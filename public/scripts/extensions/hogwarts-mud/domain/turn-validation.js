@@ -24,6 +24,10 @@ import {
 } from './map-access.js';
 
 import {
+    validateItemOperation,
+} from './item-reducer.js';
+
+import {
     findLocalRoomPath,
 } from './pathfinding.js';
 
@@ -790,6 +794,43 @@ export function validateTurnTransaction(
                 !narrativeFirst,
         },
     ));
+    (
+        transaction
+            .itemOperations ||
+        []
+    ).forEach(operation => {
+        errors.push(
+            ...validateItemOperation(
+                operation,
+                worldState,
+            ),
+        );
+    });
+    (
+        transaction
+            .itemCandidates ||
+        []
+    ).forEach(candidate => {
+        if (
+            candidate.operation !==
+                'acquire'
+        ) {
+            errors.push(
+                `待收录物品 ${candidate.id || '?'} 只能使用 acquire。`,
+            );
+            return;
+        }
+        errors.push(
+            ...validateItemOperation(
+                candidate,
+                worldState,
+                {
+                    allowCreate:
+                        true,
+                },
+            ),
+        );
+    });
     (transaction.actorUpdates || []).forEach(update => {
         if (!actorIds.has(update.id)) {
             errors.push(`人物更新引用了不存在的角色 ${update.id || '?'}。`);

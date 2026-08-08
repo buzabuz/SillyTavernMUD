@@ -2,7 +2,7 @@
 
 import {
     createSceneItemStates,
-    normalizeInventoryItem,
+    synchronizeHeldItemLocations,
 } from './inventory.js';
 
 import {
@@ -577,36 +577,20 @@ function enterInteriorMap(
                     roomId: room.id,
                 }
                 : actor);
-    next.items = (next.items || [])
-        .map((item, index) => {
-            const normalized =
-                normalizeInventoryItem(
-                    item,
-                    index,
-                    {
-                        mapId:
-                            displayMap.id,
-                        roomId: room.id,
-                        clock: next.clock,
-                    },
-                );
-            return normalized.ownerId ===
-                'player' &&
-                [
-                    'carried',
-                    'equipped',
-                ].includes(
-                    normalized.custody,
-                )
-                ? {
-                    ...normalized,
-                    mapId: displayMap.id,
-                    roomId: room.id,
-                    updatedClock:
-                        next.clock,
-                }
-                : normalized;
-        });
+    next.items =
+        synchronizeHeldItemLocations(
+            next.items,
+            {
+                playerMapId:
+                    displayMap.id,
+                playerRoomId:
+                    room.id,
+                actors:
+                    next.actors,
+                clock:
+                    next.clock,
+            },
+        );
     if (next.scene) {
         next.scene.itemStates =
             createSceneItemStates(

@@ -2,7 +2,7 @@
 
 import {
     createSceneItemStates,
-    normalizeInventoryItem,
+    synchronizeHeldItemLocations,
 } from './inventory.js';
 
 import {
@@ -508,41 +508,19 @@ export function createLegacyTurnRollbackCheckpoint(
                     }
                     : actor);
         baseState.items =
-            (baseState.items || [])
-                .map((item, index) => {
-                    const normalized =
-                        normalizeInventoryItem(
-                            item,
-                            index,
-                            {
-                                mapId:
-                                    fromMapId,
-                                roomId:
-                                    fromRoomId,
-                                clock:
-                                    baseState
-                                        .clock,
-                            },
-                        );
-                    return normalized
-                        .ownerId ===
-                            'player' &&
-                        [
-                            'carried',
-                            'equipped',
-                        ].includes(
-                            normalized
-                                .custody,
-                        )
-                        ? {
-                            ...normalized,
-                            mapId:
-                                fromMapId,
-                            roomId:
-                                fromRoomId,
-                        }
-                        : normalized;
-                });
+            synchronizeHeldItemLocations(
+                baseState.items,
+                {
+                    playerMapId:
+                        fromMapId,
+                    playerRoomId:
+                        fromRoomId,
+                    actors:
+                        baseState.actors,
+                    clock:
+                        baseState.clock,
+                },
+            );
         if (baseState.scene) {
             baseState.scene.itemStates =
                 createSceneItemStates(

@@ -32,7 +32,7 @@
                     </section>
                 </div>
             </details>
-            <button id="hpmud_character" class="hpmud-avatar-button" type="button" aria-label="打开角色状态">?</button>
+            <button id="hpmud_character" class="hpmud-avatar-button" type="button" aria-label="打开角色状态" aria-controls="hpmud_inspector_content" aria-expanded="false">?</button>
         </div>
     </header>
 
@@ -347,12 +347,33 @@
                 </div>
                 <div class="hpmud-composer-row">
                     <div class="hpmud-expression-tools">
-                        <details class="hpmud-insert-menu">
+                        <details class="hpmud-insert-menu hpmud-expression-menu">
                             <summary>插入表达</summary>
                             <div>
                                 <button type="button" data-hpmud-template="speech">台词</button>
                                 <button type="button" data-hpmud-template="action">动作</button>
                                 <button type="button" data-hpmud-template="thought">内心</button>
+                                <section class="hpmud-item-operation-menu" aria-label="物品操作协议">
+                                    <header>
+                                        <small>ITEM PROTOCOL</small>
+                                        <strong>物品操作</strong>
+                                    </header>
+                                    <div class="hpmud-item-operation-options">
+                                        <button type="button" data-hpmud-item-operation="acquire">获得</button>
+                                        <button type="button" data-hpmud-item-operation="carry">携带</button>
+                                        <button type="button" data-hpmud-item-operation="place">放置</button>
+                                        <button type="button" data-hpmud-item-operation="equip">穿戴</button>
+                                        <button type="button" data-hpmud-item-operation="unequip">脱下</button>
+                                        <button type="button" data-hpmud-item-operation="give">赠送</button>
+                                        <button type="button" data-hpmud-item-operation="lend">借出</button>
+                                        <button type="button" data-hpmud-item-operation="consume">消耗</button>
+                                        <button type="button" data-hpmud-item-operation="damage">损坏</button>
+                                        <button type="button" data-hpmud-item-operation="clean">清洗</button>
+                                        <button type="button" data-hpmud-item-operation="lose">丢失</button>
+                                        <button type="button" data-hpmud-item-operation="destroy">销毁</button>
+                                    </div>
+                                    <p>选择操作后，到物品档案引用正式 Item；新物品仍用自然语言描述。</p>
+                                </section>
                             </div>
                         </details>
                         <details id="hpmud_address_menu" class="hpmud-insert-menu hpmud-address-menu">

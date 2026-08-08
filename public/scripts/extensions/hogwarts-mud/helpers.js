@@ -26,7 +26,7 @@ export {
 } from './domain/actor-knowledge.js';
 
 export {
-    migrateRelationshipMemoryState,
+    isLegacyTransitionFillerMemory, migrateRelationshipMemoryState,
 } from './domain/actor-memory-migration.js';
 
 export {
@@ -138,7 +138,8 @@ export {
 } from './domain/scene-destination.js';
 
 export {
-    normalizeSceneTransitionPackage, stripSyntheticSceneOpeningActorSegments, validateSceneTransitionPackage,
+    isValidTransitionSceneMemory, normalizeSceneTransitionPackage, stripSyntheticSceneOpeningActorSegments,
+    validateSceneTransitionPackage,
 } from './domain/scene-transition.js';
 
 export {

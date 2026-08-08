@@ -62,8 +62,10 @@ import {
     createSceneItemStates,
     ENTITY_STATE_VERSION,
     normalizeActorLifeState,
-    normalizeInventoryItem,
 } from './inventory.js';
+import {
+    ITEM_SYSTEM_VERSION,
+} from './item-schema.js';
 
 import {
     createMandatorySceneStateProjector,
@@ -254,6 +256,11 @@ export function createInitialWorldState(character, modelSlots, campaign = create
         clues: [],
         checks: [],
         items: [],
+        itemSystemVersion:
+            ITEM_SYSTEM_VERSION,
+        canonItemCatalogVersion: 0,
+        pendingItemProposals: [],
+        itemProposalDecisions: [],
         spellbook:
             createInitialSpellbook(
                 normalizedCampaign
@@ -757,23 +764,7 @@ export function applyOpeningWorldPackage(worldState, opening) {
         clock: opening.clock,
         label: display.incitingEvent || opening.conflict.incitingEventEn,
     }];
-    next.items = (opening.items || []).map(
-        (item, index) =>
-            normalizeInventoryItem({
-                ...item,
-                label:
-                    display.itemLabels?.[index] ||
-                    item.labelEn,
-                detail:
-                    display.itemDetails?.[index] ||
-                    item.detailEn,
-            }, index, {
-                mapId: customMap.id,
-                roomId: map.currentRoomId,
-                clock: opening.clock,
-                source: 'opening',
-            }),
-    );
+    next.items = [];
     next.map.customLocalMaps = [
         ...(next.map.customLocalMaps || []).filter(item => item.id !== customMap.id),
         customMap,

@@ -5,6 +5,7 @@ import test from 'node:test';
 import { createModelAdapter } from '../public/scripts/extensions/hogwarts-mud/adapters/model.js';
 import { createAutomaticWorkGate } from '../public/scripts/extensions/hogwarts-mud/runtime/automatic-work.js';
 import { createJobRegistry } from '../public/scripts/extensions/hogwarts-mud/runtime/job-registry.js';
+import { createLifecycleRuntime } from '../public/scripts/extensions/hogwarts-mud/runtime/lifecycle.js';
 import {
     TURN_DIAGNOSTIC_EVENT_LIMIT,
     TURN_DIAGNOSTIC_HISTORY_LIMIT,
@@ -12,6 +13,12 @@ import {
     attachTurnDiagnostics,
     createTurnDiagnosticsRecorder,
 } from '../public/scripts/extensions/hogwarts-mud/runtime/turn-diagnostics.js';
+import {
+    reduceLocalPresence,
+} from '../public/scripts/extensions/hogwarts-mud/presence-witness-contract.js';
+import {
+    projectSceneTransitionPresence,
+} from '../public/scripts/extensions/hogwarts-mud/domain/transition-presence.js';
 import { createOpeningWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/opening.js';
 import { createTurnWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/turn.js';
 
@@ -227,6 +234,14 @@ function createTurnHarness({
         localizeTurnTransaction: async transaction =>
             transaction,
         parseSpellCastDirectives: () => [],
+        parseItemOperationDirectives: () => ({
+            directives: [],
+            errors: [],
+        }),
+        partitionItemProposals: () => ({
+            operations: [],
+            candidates: [],
+        }),
         reconcileTurnActorPresenceWithSpatialState:
             transaction => transaction,
         reduceLocalPresence: () => ({
@@ -307,6 +322,233 @@ test('runtime gate and job registries keep suppression and locks instance-local'
     assert.equal(rightGate.suppressed, false);
     assert.equal(rightJobs.turnSettlement.size, 0);
     assert.equal(rightJobs.socialCatchupAttempts.size, 0);
+});
+
+test('lifecycle repairs stale transition cast and local-presence projections without model work', () => {
+    const activeActorIds = [
+        'minerva_mcgonagall',
+        'canon_hermione_jean_granger',
+        'canon_ronald_bilius_weasley',
+        'canon_lavender_brown',
+    ];
+    const localOnlyActorIds = [
+        'canon_dean_thomas',
+        'canon_harry_james_potter',
+        'canon_neville_longbottom',
+        'canon_seamus_finnigan',
+    ];
+    const actorIds = [
+        ...activeActorIds,
+        ...localOnlyActorIds,
+    ];
+    const cohortActorIds =
+        actorIds.filter(id =>
+            id !==
+                'minerva_mcgonagall');
+    const state = {
+        modelSlots: {},
+        actorLibrary:
+            actorIds.map(id => ({
+                id,
+            })),
+        actors:
+            actorIds.map(id => ({
+                id,
+                present:
+                    activeActorIds
+                        .includes(id),
+                lifeStatus:
+                    'alive',
+                mapId:
+                    'hogwarts_castle',
+                roomId:
+                    activeActorIds
+                        .includes(id)
+                        ? 'transfiguration_classroom'
+                        : 'charms_classroom',
+            })),
+        activeInteractionActorIds: [
+            'canon_ronald_bilius_weasley',
+        ],
+        localPresence: {
+            version: 1,
+            mapId:
+                'hogwarts_castle',
+            roomId:
+                'transfiguration_classroom',
+            occupantActorIds:
+                activeActorIds,
+            cohortIds: [],
+            updatedTurn:
+                92,
+            source:
+                'actor_position',
+        },
+        cohorts: [{
+            version: 1,
+            id:
+                'gryffindor_year1_charms_1991',
+            labelEn:
+                'Gryffindor first-years in Charms',
+            mapId:
+                'hogwarts_castle',
+            roomId:
+                'charms_classroom',
+            knownMemberActorIds:
+                cohortActorIds,
+            source:
+                'class_roster',
+        }],
+        map: {
+            activeMapId:
+                'hogwarts_castle',
+            currentLocalNodeId:
+                'transfiguration_classroom',
+        },
+        scene: {
+            id:
+                'transfiguration_after_break',
+            mapId:
+                'hogwarts_castle',
+            roomId:
+                'transfiguration_classroom',
+            startedClock:
+                '1991-09-02 · 11:30',
+            startedMessageId:
+                0,
+            timelineEntries: [],
+            nextSceneIntent: {},
+        },
+        sceneArchive: [{
+            localCohortIds: [
+                'gryffindor_year1_charms_1991',
+            ],
+        }],
+        checks: [],
+        timeline: [],
+        turn: {
+            count: 92,
+        },
+        sceneTransition: {
+            status:
+                'idle',
+        },
+        pacingDirector: {
+            status:
+                'idle',
+        },
+        memoryDirector: {
+            status:
+                'ready',
+            reviewAfterTurns:
+                10,
+            lastReviewedTurn:
+                92,
+        },
+        causalCollapse: {},
+        socialGraph: {},
+    };
+    const context = {
+        chat: [],
+    };
+    const unchanged =
+        current => ({
+            state:
+                current,
+            changed:
+                false,
+        });
+    const lifecycle =
+        createLifecycleRuntime({
+            createFallbackNextSceneIntent:
+                () => ({}),
+            getContext:
+                () => context,
+            getLocalMapDefinition:
+                () => ({
+                    nodes: [{
+                        id:
+                            'transfiguration_classroom',
+                        kind:
+                            'classroom',
+                    }],
+                }),
+            getMudState:
+                () => state,
+            getRoomName:
+                () => '',
+            jobRegistry:
+                createJobRegistry(),
+            migrateActorKnowledgeBoundaries:
+                unchanged,
+            migrateActorMovementHistory:
+                unchanged,
+            migrateActorPresentationState:
+                unchanged,
+            migrateLoadedSocialGraph:
+                graph => ({
+                    graph,
+                    changed:
+                        false,
+                }),
+            migrateObservedInventoryState:
+                unchanged,
+            migrateRelationshipMemoryState:
+                unchanged,
+            migrateSpellbookState:
+                unchanged,
+            normalizeCausalCollapseState:
+                value => value,
+            normalizeModelSlots:
+                value => value,
+            projectActorSocialRelationships:
+                value => value,
+            projectSceneTransitionPresence,
+            reconcileCanonActorDisplayNames:
+                unchanged,
+            reconcileTemporaryActorDisplayNames:
+                unchanged,
+            reduceLocalPresence,
+            saveMetadataDebounced:
+                () => {},
+            validateNextSceneIntent:
+                () => ({
+                    valid: true,
+                }),
+        });
+
+    assert.equal(
+        lifecycle
+            .ensureSceneLifecycleState(
+                state,
+            ),
+        true,
+    );
+    assert.deepEqual(
+        state
+            .activeInteractionActorIds,
+        activeActorIds,
+    );
+    assert.deepEqual(
+        state.localPresence,
+        {
+            version: 1,
+            mapId:
+                'hogwarts_castle',
+            roomId:
+                'transfiguration_classroom',
+            occupantActorIds:
+                [...actorIds]
+                    .sort(),
+            cohortIds: [
+                'gryffindor_year1_transfiguration_1991',
+            ],
+            updatedTurn:
+                92,
+            source:
+                'cohort_roster',
+        },
+    );
 });
 
 test('turn diagnostics stay local, bounded, and retain only recent traces', () => {

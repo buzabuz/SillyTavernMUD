@@ -82,6 +82,9 @@ Authority and boundaries:
 - When a newly activated actor has no established first impression, actorStates must include a 1-24 word firstImpressionOfPlayerEn based only on the player's visible features and conduct.
 - actorContinuityCapsules are sealed by actorId and contain only established social continuity. A capsule may guide only its matching actor. If hasMetPlayer is true, do not write a first-time self-introduction to the player. Treat knownActorIds as people that actor has already met. relationshipToPlayer.stageEn and sharedMemories override generic or stale relationship labels.
 - Do not transfer one actor's memory, impression, or relationship knowledge to another actor or to the narrator.
+- relationshipUpdates is optional and sparse. Emit it only for an actor whose view of the player materially changed because of one specific interaction in the closing scene.
+- sceneMemoryEn must be one complete 8-32 word actor-centered memory: what the player did to that actor or what that actor personally witnessed, plus the actor's specific interpretation when relevant.
+- Never use closureSummaryEn as a relationship memory. Do not emit routine attendance, a general scene recap, generic consequences, or the same memory for multiple actors. Omit unchanged actors and use an empty array when no distinct memory was formed.
 - behavioralEnvironment describes the closing clock. Compute the opening clock from currentClock plus transitionMinutes instead of carrying the closing period forward.
 - Choose transitionMinutes freely according to the time that naturally passes in the fiction. Sleep, travel, waiting, holidays, and deliberate time skips may advance as long as needed. If asleep characters wake in the next scene, allow a plausible rest unless an already established alarm, emergency, departure, or other observable cause wakes them early.
 - Materially embody the opening time's daylight, sleep pressure, curfew, weather, exposure, clothing, shelter, noise, and activity implications. Do not recite them as a checklist.
@@ -96,6 +99,13 @@ Schema:
   "closureSummaryEn": "specific observable closure of the old scene",
   "authorQuillEn": "180-280 word OOC comic review of the player's observed chapter performance",
   "unresolvedThreadsEn": ["public unresolved thread"],
+  "relationshipUpdates": [
+    {
+      "id": "existing_actor_id",
+      "impressionOfPlayerEn": "1-16 word concrete current opinion",
+      "sceneMemoryEn": "one complete 8-32 word actor-specific memory"
+    }
+  ],
   "nextScene": {
     "id": "unique_snake_case_id",
     "nameEn": "scene title",
@@ -732,6 +742,65 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     sceneTransition: {
                         closureSummaryEn: payload.closureSummaryEn,
                         transitionMinutes: payload.transitionMinutes,
+                        diagnostics: {
+                            version: 1,
+                            actorStateIds:
+                                (
+                                    payload
+                                        .nextScene
+                                        ?.actorStates ||
+                                    []
+                                ).map(actor =>
+                                    actor.id),
+                            presentActorStateIds:
+                                (
+                                    payload
+                                        .nextScene
+                                        ?.actorStates ||
+                                    []
+                                )
+                                    .filter(actor =>
+                                        actor.present ===
+                                            true)
+                                    .map(actor =>
+                                        actor.id),
+                            committedPresentActorIds:
+                                (
+                                    state.actors ||
+                                    []
+                                )
+                                    .filter(actor =>
+                                        actor.present ===
+                                            true)
+                                    .map(actor =>
+                                        actor.id),
+                            activeInteractionActorIds:
+                                structuredClone(
+                                    state
+                                        .activeInteractionActorIds ||
+                                    [],
+                                ),
+                            localPresence:
+                                state.localPresence
+                                    ? {
+                                        mapId:
+                                            state
+                                                .localPresence
+                                                .mapId,
+                                        roomId:
+                                            state
+                                                .localPresence
+                                                .roomId,
+                                        occupantActorIds:
+                                            structuredClone(
+                                                state
+                                                    .localPresence
+                                                    .occupantActorIds ||
+                                                [],
+                                            ),
+                                    }
+                                    : null,
+                        },
                     },
                     authorQuill:
                     payload.authorQuill ||

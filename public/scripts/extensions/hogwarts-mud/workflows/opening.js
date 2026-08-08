@@ -339,6 +339,8 @@ Also create a durable private actor library with every present NPC plus future c
 
 Prewrite one player-facing nextSceneIntent at the same time. It is the default next dramatic beat, not a spoiler or forced outcome. For the opening package, it must use scene.map.id and one existing roomId from that generated map. Choose medium for an ordinary transition and high only for a planned permanent or complex causal turn.
 
+Do not create formal inventory records. Keep items as an empty array. Ordinary clothes, school supplies, household objects, shop stock, and scene props are implicit narrative resources. Canon signature items are seeded by deterministic runtime data; any newly important object must later be proposed to the player for confirmation.
+
 Use English only. IDs must be snake_case. Coordinates must be numbers from 5 to 95. The local map needs 2-16 rooms and valid exits. Every present NPC must have a roomId from that local map.
 
 Schema:
@@ -398,7 +400,7 @@ Schema:
   "conflict": {"titleEn":"string","premiseEn":"string","immediatePressureEn":"string","stakesEn":"string","incitingEventEn":"string"},
   "agenda": [{"timeLabelEn":"string","labelEn":"string"}],
   "clues": [{"id":"snake_case","labelEn":"string","detailEn":"string"}],
-  "items": [{"id":"snake_case","labelEn":"string","detailEn":"string"}],
+  "items": [],
   "nextSceneIntent": {
     "titleEn": "player-facing next beat title",
     "summaryEn": "non-spoiler default direction",

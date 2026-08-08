@@ -48,7 +48,9 @@ export function createTurnWorkflow(ports) {
         jobRegistry,
         localizeTurnTransaction,
         normalizeEventKnowledge,
+        parseItemOperationDirectives,
         parseSpellCastDirectives,
+        partitionItemProposals,
         reconcileSpatialState,
         reconcileTurnActorPresenceWithSpatialState,
         reconcileVisibleActorPresenceState,
@@ -391,8 +393,24 @@ export function createTurnWorkflow(ports) {
         const job = (async () => {
             jobRegistry.turnActive = true;
             let state = getMudState();
+            const itemDirectiveResult =
+            parseItemOperationDirectives(
+                playerAction,
+                (
+                    state.items ||
+                    []
+                ).filter(item =>
+                    item.visibility !==
+                        'hidden'),
+            );
             beginTurnDiagnostics({
                 playerAction,
+                itemDirectives:
+                    itemDirectiveResult
+                        .directives,
+                itemDirectiveErrors:
+                    itemDirectiveResult
+                        .errors,
                 sceneId:
                     state.scene?.id,
                 turnCount:
@@ -478,6 +496,20 @@ export function createTurnWorkflow(ports) {
                         .addressing =
                     structuredClone(
                         addressing,
+                    );
+                    playerMessage.extra
+                        .hogwartsMud
+                        .itemDirectives =
+                    structuredClone(
+                        itemDirectiveResult
+                            .directives,
+                    );
+                    playerMessage.extra
+                        .hogwartsMud
+                        .itemDirectiveErrors =
+                    structuredClone(
+                        itemDirectiveResult
+                            .errors,
                     );
                     await context.saveChat();
                 }
@@ -797,25 +829,98 @@ export function createTurnWorkflow(ports) {
                 transaction.materialEvents =
                 localObservation
                     .materialEvents;
-                transaction.itemUpdates = [
+                const itemSourceEventId =
+                    `${
+                        state.scene?.id ||
+                        'scene'
+                    }_turn_${
+                        Number(
+                            state.turn
+                                ?.count ||
+                            0,
+                        ) + 1
+                    }`;
+                const performanceItems =
+                    partitionItemProposals(
+                        transaction
+                            .itemUpdates ||
+                        [],
+                        state,
+                        {
+                            sourceRole:
+                                'low',
+                            sourceEventId:
+                                itemSourceEventId,
+                            sourceMessageIds:
+                                playerMessageId >=
+                                    0
+                                    ? [
+                                        playerMessageId,
+                                    ]
+                                    : [],
+                            clock:
+                                state.clock,
+                            sourceTexts: [
+                                narrativePlayerAction,
+                                localObservation
+                                    .narrativeText,
+                            ],
+                        },
+                    );
+                const observedItems =
+                    partitionItemProposals(
+                        localObservation
+                            .itemUpdates ||
+                        [],
+                        state,
+                        {
+                            sourceRole:
+                                'local_observer',
+                            sourceEventId:
+                                itemSourceEventId,
+                            sourceMessageIds:
+                                playerMessageId >=
+                                    0
+                                    ? [
+                                        playerMessageId,
+                                    ]
+                                    : [],
+                            clock:
+                                state.clock,
+                            sourceTexts: [
+                                narrativePlayerAction,
+                                localObservation
+                                    .narrativeText,
+                            ],
+                        },
+                    );
+                transaction.itemOperations = [
                     ...new Map(
                         [
-                            ...(
-                                transaction
-                                    .itemUpdates ||
-                            []
-                            ),
-                            ...(
-                                localObservation
-                                    .itemUpdates ||
-                            []
-                            ),
-                        ].map(update => [
-                            update.id,
-                            update,
+                            ...performanceItems
+                                .operations,
+                            ...observedItems
+                                .operations,
+                        ].map(proposal => [
+                            proposal.key,
+                            proposal,
                         ]),
                     ).values(),
                 ];
+                transaction.itemCandidates = [
+                    ...new Map(
+                        [
+                            ...performanceItems
+                                .candidates,
+                            ...observedItems
+                                .candidates,
+                        ].map(proposal => [
+                            proposal.key,
+                            proposal,
+                        ]),
+                    ).values(),
+                ];
+                transaction.itemUpdates = [];
                 transaction.materialExtraction = {
                     schemaVersion: 1,
                     source:

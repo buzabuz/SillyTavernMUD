@@ -1,3 +1,7 @@
+import {
+    createItemCandidateCard,
+} from './item-components.js';
+
 export function createMessageRenderer(ports) {
     const {
         session,
@@ -6,11 +10,15 @@ export function createMessageRenderer(ports) {
     const {
         LIVE_STREAM_PHASE_LABELS,
         MAX_RENDERED_MESSAGES,
+        acceptItemCandidate,
         getContext,
+        getItemProposalDecision,
         getSettings,
         getWorldState,
+        ignoreItemCandidate,
         initials,
         normalizeTranslationProvider,
+        projectItemCard,
         translateMessage,
     } = ports;
 
@@ -408,6 +416,39 @@ export function createMessageRenderer(ports) {
             block.append(body);
             article.append(block);
         });
+        const itemCandidates =
+            message.extra
+                ?.hogwartsMud
+                ?.turnTransaction
+                ?.itemCandidates ||
+            [];
+        itemCandidates
+            .forEach(candidate => {
+                const item =
+                    projectItemCard(
+                        candidate.item,
+                        state,
+                    );
+                const decision =
+                    getItemProposalDecision(
+                        state,
+                        candidate.key,
+                    ) ||
+                    'pending';
+                article.append(
+                    createItemCandidateCard(
+                        candidate,
+                        item,
+                        {
+                            decision,
+                            onAccept:
+                                acceptItemCandidate,
+                            onIgnore:
+                                ignoreItemCandidate,
+                        },
+                    ),
+                );
+            });
         return article;
     }
 

@@ -1,8 +1,9 @@
 import {
-    normalizeMemoryId,
-} from './stable-identity.js';
+    inferItemType,
+    normalizeItem,
+} from './item-schema.js';
 
-export const ENTITY_STATE_VERSION = 1;
+export const ENTITY_STATE_VERSION = 2;
 export const OBSERVED_INVENTORY_VERSION = 1;
 export const ITEM_IMPORTANCE_VALUES = Object.freeze([
     'key',
@@ -24,7 +25,7 @@ export const ACTOR_LIFE_STATUS_VALUES = Object.freeze([
     'dead',
 ]);
 export const IMPORTANT_ITEM_PATTERN =
-    /(?:\b(?:wand|key|letter|journal|diary|map|permit|token|ring|amulet|artifact|heirloom|autograph|signed parchment)\b|魔杖|钥匙|信件|日记|地图|许可证|信物|戒指|护符|魔法物品|传家宝|签名|签名羊皮纸)/i;
+    /(?:\b(?:wand|key|letter|journal|diary|map|permit|token|ring|ribbon|glasses|spectacles|amulet|artifact|heirloom|keepsake|clue|autograph|signed parchment)\b|魔杖|钥匙|信件|日记|地图|许可证|信物|戒指|丝带|眼镜|护符|魔法物品|传家宝|纪念品|线索|签名|签名羊皮纸)/i;
 export const ORDINARY_TRANSIENT_ITEM_PATTERN =
     /(?:\b(?:food|meal|snack|sweet|toffee|pasty|tart|drink|wrapper|receipt)\b|食物|饭|零食|糖果|太妃糖|馅饼|饮料|包装|收据)/i;
 export const DURABLE_ACQUISITION_PATTERN =
@@ -56,28 +57,7 @@ function inferItemImportance(
 export function inferItemKind(
     value,
 ) {
-    const text = typeof value === 'string'
-        ? value
-        : [
-            value?.id,
-            value?.labelEn,
-            value?.label,
-            value?.detailEn,
-            value?.detail,
-        ].filter(Boolean).join(' ');
-    const kinds = [
-        ['wand', /(?:\bwand\b|魔杖)/i],
-        ['key', /(?:\bkey\b|钥匙)/i],
-        ['letter', /(?:\bletter\b|信件|通知书)/i],
-        ['journal', /(?:\b(?:journal|diary)\b|日记)/i],
-        ['map', /(?:\bmap\b|地图)/i],
-        ['permit', /(?:\bpermit\b|许可证)/i],
-        ['token', /(?:\btoken\b|信物)/i],
-        ['jewellery', /(?:\b(?:ring|amulet)\b|戒指|护符)/i],
-    ];
-    return kinds.find(([, pattern]) =>
-        pattern.test(text))?.[0] ||
-        'other';
+    return inferItemType(value);
 }
 
 export function normalizeInventoryItem(
@@ -86,97 +66,143 @@ export function normalizeInventoryItem(
     defaults = {},
 ) {
     const importance = inferItemImportance(item);
-    const custody =
-        ITEM_CUSTODY_VALUES.includes(item.custody)
-            ? item.custody
-            : importance === 'ordinary'
-                ? 'stored'
-                : 'carried';
-    const ownerId = String(
-        item.ownerId ||
-        defaults.ownerId ||
+    return normalizeItem(
+        {
+            ...item,
+            type:
+                item.type ||
+                item.kind ||
+                inferItemKind(
+                    item,
+                ),
+            appearanceEn:
+                item.appearanceEn ||
+                item.detailEn,
+            appearance:
+                item.appearance ||
+                item.detail,
+            importance,
+        },
+        index,
+        {
+            ...defaults,
+            sourceEventId:
+                defaults
+                    .sourceEventId ||
+                defaults.source,
+        },
+    );
+}
+
+export function synchronizeHeldItemLocations(
+    items = [],
+    {
+        playerMapId = '',
+        playerRoomId = '',
+        actors = [],
+        holderIds = null,
+        clock = '',
+    } = {},
+) {
+    const allowedHolders =
+        holderIds === null
+            ? null
+            : new Set(
+                holderIds,
+            );
+    const actorLocations =
+        new Map(
+            (
+                actors ||
+                []
+            ).map(actor => [
+                actor.id,
+                {
+                    mapId:
+                        actor.mapId ||
+                        '',
+                    roomId:
+                        actor.roomId ||
+                        '',
+                },
+            ]),
+        );
+    actorLocations.set(
         'player',
-    ).trim();
-    const activeWithOwner = [
-        'carried',
-        'equipped',
-    ].includes(custody);
-    return {
-        ...item,
-        id: normalizeMemoryId(
-            item.id,
-            `item_${index + 1}`,
-        ),
-        labelEn: String(
-            item.labelEn ||
-            item.label ||
-            `Item ${index + 1}`,
-        ).trim(),
-        label: String(
-            item.label ||
-            item.labelEn ||
-            `物品 ${index + 1}`,
-        ).trim(),
-        detailEn: String(
-            item.detailEn ||
-            item.detail ||
-            '',
-        ).trim(),
-        detail: String(
-            item.detail ||
-            item.detailEn ||
-            '',
-        ).trim(),
-        kind: item.kind ||
-            inferItemKind(item),
-        importance,
-        custody,
-        ownerId,
-        mapId: activeWithOwner
-            ? String(
-                defaults.mapId ||
-                item.mapId ||
-                '',
-            )
-            : String(
-                item.mapId ||
-                defaults.mapId ||
-                '',
-            ),
-        roomId: activeWithOwner
-            ? String(
-                defaults.roomId ||
-                item.roomId ||
-                '',
-            )
-            : String(
-                item.roomId ||
-                defaults.roomId ||
-                '',
-            ),
-        status: [
-            'available',
-            'damaged',
-            'consumed',
-            'lost',
-        ].includes(item.status)
-            ? item.status
-            : custody === 'consumed'
-                ? 'consumed'
-                : custody === 'lost'
-                    ? 'lost'
-                    : 'available',
-        acquiredClock:
-            item.acquiredClock ||
-            defaults.clock ||
-            '',
-        updatedClock:
-            item.updatedClock ||
-            item.acquiredClock ||
-            defaults.clock ||
-            '',
-        source: item.source || defaults.source || 'world',
-    };
+        {
+            mapId:
+                playerMapId,
+            roomId:
+                playerRoomId,
+        },
+    );
+    return (
+        items ||
+        []
+    ).map(
+        (
+            source,
+            index,
+        ) => {
+            const item =
+                normalizeInventoryItem(
+                    source,
+                    index,
+                    {
+                        clock,
+                    },
+                );
+            if (
+                !item.holderId ||
+                (
+                    allowedHolders &&
+                    !allowedHolders.has(
+                        item.holderId,
+                    )
+                )
+            ) {
+                return item;
+            }
+            const location =
+                actorLocations.get(
+                    item.holderId,
+                );
+            if (
+                !location?.mapId ||
+                !location?.roomId ||
+                (
+                    item.location
+                        .mapId ===
+                        location.mapId &&
+                    item.location
+                        .roomId ===
+                        location.roomId &&
+                    item.location
+                        .placement ===
+                        'with_holder'
+                )
+            ) {
+                return item;
+            }
+            return normalizeInventoryItem(
+                {
+                    ...item,
+                    location: {
+                        ...location,
+                        placement:
+                            'with_holder',
+                    },
+                    updatedClock:
+                        clock ||
+                        item.updatedClock,
+                },
+                index,
+                {
+                    clock,
+                },
+            );
+        },
+    );
 }
 
 export function projectObservedInventoryUpdates(
@@ -185,35 +211,44 @@ export function projectObservedInventoryUpdates(
     playerAction,
     narrativeText,
 ) {
-    const existingItems =
-        new Map(
+    const existingIds =
+        new Set(
             (
                 worldState.items ||
                 []
-            ).map((item, index) => {
-                const normalized =
-                    normalizeInventoryItem(
-                        item,
-                        index,
-                    );
-                return [
-                    normalized.id,
-                    normalized,
-                ];
-            }),
+            ).map(item =>
+                item.id),
         );
+    const validHolderIds =
+        new Set([
+            'player',
+            ...(
+                worldState.actors ||
+                []
+            ).map(actor =>
+                actor.id),
+            ...(
+                worldState
+                    .actorLibrary ||
+                []
+            ).map(actor =>
+                actor.id),
+        ]);
     const allowedActions =
         new Set([
             'acquire',
-            'update',
             'carry',
+            'place',
             'equip',
-            'store',
+            'unequip',
+            'give',
+            'lend',
             'consume',
+            'damage',
+            'clean',
             'lose',
+            'destroy',
         ]);
-    const explicitPossession =
-        /(?:\b(?:take|takes|took|pick(?:ed)? up|receive[ds]?|accept(?:ed)?|claim(?:ed)?|keep|kept|carry|carried|hold(?:ing)?|held|clamped on|in (?:her|his|their) hand)\b|拿起|拿到|拿走|收下|收到|接过|认领|保留|留着|带着|握着|攥着|手里|随身)/iu;
     const projected = [];
     const seenIds =
         new Set();
@@ -231,9 +266,8 @@ export function projectObservedInventoryUpdates(
                 observed.confidence ||
                 0,
             ) < 0.65 ||
-            observed.ownerId !==
-                'player' ||
             !allowedActions.has(
+                observed.operation ||
                 observed.action,
             ) ||
             !/^[a-z][a-z0-9_]{1,79}$/u
@@ -274,35 +308,24 @@ export function projectObservedInventoryUpdates(
             continue;
         }
         const existing =
-            existingItems.get(
+            existingIds.has(
                 observed.id,
             );
         if (
             !existing &&
             (
-                observed.action !==
+                (
+                    observed.operation ||
+                    observed.action
+                ) !==
                     'acquire' ||
-                ![
-                    'key',
-                    'important',
-                ].includes(
-                    observed
-                        .importance,
-                ) ||
-                ![
-                    'carried',
-                    'equipped',
-                ].includes(
-                    observed
-                        .custody,
-                ) ||
-                !explicitPossession
-                    .test(evidence) ||
                 !String(
                     observed.labelEn ||
                     '',
                 ).trim() ||
                 !String(
+                    observed
+                        .appearanceEn ||
                     observed.detailEn ||
                     '',
                 ).trim()
@@ -310,51 +333,186 @@ export function projectObservedInventoryUpdates(
         ) {
             continue;
         }
+        if (!existing) {
+            const candidateText = [
+                observed.labelEn,
+                observed.labelZh,
+                observed.appearanceEn,
+                observed.appearanceZh,
+                observed.detailEn,
+                observed.detailZh,
+            ]
+                .filter(Boolean)
+                .join(' ');
+            const candidateType =
+                observed.type ||
+                inferItemKind(
+                    observed,
+                );
+            const evidenceType =
+                inferItemKind(
+                    evidence,
+                );
+            const normalizedEvidence =
+                evidence
+                    .normalize('NFKC')
+                    .toLocaleLowerCase();
+            const labelMentioned =
+                [
+                    observed.labelEn,
+                    observed.labelZh,
+                ]
+                    .map(value =>
+                        String(
+                            value ||
+                            '',
+                        )
+                            .normalize(
+                                'NFKC',
+                            )
+                            .toLocaleLowerCase()
+                            .trim())
+                    .filter(value =>
+                        value.length >= 2)
+                    .some(value =>
+                        normalizedEvidence
+                            .includes(
+                                value,
+                            ));
+            const typedMention =
+                candidateType !==
+                    'other' &&
+                candidateType ===
+                    evidenceType;
+            const explicitlyKept =
+                PLAYER_KEEP_ITEM_PATTERN
+                    .test(evidence);
+            const meaningful =
+                (
+                    observed.storyRoles ||
+                    []
+                ).length > 0 ||
+                IMPORTANT_ITEM_PATTERN
+                    .test(candidateText) ||
+                explicitlyKept;
+            if (
+                !meaningful ||
+                !(
+                    labelMentioned ||
+                    typedMention
+                ) ||
+                (
+                    ORDINARY_TRANSIENT_ITEM_PATTERN
+                        .test(
+                            candidateText,
+                        ) &&
+                    !explicitlyKept &&
+                    !(
+                        observed
+                            .storyRoles ||
+                        []
+                    ).length
+                )
+            ) {
+                continue;
+            }
+        }
         seenIds.add(
             observed.id,
         );
+        const ownerId =
+            validHolderIds.has(
+                observed.ownerId,
+            )
+                ? observed.ownerId
+                : 'player';
+        const holderId =
+            validHolderIds.has(
+                observed.holderId,
+            )
+                ? observed.holderId
+                : ownerId;
         projected.push({
             id:
                 observed.id,
-            action:
-                existing &&
-                observed.action ===
-                    'acquire'
-                    ? 'update'
-                    : observed.action,
+            operation:
+                observed.operation ||
+                observed.action,
+            type:
+                observed.type ||
+                inferItemKind(
+                    observed,
+                ),
             labelEn:
                 String(
                     observed.labelEn ||
-                    existing?.labelEn ||
                     '',
                 ).trim(),
             label:
                 String(
                     observed.labelZh ||
-                    existing?.label ||
                     observed.labelEn ||
                     '',
                 ).trim(),
-            detailEn:
+            appearanceEn:
                 String(
+                    observed
+                        .appearanceEn ||
                     observed.detailEn ||
-                    existing?.detailEn ||
                     '',
                 ).trim(),
-            detail:
+            appearance:
                 String(
+                    observed
+                        .appearanceZh ||
                     observed.detailZh ||
-                    existing?.detail ||
                     observed.detailEn ||
                     '',
                 ).trim(),
-            importance:
-                existing
-                    ?.importance ||
-                observed.importance,
-            custody:
-                observed.custody,
-            ownerId: 'player',
+            ownerId,
+            holderId,
+            targetHolderId:
+                validHolderIds.has(
+                    observed
+                        .targetHolderId,
+                )
+                    ? observed
+                        .targetHolderId
+                    : '',
+            transferMode:
+                observed
+                    .transferMode ||
+                'none',
+            storyRoles:
+                observed
+                    .storyRoles ||
+                [],
+            visibility:
+                observed.visibility ||
+                (
+                    ownerId ===
+                        'player'
+                        ? 'public'
+                        : 'owner_known'
+                ),
+            isEquipped:
+                observed
+                    .isEquipped ===
+                true,
+            held:
+                observed.held ===
+                true,
+            sourceKind:
+                observed
+                    .sourceKind,
+            evidenceText:
+                evidence,
+            confidence:
+                Number(
+                    observed
+                        .confidence ||
+                    0,
+                ),
         });
     }
     return projected;
@@ -530,11 +688,17 @@ export function createSceneItemStates(
             'carried',
             'equipped',
         ].includes(normalized.custody) &&
-            normalized.ownerId === 'player';
+            normalized.holderId === 'player';
         return {
             id: normalized.id,
+            version:
+                normalized.version,
+            type:
+                normalized.type,
             custody: normalized.custody,
             ownerId: normalized.ownerId,
+            holderId:
+                normalized.holderId,
             mapId: followsPlayer
                 ? mapId
                 : normalized.mapId,
@@ -542,6 +706,10 @@ export function createSceneItemStates(
                 ? roomId
                 : normalized.roomId,
             status: normalized.status,
+            state:
+                normalized.state,
+            isEquipped:
+                normalized.isEquipped,
         };
     });
 }

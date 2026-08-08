@@ -12,6 +12,52 @@ import {
     normalizeMemoryId,
 } from './stable-identity.js';
 
+const LEGACY_TRANSITION_FILLER_PATTERN =
+    /^During the closed scene,[\s\S]*This experience materially shaped the actor['’]s view of the player\.$/u;
+
+export function isLegacyTransitionFillerMemory(
+    memory,
+) {
+    return (
+        memory?.source ===
+            'medium_transition' &&
+        LEGACY_TRANSITION_FILLER_PATTERN
+            .test(
+                String(
+                    memory.summaryEn ||
+                    memory.summary ||
+                    '',
+                ).trim(),
+            )
+    );
+}
+
+function pruneLegacyTransitionFillerMemories(
+    profile,
+) {
+    const sharedMemories =
+        normalizeSharedMemories(
+            profile.sharedMemories,
+        );
+    return {
+        ...profile,
+        sharedMemories:
+            normalizeSharedMemories(
+                Object.fromEntries(
+                    SHARED_MEMORY_TIERS
+                        .map(tier => [
+                            tier,
+                            sharedMemories[tier]
+                                .filter(memory =>
+                                    !isLegacyTransitionFillerMemory(
+                                        memory,
+                                    )),
+                        ]),
+                ),
+            ),
+    };
+}
+
 export function upsertSharedMemory(
     profile,
     memory,
@@ -183,12 +229,51 @@ export function migrateRelationshipMemoryState(
     worldState,
     chat = [],
 ) {
-    if (!worldState ||
-        Number(worldState.relationshipMemoryVersion || 0) >=
-            RELATIONSHIP_MEMORY_VERSION) {
+    if (!worldState) {
         return { state: worldState, changed: false };
     }
+    const needsVersionMigration =
+        Number(
+            worldState
+                .relationshipMemoryVersion ||
+            0,
+        ) < RELATIONSHIP_MEMORY_VERSION;
+    const needsFillerPruning =
+        (worldState.actorLibrary || [])
+            .some(profile =>
+                SHARED_MEMORY_TIERS.some(tier =>
+                    (
+                        Array.isArray(
+                            profile
+                                .sharedMemories?.[tier],
+                        )
+                            ? profile
+                                .sharedMemories[tier]
+                            : []
+                    ).some(
+                        isLegacyTransitionFillerMemory,
+                    )));
+    if (
+        !needsVersionMigration &&
+        !needsFillerPruning
+    ) {
+        return {
+            state: worldState,
+            changed: false,
+        };
+    }
     const next = structuredClone(worldState);
+    if (!needsVersionMigration) {
+        next.actorLibrary =
+            (next.actorLibrary || [])
+                .map(
+                    pruneLegacyTransitionFillerMemories,
+                );
+        return {
+            state: next,
+            changed: true,
+        };
+    }
     const currentActors = new Map(
         (next.actors || []).map(actor => [actor.id, actor]),
     );
@@ -318,7 +403,7 @@ export function migrateRelationshipMemoryState(
             profiles.get(profile.id) || profile,
             currentActors.get(profile.id),
         );
-        return profilesNeedingShorthand
+        const migrated = profilesNeedingShorthand
             .has(profile.id)
             ? {
                 ...normalized,
@@ -344,6 +429,9 @@ export function migrateRelationshipMemoryState(
                 })(),
             }
             : normalized;
+        return pruneLegacyTransitionFillerMemories(
+            migrated,
+        );
     });
     const normalizedProfiles = new Map(
         next.actorLibrary.map(profile => [profile.id, profile]),

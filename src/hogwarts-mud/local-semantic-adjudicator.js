@@ -104,25 +104,33 @@ const MATERIAL_SLOTS = [
     'unspecified',
 ];
 const INVENTORY_ACTIONS = [
-    'acquire',
-    'update',
-    'carry',
-    'equip',
-    'store',
-    'consume',
-    'lose',
+    'acquire', 'carry', 'place', 'equip', 'unequip', 'give',
+    'lend', 'consume', 'damage', 'clean', 'lose', 'destroy',
 ];
-const INVENTORY_IMPORTANCE = [
+const INVENTORY_TYPES = [
+    'wand',
+    'eyewear',
+    'clothing',
+    'accessory',
+    'document',
+    'container',
+    'money',
     'key',
-    'important',
-    'ordinary',
+    'book',
+    'tool',
+    'consumable',
+    'keepsake',
+    'clue',
+    'other',
 ];
-const INVENTORY_CUSTODY = [
-    'carried',
-    'equipped',
-    'stored',
-    'consumed',
-    'lost',
+const INVENTORY_TRANSFER_MODES = [
+    'none', 'gift', 'loan', 'theft', 'return',
+];
+const INVENTORY_STORY_ROLES = [
+    'signature', 'social', 'clue', 'promise', 'keepsake',
+];
+const INVENTORY_VISIBILITY = [
+    'public', 'owner_known', 'hidden',
 ];
 const VISUAL_SCOPES = [
     'none',
@@ -246,28 +254,46 @@ const inventoryUpdateSchema =
     z.object({
         id:
             z.string().max(80),
-        action:
+        operation:
             z.enum(
                 INVENTORY_ACTIONS,
+            ),
+        type:
+            z.enum(
+                INVENTORY_TYPES,
             ),
         labelEn:
             z.string().max(200),
         labelZh:
             z.string().max(200),
-        detailEn:
+        appearanceEn:
             z.string().max(600),
-        detailZh:
+        appearanceZh:
             z.string().max(600),
-        importance:
-            z.enum(
-                INVENTORY_IMPORTANCE,
-            ),
-        custody:
-            z.enum(
-                INVENTORY_CUSTODY,
-            ),
         ownerId:
             z.string().max(96),
+        holderId:
+            z.string().max(96),
+        targetHolderId:
+            z.string().max(96),
+        transferMode:
+            z.enum(
+                INVENTORY_TRANSFER_MODES,
+            ),
+        storyRoles:
+            z.array(
+                z.enum(
+                    INVENTORY_STORY_ROLES,
+                ),
+            ).max(5),
+        visibility:
+            z.enum(
+                INVENTORY_VISIBILITY,
+            ),
+        isEquipped:
+            z.boolean(),
+        held:
+            z.boolean(),
         sourceKind:
             z.enum([
                 'player',
@@ -552,14 +578,20 @@ const inventoryUpdateJsonSchema = {
     additionalProperties: false,
     required: [
         'id',
-        'action',
+        'operation',
+        'type',
         'labelEn',
         'labelZh',
-        'detailEn',
-        'detailZh',
-        'importance',
-        'custody',
+        'appearanceEn',
+        'appearanceZh',
         'ownerId',
+        'holderId',
+        'targetHolderId',
+        'transferMode',
+        'storyRoles',
+        'visibility',
+        'isEquipped',
+        'held',
         'sourceKind',
         'evidenceText',
         'confidence',
@@ -568,10 +600,15 @@ const inventoryUpdateJsonSchema = {
         id: {
             type: 'string',
         },
-        action: {
+        operation: {
             type: 'string',
             enum:
                 INVENTORY_ACTIONS,
+        },
+        type: {
+            type: 'string',
+            enum:
+                INVENTORY_TYPES,
         },
         labelEn: {
             type: 'string',
@@ -581,26 +618,50 @@ const inventoryUpdateJsonSchema = {
             type: 'string',
             maxLength: 200,
         },
-        detailEn: {
+        appearanceEn: {
             type: 'string',
             maxLength: 600,
         },
-        detailZh: {
+        appearanceZh: {
             type: 'string',
             maxLength: 600,
-        },
-        importance: {
-            type: 'string',
-            enum:
-                INVENTORY_IMPORTANCE,
-        },
-        custody: {
-            type: 'string',
-            enum:
-                INVENTORY_CUSTODY,
         },
         ownerId: {
             type: 'string',
+            maxLength: 96,
+        },
+        holderId: {
+            type: 'string',
+            maxLength: 96,
+        },
+        targetHolderId: {
+            type: 'string',
+            maxLength: 96,
+        },
+        transferMode: {
+            type: 'string',
+            enum:
+                INVENTORY_TRANSFER_MODES,
+        },
+        storyRoles: {
+            type: 'array',
+            maxItems: 5,
+            items: {
+                type: 'string',
+                enum:
+                    INVENTORY_STORY_ROLES,
+            },
+        },
+        visibility: {
+            type: 'string',
+            enum:
+                INVENTORY_VISIBILITY,
+        },
+        isEquipped: {
+            type: 'boolean',
+        },
+        held: {
+            type: 'boolean',
         },
         sourceKind: {
             type: 'string',
@@ -1371,26 +1432,35 @@ Calibration examples:
 4. A failed secret spell sends Ron into the rafters in front of class => visualScope room, audibleScope room, concealment attempted, Ron as a direct participant.
 5. A note quietly passed to Harry without discovery => visualScope target, audibleScope none, concealment successful, Harry as a direct participant.`;
 
-const INVENTORY_TURN_SYSTEM = `You are a conservative inventory observer for an already-written RPG turn. Extract only durable story possessions explicitly acquired, retained, carried, equipped, stored, consumed, or lost by the player.
+const INVENTORY_TURN_SYSTEM = `You are a conservative Item V2 proposal observer for an already-written RPG turn. Extract only durable story items whose ownership, holder, location, social meaning, clue/promise value, signature identity, or future state can matter.
 
 Rules:
 - playerAction and narrativeText are the only evidence sources. inventory is context, never evidence.
-- Return an empty array unless an exact source clause explicitly shows the player taking, receiving, claiming, keeping, carrying, holding, storing, consuming, or losing a durable story item.
-- A signed autograph, personal letter, key, wand, map, named keepsake, clue-bearing document, or similarly durable artifact is important or key when the player keeps it.
-- Ignore food, drinks, wrappers, cutlery, generic quills, generic books, classroom supplies, clothing mentioned only as scenery, and objects handled only by NPCs.
-- New possessions use action acquire, ownerId player, custody carried or equipped, and a stable descriptive snake_case ID.
+- A pair such as 【物品操作:carry｜携带】 followed by 【物品:stable_item_id｜label】 is authoritative player intent and object selection. Reuse that exact inventory ID; never substitute a similarly named Item.
+- The structured pair does not prove success. Emit the requested operation only when narrativeText observably completes or changes the Item state. For give/lend, the natural action or narrative must identify the recipient.
+- A malformed, orphaned, hidden, or unknown-ID directive must not produce an inventory update.
+- Return an empty array unless an exact source clause establishes acquire, carry, place, equip, unequip, give, lend, consume, damage, clean, lose, or destroy.
+- A signed autograph, personal letter, key, wand, map, named keepsake, clue-bearing document, promise token, socially meaningful gift, or signature accessory may become a new candidate.
+- Ignore food, drinks, wrappers, cutlery, generic quills, generic books, classroom supplies, routine shop stock, ordinary uniforms, generic clothing and everyday objects unless the player deliberately marks one for retention or the completed event gives it social/plot significance.
+- Ordinary identity-appropriate objects remain implicit and receive no ID, quantity or history.
+- New candidates use operation acquire and a stable descriptive snake_case ID. They are only proposals; the player decides whether to record them.
 - Existing possessions must reuse a supplied inventory ID.
-- New acquisitions require accurate English and Simplified Chinese labels and details.
+- New candidates require accurate English and Simplified Chinese labels and objective appearances.
+- ownerId is the social/legal owner. holderId is the current holder. A gift changes both; a loan or theft changes holderId but preserves ownerId.
+- targetHolderId is required only for give/lend. Use empty string otherwise.
+- storyRoles may include signature, social, clue, promise, keepsake. Use an empty array when none apply.
+- visibility is public for visibly known objects, owner_known for ordinary NPC signature belongings, and hidden only when the player has not observed the object.
+- held is true only when the item is physically in hand at turn end. isEquipped is true only when worn.
 - sourceKind player selects playerAction; sourceKind narrative selects narrativeText.
 - evidenceText must be one exact source substring no longer than 500 characters. Never paraphrase, cite inventory, or invent a sentence.
 - Do not infer ownership from proximity. If another actor takes the item away and the player does not retain it, return no acquisition.
 
-Example: playerAction "Tina拿起哈利签过名的羊皮纸并带着它去上课" => acquire one important signed parchment owned by player, using that exact clause as evidence.`;
+Example: playerAction "Tina拿起哈利签过名的羊皮纸并带着它去上课" => acquire one document candidate owned and held by player, storyRoles social and keepsake, using that exact clause as evidence.`;
 
 const INVENTORY_CANDIDATE_ITEM_PATTERN =
-    /(?:\b(?:autograph|signed (?:parchment|note|paper|book)|letter|key|wand|map|journal|diary|ring|amulet|artifact|heirloom|keepsake|permit|token)\b|签名|签过名|亲笔签名|信件|钥匙|魔杖|地图|日记|戒指|护符|魔法物品|传家宝|纪念品|许可证|信物)/iu;
+    /(?:\b(?:autograph|signed (?:parchment|note|paper|book)|letter|key|wand|map|journal|diary|ring|ribbon|glasses|spectacles|amulet|artifact|heirloom|keepsake|permit|token)\b|签名|签过名|亲笔签名|信件|钥匙|魔杖|地图|日记|戒指|丝带|眼镜|护符|魔法物品|传家宝|纪念品|许可证|信物)/iu;
 const INVENTORY_CANDIDATE_POSSESSION_PATTERN =
-    /(?:\b(?:take|takes|took|pick(?:ed)? up|receive[ds]?|accept(?:ed)?|claim(?:ed)?|keep|kept|carry|carried|hold(?:ing)?|held|clamped on|put .* (?:bag|pocket))\b|拿起|拿到|拿走|收下|收到|接过|认领|保留|留着|带着|握着|攥着|手里|随身|装进|放进口袋|放进包)/iu;
+    /(?:\b(?:acquire|equip|unequip|take|takes|took|pick(?:ed)? up|receive[ds]?|accept(?:ed)?|claim(?:ed)?|keep|kept|carry|carried|hold(?:ing)?|held|clamped on|wear|wore|remove[ds]?|give|gave|lend|lent|borrow|place[ds]?|put|consume[ds]?|break|broke|damage[ds]?|clean[eds]?|wash(?:ed)?|lose|lost|destroy(?:ed)?)\b|获得|携带|拿起|拿到|拿走|收下|收到|接过|认领|保留|留着|带着|握着|攥着|手里|随身|装进|放下|放置|穿戴|穿上|戴上|脱下|摘下|赠送|送给|借出|借给|借来|消耗|吃掉|喝掉|损坏|打坏|清洗|洗净|丢失|弄丢|销毁|摧毁|放进口袋|放进包)/iu;
 
 function shouldObserveInventory(
     input,
@@ -1401,8 +1471,36 @@ function shouldObserveInventory(
     ]
         .filter(Boolean)
         .join('\n');
-    return INVENTORY_CANDIDATE_ITEM_PATTERN
-        .test(source) &&
+    const normalizedSource =
+        source.normalize('NFKC')
+            .toLocaleLowerCase();
+    const inventory =
+        Array.isArray(input?.inventory)
+            ? input.inventory
+            : [];
+    const mentionsTrackedItem =
+        inventory
+            .flatMap(item => [
+                item?.labelEn,
+                item?.label,
+                item?.appearanceEn,
+            ])
+            .map(value =>
+                String(value || '')
+                    .normalize('NFKC')
+                    .toLocaleLowerCase()
+                    .trim())
+            .filter(value =>
+                value.length >= 2)
+            .some(value =>
+                normalizedSource.includes(
+                    value,
+                ));
+    return (
+        INVENTORY_CANDIDATE_ITEM_PATTERN
+            .test(source) ||
+        mentionsTrackedItem
+    ) &&
         INVENTORY_CANDIDATE_POSSESSION_PATTERN
             .test(source);
 }

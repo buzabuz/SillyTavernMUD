@@ -8,6 +8,8 @@ export function createLocalSemanticAdapter(ports) {
         projectObservedInventoryUpdates,
         validatePerceptionContract,
     } = ports;
+    const OBSERVED_ACTOR_DEPARTURE_PATTERN =
+        /(?:\b(?:left|departed|exited|walked (?:out|away|through|into)|went (?:out|away|into)|moved into|crossed into)\b|离开|走出|退场|走进|进入了)/iu;
 
     function buildLocalSemanticActorContext(
         state,
@@ -844,6 +846,15 @@ export function createLocalSemanticAdapter(ports) {
             actors.get(
                 observed.actorId,
             );
+            const observedEvidence =
+            actor
+                ? findActorObservationEvidence(
+                    narrativeText,
+                    observed,
+                    actor,
+                    roomContext,
+                )
+                : null;
             if (
                 !actor ||
             (
@@ -856,16 +867,11 @@ export function createLocalSemanticAdapter(ports) {
                 observed.confidence ||
                 0,
             ) < 0.65 ||
-            !findActorObservationEvidence(
-                narrativeText,
-                observed,
-                actor,
-                roomContext,
-            )
+            !observedEvidence
             ) {
                 continue;
             }
-            const targetRoomId =
+            const requestedRoomId =
             roomIds.has(
                 observed.roomId,
             )
@@ -877,6 +883,39 @@ export function createLocalSemanticAdapter(ports) {
             actor.roomId ||
             roomContext
                 .currentRoomId;
+            const targetRoom =
+            roomContext.rooms.find(
+                room =>
+                    room.id ===
+                    requestedRoomId,
+            );
+            const normalizedEvidence =
+            String(
+                observedEvidence
+                    .text ||
+                '',
+            )
+                .replace(/_/gu, ' ')
+                .toLocaleLowerCase();
+            const hasTargetRoomEvidence =
+            requestedRoomId ===
+                fromRoomId ||
+            [
+                requestedRoomId,
+                targetRoom?.nameEn,
+            ]
+                .filter(Boolean)
+                .map(value =>
+                    String(value)
+                        .replace(/_/gu, ' ')
+                        .toLocaleLowerCase())
+                .some(value =>
+                    normalizedEvidence
+                        .includes(value));
+            const targetRoomId =
+            hasTargetRoomEvidence
+                ? requestedRoomId
+                : fromRoomId;
             if (
                 targetRoomId !==
                 fromRoomId &&
@@ -931,9 +970,18 @@ export function createLocalSemanticAdapter(ports) {
             targetRoomId !==
                 roomContext
                     .currentRoomId;
+            const departureGrounded =
+            OBSERVED_ACTOR_DEPARTURE_PATTERN
+                .test(
+                    observedEvidence
+                        .text,
+                );
             if (
-                observed.presence ===
-                'absent' ||
+                (
+                    observed.presence ===
+                    'absent' &&
+                    departureGrounded
+                ) ||
             leftInteraction
             ) {
                 nextUpdate.present =
@@ -1091,22 +1139,57 @@ export function createLocalSemanticAdapter(ports) {
                                                 item
                                                     .labelEn ||
                                                 '',
-                                            detailEn:
+                                            label:
+                                                item
+                                                    .label ||
+                                                item
+                                                    .labelEn ||
+                                                '',
+                                            appearanceEn:
+                                                item
+                                                    .appearanceEn ||
                                                 item
                                                     .detailEn ||
                                                 '',
-                                            importance:
+                                            type:
                                                 item
-                                                    .importance ||
-                                                'ordinary',
-                                            custody:
+                                                    .type ||
                                                 item
-                                                    .custody ||
-                                                'stored',
+                                                    .kind ||
+                                                'other',
                                             ownerId:
                                                 item
                                                     .ownerId ||
                                                 'player',
+                                            holderId:
+                                                item
+                                                    .holderId ||
+                                                (
+                                                    [
+                                                        'carried',
+                                                        'equipped',
+                                                    ].includes(
+                                                        item
+                                                            .custody,
+                                                    )
+                                                        ? item
+                                                            .ownerId ||
+                                                            'player'
+                                                        : ''
+                                                ),
+                                            state:
+                                                item
+                                                    .state ||
+                                                item
+                                                    .status ||
+                                                'intact',
+                                            isEquipped:
+                                                item
+                                                    .isEquipped ===
+                                                    true ||
+                                                item
+                                                    .custody ===
+                                                    'equipped',
                                         }),
                                     ),
                                 existingActorPresence:

@@ -95,6 +95,7 @@ export function createWorkflowApplication(ports) {
         migrateActorPresentationState,
         migrateLoadedSocialGraph,
         migrateObservedInventoryState,
+        migrateItemSystemState,
         migrateRelationshipMemoryState,
         migrateSpellbookState,
         normalizeActorMemoryProfile,
@@ -109,10 +110,13 @@ export function createWorkflowApplication(ports) {
         normalizeSocialGraph,
         normalizeTranslationProvider,
         parseCompleteJsonObject,
+        parseItemOperationDirectives,
         parseSpellCastDirectives,
+        partitionItemProposals,
         projectActorSocialRelationships,
         projectObservedInventoryUpdates,
         projectSceneArchivePresence,
+        projectSceneTransitionPresence,
         protectTranslationTerms,
         reconcileCanonActorDisplayNames,
         reconcileSpatialState,
@@ -127,6 +131,7 @@ export function createWorkflowApplication(ports) {
         resetInspectorMapScope,
         resolveActionCheck,
         resolveEventWitnesses,
+        resolveItemCandidate,
         resolvePlayerAddressing,
         resolveTemporaryActorRevealedName,
         restoreTranslationTerms,
@@ -182,6 +187,7 @@ export function createWorkflowApplication(ports) {
     } = createLifecycleRuntime({
         createFallbackNextSceneIntent,
         getContext,
+        getLocalMapDefinition,
         getMudState,
         getRoomName,
         jobRegistry,
@@ -190,13 +196,16 @@ export function createWorkflowApplication(ports) {
         migrateActorPresentationState,
         migrateLoadedSocialGraph,
         migrateObservedInventoryState,
+        migrateItemSystemState,
         migrateRelationshipMemoryState,
         migrateSpellbookState,
         normalizeCausalCollapseState,
         normalizeModelSlots,
         projectActorSocialRelationships,
+        projectSceneTransitionPresence,
         reconcileCanonActorDisplayNames,
         reconcileTemporaryActorDisplayNames,
+        reduceLocalPresence,
         saveMetadataDebounced,
         validateNextSceneIntent,
     });
@@ -433,6 +442,7 @@ export function createWorkflowApplication(ports) {
         getActiveAddressingState,
         getRequestHeaders,
         getSettings,
+        parseItemOperationDirectives,
         parseJsonObject,
         recoverScenePerformancePayload,
         recordTurnDiagnostic,
@@ -510,7 +520,9 @@ export function createWorkflowApplication(ports) {
         jobRegistry,
         localizeTurnTransaction,
         normalizeEventKnowledge,
+        parseItemOperationDirectives,
         parseSpellCastDirectives,
+        partitionItemProposals,
         reconcileSpatialState,
         reconcileTurnActorPresenceWithSpatialState,
         reconcileVisibleActorPresenceState,
@@ -534,6 +546,47 @@ export function createWorkflowApplication(ports) {
         validateTurnTransaction,
         discardTurnDiagnostics,
     });
+
+    async function decideItemCandidate(
+        key,
+        decision,
+    ) {
+        const context =
+            getContext();
+        const state =
+            getMudState();
+        const result =
+            resolveItemCandidate(
+                state,
+                key,
+                decision,
+            );
+        if (!result.changed) {
+            return result;
+        }
+        context.chatMetadata
+            .hogwartsMud =
+            result.state;
+        await context
+            .saveMetadata();
+        await syncLocalKnowledge();
+        applySystemPrompt();
+        renderAll();
+        return result;
+    }
+
+    const acceptItemCandidate =
+        key =>
+            decideItemCandidate(
+                key,
+                'accepted',
+            );
+    const ignoreItemCandidate =
+        key =>
+            decideItemCandidate(
+                key,
+                'ignored',
+            );
 
 
     return {
@@ -573,5 +626,7 @@ export function createWorkflowApplication(ports) {
         runStructuredTurn,
         retryFailedPlayerTurn,
         preparePlayableState,
+        acceptItemCandidate,
+        ignoreItemCandidate,
     };
 }

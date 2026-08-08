@@ -2,7 +2,7 @@
 
 import {
     createSceneItemStates,
-    normalizeInventoryItem,
+    synchronizeHeldItemLocations,
 } from './inventory.js';
 
 import {
@@ -104,46 +104,6 @@ export function reconcileSpatialState(
                 openingRoom.name ||
                 openingRoom.nameEn ||
                 next.location;
-            next.items = (next.items || [])
-                .map((item, index) => {
-                    const normalized =
-                        normalizeInventoryItem(
-                            item,
-                            index,
-                            {
-                                mapId,
-                                roomId:
-                                    openingRoom.id,
-                                clock: next.clock,
-                            },
-                        );
-                    return normalized.ownerId ===
-                        'player' &&
-                        [
-                            'carried',
-                            'equipped',
-                        ].includes(
-                            normalized.custody,
-                        )
-                        ? {
-                            ...normalized,
-                            mapId,
-                            roomId:
-                                openingRoom.id,
-                        }
-                        : normalized;
-                });
-            if (next.scene) {
-                next.scene.itemStates =
-                    createSceneItemStates(
-                        next.items,
-                        {
-                            mapId,
-                            roomId:
-                                openingRoom.id,
-                        },
-                    );
-            }
             next.actors = (next.actors || [])
                 .map(actor =>
                     actor.present !== false &&
@@ -160,6 +120,31 @@ export function reconcileSpatialState(
                                 openingRoom.id,
                         }
                         : actor);
+            next.items =
+                synchronizeHeldItemLocations(
+                    next.items,
+                    {
+                        playerMapId:
+                            mapId,
+                        playerRoomId:
+                            openingRoom.id,
+                        actors:
+                            next.actors,
+                        clock:
+                            next.clock,
+                    },
+                );
+            if (next.scene) {
+                next.scene.itemStates =
+                    createSceneItemStates(
+                        next.items,
+                        {
+                            mapId,
+                            roomId:
+                                openingRoom.id,
+                        },
+                    );
+            }
             locationRepair = {
                 fromMapId: mapId,
                 fromRoomId:
@@ -253,36 +238,20 @@ export function reconcileSpatialState(
                         dormitoryRoom.id,
                 }
                 : actor);
-        next.items = (
-            next.items || []
-        ).map((item, index) => {
-            const normalized =
-                normalizeInventoryItem(
-                    item,
-                    index,
-                    {
+        next.items =
+            synchronizeHeldItemLocations(
+                next.items,
+                {
+                    playerMapId:
                         mapId,
-                        roomId:
-                            dormitoryRoom.id,
-                        clock: next.clock,
-                    },
-                );
-            return normalized.ownerId ===
-                'player' &&
-                [
-                    'carried',
-                    'equipped',
-                ].includes(
-                    normalized.custody,
-                )
-                ? {
-                    ...normalized,
-                    mapId,
-                    roomId:
+                    playerRoomId:
                         dormitoryRoom.id,
-                }
-                : normalized;
-        });
+                    actors:
+                        next.actors,
+                    clock:
+                        next.clock,
+                },
+            );
         if (next.scene) {
             next.scene.itemStates =
                 createSceneItemStates(

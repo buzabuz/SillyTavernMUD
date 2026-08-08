@@ -18,6 +18,7 @@ export function createTurnPerformanceWorkflow(ports) {
         getActiveAddressingState,
         getRequestHeaders,
         getSettings,
+        parseItemOperationDirectives,
         parseJsonObject,
         recoverScenePerformancePayload,
         recordTurnDiagnostic =
@@ -179,6 +180,16 @@ export function createTurnPerformanceWorkflow(ports) {
             playerAction,
             addressing,
         );
+        const itemDirectiveResult =
+        parseItemOperationDirectives(
+            playerAction,
+            (
+                state.items ||
+                []
+            ).filter(item =>
+                item.visibility !==
+                    'hidden'),
+        );
         const privateKnowledgeActorIds =
         new Set(
             addressing.actorIds ||
@@ -238,7 +249,7 @@ ${CANON_CAST_IDENTITY_CONTRACT}
 Strict boundaries:
 - segments is the only required output field. State bookkeeping is handled by a deterministic settlement graph after your response. Omit optional metadata whenever no real state change occurred.
 - You may perform mundane blocking, gestures, conversation, sensory changes, and ordinary consequences that follow directly from the player's stated action.
-- You may not create a new location, formal NPC, item, spell, relationship, hidden fact, clue, rule result, or plot turn. The sole NPC exception is temporaryActorPromotionPolicy: promote a specific unnamed crowd member whom the player has already selected for direct, continuing interaction.
+- You may not directly create a new location, formal NPC, Item, spell, relationship, hidden fact, clue, rule result, or plot turn. You may submit an item_update proposal; a new object remains only a player-review candidate until the player explicitly records it. The sole NPC exception is temporaryActorPromotionPolicy: promote a specific unnamed crowd member whom the player has already selected for direct, continuing interaction.
 - playerTurnSequence is the sole authoritative ordered player input. direct_speech and broadcast_speech entries are already routed by the rules layer; action entries are never spoken dialogue. Preserve lineIndex and speechOrder. Never infer, replace, or merge an addressee from prose.
 - addressing is routing metadata for playerTurnSequence. Do not reinterpret playerAction or names inside action entries to infer another addressee.
 - mentionedKnownActors is rules-layer authority for familiar people explicitly named in action prose. Each listed actor is now present in the current room. Depict an observable response to the acknowledged gesture or action; do not replace them with an anonymous bystander.
@@ -257,6 +268,11 @@ Strict boundaries:
 - currentRoomState.visibleResiduesEn contains previously committed aftermath that remains physically or institutionally observable. Preserve it until a later authoritative state change removes it; visibility does not grant knowledge of its hidden cause.
 - A named residue or belonging never makes its owner present. Only presentActors entries with present true may speak, act, move, or receive state proposals; do not admit an absent owner because their blanket, trunk, note, damage, or other aftermath remains in the room.
 - currentMaterialState is binding visual state for the player, present actors, and this room only. Preserve active outfits, accessories, hairstyles, visible conditions, held objects and hands, placements, moves, removals, furnishing adjustments, damage, repairs, dirt, and cleaning silently unless relevant; do not reset anything merely because this turn does not mention it.
+- implicitItemPolicy grants ordinary identity-appropriate objects without creating Items: students have normal uniform, quills, textbooks and school supplies; professors have ordinary robes and teaching/office supplies; shopkeepers have routine stock and tools; everyone has normal clothing, food, household and hygiene objects. Use these naturally without IDs, quantities, history or item_update proposals.
+- formalItems is the complete player-visible tracked Item list. Use its stable ID for carry/place/equip/unequip/give/lend/consume/damage/clean/lose/destroy proposals. Never rename an existing Item.
+- itemDirectives pairs a structured player-intent operation with one stable formal Item ID. Treat it as authoritative object selection and intended operation, but not as proof of success. Narrate the attempt, then emit an item_update only when this turn's observable result actually completes or changes that operation. Recipient identity for give/lend still comes from the natural player action.
+- itemDirectiveErrors are diagnostics for malformed or unknown references. Never guess a replacement Item or mutate state from an invalid directive.
+- Propose acquire for a new candidate only when ownership, social meaning, clue/promise value, signature identity, or future plot consequences make durable tracking useful. Include objective appearance and exact evidence from this turn. Ordinary clothing and transient props stay implicit.
 - Use only facts already observable in the scene or explicitly supplied in the scene-safe local records. Never disclose a locked clue or infer a private fact.
 - Never add speech, thoughts, intentions, or choices for the player beyond the supplied action.
 - NPCs have agency. They must pursue their committed goals, initiate practical steps, and act without waiting for the player to prompt every motion.
@@ -312,7 +328,22 @@ Schema:
     },
     {
       "type":"item_update",
-      "item":{"id":"stable_item_id","action":"acquire|update|carry|equip|store|consume|lose"}
+      "item":{
+        "id":"stable_item_id",
+        "operation":"acquire|carry|place|equip|unequip|give|lend|consume|damage|clean|lose|destroy",
+        "type":"wand|eyewear|clothing|accessory|document|container|money|key|book|tool|consumable|keepsake|clue|other",
+        "labelEn":"required for a new candidate",
+        "appearanceEn":"objective visible appearance; required for a new candidate",
+        "ownerId":"player or actor ID",
+        "holderId":"player or actor ID",
+        "targetHolderId":"required for give/lend",
+        "transferMode":"none|gift|loan|theft|return",
+        "storyRoles":["signature|social|clue|promise|keepsake"],
+        "visibility":"public|owner_known|hidden",
+        "isEquipped":false,
+        "held":false,
+        "evidenceText":"exact substring from player action or generated English segments"
+      }
     },
     {
       "type":"temporary_actor",
@@ -346,6 +377,12 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     playerAction:
                     narrativePlayerAction,
                     playerTurnSequence,
+                    itemDirectives:
+                    itemDirectiveResult
+                        .directives,
+                    itemDirectiveErrors:
+                    itemDirectiveResult
+                        .errors,
                     addressing,
                     privateKnowledgeActorIds:
                     [...privateKnowledgeActorIds],
@@ -384,6 +421,58 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     buildCurrentMaterialState(
                         state,
                     ),
+                    formalItems:
+                    (
+                        state.items ||
+                        []
+                    )
+                        .filter(item =>
+                            item.visibility !==
+                                'hidden')
+                        .map(item => ({
+                            id:
+                                item.id,
+                            type:
+                                item.type ||
+                                item.kind,
+                            labelEn:
+                                item.labelEn,
+                            ownerId:
+                                item.ownerId,
+                            holderId:
+                                item.holderId ||
+                                (
+                                    [
+                                        'carried',
+                                        'equipped',
+                                    ].includes(
+                                        item.custody,
+                                    )
+                                        ? item.ownerId
+                                        : ''
+                                ),
+                            state:
+                                item.state ||
+                                item.status,
+                            isEquipped:
+                                item
+                                    .isEquipped ===
+                                    true ||
+                                item.custody ===
+                                    'equipped',
+                        })),
+                    implicitItemPolicy: {
+                        student:
+                            'ordinary uniform, quills, textbooks, school supplies',
+                        professor:
+                            'ordinary robes, teaching and office supplies',
+                        shopkeeper:
+                            'routine shop stock and work tools',
+                        everyone:
+                            'ordinary clothing, food, household and hygiene objects',
+                        rule:
+                            'Use naturally without creating Item IDs unless a durable candidate meets the formal tracking criteria.',
+                    },
                     movementResolution,
                     momentumDirective,
                     checkResolution,

@@ -10,6 +10,14 @@ import {
     ORDINARY_TRANSIENT_ITEM_PATTERN,
     PLAYER_KEEP_ITEM_PATTERN,
 } from './inventory.js';
+import {
+    applyItemOperations,
+    normalizeItemProposal,
+} from './item-reducer.js';
+import {
+    ITEM_OPERATION_VALUES,
+    normalizeItemOperation,
+} from './item-schema.js';
 
 import {
     LOCALIZED_TEMPORARY_ACTOR_KEYS,
@@ -36,15 +44,12 @@ export function validateItemUpdates(
         ]),
     );
     const seenIds = new Set();
-    const allowedActions = new Set([
-        'acquire',
-        'update',
-        'carry',
-        'equip',
-        'store',
-        'consume',
-        'lose',
-    ]);
+    const allowedActions =
+        new Set([
+            ...ITEM_OPERATION_VALUES,
+            'update',
+            'store',
+        ]);
     itemUpdates.forEach(update => {
         if (!update ||
             typeof update !== 'object' ||
@@ -60,7 +65,17 @@ export function validateItemUpdates(
             );
         }
         seenIds.add(update.id);
-        if (!allowedActions.has(update.action)) {
+        const operation =
+            normalizeItemOperation(
+                update.operation ||
+                update.action,
+            );
+        if (
+            !allowedActions.has(
+                update.action,
+            ) &&
+            !operation
+        ) {
             errors.push(
                 `物品 ${update.id || '?'} 的 action 无效。`,
             );
@@ -68,36 +83,46 @@ export function validateItemUpdates(
         const existing =
             existingItems.get(update.id);
         if (
-            update.action !== 'acquire' &&
+            operation !== 'acquire' &&
             !existing
         ) {
             errors.push(
                 `物品 ${update.id || '?'} 尚未入栏，不能执行 ${update.action || '?'}。`,
             );
         }
-        if (update.action === 'acquire') {
+        if (operation === 'acquire') {
             if (
                 !String(
                     update.labelEn || '',
                 ).trim() ||
                 !String(
-                    update.detailEn || '',
+                    update.appearanceEn ||
+                    update.detailEn ||
+                    '',
                 ).trim()
             ) {
                 errors.push(
                     `新物品 ${update.id || '?'} 缺少 labelEn 或 detailEn。`,
                 );
             }
-            if (!ITEM_IMPORTANCE_VALUES.includes(
-                update.importance,
-            )) {
+            if (
+                update.importance &&
+                !ITEM_IMPORTANCE_VALUES
+                    .includes(
+                        update.importance,
+                    )
+            ) {
                 errors.push(
                     `新物品 ${update.id || '?'} 的 importance 无效。`,
                 );
             }
-            if (!ITEM_CUSTODY_VALUES.includes(
-                update.custody,
-            )) {
+            if (
+                update.custody &&
+                !ITEM_CUSTODY_VALUES
+                    .includes(
+                        update.custody,
+                    )
+            ) {
                 errors.push(
                     `新物品 ${update.id || '?'} 的 custody 无效。`,
                 );
@@ -143,7 +168,10 @@ export function validateItemUpdates(
                 ));
         const submitted =
             itemUpdates.some(update =>
-                update.action === 'acquire' &&
+                normalizeItemOperation(
+                    update.operation ||
+                    update.action,
+                ) === 'acquire' &&
                 inferItemKind(update) === kind &&
                 ['key', 'important'].includes(
                     update.importance,
@@ -161,98 +189,44 @@ export function applyItemUpdates(
     worldState,
     itemUpdates = [],
 ) {
-    const items = (worldState.items || [])
-        .map((item, index) =>
-            normalizeInventoryItem(
-                item,
-                index,
-                {
-                    mapId:
-                        worldState.map
-                            ?.activeMapId,
-                    roomId:
-                        worldState.map
-                            ?.currentLocalNodeId,
-                    clock: worldState.clock,
-                },
-            ));
-    const byId = new Map(
-        items.map(item => [item.id, item]),
-    );
-    itemUpdates.forEach(update => {
-        const existing = byId.get(update.id);
-        let custody =
-            update.custody ||
-            existing?.custody ||
-            'carried';
-        if (update.action === 'carry') {
-            custody = 'carried';
-        } else if (update.action === 'equip') {
-            custody = 'equipped';
-        } else if (update.action === 'store') {
-            custody = 'stored';
-        } else if (update.action === 'consume') {
-            custody = 'consumed';
-        } else if (update.action === 'lose') {
-            custody = 'lost';
-        }
-        const followsPlayer = [
-            'carried',
-            'equipped',
-        ].includes(custody) &&
-            (update.ownerId ||
-                existing?.ownerId ||
-                'player') === 'player';
-        const nextItem = normalizeInventoryItem({
-            ...(existing || {}),
-            ...update,
-            label:
-                update.label ||
-                existing?.label ||
-                update.labelEn,
-            detail:
-                update.detail ||
-                existing?.detail ||
-                update.detailEn,
-            custody,
-            status:
-                custody === 'consumed'
-                    ? 'consumed'
-                    : custody === 'lost'
-                        ? 'lost'
-                        : update.status ||
-                            existing?.status ||
-                            'available',
-            updatedClock:
-                worldState.clock,
-            acquiredClock:
-                existing?.acquiredClock ||
-                worldState.clock,
-            source:
-                existing?.source ||
-                'scene_turn',
-            mapId: followsPlayer
-                ? worldState.map
-                    ?.activeMapId
-                : update.mapId ||
-                    existing?.mapId,
-            roomId: followsPlayer
-                ? worldState.map
-                    ?.currentLocalNodeId
-                : update.roomId ||
-                    existing?.roomId,
-        }, items.length, {
-            mapId:
-                worldState.map?.activeMapId,
-            roomId:
-                worldState.map
-                    ?.currentLocalNodeId,
-            clock: worldState.clock,
-        });
-        delete nextItem.action;
-        byId.set(nextItem.id, nextItem);
-    });
-    return [...byId.values()];
+    const proposals =
+        (
+            Array.isArray(
+                itemUpdates,
+            )
+                ? itemUpdates
+                : []
+        )
+            .map(
+                (
+                    update,
+                    index,
+                ) =>
+                    normalizeItemProposal(
+                        update,
+                        {
+                            sourceRole:
+                                'low',
+                            sourceEventId:
+                                `legacy_item_update_${
+                                    index + 1
+                                }`,
+                            clock:
+                                worldState
+                                    .clock,
+                            index,
+                        },
+                    ),
+            )
+            .filter(Boolean);
+    return applyItemOperations(
+        worldState,
+        proposals,
+        {
+            allowCreate:
+                true,
+        },
+    ).items;
 }
 
 export function validateActorPresenceResolution(
