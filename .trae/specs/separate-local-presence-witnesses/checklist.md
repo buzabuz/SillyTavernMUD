@@ -1,0 +1,25 @@
+# Verification Checklist
+
+- [x] Active interaction、local occupants、cohorts 与 event witnesses 使用独立版本化字段。
+- [x] `actor.present=false` 不会在没有移动/离场证据时删除同室 occupant。
+- [x] `/local/observe` 单次调用返回合法 perception，不新增感知模型调用。
+- [x] Perception 不直接输出最终 witness 名单。
+- [x] Witness Resolver 根据 occupant、cohort、空间和 perception 生成稳定 witness/basis。
+- [x] Tina 悬浮 Ron 时全教室已知人物和课堂 cohort 获得事件知识。
+- [x] 耳语、纸条、成功隐蔽只授予目标/参与者知识。
+- [x] 失败隐蔽按实际公开结果扩张见证范围。
+- [x] 相邻人物只在感知范围和空间图同时允许时成为见证者。
+- [x] 本地观察失败时正文仍提交，并使用有来源标记的确定性回退。
+- [x] Event knowledge 不自动创建关系边或修改关系数值。
+- [x] Social Director 只能在 event witness 白名单内选择 `witnessedBy`。
+- [x] 人物知识胶囊区分 direct、witnessed、reported。
+- [x] Knowledge 与 scene archive 分别保存 active、local、cohort、participant、witness。
+- [x] 人物栏显示“当前互动人物”和折叠的“当前地点人物”。
+- [x] 地点人物 UI 不泄漏隐藏人物，并支持桌面、390px、键盘和 reduced motion。
+- [x] 迁移工具支持 dry-run、apply、单文件/全部、manifest 恢复、原子写入。
+- [x] 存量迁移不调用用户大模型、翻译或 Social Director API。
+- [x] Tina 迁移不改变正文、消息 ID、scene ID、clock、turn、cursor、关系数值、evidence ID、共同记忆冷却。
+- [x] Tina 迁移重复运行是 no-op，恢复后重跑得到相同结果。
+- [x] 普通新回合的大模型调用次数不增加，后置本地观察保持一次。
+- [x] 全量测试、Social Contract、只读 E2E、ESLint、`node --check`、`git diff --check` 全部通过。
+- [x] README 记录最新写入所有权、模型调用工作流、回退和迁移命令。

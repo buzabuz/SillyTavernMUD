@@ -11,7 +11,7 @@ import {
     foldNarrativeTurnProposals,
     normalizeNarrativeTurnCore,
     reconcileNarrativeTurnAuthority,
-} from '../../public/scripts/extensions/hogwarts-mud/helpers.js';
+} from '../../public/scripts/extensions/hogwarts-mud/domain/turn-protocol.js';
 
 const TurnSettlementState =
     new StateSchema({

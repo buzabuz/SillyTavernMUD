@@ -2,10 +2,16 @@ import { getRequestHeaders } from '/script.js';
 import { getStringHash } from '/scripts/utils.js';
 import {
     buildActorAppearanceView,
-    buildSocialAudienceProjection,
-    getActiveInteractionActorIds,
+} from './domain/appearance.js';
+import {
     normalizeActorMemoryProfile,
-} from './helpers.js';
+} from './domain/actor-memory.js';
+import {
+    buildSocialAudienceProjection,
+} from './domain/social-projection.js';
+import {
+    getActiveInteractionActorIds,
+} from './presence-witness-contract.js';
 
 export const KNOWLEDGE_CATEGORIES = Object.freeze(['actors', 'scenes', 'events', 'clues']);
 const VECTOR_SOURCE = 'transformers';

@@ -31,6 +31,12 @@ function readChatStatus() {
 
 test.use({
     channel: 'chrome',
+    launchOptions: {
+        args: [
+            '--disable-breakpad',
+            '--disable-crash-reporter',
+        ],
+    },
     viewport: {
         width: 390,
         height: 844,
@@ -180,6 +186,40 @@ test('migrated Tina save keeps the 390px people panel read-only and keyboard acc
             '拉文德·布朗',
             '罗恩·韦斯莱',
         ]);
+    await page.locator(
+        '#hpmud_people .hpmud-person',
+    ).first().click();
+    await expect(
+        page.locator(
+            '#hpmud_inspector_content',
+        ),
+    ).toContainText(
+        '拉文德·布朗',
+    );
+
+    await page.locator(
+        '[data-hpmud-inspector="map"]',
+    ).click();
+    await expect(
+        page.locator(
+            '#hpmud_inspector_content .hpmud-inspector-map svg',
+        ),
+    ).toHaveCount(1);
+
+    const composerInput =
+        page.locator(
+            '#hpmud_input',
+        );
+    await expect(composerInput)
+        .toBeEditable();
+    await composerInput.fill(
+        '390px read-only composer probe',
+    );
+    await expect(composerInput)
+        .toHaveValue(
+            '390px read-only composer probe',
+        );
+    await composerInput.fill('');
 
     const localDetails =
         page.locator(
@@ -373,6 +413,34 @@ test('migrated Tina save keeps the 390px people panel read-only and keyboard acc
             resolve,
             1500,
         ));
+    const relationshipViewport =
+        await page.locator(
+            '#hpmud_relationship_dialog',
+        ).evaluate(element => {
+            const rect =
+                element
+                    .getBoundingClientRect();
+            return {
+                left:
+                    rect.left,
+                right:
+                    rect.right,
+                viewportWidth:
+                    element
+                        .ownerDocument
+                        .defaultView
+                        .innerWidth,
+            };
+        });
+    expect(
+        relationshipViewport.left,
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+        relationshipViewport.right,
+    ).toBeLessThanOrEqual(
+        relationshipViewport
+            .viewportWidth,
+    );
 
     const loadedState =
         await page.evaluate(() => {

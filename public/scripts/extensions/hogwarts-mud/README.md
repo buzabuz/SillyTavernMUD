@@ -504,16 +504,119 @@ POST /api/translate/bing
 
 Google 端点使用 `google-translate-api-x`，Bing 端点使用 `bing-translate-api`。Google 固定源语言为英语并使用 4700 字符安全批次，Bing 使用 900 字符安全批次。两者会在翻译前把人物、地点和高频魔法术语替换为稳定占位符，翻译后恢复权威中文名称。切换翻译源会按来源和格式版本刷新当前范围内的缓存；任何 provider 失败都不会覆盖英文原文。
 
+## 模块地图
+
+导入只能指向更低层；允许跳过中间层，但不允许反向依赖：
+
+```text
+core <- state/domain <- runtime/adapters <- workflows <- ui <- index.js
+```
+
+| 层 | 目录或文件 | 职责 |
+| --- | --- | --- |
+| Core | `core/` | Context 预算、稳定值工具、JSON 恢复；不访问业务状态或宿主。 |
+| State/Domain | `domain/` | Schema、normalize、validate、migration、projection、Reducer 和确定性规则。 |
+| Runtime | `runtime/` | 状态 port、只读策略、任务互斥、宿主事件、存档生命周期。 |
+| Adapters | `adapters/` | Connection Manager、知识库、本地语义和翻译端口适配。 |
+| Workflows | `workflows/` | 开局、导演、社交记忆、室内地图、普通回合和转场事务编排。 |
+| UI | `ui/` | View model、renderer、controller、控件状态和 action 绑定。 |
+| Composition | `index.js` | 依赖组装、根 DOM、宿主事件生命周期、兼容导出和幂等 `init()`。 |
+
+`world-data.js`、`map-pack.js`、`canon-characters.js` 和本地化目录是数据/目录源。
+`presence-witness-contract.js`、`spell-catalog.js` 是仍保留原公开路径的领域契约。
+`knowledge.js`、`relationship-graph.js` 和服务端 graph 是宿主集成模块，必须直接导入真实领域模块。
+
+### 修改落点
+
+| 修改类型 | 首选落点 |
+| --- | --- |
+| Context 裁剪、JSON 恢复 | `core/context-budget.js`、`core/json-recovery.js` |
+| Campaign、人物草稿、初始世界 | `domain/campaign.js`、`domain/character.js`、`domain/initial-world.js` |
+| 物品、物质、外观、法术 | `domain/inventory.js`、`domain/material-state.js`、`domain/appearance.js`、`domain/spell-state.js` |
+| 人物身份、知识、记忆、选角 | `domain/actor-*.js`、`domain/cast.js` |
+| 社交 Schema、迁移、投影、Reducer | `domain/social-*.js` |
+| 判定、时间、节奏、因果 | `domain/checks.js`、`domain/time-environment.js`、`domain/pacing-*.js`、`domain/causal-*.js` |
+| 回合协议、校验、提交、回滚 | `domain/turn-*.js` |
+| 转场、世界变化、档案 | `domain/scene-*.js`、`domain/world-changes.js`、`domain/archive-projection.js` |
+| 地图、寻路、移动、空间 | `domain/maps.js`、`domain/pathfinding.js`、`domain/movement.js`、`domain/spatial-*.js` |
+| 翻译术语、Preset/Regex 导入 | `domain/translation.js`、`domain/preset-import.js` |
+| 模型或宿主 I/O | `adapters/` 或 `runtime/`，领域层只接收显式参数/port |
+| 跨领域用户流程 | `workflows/`，不得复制领域 normalize、validate 或 Reducer |
+| 页面、面板、输入与事件 | `ui/`，通过注入的 action 调 workflow |
+
+### 依赖与兼容规则
+
+- `helpers.js` 只供扩展外部调用方和旧测试兼容使用；它只能 re-export，不得包含函数实现、DOM、网络或存档副作用。
+- Hogwarts MUD 生产模块（包括 `index.js`）不得导入 `helpers.js`；任何生产模块不得导入 `index.js`。
+- 内部调用方直接从 `core/`、`domain/`、`runtime/`、`adapters/`、`workflows/` 或 `ui/` 的真实所有者导入 named export。
+- Workflow 通过 runtime/adapter port 读写宿主；UI 只发 action；领域模块不得读取 UI 或 workflow 状态。
+- 新公开兼容符号先在真实模块实现，再由 `helpers.js` re-export；不得在门面复制实现。
+- 静态模块图同时扫描静态 import、动态 `import()` 和 re-export，并拒绝循环、逆层和门面反向依赖。
+
+### 文件大小门禁
+
+- `index.js` 必须不超过 600 行。
+- `helpers.js` 必须不超过 350 行，并且只包含 import/export、注释和兼容常量别名。
+- 手写逻辑模块以 1,500 行为拆分目标，达到 2,000 行直接失败。
+- 纯数据目录、样式和测试 fixture 可豁免；Presence/Witness 与 Social Director 等逻辑模块不设 grandfather 配额。
+- `tests/hogwarts-mud-task1-baseline.test.mjs` 是模块图、顶层副作用和全局大小门禁的权威检查。
+
 ## 开发验证
 
+### 完整离线验收
+
+以下命令不得访问远端模型、翻译服务或 Ollama。
+
 ```bash
-node --test tests/hogwarts-mud.test.mjs
-npx eslint \
-  src/endpoints/hogwarts-mud.js \
-  src/hogwarts-mud/social-director-graph.js \
-  public/scripts/extensions/hogwarts-mud/index.js \
-  public/scripts/extensions/hogwarts-mud/helpers.js \
-  public/scripts/extensions/hogwarts-mud/knowledge.js \
-  tests/hogwarts-mud.test.mjs
-npm start
+# 分层模块边界
+node --experimental-vm-modules --test \
+  tests/hogwarts-mud-task1-baseline.test.mjs \
+  tests/hogwarts-mud-task2-modules.test.mjs \
+  tests/hogwarts-mud-task3-contract.test.mjs \
+  tests/hogwarts-mud-task4-boundaries.test.mjs \
+  tests/hogwarts-mud-task5-workflows.test.mjs \
+  tests/hogwarts-mud-task6-ui-contract.test.mjs
+
+# 全部 Hogwarts Node 测试，包含 Social/Presence/Witness
+node --experimental-vm-modules --test tests/hogwarts-mud*.test.mjs
+
+# Hogwarts 生产代码和测试 ESLint
+find public/scripts/extensions/hogwarts-mud src/hogwarts-mud \
+  -type f -name '*.js' -print0 | xargs -0 npx eslint
+find tests -maxdepth 1 -type f \
+  \( -name 'hogwarts-mud*.js' -o -name 'hogwarts-mud*.mjs' \) \
+  -print0 | xargs -0 npx eslint
+
+# 所有 Hogwarts 生产模块语法检查
+find public/scripts/extensions/hogwarts-mud src/hogwarts-mud \
+  -type f \( -name '*.js' -o -name '*.mjs' \) -print0 |
+  xargs -0 -n1 node --check
+
+git diff --check
 ```
+
+只读浏览器验收需要先在一个终端运行 `npm start`，再在另一个终端运行：
+
+```bash
+cd tests
+npx playwright test \
+  hogwarts-mud-module-init.e2e.js \
+  hogwarts-mud-readonly.e2e.js \
+  --workers=1 --retries=0
+```
+
+两个 E2E 会阻断并统计 `/generate`、翻译、本地语义、Social Director 和聊天保存请求，同时核对 Tina fixture 的 SHA-256 与 mtime。任何被禁止请求、模块非 2xx/MIME 错误、`pageerror` 或档案变化都会失败。
+
+### 单次模型验收
+
+本阶段属于 Task 8，只能在完整离线验收全部通过后运行；日常开发和 Task 7 禁止执行。验收脚本必须使用可丢弃存档、关闭翻译、为本地语义提供确定性 fallback，并在浏览器和上游代理两层将远端生成硬预算设为 1：
+
+```bash
+cd tests
+HOGWARTS_REAL_MODEL_ACCEPTANCE=1 \
+HOGWARTS_ACCEPTANCE_GENERATE_BUDGET=1 \
+npx playwright test hogwarts-mud-single-model.e2e.js \
+  --workers=1 --retries=0
+```
+
+`hogwarts-mud-single-model.e2e.js` 在 Task 8 实现前不得用临时脚本替代。正式 harness 必须断言生成尝试数、代理放行数和上游确认数均为 1；第二次尝试在到达上游前返回 429；玩家/助手消息各增加一条，`turn.count +1`、状态回到 `idle`，segments 与 transaction 合法；刷新后新增调用为 0，最后清理可丢弃存档。
