@@ -19,9 +19,13 @@ export function createModelAdapter(ports) {
     const {
         ConnectionManagerRequestService,
         applyRegexPresetById,
+        createContextBudgetPlan =
+        () => null,
         getConnectionProfiles,
         limitMessagesToContext,
         parseCompleteJsonObject,
+        recordTurnDiagnostic =
+        () => {},
         uuidv4,
     } = ports;
 
@@ -54,6 +58,250 @@ export function createModelAdapter(ports) {
             slot.contextSize,
             slot.maxResponseLength,
         );
+        const requestCharacters =
+            Array.isArray(requestPrompt)
+                ? requestPrompt.reduce(
+                    (
+                        sum,
+                        message,
+                    ) =>
+                        sum +
+                        String(
+                            message
+                                ?.content ||
+                            '',
+                        ).length,
+                    0,
+                )
+                : String(
+                    requestPrompt ||
+                    '',
+                ).length;
+        const requestContextPlan =
+            createContextBudgetPlan(
+                slot.contextSize,
+                slot.maxResponseLength,
+            );
+        const requestExceedsContext =
+            Number.isFinite(
+                requestContextPlan
+                    ?.maxPromptCharacters,
+            ) &&
+            requestCharacters >
+                requestContextPlan
+                    .maxPromptCharacters;
+        const diagnosticSystem =
+            Array.isArray(prompt)
+                ? String(
+                    prompt.find(message =>
+                        message?.role ===
+                            'system')
+                        ?.content ||
+                    '',
+                )
+                : '';
+        const diagnosticRole =
+            diagnosticSystem.includes(
+                'On-Scene Performer',
+            )
+                ? 'scene_performer'
+                : diagnosticSystem.includes(
+                    'Repair only the narrative core',
+                )
+                    ? 'scene_repair'
+                    : '';
+        if (diagnosticRole) {
+            const originalUser =
+                String(
+                    prompt.find(message =>
+                        message?.role ===
+                            'user')
+                        ?.content ||
+                    '',
+                );
+            const limitedSystem =
+                String(
+                    requestPrompt.find(message =>
+                        message?.role ===
+                            'system')
+                        ?.content ||
+                    '',
+                );
+            const limitedUser =
+                String(
+                    requestPrompt.find(message =>
+                        message?.role ===
+                            'user')
+                        ?.content ||
+                    '',
+                );
+            let originalJson = null;
+            let limitedJson = null;
+            try {
+                originalJson =
+                    JSON.parse(
+                        originalUser,
+                    );
+            } catch {
+                // Invalid JSON is recorded below.
+            }
+            try {
+                limitedJson =
+                    JSON.parse(
+                        limitedUser,
+                    );
+            } catch {
+                // Invalid JSON is recorded below.
+            }
+            const originalInput =
+                originalJson
+                    ?.originalSceneInput ||
+                originalJson;
+            const limitedInput =
+                limitedJson
+                    ?.originalSceneInput ||
+                limitedJson;
+            recordTurnDiagnostic(
+                'model_request',
+                {
+                    role:
+                        diagnosticRole,
+                    stream,
+                    json,
+                    originalCharacters:
+                        Array.isArray(prompt)
+                            ? prompt.reduce(
+                                (
+                                    sum,
+                                    message,
+                                ) =>
+                                    sum +
+                                    String(
+                                        message
+                                            ?.content ||
+                                        '',
+                                    ).length,
+                                0,
+                            )
+                            : String(
+                                prompt ||
+                                '',
+                            ).length,
+                    limitedCharacters:
+                        requestCharacters,
+                    maxPromptCharacters:
+                        requestContextPlan
+                            ?.maxPromptCharacters ??
+                        null,
+                    exceedsContextBudget:
+                        requestExceedsContext,
+                    originalMessageCharacters:
+                        Array.isArray(prompt)
+                            ? prompt.map(
+                                message => ({
+                                    role:
+                                        message
+                                            ?.role,
+                                    characters:
+                                        String(
+                                            message
+                                                ?.content ||
+                                            '',
+                                        )
+                                            .length,
+                                }),
+                            )
+                            : [],
+                    limitedMessageCharacters:
+                        Array.isArray(
+                            requestPrompt,
+                        )
+                            ? requestPrompt
+                                .map(
+                                    message => ({
+                                        role:
+                                            message
+                                                ?.role,
+                                        characters:
+                                            String(
+                                                message
+                                                    ?.content ||
+                                                '',
+                                            )
+                                                .length,
+                                    }),
+                                )
+                            : [],
+                    contextTrimmed:
+                        originalUser !==
+                            limitedUser ||
+                        diagnosticSystem !==
+                            limitedSystem,
+                    originalUserJsonValid:
+                        Boolean(originalJson),
+                    limitedUserJsonValid:
+                        Boolean(limitedJson),
+                    originalPlayerAction:
+                        originalInput
+                            ?.playerAction ||
+                        '',
+                    limitedPlayerAction:
+                        limitedInput
+                            ?.playerAction ||
+                        '',
+                    originalPlayerTurnSequence:
+                        originalInput
+                            ?.playerTurnSequence ||
+                        [],
+                    limitedPlayerTurnSequence:
+                        limitedInput
+                            ?.playerTurnSequence ||
+                        [],
+                    targetWordRange:
+                        originalInput
+                            ?.targetWordRange ||
+                        originalJson
+                            ?.originalSceneInput
+                            ?.targetWordRange ||
+                        null,
+                    elapsedMinutes:
+                        originalInput
+                            ?.elapsedMinutes ??
+                        null,
+                    instructionFlags: {
+                        originalDuration:
+                            /plausibly cover .* minutes/iu
+                                .test(
+                                    diagnosticSystem,
+                                ),
+                        limitedDuration:
+                            /plausibly cover .* minutes/iu
+                                .test(
+                                    limitedSystem,
+                                ),
+                        originalDirectAnswer:
+                            diagnosticSystem
+                                .includes(
+                                    'Every direct block',
+                                ),
+                        limitedDirectAnswer:
+                            limitedSystem
+                                .includes(
+                                    'Every direct block',
+                                ),
+                    },
+                    limitedUserPrefix:
+                        limitedUser.slice(
+                            0,
+                            500,
+                        ),
+                    limitedUserSuffix:
+                        limitedUser.slice(
+                            -500,
+                        ),
+                },
+            );
+        }
         const overridePayload = {
             max_tokens: slot.maxResponseLength,
             ...(json ? {

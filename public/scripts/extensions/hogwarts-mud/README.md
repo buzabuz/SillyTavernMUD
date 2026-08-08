@@ -113,7 +113,7 @@ Preset Regex 使用酒馆原有的显式授权机制启用。
 - Context Size。
 - 输出安全余量。
 
-不再使用扩展自定义的“单次 token 预算”。旧存档中的 `maxTokens` 会迁移为 `maxResponseLength`；迁移前低于 `12000` 的旧上限只提升一次，之后仍允许玩家手工覆盖。
+不再使用扩展自定义的“单次 token 预算”。旧存档中的 `maxTokens` 会迁移为 `maxResponseLength`；迁移前低于 `12000` 的旧上限只提升一次，之后仍允许玩家手工覆盖。Headroom v2 还会把 v1 中恰好等于旧 response ceiling 的异常值恢复为 `12000`；v2 下明确保存的自定义值不会被覆盖。
 
 默认 Context Size 统一为 `120000`，三档输出安全余量统一为 `12000`。游戏进行中可以通过顶部“更多 → AI 配置”直接修改三档 Connection Profile、Chat Completion Preset、Regex Preset、Context Size 和输出安全余量；点击“保存 AI 配置并返回游戏”后立即写入当前时间线并应用低档原生生成参数，无需返回档案大厅或重开存档。
 
@@ -132,6 +132,10 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 - **丰裕 120K**：默认档位，记忆 3/6/8，RAG 最多 10 条，普通近期历史 16 条，章节结算 32 条。
 
 系统至少为 mandatory Prompt 预留 `6000 tokens`，输出安全余量不能侵占该空间。全局 mandatory 层只包含当前场景、玩家位置、在场人物状态和必要表演边界；完整共同记忆、离场人物、详细地图和隐藏故事线按低/中/高职责权限注入。低 Context 会自动减少日常记忆、RAG 与历史，120K 则使用完整的分层上限。
+
+职责输入预算为 `Context Size - 输出安全余量`。系统预留取输入预算的 8%，下限 `6000`、上限 `12000`；职责预算下限为 `8192`。当前字符安全线按 `职责预算 × 3` 估算。默认 120K Context 与 12K 输出余量对应 108K 输入预算、99,360 职责 tokens 和 298,080 字符安全线。
+
+超出安全线时，结构化用户 JSON 不做原始字符串截头。系统先移除 `retrievedLocalKnowledge`、可重建的 `actorContinuityCapsules` 和 `contextPolicy`，同时始终保留 `playerAction`、有序 `playerTurnSequence`、addressing、时间、判定、移动以及绑定世界状态；repair 还可省略重复 Schema。非 JSON 文本才从开头裁剪并至少保留 64 字符。持久化回合诊断会记录裁剪前后长度、JSON 有效性和玩家字段是否保留。
 
 每个职责槽位实时显示输入预算、系统预留、RAG 条数和三层记忆配额。手工 Context 会自动归入精简、标准或丰裕策略，但不会被快捷档位强制覆盖。
 
@@ -560,6 +564,18 @@ core <- state/domain <- runtime/adapters <- workflows <- ui <- index.js
 - 手写逻辑模块以 1,500 行为拆分目标，达到 2,000 行直接失败。
 - 纯数据目录、样式和测试 fixture 可豁免；Presence/Witness 与 Social Director 等逻辑模块不设 grandfather 配额。
 - `tests/hogwarts-mud-task1-baseline.test.mjs` 是模块图、顶层副作用和全局大小门禁的权威检查。
+
+### 回合诊断
+
+每个新回合都会把本地诊断包写入对应消息的
+`extra.hogwartsMud.turnDiagnostics`。诊断只保留最近 8 个回合，每个回合最多
+32 个阶段事件，长文本自动截断；不会记录 Connection Profile、密钥或请求头。
+诊断包含玩家原文、context 裁剪前后的权威输入、initial/repair 原始输出、
+validator/settlement 结果和最终提交摘要。
+
+排查回合问题时先读取这些诊断，不得默认重新调用模型。Chrome 中可通过
+`SillyTavern.getContext().chat` 读取，磁盘上可直接查看对应 JSONL 消息。
+只有现有诊断不足且用户明确同意时，才执行真实模型重放。
 
 ## 开发验证
 

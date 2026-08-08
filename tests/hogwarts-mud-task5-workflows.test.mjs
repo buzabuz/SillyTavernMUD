@@ -5,6 +5,13 @@ import test from 'node:test';
 import { createModelAdapter } from '../public/scripts/extensions/hogwarts-mud/adapters/model.js';
 import { createAutomaticWorkGate } from '../public/scripts/extensions/hogwarts-mud/runtime/automatic-work.js';
 import { createJobRegistry } from '../public/scripts/extensions/hogwarts-mud/runtime/job-registry.js';
+import {
+    TURN_DIAGNOSTIC_EVENT_LIMIT,
+    TURN_DIAGNOSTIC_HISTORY_LIMIT,
+    TURN_DIAGNOSTIC_STRING_LIMIT,
+    attachTurnDiagnostics,
+    createTurnDiagnosticsRecorder,
+} from '../public/scripts/extensions/hogwarts-mud/runtime/turn-diagnostics.js';
 import { createOpeningWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/opening.js';
 import { createTurnWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/turn.js';
 
@@ -106,6 +113,18 @@ function createTurnHarness({
         saveMetadata: async () => {},
     };
     const jobRegistry = createJobRegistry();
+    let diagnosticId = 0;
+    let diagnosticNow =
+        Date.parse(
+            '1991-09-01T08:00:00.000Z',
+        );
+    const diagnostics =
+        createTurnDiagnosticsRecorder({
+            createId: () =>
+                `test-${++diagnosticId}`,
+            now: () =>
+                diagnosticNow++,
+        });
     let streamClears = 0;
     const workflow = createTurnWorkflow({
         TRANSLATION_FORMAT_VERSION: 12,
@@ -131,6 +150,8 @@ function createTurnHarness({
             },
             lastTransaction: transaction,
         }),
+        attachTurnDiagnostics,
+        ...diagnostics,
         buildLocalSemanticRoomContext: () => ({
             rooms: [],
         }),
@@ -286,6 +307,102 @@ test('runtime gate and job registries keep suppression and locks instance-local'
     assert.equal(rightGate.suppressed, false);
     assert.equal(rightJobs.turnSettlement.size, 0);
     assert.equal(rightJobs.socialCatchupAttempts.size, 0);
+});
+
+test('turn diagnostics stay local, bounded, and retain only recent traces', () => {
+    let id = 0;
+    let now =
+        Date.parse(
+            '1991-09-01T08:00:00.000Z',
+        );
+    const recorder =
+        createTurnDiagnosticsRecorder({
+            createId: () =>
+                `trace-${++id}`,
+            now: () =>
+                now++,
+        });
+    const chat = [];
+    for (
+        let turn = 0;
+        turn <
+            TURN_DIAGNOSTIC_HISTORY_LIMIT +
+                2;
+        turn++
+    ) {
+        recorder.beginTurnDiagnostics({
+            playerAction:
+                `turn ${turn}`,
+            turnCount:
+                turn,
+        });
+        for (
+            let event = 0;
+            event <
+                TURN_DIAGNOSTIC_EVENT_LIMIT +
+                    2;
+            event++
+        ) {
+            recorder.recordTurnDiagnostic(
+                'event',
+                {
+                    text:
+                        'x'.repeat(
+                            TURN_DIAGNOSTIC_STRING_LIMIT +
+                                10,
+                        ),
+                },
+            );
+        }
+        const trace =
+            recorder.finalizeTurnDiagnostics(
+                'committed',
+            );
+        const message = {
+            extra: {
+                hogwartsMud: {},
+            },
+        };
+        chat.push(message);
+        attachTurnDiagnostics(
+            chat,
+            message,
+            trace,
+        );
+        assert.equal(
+            trace.events.length,
+            TURN_DIAGNOSTIC_EVENT_LIMIT,
+        );
+        assert.equal(
+            trace.events[0]
+                .sequence,
+            0,
+        );
+        assert.ok(
+            trace.events
+                .find(event =>
+                    event.stage ===
+                        'event')
+                .data.text.length <=
+                TURN_DIAGNOSTIC_STRING_LIMIT,
+        );
+    }
+    assert.equal(
+        chat.filter(message =>
+            message.extra
+                .hogwartsMud
+                .turnDiagnostics)
+            .length,
+        TURN_DIAGNOSTIC_HISTORY_LIMIT,
+    );
+    assert.equal(
+        chat.at(-1)
+            .extra
+            .hogwartsMud
+            .turnDiagnostics
+            .status,
+        'committed',
+    );
 });
 
 test('opening workflow accepts a valid first response without repair', async () => {
@@ -481,6 +598,127 @@ test('model adapter rethrows common streaming rate-limit errors without one-shot
     }
 });
 
+test('model adapter records whether context limiting preserves the authoritative player prompt', async () => {
+    const events = [];
+    const prompt = [
+        {
+            role: 'system',
+            content:
+                'You are the low-tier On-Scene Performer. The scene must plausibly cover 15 minutes. Every direct block must receive an answer.',
+        },
+        {
+            role: 'user',
+            content:
+                JSON.stringify({
+                    playerAction:
+                        'Whisper to Lavender.',
+                    playerTurnSequence: [{
+                        type:
+                            'direct_speech',
+                        targetActorId:
+                            'canon_lavender_brown',
+                        text:
+                            'A private question.',
+                    }],
+                    elapsedMinutes:
+                        15,
+                    targetWordRange: [
+                        240,
+                        560,
+                    ],
+                }),
+        },
+    ];
+    const adapter =
+        createModelAdapter({
+            ConnectionManagerRequestService: {
+                sendRequest:
+                    async () => ({
+                        content:
+                            '{"segments":[]}',
+                    }),
+            },
+            applyRegexPresetById:
+                async () => {},
+            getConnectionProfiles:
+                () => [{
+                    id: 'base',
+                }],
+            limitMessagesToContext:
+                value => [
+                    value[0],
+                    {
+                        ...value[1],
+                        content:
+                            value[1]
+                                .content
+                                .slice(40),
+                    },
+                ],
+            parseCompleteJsonObject:
+                value => value,
+            recordTurnDiagnostic:
+                (stage, data) => {
+                    events.push({
+                        stage,
+                        data,
+                    });
+                },
+            uuidv4:
+                () => 'diagnostic-test',
+        });
+
+    await adapter.sendRoleRequest(
+        {
+            profileId:
+                'base',
+            contextSize:
+                4096,
+            maxResponseLength:
+                512,
+        },
+        prompt,
+        {
+            json: true,
+        },
+    );
+
+    assert.equal(
+        events.length,
+        1,
+    );
+    assert.equal(
+        events[0].stage,
+        'model_request',
+    );
+    assert.equal(
+        events[0].data
+            .contextTrimmed,
+        true,
+    );
+    assert.equal(
+        events[0].data
+            .originalPlayerAction,
+        'Whisper to Lavender.',
+    );
+    assert.equal(
+        events[0].data
+            .limitedUserJsonValid,
+        false,
+    );
+    assert.equal(
+        events[0].data
+            .limitedPlayerAction,
+        '',
+    );
+    assert.equal(
+        events[0].data
+            .instructionFlags
+            .limitedDuration,
+        true,
+    );
+});
+
 test('failed-turn retry appends one assistant response without duplicating player input', async () => {
     const harness = createTurnHarness();
 
@@ -498,6 +736,24 @@ test('failed-turn retry appends one assistant response without duplicating playe
         'idle',
     );
     assert.equal(harness.streamClears, 1);
+    assert.equal(
+        harness.context.chat[1]
+            .extra
+            .hogwartsMud
+            .turnDiagnostics
+            .status,
+        'committed',
+    );
+    assert.ok(
+        harness.context.chat[1]
+            .extra
+            .hogwartsMud
+            .turnDiagnostics
+            .events
+            .some(event =>
+                event.stage ===
+                    'workflow_input'),
+    );
 });
 
 test('unsettled-turn recovery rewrites the existing assistant message in place', async () => {

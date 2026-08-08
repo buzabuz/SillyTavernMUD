@@ -3,7 +3,7 @@ export const MIN_CONTEXT_SIZE = 32768;
 export const MANDATORY_CONTEXT_RESERVE = 6000;
 export const ROLE_CONTEXT_RESERVE = 8192;
 export const DEFAULT_RESPONSE_HEADROOM = 12000;
-export const RESPONSE_HEADROOM_VERSION = 1;
+export const RESPONSE_HEADROOM_VERSION = 2;
 export const CONTEXT_SIZE_PRESETS = Object.freeze({
     lean: 32768,
     balanced: 65536,
@@ -46,18 +46,24 @@ export function normalizeModelSlots(slots = {}) {
         const legacyMaxTokens = Number.parseInt(source.maxTokens, 10);
         const configuredResponse = Number.parseInt(source.maxResponseLength, 10) || legacyMaxTokens || defaults.maxResponseLength;
         const headroomVersion = Number.parseInt(source.responseHeadroomVersion, 10) || 0;
-        const requestedResponse = headroomVersion >= RESPONSE_HEADROOM_VERSION
-            ? configuredResponse
-            : Math.max(
-                DEFAULT_RESPONSE_HEADROOM,
-                configuredResponse,
-            );
         const responseCeiling = Math.max(
             512,
             contextSize -
                 MANDATORY_CONTEXT_RESERVE -
                 ROLE_CONTEXT_RESERVE,
         );
+        const legacyCeilingResponse =
+            headroomVersion === 1 &&
+            configuredResponse >=
+                responseCeiling;
+        const requestedResponse = headroomVersion >= RESPONSE_HEADROOM_VERSION
+            ? configuredResponse
+            : legacyCeilingResponse
+                ? DEFAULT_RESPONSE_HEADROOM
+                : Math.max(
+                    DEFAULT_RESPONSE_HEADROOM,
+                    configuredResponse,
+                );
         return [role, {
             profileId: String(source.profileId || ''),
             presetName: String(source.presetName || ''),
@@ -184,6 +190,200 @@ export function createSharedMemoryContextSelector(
     };
 }
 
+const STRUCTURED_CONTEXT_TRIM_KEYS =
+    Object.freeze([
+        'retrievedLocalKnowledge',
+        'actorContinuityCapsules',
+        'contextPolicy',
+    ]);
+
+const STRUCTURED_CONTEXT_PRESERVE_KEYS =
+    Object.freeze([
+        'playerAction',
+        'playerTurnSequence',
+        'addressing',
+        'privateKnowledgeActorIds',
+        'elapsedMinutes',
+        'targetWordRange',
+        'ensemblePolicy',
+        'clockBeforeTurn',
+        'currentScene',
+        'currentLocation',
+        'currentRoomId',
+        'movementResolution',
+        'momentumDirective',
+        'checkResolution',
+        'mentionedKnownActors',
+        'presentActors',
+        'actorProfiles',
+        'addressedActorKnowledge',
+        'behavioralEnvironment',
+        'currentRoomState',
+        'currentMaterialState',
+        'spatialContext',
+        'temporaryActorPromotionPolicy',
+        'pacingDirective',
+    ]);
+
+function trimStructuredMessageContent(
+    content,
+    removeCharacters,
+) {
+    let parsed;
+    try {
+        parsed = JSON.parse(content);
+    } catch {
+        return null;
+    }
+    if (
+        !parsed ||
+        typeof parsed !== 'object' ||
+        Array.isArray(parsed)
+    ) {
+        return null;
+    }
+    const targetCharacters =
+        Math.max(
+            256,
+            content.length -
+                Math.max(
+                    0,
+                    removeCharacters,
+                ),
+        );
+    let next =
+        structuredClone(parsed);
+    const sceneInput =
+        next.originalSceneInput &&
+        typeof next.originalSceneInput ===
+            'object' &&
+        !Array.isArray(
+            next.originalSceneInput,
+        )
+            ? next.originalSceneInput
+            : next;
+    const prefix =
+        sceneInput === next
+            ? ''
+            : 'originalSceneInput.';
+    const omitted = [];
+    let serialized =
+        JSON.stringify(next);
+    for (
+        const key of
+        STRUCTURED_CONTEXT_TRIM_KEYS
+    ) {
+        if (
+            serialized.length <=
+                targetCharacters
+        ) {
+            break;
+        }
+        if (
+            Object.hasOwn(
+                sceneInput,
+                key,
+            )
+        ) {
+            delete sceneInput[key];
+            omitted.push(
+                `${prefix}${key}`,
+            );
+            serialized =
+                JSON.stringify(next);
+        }
+    }
+    if (
+        serialized.length >
+            targetCharacters &&
+        sceneInput !== next &&
+        Object.hasOwn(
+            next,
+            'requiredSchema',
+        )
+    ) {
+        delete next.requiredSchema;
+        omitted.push(
+            'requiredSchema',
+        );
+        serialized =
+            JSON.stringify(next);
+    }
+    if (
+        serialized.length >
+        targetCharacters
+    ) {
+        const mandatoryInput =
+            Object.fromEntries(
+                STRUCTURED_CONTEXT_PRESERVE_KEYS
+                    .filter(key =>
+                        Object.hasOwn(
+                            sceneInput,
+                            key,
+                        ))
+                    .map(key => [
+                        key,
+                        sceneInput[key],
+                    ]),
+            );
+        omitted.push(
+            ...Object.keys(
+                sceneInput,
+            )
+                .filter(key =>
+                    !Object.hasOwn(
+                        mandatoryInput,
+                        key,
+                    ))
+                .map(key =>
+                    `${prefix}${key}`),
+        );
+        if (sceneInput === next) {
+            next =
+                mandatoryInput;
+        } else {
+            next = {
+                validationError:
+                    next.validationError,
+                invalidOutput:
+                    String(
+                        next.invalidOutput ||
+                        '',
+                    ).slice(
+                        0,
+                        Math.max(
+                            1_000,
+                            Math.floor(
+                                targetCharacters /
+                                3,
+                            ),
+                        ),
+                    ),
+                originalSceneInput:
+                    mandatoryInput,
+            };
+        }
+        serialized =
+            JSON.stringify(next);
+    }
+    if (omitted.length) {
+        next.contextOmittedFields =
+            [...new Set(omitted)];
+        serialized =
+            JSON.stringify(next);
+    }
+    return {
+        content:
+            serialized,
+        removedCharacters:
+            Math.max(
+                0,
+                content.length -
+                    serialized.length,
+            ),
+    };
+}
+
 export function limitMessagesToContext(messages, contextSize, maxResponseLength) {
     const contextPlan = createContextBudgetPlan(
         contextSize,
@@ -211,6 +411,27 @@ export function limitMessagesToContext(messages, contextSize, maxResponseLength)
     for (const { message } of trimOrder) {
         if (overflow <= 0) break;
         const content = String(message?.content || '');
+        const structured =
+            trimStructuredMessageContent(
+                content,
+                overflow,
+            );
+        if (
+            structured &&
+            structured
+                .removedCharacters >
+                0
+        ) {
+            message.content =
+                structured.content;
+            overflow -=
+                structured
+                    .removedCharacters;
+            continue;
+        }
+        if (structured) {
+            continue;
+        }
         const removable = Math.min(overflow, Math.max(0, content.length - 64));
         if (removable > 0) {
             message.content = content.slice(removable);

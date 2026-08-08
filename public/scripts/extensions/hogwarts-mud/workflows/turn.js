@@ -8,6 +8,13 @@ export function createTurnWorkflow(ports) {
         applyPresenceWitnessTransaction,
         applySystemPrompt,
         applyTurnTransaction,
+        attachTurnDiagnostics =
+        () => ({
+            attached: false,
+            removed: 0,
+        }),
+        beginTurnDiagnostics =
+        () => null,
         buildLocalSemanticRoomContext,
         buildSceneTransaction,
         clearLiveSceneStream,
@@ -24,6 +31,8 @@ export function createTurnWorkflow(ports) {
         ensurePacingDirectorAssessment,
         ensureSceneLifecycleState,
         ensureSocialDirectorCatchup,
+        finalizeTurnDiagnostics =
+        () => null,
         filterKnowledgeForAudience,
         findUnsettledTurn,
         generateScenePerformance,
@@ -50,6 +59,8 @@ export function createTurnWorkflow(ports) {
         resetInspectorMapScope,
         requestLocalTurnAdjudication,
         requestLocalTurnObservation,
+        recordTurnDiagnostic =
+        () => {},
         resolveActionCheck,
         resolveEventWitnesses,
         resolvePlayerAddressing,
@@ -60,6 +71,8 @@ export function createTurnWorkflow(ports) {
         syncLocalKnowledge,
         updateNativeMessageBlock,
         validateTurnTransaction,
+        discardTurnDiagnostics =
+        () => {},
     } = ports;
 
     function findPlayerActionForMessage(chat, messageId) {
@@ -378,6 +391,15 @@ export function createTurnWorkflow(ports) {
         const job = (async () => {
             jobRegistry.turnActive = true;
             let state = getMudState();
+            beginTurnDiagnostics({
+                playerAction,
+                sceneId:
+                    state.scene?.id,
+                turnCount:
+                    state.turn?.count,
+                assistantMessageId,
+            });
+            let playerMessage = null;
             let spellCasts =
             parseSpellCastDirectives(
                 playerAction,
@@ -406,7 +428,7 @@ export function createTurnWorkflow(ports) {
             await context.saveMetadata();
             renderAll();
             try {
-                const playerMessage = assistantMessageId === null
+                playerMessage = assistantMessageId === null
                     ? [...context.chat].reverse().find(message =>
                         message.is_user &&
                     message.mes === playerAction)
@@ -414,6 +436,24 @@ export function createTurnWorkflow(ports) {
                         .slice(0, assistantMessageId)
                         .reverse()
                         .find(message => message.is_user);
+                recordTurnDiagnostic(
+                    'player_message',
+                    {
+                        requestedPlayerAction:
+                            playerAction,
+                        storedPlayerMessage:
+                            String(
+                                playerMessage
+                                    ?.mes ||
+                                '',
+                            ),
+                        matched:
+                            playerMessage
+                                ?.mes ===
+                            playerAction,
+                        assistantMessageId,
+                    },
+                );
                 const storedAddressing =
                 playerMessage?.extra
                     ?.hogwartsMud
@@ -685,6 +725,27 @@ export function createTurnWorkflow(ports) {
                     state,
                     narrativePlayerAction,
                     budget,
+                );
+                recordTurnDiagnostic(
+                    'workflow_input',
+                    {
+                        playerAction:
+                            narrativePlayerAction,
+                        playerMessage:
+                            String(
+                                playerMessage
+                                    ?.mes ||
+                                '',
+                            ),
+                        budget,
+                        momentumDirective,
+                        addressing,
+                        contextPlan,
+                        turnCount:
+                            state.turn?.count,
+                        sceneId:
+                            state.scene?.id,
+                    },
                 );
                 const performance = await generateScenePerformance(
                     slots.low,
@@ -962,6 +1023,62 @@ export function createTurnWorkflow(ports) {
                     context.chat.push(message);
                     messageId = context.chat.length - 1;
                 }
+                recordTurnDiagnostic(
+                    'commit',
+                    {
+                        messageId,
+                        committedClock:
+                            transaction
+                                .committedClock,
+                        elapsedMinutes:
+                            transaction
+                                .elapsedMinutes,
+                        segmentCount:
+                            transaction
+                                .segments
+                                ?.length ||
+                            0,
+                        wordCount:
+                            (
+                                transaction
+                                    .segments ||
+                                []
+                            )
+                                .map(segment =>
+                                    String(
+                                        segment
+                                            ?.textEn ||
+                                        '',
+                                    ).trim())
+                                .filter(Boolean)
+                                .join(' ')
+                                .split(/\s+/)
+                                .filter(Boolean)
+                                .length,
+                        settlementSource:
+                            transaction
+                                .settlementSource,
+                        settlementWarnings:
+                            transaction
+                                .settlementWarnings ||
+                            [],
+                    },
+                );
+                const completedDiagnostics =
+                    finalizeTurnDiagnostics(
+                        'committed',
+                        {
+                            messageId,
+                            committedClock:
+                                transaction
+                                    .committedClock,
+                        },
+                    );
+                attachTurnDiagnostics(
+                    context.chat,
+                    message,
+                    completedDiagnostics,
+                );
                 await context.saveMetadata();
                 await context.saveChat();
                 await syncLocalKnowledge();
@@ -975,14 +1092,48 @@ export function createTurnWorkflow(ports) {
                     await ensureDailyDirectorPlan();
                 }
             } catch (error) {
+                const errorText =
+                    String(
+                        error?.cause
+                            ?.message ||
+                        error?.message ||
+                        error,
+                    );
+                recordTurnDiagnostic(
+                    'turn_error',
+                    {
+                        error:
+                            errorText,
+                    },
+                );
+                const failedDiagnostics =
+                    finalizeTurnDiagnostics(
+                        'failed',
+                        {
+                            error:
+                                errorText,
+                        },
+                    );
+                if (playerMessage) {
+                    attachTurnDiagnostics(
+                        context.chat,
+                        playerMessage,
+                        failedDiagnostics,
+                    );
+                }
                 state = getMudState();
                 state.turn ??= {};
                 state.turn.status = 'failed';
-                state.turn.error = String(error?.cause?.message || error?.message || error);
+                state.turn.error =
+                    errorText;
                 await context.saveMetadata();
+                if (playerMessage) {
+                    await context.saveChat();
+                }
                 renderAll();
                 throw error;
             } finally {
+                discardTurnDiagnostics();
                 jobRegistry.turnActive = false;
                 clearLiveSceneStream();
                 jobRegistry.turnSettlement.delete(jobKey);
