@@ -3124,9 +3124,13 @@ export function forceCharacterEditorTokenize() {
 jQuery(() => {
     const adjustAutocompleteDebounced = debounce(() => {
         $('.ui-autocomplete-input').each(function () {
-            const isOpen = $(this).autocomplete('widget')[0].style.display !== 'none';
+            const input = $(this);
+            if (input.autocomplete('instance') === undefined) {
+                return;
+            }
+            const isOpen = input.autocomplete('widget')[0].style.display !== 'none';
             if (isOpen) {
-                $(this).autocomplete('search');
+                input.autocomplete('search');
             }
         });
     });

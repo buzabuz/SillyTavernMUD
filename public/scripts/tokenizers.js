@@ -567,9 +567,15 @@ function counterWrapperOpenAIAsync(text) {
 }
 
 export function getTokenizerModel() {
-    // OpenAI models always provide their own tokenizer
+    // Custom OpenAI-compatible model IDs do not necessarily have a tiktoken
+    // encoding. Use a stable local fallback for counting without changing the
+    // model sent to the generation backend.
     if (oai_settings.chat_completion_source == chat_completion_sources.OPENAI) {
-        return oai_settings.openai_model;
+        const model = String(oai_settings.openai_model || '');
+        if (/^(?:gpt-|chatgpt-|o1(?:-|$)|o3(?:-|$)|o4(?:-|$))/i.test(model)) {
+            return model;
+        }
+        return 'gpt-3.5-turbo';
     }
 
     const turboTokenizer = 'gpt-3.5-turbo';
@@ -752,7 +758,27 @@ export function getTokenizerModel() {
     }
 
     if (oai_settings.chat_completion_source == chat_completion_sources.CUSTOM) {
-        return oai_settings.custom_model;
+        const model = String(oai_settings.custom_model || '');
+        const normalized = model.toLowerCase();
+        if (/^(?:gpt-|chatgpt-|o1(?:-|$)|o3(?:-|$)|o4(?:-|$))/i.test(model)) {
+            return model;
+        }
+        if (normalized.includes('deepseek')) {
+            return deepseekTokenizer;
+        }
+        if (normalized.includes('qwen') || normalized.includes('qwq') || normalized.includes('kimi')) {
+            return qwen2Tokenizer;
+        }
+        if (normalized.includes('llama')) {
+            return llama3Tokenizer;
+        }
+        if (normalized.includes('mistral') || normalized.includes('mixtral')) {
+            return mistralTokenizer;
+        }
+        if (normalized.includes('gemma')) {
+            return gemmaTokenizer;
+        }
+        return turboTokenizer;
     }
 
     if (oai_settings.chat_completion_source === chat_completion_sources.PERPLEXITY) {
@@ -1228,4 +1254,3 @@ export async function initTokenizers() {
     await loadTokenCache();
     registerDebugFunction('resetTokenCache', 'Reset token cache', 'Purges the calculated token counts. Use this if you want to force a full re-tokenization of all chats or suspect the token counts are wrong.', resetTokenCache);
 }
-

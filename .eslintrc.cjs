@@ -15,7 +15,12 @@ module.exports = {
     overrides: [
         {
             // Server-side files (plus this configuration file)
-            files: ['src/**/*.js', './*.js', 'plugins/**/*.js'],
+            files: [
+                'src/**/*.js',
+                './*.js',
+                'plugins/**/*.js',
+                'scripts/migrate-hogwarts-actor-presentations.js',
+            ],
             env: {
                 node: true,
             },
@@ -37,7 +42,10 @@ module.exports = {
             },
         },
         {
-            files: ['src/**/*.mjs'],
+            files: [
+                'src/**/*.mjs',
+                'scripts/**/*.mjs',
+            ],
             parserOptions: {
                 sourceType: 'module',
             },

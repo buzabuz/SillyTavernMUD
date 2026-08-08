@@ -6254,8 +6254,34 @@ export function extractJsonFromData(data, { mainApi = null, chatCompletionSource
     chatCompletionSource = chatCompletionSource ?? oai_settings.chat_completion_source;
 
     const tryParse = (/** @type {string} */ value) => {
+        const source = String(value || '').trim();
+        const fenced = source.match(
+            /```(?:json)?\s*([\s\S]*?)```/i,
+        )?.[1]?.trim();
+        const candidates = [
+            fenced,
+            source,
+        ].filter(Boolean);
+        const firstBrace = source.indexOf('{');
+        const lastBrace = source.lastIndexOf('}');
+        if (firstBrace >= 0 &&
+            lastBrace > firstBrace) {
+            candidates.push(
+                source.slice(
+                    firstBrace,
+                    lastBrace + 1,
+                ),
+            );
+        }
+        for (const candidate of candidates) {
+            try {
+                return JSON.parse(candidate);
+            } catch {
+                // Try the next structured candidate.
+            }
+        }
         try {
-            return JSON.parse(value);
+            return JSON.parse(source);
         } catch (e) {
             console.debug('Failed to parse content as JSON.', e);
         }

@@ -60,6 +60,8 @@ import EventSourceStream from './sse-stream.js';
  * @typedef {Object} ExtractedData
  * @property {string} content - Extracted content.
  * @property {string} reasoning - Extracted reasoning.
+ * @property {string} [finishReason] - Provider finish or stop reason.
+ * @property {Record<string, any> | null} [usage] - Provider token usage metadata.
  */
 
 /**
@@ -72,6 +74,24 @@ import EventSourceStream from './sse-stream.js';
  */
 
 // #endregion
+
+function extractResponseMetadata(data) {
+    return {
+        finishReason: String(
+            data?.choices?.[0]
+                ?.finish_reason ??
+            data?.candidates?.[0]
+                ?.finishReason ??
+            data?.stop_reason ??
+            data?.finish_reason ??
+            '',
+        ),
+        usage:
+            data?.usage ??
+            data?.usageMetadata ??
+            null,
+    };
+}
 
 /**
  * Creates & sends a text completion request.
@@ -141,6 +161,7 @@ export class TextCompletionService {
                     textGenType: data.api_type,
                     ignoreShowThoughts: true,
                 }),
+                ...extractResponseMetadata(json),
             };
         }
 
@@ -485,10 +506,25 @@ export class ChatCompletionService {
                     textGenType: data.chat_completion_source,
                     ignoreShowThoughts: true,
                 }),
+                ...extractResponseMetadata(json),
             };
             // Try parse JSON
             if (data.json_schema) {
-                result.content = JSON.parse(extractJsonFromData(json, { mainApi: this.TYPE, chatCompletionSource: data.chat_completion_source }));
+                const extracted = extractJsonFromData(
+                    json,
+                    {
+                        mainApi: this.TYPE,
+                        chatCompletionSource:
+                            data.chat_completion_source,
+                        returnInvalidJson: true,
+                    },
+                );
+                try {
+                    result.content =
+                        JSON.parse(extracted);
+                } catch {
+                    result.content = extracted;
+                }
             }
             return result;
         }
