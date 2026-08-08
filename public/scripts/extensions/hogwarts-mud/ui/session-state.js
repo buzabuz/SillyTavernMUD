@@ -1,0 +1,32 @@
+export function createUiSessionState({
+    campaign,
+    currentScenePageSize = 20,
+    archiveListPageSize = 6,
+    archiveTranscriptPageSize = 8,
+} = {}) {
+    return {
+        activeSetupStep: 'identity',
+        activeScreen: 'home',
+        activeCampaign: campaign,
+        setupMapScope: 'world',
+        setupMapLevel: '',
+        inspectorMapScope: 'auto',
+        inspectorMapLevel: '',
+        saveListRequest: 0,
+        profileEditorTargetRole: '',
+        profileEditorTempSecret: null,
+        rolePresetImportTarget: '',
+        roleRegexImportTarget: '',
+        selectedActorId: '',
+        liveSceneStream: null,
+        renderedSceneId: '',
+        currentSceneMessageLimit:
+            currentScenePageSize,
+        archiveListLimit:
+            archiveListPageSize,
+        archiveTranscriptLimit:
+            archiveTranscriptPageSize,
+        spellPickerShowAll: false,
+        renderTimer: null,
+    };
+}

@@ -1,0 +1,35 @@
+# Verification Checklist
+
+- [x] `socialGraph.version=2` 包含 familiarity、closeness、warmth、trust、respect、influence、tension、resentment、fear、protectiveness。
+- [x] active emotion appraisal 与长期关系维度分层存储，短期情绪不会直接覆盖长期关系。
+- [x] closeness 20/35/50/70/90 分别对应熟人/朋友/密友/知己/终身纽带锚点。
+- [x] Prompt 向模型提供阶段锚点、impact 增量带和正负事件示例。
+- [x] Reducer 对 delta 执行 impact clamp、重复衰减、饱和衰减、负面不对称和范围 clamp。
+- [x] 普通同班或同场只提高 familiarity，不会自动提高 closeness。
+- [x] 重复夸奖或礼物不能短时间刷成密友。
+- [x] 普通善意不能清除严重 resentment；道歉/补偿/原谅 evidence 可以修复。
+- [x] 熟悉但敌对、亲近但积怨、尊敬但害怕等组合可被保存并生成准确标签。
+- [x] family/rivalry/authority 等结构标签不再被压成单一好感度。
+- [x] v1 affinity 确定性迁移为 warmth，现有 evidence、关系边和游标不丢失、不重复累计。
+- [x] Tina 存档迁移不调用模型、不推进共同记忆冷却。
+- [x] statement/evidence 继续保留稳定 ID、sceneId、sourceMessageIds 和 witnessedBy。
+- [x] 跨场景、未知 actor、未授权 witness 和越界 delta 被拒绝且不影响正文。
+- [x] actor knowledge capsules 不向缺席或不知情 NPC 泄露关系与情绪。
+- [x] 顶栏始终提供“关系星图”固定入口，打开后不丢失聊天状态或输入草稿。
+- [x] 关系星图只显示玩家已知人物、关系和 evidence，不暗示隐藏信息。
+- [x] 关系图能分别展示 A→B 与 B→A 的不对称状态。
+- [x] 节点头像、学院/阵营外环、边颜色/宽度/透明度符合视觉规范。
+- [x] 关系图支持搜索、筛选、缩放、平移、拖拽、重置布局和详情查看。
+- [x] 节点位置与筛选偏好按时间线持久化。
+- [x] 点击图节点能打开人物详情，人物卡能“在星图中查看”。
+- [x] 人物卡与关系星图使用同一权威投影，不出现关系标签分叉。
+- [x] 无头像时使用一致的原创 initials/插画策略，不使用电影剧照或外部占位图。
+- [x] reduced-motion、键盘操作和文本列表回退可用。
+- [x] Hogwarts MUD 单元测试全部通过。
+- [x] 相关 ESLint、`node --check` 与 `git diff --check` 全部通过。
+- [x] 浏览器实机验证桌面和窄屏下入口、画布、详情侧栏与人物卡联动。
+- [x] README 已记录 v2 维度、锚点、Reducer 规律和关系星图入口。
+- [x] Social Director 的 Prompt、结构化 Schema、validator 与 Reducer 端到端只接受并提交 v2 十维、结构标签和短期情绪。
+- [x] affinity 与 weightDelta/type 旧更新协议仅由 v1 迁移输入解析器读取，迁移后的 v2 evidence/edge 不含旧字段。
+- [x] 人物上下文、人物卡、知识库和关系星图不再投影或回退读取 affinity。
+- [x] Tina 当前存档完成本地清理后仍保持 91 evidence、33 edges、cursor、正文哈希和共同记忆冷却不变。

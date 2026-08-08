@@ -4,17 +4,184 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
 
+import * as actorIdentity from '../public/scripts/extensions/hogwarts-mud/domain/actor-identity.js';
+import * as actorKnowledge from '../public/scripts/extensions/hogwarts-mud/domain/actor-knowledge.js';
+import * as actorMemory from '../public/scripts/extensions/hogwarts-mud/domain/actor-memory.js';
+import * as actorMemoryMigration from '../public/scripts/extensions/hogwarts-mud/domain/actor-memory-migration.js';
+import * as actorMemoryReducer from '../public/scripts/extensions/hogwarts-mud/domain/actor-memory-reducer.js';
+import * as appearance from '../public/scripts/extensions/hogwarts-mud/domain/appearance.js';
+import * as cast from '../public/scripts/extensions/hogwarts-mud/domain/cast.js';
+import * as causalState from '../public/scripts/extensions/hogwarts-mud/domain/causal-state.js';
+import * as inventory from '../public/scripts/extensions/hogwarts-mud/domain/inventory.js';
+import * as mapAccess from '../public/scripts/extensions/hogwarts-mud/domain/map-access.js';
+import * as materialState from '../public/scripts/extensions/hogwarts-mud/domain/material-state.js';
+import * as socialMigration from '../public/scripts/extensions/hogwarts-mud/domain/social-migration.js';
+import * as socialProjection from '../public/scripts/extensions/hogwarts-mud/domain/social-projection.js';
+import * as socialReducer from '../public/scripts/extensions/hogwarts-mud/domain/social-reducer.js';
+import * as socialSchema from '../public/scripts/extensions/hogwarts-mud/domain/social-schema.js';
+import * as spellState from '../public/scripts/extensions/hogwarts-mud/domain/spell-state.js';
 import * as helpers from '../public/scripts/extensions/hogwarts-mud/helpers.js';
 import * as socialDirector from '../src/hogwarts-mud/social-director-graph.js';
 
-const INDEX_URL = new URL(
-    '../public/scripts/extensions/hogwarts-mud/index.js',
+const TASK3_MODULE_URLS = [
+    'actor-identity',
+    'actor-knowledge',
+    'actor-memory',
+    'actor-memory-migration',
+    'actor-memory-reducer',
+    'appearance',
+    'cast',
+    'causal-state',
+    'inventory',
+    'map-access',
+    'material-state',
+    'social-migration',
+    'social-projection',
+    'social-reducer',
+    'social-schema',
+    'spell-state',
+    'stable-identity',
+].map(name => new URL(
+    `../public/scripts/extensions/hogwarts-mud/domain/${name}.js`,
+    import.meta.url,
+));
+const SOCIAL_WORKFLOW_URL = new URL(
+    '../public/scripts/extensions/hogwarts-mud/workflows/social-memory.js',
+    import.meta.url,
+);
+const SCENE_TRANSITION_WORKFLOW_URL = new URL(
+    '../public/scripts/extensions/hogwarts-mud/workflows/scene-transition.js',
     import.meta.url,
 );
 const KNOWLEDGE_URL = new URL(
     '../public/scripts/extensions/hogwarts-mud/knowledge.js',
     import.meta.url,
 );
+const RELATIONSHIP_GRAPH_URL = new URL(
+    '../public/scripts/extensions/hogwarts-mud/relationship-graph.js',
+    import.meta.url,
+);
+
+const TASK3_PUBLIC_MODULES = [
+    actorIdentity,
+    actorKnowledge,
+    actorMemory,
+    actorMemoryMigration,
+    actorMemoryReducer,
+    appearance,
+    cast,
+    causalState,
+    inventory,
+    mapAccess,
+    materialState,
+    socialMigration,
+    socialProjection,
+    socialReducer,
+    socialSchema,
+    spellState,
+];
+const TASK3_INTERNAL_EXPORTS = new Set([
+    'CAUSAL_COLLAPSE_KEYS',
+    'CAUSAL_COLLAPSE_KINDS',
+    'CAUSAL_COLLAPSE_PERSISTENCE_TARGETS',
+    'CAUSAL_SOCIAL_STRUCTURAL_TAG_BY_EDGE_TYPE',
+    'CAUSAL_WITNESS_ACCOUNT_KEYS',
+    'clampSocialDimension',
+    'countTextWords',
+    'CROWDED_SCENE_ROOM_KINDS',
+    'deriveRelationshipImpression',
+    'DURABLE_ACQUISITION_PATTERN',
+    'finiteSocialNumber',
+    'getActorMemoryEntries',
+    'getCanonActorDisplayMetadata',
+    'getKnownSpell',
+    'getMapRooms',
+    'getSpellProficiencyModifier',
+    'hasGenericImpression',
+    'IMPORTANT_ITEM_PATTERN',
+    'impactForSocialDelta',
+    'inferItemKind',
+    'inferSocialEventKind',
+    'isValidFirstImpression',
+    'isValidImpressionShorthand',
+    'normalizeActorLifeState',
+    'normalizeActorVisualRecord',
+    'normalizeEmotionAppraisals',
+    'normalizeMemoryId',
+    'normalizeSocialDimensionDeltas',
+    'normalizeSocialSourceMessageIds',
+    'normalizeSocialStructuralTags',
+    'ORDINARY_TRANSIENT_ITEM_PATTERN',
+    'parseSocialGraphV1MigrationInput',
+    'PLAYER_KEEP_ITEM_PATTERN',
+    'SHARED_MEMORY_TIERS',
+    'SOCIAL_RELATIONSHIP_DIMENSION_SET',
+    'upsertSharedMemory',
+]);
+
+test('Task 3 facade re-exports real entity, actor, and social module values', () => {
+    for (const module of TASK3_PUBLIC_MODULES) {
+        const publicEntries =
+            Object.entries(module)
+                .filter(([name]) =>
+                    !TASK3_INTERNAL_EXPORTS
+                        .has(name));
+        for (const [name, value] of
+            publicEntries) {
+            assert.equal(
+                helpers[name],
+                value,
+                `${name} must be the real domain export`,
+            );
+        }
+    }
+});
+
+test('Task 3 modules stay below size limits and never import compatibility entry points', async () => {
+    for (const url of TASK3_MODULE_URLS) {
+        const source = await readFile(
+            url,
+            'utf8',
+        );
+        assert.ok(
+            source.split('\n').length < 2000,
+            `${url.pathname} exceeds the hard module limit`,
+        );
+        assert.doesNotMatch(
+            source,
+            /(?:from|import\s*\()\s*['"][^'"]*(?:helpers|index)\.js['"]/u,
+            url.pathname,
+        );
+    }
+});
+
+test('knowledge and relationship graph import their real domain owners', async () => {
+    const [knowledgeSource, graphSource] =
+        await Promise.all([
+            readFile(KNOWLEDGE_URL, 'utf8'),
+            readFile(
+                RELATIONSHIP_GRAPH_URL,
+                'utf8',
+            ),
+        ]);
+    for (const source of [
+        knowledgeSource,
+        graphSource,
+    ]) {
+        assert.doesNotMatch(
+            source,
+            /from\s+['"]\.\/helpers\.js['"]/u,
+        );
+    }
+    assert.match(
+        knowledgeSource,
+        /from\s+['"]\.\/domain\/actor-memory\.js['"]/u,
+    );
+    assert.match(
+        graphSource,
+        /from\s+['"]\.\/domain\/social-projection\.js['"]/u,
+    );
+});
 
 function extractFunction(source, name) {
     const start = source.indexOf(
@@ -35,9 +202,15 @@ function extractFunction(source, name) {
             '\nexport function ',
             start + 1,
         );
+    const nextNestedFunction =
+        source.indexOf(
+            '\n    function ',
+            start + 1,
+        );
     const candidates = [
         nextFunction,
         nextExport,
+        nextNestedFunction,
     ].filter(index => index >= 0);
     const end = candidates.length
         ? Math.min(...candidates)
@@ -80,7 +253,7 @@ async function loadKnowledgeModule() {
                     value =>
                         String(value).length,
             },
-            './helpers.js': {
+            './domain/appearance.js': {
                 buildActorAppearanceView:
                     () => ({
                         physicalDescriptionEn:
@@ -96,14 +269,8 @@ async function loadKnowledgeModule() {
                             heldItems: [],
                         },
                     }),
-                buildSocialAudienceProjection:
-                    () => ({
-                        statements: [],
-                        relationships: [],
-                    }),
-                getActiveInteractionActorIds:
-                    helpers
-                        .getActiveInteractionActorIds,
+            },
+            './domain/actor-memory.js': {
                 normalizeActorMemoryProfile:
                     actor => ({
                         ...actor,
@@ -122,6 +289,18 @@ async function loadKnowledgeModule() {
                             ),
                         },
                     }),
+            },
+            './domain/social-projection.js': {
+                buildSocialAudienceProjection:
+                    () => ({
+                        statements: [],
+                        relationships: [],
+                    }),
+            },
+            './presence-witness-contract.js': {
+                getActiveInteractionActorIds:
+                    helpers
+                        .getActiveInteractionActorIds,
             },
         };
         const values =
@@ -271,7 +450,7 @@ test('[defect-probing] actor knowledge capsules separate direct, witnessed, and 
 test('[defect-probing] Social Director collection contains no active-cast or dialogue witness inference', async () => {
     const source =
         await readFile(
-            INDEX_URL,
+            SOCIAL_WORKFLOW_URL,
             'utf8',
         );
     const collector =
@@ -495,7 +674,7 @@ test('[defect-probing] knowledge records use event participants, witnesses, coho
 test('[defect-probing] scene archive stores active, local, cohort, and event witness fields while retaining actorIds only for compatibility', async () => {
     const source =
         await readFile(
-            INDEX_URL,
+            SCENE_TRANSITION_WORKFLOW_URL,
             'utf8',
         );
     const builder =

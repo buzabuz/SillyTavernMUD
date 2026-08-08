@@ -1,0 +1,36 @@
+# Verification Checklist
+
+- [x] `index.js` 不超过 600 行，只承担依赖组装、兼容 re-export、宿主事件生命周期和 `init()`。
+- [x] `helpers.js` 不超过 350 行，只包含无副作用的兼容 import/export、注释或别名。
+- [x] 拆分前 `helpers.js` 的全部公开导出名称、值类型和调用契约保持兼容。
+- [x] `manifest.json` 继续加载 `index.js`，`hooks.activate: init` 行为不变。
+- [x] 模块依赖遵循 `core → state/domain → runtime/adapters → workflows → ui → index.js`。
+- [x] 静态模块图无循环依赖、逆层依赖、内部模块导入 `helpers.js` 或导入 `index.js`。
+- [x] 单独导入规则模块不会访问 DOM、网络、聊天存档或注册事件。
+- [x] 重复调用 `init()` 不会重复插入 DOM、注册事件、启动翻译或触发模型工作。
+- [x] 所有手写逻辑模块小于 2,000 行，原则上不超过 1,500 行；豁免仅限纯数据、样式和测试 fixture。
+- [x] 上下文预算、JSON 恢复、Campaign/Character、翻译和 Preset/Regex 工具已进入独立模块。
+- [x] 物品、材质、人物外观、法术、人物知识/记忆/选角和 Social Graph 已进入独立领域模块。
+- [x] 行动判定、时间环境、节奏/因果、回合、转场、地图/空间已进入独立领域模块。
+- [x] 状态访问、任务去重、模型、知识库、本地语义和翻译通过明确 runtime/adapter 接口提供。
+- [x] 开局、各级导演、室内地图、回合和转场通过独立 workflow 编排，UI 不直接持有领域写入逻辑。
+- [x] Story、Inspector、Map、Composer、Setup 和存档 UI 已拆分，世界权威状态未迁入 UI 临时态。
+- [x] 迁移顺序、执行次数、版本字段缺失语义、`{ state, changed }` 和二次 no-op 行为不变。
+- [x] 初始世界、Prompt/Schema、回合结算、场景转场、社交投影和迁移黄金样本与拆分前一致。
+- [x] Narrative-first 正文优先、无效 proposal 独立丢弃、事务单写者、回滚/重试语义不变。
+- [x] 普通回合的 foundation/daily/pacing/repair/social/translation 调用条件和次数未增加。
+- [x] 浏览器模块请求全部为 2xx 且 MIME 正确，`pageerror` 和模块加载错误均为 0。
+- [x] 当前 Tina 档案只读加载不触发模型、翻译、Ollama、Social Director 或聊天保存。
+- [x] Tina 档案 SHA-256、mtime、正文、cursor、关系数据和共同记忆冷却在离线验收前后不变。
+- [x] 桌面与 390px 下存档大厅、场景、关系星图、人物卡、地图和 composer 关键交互正常。
+- [x] Hogwarts MUD Node 测试、Social/Presence/Witness 契约和新增模块边界测试全部通过。
+- [x] 项目 ESLint、目标 ESLint、所有新增 JS/MJS 的 `node --check` 和 `git diff --check` 全部通过。
+- [x] README 记录模块地图、依赖方向、功能修改落点、兼容门面和完整验证命令。
+- [x] 离线验证期间真实远端大模型调用数为 0。
+- [x] 最终一次调用使用可丢弃存档，未改写用户当前 Tina 档案。
+- [x] 最终验收中远端生成尝试数、代理放行数、上游确认数严格为 1，任何第二次尝试均在上游前被阻断。
+- [x] 单次真实调用后玩家/助手消息各增加一条，`turn.count +1`、状态回到 `idle`、segments 与 transaction 合法。
+- [x] 单次调用后的刷新不产生新模型请求，刷新状态与提交后状态一致，可丢弃验收档案已清理。
+- [x] 低档现场表演对合法正文只提交一次；若结构提案无效，仅丢弃对应提案，不会让首次与 repair 连续整份失败。
+- [x] pre-fix/post-fix 调试日志证明根因已消除，模型调用次数、玩家/助手消息和权威事务无重复。
+- [ ] `ConnectionManagerRequestService` 将底层 `Too Many Requests` 包装为 `API request failed` 后，model adapter 仍识别限流、原样抛错且远端请求次数严格为 1。

@@ -1,6 +1,6 @@
 import {
     buildSocialAudienceProjection,
-} from './helpers.js';
+} from './domain/social-projection.js';
 import {
     findCanonCharacter,
 } from './canon-characters.js';

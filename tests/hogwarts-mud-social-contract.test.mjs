@@ -5,7 +5,6 @@ import {
     readdir,
 } from 'node:fs/promises';
 import test from 'node:test';
-import vm from 'node:vm';
 
 import Ajv from 'ajv';
 import { parse } from 'acorn';
@@ -14,6 +13,13 @@ import {
     getSocialDirectorReducerContract,
     runSocialDirectorGraph,
 } from '../src/hogwarts-mud/social-director-graph.js';
+import {
+    createSocialMemoryWorkflow,
+} from '../public/scripts/extensions/hogwarts-mud/workflows/social-memory.js';
+import {
+    canOpenCurrentV2SaveReadOnly,
+    shouldTranslateRenderedMessage,
+} from '../public/scripts/extensions/hogwarts-mud/runtime/read-only-policy.js';
 
 const V2_DIMENSIONS = Object.freeze([
     'familiarity',
@@ -60,23 +66,41 @@ const INDEX_URL = new URL(
     '../public/scripts/extensions/hogwarts-mud/index.js',
     import.meta.url,
 );
-const HELPERS_URL = new URL(
-    '../public/scripts/extensions/hogwarts-mud/helpers.js',
+const HOST_EVENTS_URL = new URL(
+    '../public/scripts/extensions/hogwarts-mud/runtime/host-events.js',
+    import.meta.url,
+);
+const SETTINGS_CONTROLLER_URL = new URL(
+    '../public/scripts/extensions/hogwarts-mud/ui/settings-profile-controller.js',
+    import.meta.url,
+);
+const SOCIAL_SCHEMA_URL = new URL(
+    '../public/scripts/extensions/hogwarts-mud/domain/social-schema.js',
     import.meta.url,
 );
 
 function findFunctionNode(program, name) {
-    for (const node of program.body) {
-        const declaration =
-            node.type === 'ExportNamedDeclaration'
-                ? node.declaration
-                : node;
+    const pending = [...program.body];
+    while (pending.length) {
+        const node = pending.shift();
+        const declaration = node.type ===
+            'ExportNamedDeclaration'
+            ? node.declaration
+            : node;
         if (
             declaration?.type ===
                 'FunctionDeclaration' &&
             declaration.id?.name === name
         ) {
             return declaration;
+        }
+        if (
+            declaration?.type ===
+                'FunctionDeclaration'
+        ) {
+            pending.push(
+                ...declaration.body.body,
+            );
         }
     }
     return null;
@@ -106,97 +130,6 @@ function collectCalledFunctions(node) {
     return calls;
 }
 
-function collectNamedImports(source) {
-    const imports = new Map();
-    const pattern =
-        /import\s*\{([\s\S]*?)\}\s*from\s*(['"])(.*?)\2\s*;/gu;
-    for (const match of source.matchAll(pattern)) {
-        const names = match[1]
-            .split(',')
-            .map(value => value.trim())
-            .filter(Boolean)
-            .map(value =>
-                value.split(/\s+as\s+/u)[0]);
-        imports.set(match[3], names);
-    }
-    return imports;
-}
-
-function createBrowserImportStub(name) {
-    if (
-        name ===
-        'SOCIAL_GRAPH_EXTRACTOR_VERSION'
-    ) {
-        return 6;
-    }
-    if (name === 'normalizeSocialGraph') {
-        return value => ({
-            statements: [],
-            relationshipEvidence: [],
-            relationships: [],
-            lastProcessedMessageId: -1,
-            ...(value || {}),
-        });
-    }
-    if (
-        name === 'createDefaultCampaign' ||
-        name === 'createDefaultCharacterDraft'
-    ) {
-        return () => ({});
-    }
-    return () => ({});
-}
-
-async function loadBrowserSocialContract() {
-    const source =
-        await readFile(INDEX_URL, 'utf8');
-    const namedImports =
-        collectNamedImports(source);
-    const context = vm.createContext({
-        console,
-        structuredClone,
-        URL,
-    });
-    const module = new vm.SourceTextModule(
-        source,
-        {
-            context,
-            identifier: INDEX_URL.href,
-        },
-    );
-    const stubs = new Map();
-    await module.link(async specifier => {
-        if (!stubs.has(specifier)) {
-            const names =
-                namedImports.get(specifier) || [];
-            stubs.set(
-                specifier,
-                new vm.SyntheticModule(
-                    names,
-                    function setExports() {
-                        for (const name of names) {
-                            this.setExport(
-                                name,
-                                createBrowserImportStub(
-                                    name,
-                                ),
-                            );
-                        }
-                    },
-                    {
-                        context,
-                        identifier:
-                            `stub:${specifier}`,
-                    },
-                ),
-            );
-        }
-        return stubs.get(specifier);
-    });
-    await module.evaluate();
-    return module.namespace;
-}
-
 async function readProductionSocialSources() {
     const directories = [
         new URL(
@@ -213,6 +146,11 @@ async function readProductionSocialSources() {
             '../src/endpoints/hogwarts-mud.js',
             import.meta.url,
         ),
+        new URL(
+            '../public/scripts/extensions/hogwarts-mud/workflows/social-memory.js',
+            import.meta.url,
+        ),
+        SOCIAL_SCHEMA_URL,
     ];
     for (const directory of directories) {
         const entries = await readdir(
@@ -249,7 +187,7 @@ function removeCentralMigrationParser(
 ) {
     if (
         entry.url.href !==
-        HELPERS_URL.href
+        SOCIAL_SCHEMA_URL.href
     ) {
         return entry.source;
     }
@@ -348,25 +286,46 @@ function createGraphInput(
 }
 
 test('[defect-probing] passive current-v2 save loading never starts translation or chat persistence', async () => {
-    const source =
-        await readFile(INDEX_URL, 'utf8');
-    const program = parse(source, {
+    const [indexSource, hostEventsSource, settingsSource] =
+        await Promise.all([
+            readFile(INDEX_URL, 'utf8'),
+            readFile(HOST_EVENTS_URL, 'utf8'),
+            readFile(
+                SETTINGS_CONTROLLER_URL,
+                'utf8',
+            ),
+        ]);
+    const indexProgram = parse(indexSource, {
         ecmaVersion: 'latest',
         sourceType: 'module',
     });
+    const hostEventsProgram = parse(
+        hostEventsSource,
+        {
+            ecmaVersion: 'latest',
+            sourceType: 'module',
+        },
+    );
+    const settingsProgram = parse(
+        settingsSource,
+        {
+            ecmaVersion: 'latest',
+            sourceType: 'module',
+        },
+    );
     const registerEvents =
         findFunctionNode(
-            program,
+            hostEventsProgram,
             'registerEvents',
         );
     const init =
         findFunctionNode(
-            program,
+            indexProgram,
             'init',
         );
     const setTranslationProvider =
         findFunctionNode(
-            program,
+            settingsProgram,
             'setTranslationProvider',
         );
 
@@ -418,8 +377,6 @@ test('[defect-probing] passive current-v2 save loading never starts translation 
         'an explicit provider change must retain the user-triggered refresh path',
     );
 
-    const browserContract =
-        await loadBrowserSocialContract();
     const currentSave = {
         fileName:
             'tina-current.jsonl',
@@ -434,80 +391,74 @@ test('[defect-probing] passive current-v2 save loading never starts translation 
         },
     };
     assert.equal(
-        browserContract
-            .canOpenCurrentV2SaveReadOnly(
-                currentSave,
-                {
-                    currentChatId:
+        canOpenCurrentV2SaveReadOnly(
+            currentSave,
+            {
+                currentChatId:
                         'tina-current',
-                    characterId: 4,
-                    chatLength: 192,
-                    state: currentState,
-                },
-            ),
+                characterId: 4,
+                chatLength: 192,
+                state: currentState,
+            },
+        ),
         true,
         'a current, fully processed v2 save must open without reinstalling and saving its snapshot',
     );
     assert.equal(
-        browserContract
-            .canOpenCurrentV2SaveReadOnly(
-                currentSave,
-                {
-                    currentChatId:
+        canOpenCurrentV2SaveReadOnly(
+            currentSave,
+            {
+                currentChatId:
                         'tina-current',
-                    characterId: 4,
-                    chatLength: 193,
-                    state: currentState,
-                },
-            ),
+                characterId: 4,
+                chatLength: 193,
+                state: currentState,
+            },
+        ),
         false,
         'a behind cursor must retain the migration and catch-up load path',
     );
     assert.equal(
-        browserContract
-            .canOpenCurrentV2SaveReadOnly(
-                currentSave,
-                {
-                    currentChatId:
+        canOpenCurrentV2SaveReadOnly(
+            currentSave,
+            {
+                currentChatId:
                         'another-save',
-                    characterId: 4,
-                    chatLength: 192,
-                    state: currentState,
-                },
-            ),
+                characterId: 4,
+                chatLength: 192,
+                state: currentState,
+            },
+        ),
         false,
         'a different save must retain the snapshot installation path',
     );
     assert.equal(
-        browserContract
-            .shouldTranslateRenderedMessage(
-                191,
-                currentState,
-            ),
+        shouldTranslateRenderedMessage(
+            191,
+            currentState,
+        ),
         false,
         'a rendered message already covered by the current v2 cursor is passive load data',
     );
     assert.equal(
-        browserContract
-            .shouldTranslateRenderedMessage(
-                192,
-                currentState,
-            ),
+        shouldTranslateRenderedMessage(
+            192,
+            currentState,
+        ),
         true,
         'a newly rendered message beyond the current v2 cursor must retain automatic translation',
     );
     assert.equal(
-        browserContract
-            .shouldTranslateRenderedMessage(
-                191,
-                {
-                    socialGraph: {
-                        version: 1,
-                        lastProcessedMessageId:
+        shouldTranslateRenderedMessage(
+            191,
+            {
+                socialGraph: {
+                    version: 1,
+                    lastProcessedMessageId:
                             191,
-                    },
                 },
-            ),
+            },
+        ),
         true,
         'legacy saves must retain their migration-era rendering path',
     );
@@ -515,7 +466,27 @@ test('[defect-probing] passive current-v2 save loading never starts translation 
 
 test('actual Social Director prompt and JSON Schema expose only the v2 relationship contract', async () => {
     const browserContract =
-        await loadBrowserSocialContract();
+        createSocialMemoryWorkflow({
+            buildSocialAudienceProjection:
+                () => ({
+                    relationships: [],
+                }),
+            normalizeActorMemoryProfile:
+                actor => ({
+                    ...actor,
+                    sharedMemories: [],
+                }),
+            normalizeSocialGraph:
+                graph => ({
+                    statements: [],
+                    relationshipEvidence: [],
+                    relationships: [],
+                    lastProcessedMessageId: -1,
+                    ...(graph || {}),
+                }),
+            selectSharedMemoriesForContext:
+                () => [],
+        });
     const promptMessages =
         browserContract
             .createMemoryConsolidationPrompt(
@@ -667,24 +638,24 @@ test('actual Social Director prompt and JSON Schema expose only the v2 relations
 test('legacy relationship field names exist only inside the centralized v1 migration parser', async () => {
     const sources =
         await readProductionSocialSources();
-    const helpers =
+    const schema =
         sources.find(entry =>
             entry.url.href ===
-            HELPERS_URL.href);
-    assert.ok(helpers);
+            SOCIAL_SCHEMA_URL.href);
+    assert.ok(schema);
     const migrationStart =
-        helpers.source.indexOf(
-            'function parseSocialGraphV1MigrationInput(',
+        schema.source.indexOf(
+            'export function parseSocialGraphV1MigrationInput(',
         );
     const migrationEnd =
-        helpers.source.indexOf(
-            '\nfunction normalizeEmotionAppraisals(',
+        schema.source.indexOf(
+            '\nexport function normalizeEmotionAppraisals(',
             migrationStart,
         );
     assert.ok(migrationStart >= 0);
     assert.ok(migrationEnd > migrationStart);
     const migrationSource =
-        helpers.source.slice(
+        schema.source.slice(
             migrationStart,
             migrationEnd,
         );
