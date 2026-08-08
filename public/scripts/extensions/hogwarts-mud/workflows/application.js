@@ -1,5 +1,9 @@
 import { createStatePorts } from '../runtime/state-ports.js';
 import { createLifecycleRuntime } from '../runtime/lifecycle.js';
+import {
+    attachTurnDiagnostics,
+    createTurnDiagnosticsRecorder,
+} from '../runtime/turn-diagnostics.js';
 import { createModelAdapter } from '../adapters/model.js';
 import { createKnowledgeAdapter } from '../adapters/knowledge.js';
 import { createTranslationAdapter } from '../adapters/translation.js';
@@ -165,6 +169,15 @@ export function createWorkflowApplication(ports) {
     });
 
     const {
+        beginTurnDiagnostics,
+        recordTurnDiagnostic,
+        finalizeTurnDiagnostics,
+        discardTurnDiagnostics,
+    } = createTurnDiagnosticsRecorder({
+        createId: uuidv4,
+    });
+
+    const {
         ensureSceneLifecycleState,
     } = createLifecycleRuntime({
         createFallbackNextSceneIntent,
@@ -195,9 +208,11 @@ export function createWorkflowApplication(ports) {
     } = createModelAdapter({
         ConnectionManagerRequestService,
         applyRegexPresetById,
+        createContextBudgetPlan,
         getConnectionProfiles,
         limitMessagesToContext,
         parseCompleteJsonObject,
+        recordTurnDiagnostic,
         uuidv4,
     });
 
@@ -420,6 +435,7 @@ export function createWorkflowApplication(ports) {
         getSettings,
         parseJsonObject,
         recoverScenePerformancePayload,
+        recordTurnDiagnostic,
         removeExplicitAddressDirective,
         resolvePlayerAddressing,
         resolveTemporaryActorRevealedName,
@@ -460,6 +476,8 @@ export function createWorkflowApplication(ports) {
         applyPresenceWitnessTransaction,
         applySystemPrompt,
         applyTurnTransaction,
+        attachTurnDiagnostics,
+        beginTurnDiagnostics,
         buildLocalSemanticRoomContext,
         buildSceneTransaction,
         clearLiveSceneStream,
@@ -476,6 +494,7 @@ export function createWorkflowApplication(ports) {
         ensurePacingDirectorAssessment,
         ensureSceneLifecycleState,
         ensureSocialDirectorCatchup,
+        finalizeTurnDiagnostics,
         filterKnowledgeForAudience,
         findUnsettledTurn,
         generateScenePerformance,
@@ -502,6 +521,7 @@ export function createWorkflowApplication(ports) {
         resetInspectorMapScope,
         requestLocalTurnAdjudication,
         requestLocalTurnObservation,
+        recordTurnDiagnostic,
         resolveActionCheck,
         resolveEventWitnesses,
         resolvePlayerAddressing,
@@ -512,6 +532,7 @@ export function createWorkflowApplication(ports) {
         syncLocalKnowledge,
         updateNativeMessageBlock,
         validateTurnTransaction,
+        discardTurnDiagnostics,
     });
 
 

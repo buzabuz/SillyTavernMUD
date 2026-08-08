@@ -178,6 +178,149 @@ test('context budget preserves defaults, field order, and memory selection', () 
     );
 });
 
+test('context limiting preserves authoritative player input inside structured prompts', () => {
+    const playerAction =
+        'Practice for ten minutes, then whisper a question to Lavender.';
+    const playerTurnSequence = [{
+        type:
+            'action',
+        lineIndex:
+            0,
+        text:
+            'Practice for ten minutes.',
+    }, {
+        type:
+            'direct_speech',
+        lineIndex:
+            1,
+        speechOrder:
+            0,
+        targetActorId:
+            'canon_lavender_brown',
+        text:
+            'Ask Lavender a private question.',
+    }];
+    const limited =
+        contextBudget
+            .limitMessagesToContext(
+                [{
+                    role:
+                        'system',
+                    content:
+                        'Preserve the authoritative player turn.',
+                }, {
+                    role:
+                        'user',
+                    content:
+                        JSON.stringify({
+                            playerAction,
+                            playerTurnSequence,
+                            addressing: {
+                                mode:
+                                    'direct',
+                                actorIds: [
+                                    'canon_lavender_brown',
+                                ],
+                            },
+                            elapsedMinutes:
+                                15,
+                            retrievedLocalKnowledge: [{
+                                text:
+                                    'optional '.repeat(
+                                        10_000,
+                                    ),
+                            }],
+                        }),
+                }],
+                32_768,
+                18_576,
+            );
+    const parsed =
+        JSON.parse(
+            limited[1].content,
+        );
+
+    assert.equal(
+        parsed.playerAction,
+        playerAction,
+    );
+    assert.deepEqual(
+        parsed.playerTurnSequence,
+        playerTurnSequence,
+    );
+    assert.deepEqual(
+        parsed.addressing.actorIds,
+        [
+            'canon_lavender_brown',
+        ],
+    );
+    assert.equal(
+        parsed.elapsedMinutes,
+        15,
+    );
+    assert.equal(
+        parsed.retrievedLocalKnowledge,
+        undefined,
+    );
+    assert.ok(
+        parsed.contextOmittedFields
+            .includes(
+                'retrievedLocalKnowledge',
+            ),
+    );
+});
+
+test('v1 ceiling-sized response headroom migrates without overriding explicit v2 choices', () => {
+    const contextSize =
+        120_000;
+    const legacyCeiling =
+        contextSize -
+        contextBudget
+            .MANDATORY_CONTEXT_RESERVE -
+        contextBudget
+            .ROLE_CONTEXT_RESERVE;
+    const migrated =
+        contextBudget
+            .normalizeModelSlots({
+                low: {
+                    contextSize,
+                    maxResponseLength:
+                        legacyCeiling,
+                    responseHeadroomVersion:
+                        1,
+                },
+            });
+    const explicit =
+        contextBudget
+            .normalizeModelSlots({
+                low: {
+                    contextSize,
+                    maxResponseLength:
+                        legacyCeiling,
+                    responseHeadroomVersion:
+                        contextBudget
+                            .RESPONSE_HEADROOM_VERSION,
+                },
+            });
+
+    assert.equal(
+        migrated.low
+            .maxResponseLength,
+        contextBudget
+            .DEFAULT_RESPONSE_HEADROOM,
+    );
+    assert.equal(
+        migrated.low
+            .responseHeadroomVersion,
+        2,
+    );
+    assert.equal(
+        explicit.low
+            .maxResponseLength,
+        legacyCeiling,
+    );
+});
+
 test('JSON recovery preserves successful and truncated-root contracts', () => {
     assert.deepEqual(
         jsonRecovery.parseCompleteJsonObject(

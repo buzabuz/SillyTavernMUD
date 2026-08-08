@@ -20,6 +20,8 @@ export function createTurnPerformanceWorkflow(ports) {
         getSettings,
         parseJsonObject,
         recoverScenePerformancePayload,
+        recordTurnDiagnostic =
+        () => {},
         removeExplicitAddressDirective,
         resolvePlayerAddressing,
         resolveTemporaryActorRevealedName,
@@ -546,6 +548,20 @@ ${CANON_WIT_TONE_CONTRACT}`,
         let raw = extractRoleResponseText(response);
         let lastError = null;
         for (let attempt = 0; attempt < 2; attempt++) {
+            recordTurnDiagnostic(
+                'model_response',
+                {
+                    attempt,
+                    rawCharacters:
+                        typeof raw ===
+                            'string'
+                            ? raw.length
+                            : JSON.stringify(
+                                raw || {},
+                            ).length,
+                    raw,
+                },
+            );
             try {
                 let parsedPayload;
                 try {
@@ -587,6 +603,42 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     movementResolution,
                     playerAction,
                 );
+                recordTurnDiagnostic(
+                    'performance_validation',
+                    {
+                        attempt,
+                        budget,
+                        wordCount:
+                            (
+                                payload
+                                    .segments ||
+                                []
+                            )
+                                .map(segment =>
+                                    String(
+                                        segment
+                                            ?.textEn ||
+                                        '',
+                                    ).trim())
+                                .filter(Boolean)
+                                .join(' ')
+                                .split(/\s+/)
+                                .filter(Boolean)
+                                .length,
+                        segmentCount:
+                            payload
+                                .segments
+                                ?.length ||
+                            0,
+                        validation,
+                        settlementSource:
+                            payload
+                                .settlementSource,
+                        segments:
+                            payload
+                                .segments,
+                    },
+                );
                 if (!validation.valid) {
                     throw new Error(validation.errors.join('；'));
                 }
@@ -597,6 +649,20 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 return payload;
             } catch (error) {
                 lastError = error;
+                recordTurnDiagnostic(
+                    'performance_repair',
+                    {
+                        attempt,
+                        error:
+                            String(
+                                error
+                                    ?.message ||
+                                error,
+                            ),
+                        willRetry:
+                            attempt === 0,
+                    },
+                );
                 if (attempt > 0) break;
                 setLiveSceneStreamPhase('repairing');
                 response = await sendRoleRequest(lowSlot, [
