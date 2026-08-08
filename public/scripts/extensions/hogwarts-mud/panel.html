@@ -1,0 +1,668 @@
+<div id="hpmud_app" class="hpmud-app" aria-label="Hogwarts MUD">
+    <header class="hpmud-topbar">
+        <div class="hpmud-place">
+            <button id="hpmud_scene_restore" class="hpmud-icon-button" type="button" aria-label="显示场景栏">◫</button>
+            <strong id="hpmud_location">建档大厅</strong>
+            <span id="hpmud_save_state" class="hpmud-save-state"><i></i>已保存</span>
+        </div>
+        <div class="hpmud-chapter">
+            <strong id="hpmud_chapter">1991 年时间线</strong>
+            <span id="hpmud_clock">等待角色入场</span>
+        </div>
+        <div class="hpmud-top-actions">
+            <button id="hpmud_relationship_graph" class="hpmud-relationship-entry" type="button">
+                <span aria-hidden="true">✦</span>关系星图
+            </button>
+            <button id="hpmud_focus" type="button">专注</button>
+            <details class="hpmud-more">
+                <summary>更多</summary>
+                <div class="hpmud-more-menu">
+                    <button id="hpmud_open_home" type="button">档案大厅</button>
+                    <button id="hpmud_open_settings" type="button">配置</button>
+                    <button id="hpmud_reopen_models" type="button">AI 配置</button>
+                    <button id="hpmud_reopen_setup" type="button">人物卡</button>
+                    <section class="hpmud-more-translation">
+                        <span>默认翻译 <small id="hpmud_translation_provider_status">本地 4B</small></span>
+                        <div role="radiogroup" aria-label="默认翻译源">
+                            <button type="button" role="radio" data-hpmud-translation-provider="local">本地 4B</button>
+                            <button type="button" role="radio" data-hpmud-translation-provider="google">Google</button>
+                            <button type="button" role="radio" data-hpmud-translation-provider="bing">Bing</button>
+                            <button type="button" role="radio" data-hpmud-translation-provider="off">不开</button>
+                        </div>
+                    </section>
+                </div>
+            </details>
+            <button id="hpmud_character" class="hpmud-avatar-button" type="button" aria-label="打开角色状态">?</button>
+        </div>
+    </header>
+
+    <section id="hpmud_home" class="hpmud-home" aria-label="Hogwarts MUD 档案大厅">
+        <div class="hpmud-home-hero">
+            <div class="hpmud-home-mark">
+                <img src="/scripts/extensions/hogwarts-mud/assets/icon-wand.png" alt="">
+                <span></span>
+            </div>
+            <small>World Blueprint · Persistent Timeline</small>
+            <h1>选择故事剧本</h1>
+            <p>决定你从魔法史的哪个位置进入。开局之后，原著只提供初始条件。</p>
+
+            <div id="hpmud_campaigns" class="hpmud-campaigns" role="radiogroup" aria-label="故事剧本">
+                <button class="active" type="button" role="radio" aria-checked="true" data-campaign="canon_1991">
+                    <small>Canon Cohort · 1991</small><strong>与哈利同届</strong><span>从入学通知开始</span>
+                </button>
+                <button type="button" role="radio" aria-checked="false" data-campaign="hogwarts_student">
+                    <small>Open School Years</small><strong>霍格沃茨在校生</strong><span>自选年级与年份</span>
+                </button>
+                <button type="button" role="radio" aria-checked="false" data-campaign="marauders_era">
+                    <small>Earlier Generation · 1971</small><strong>掠夺者时代</strong><span>战争阴影形成之前</span>
+                </button>
+            </div>
+
+            <div class="hpmud-campaign-options">
+                <label><span>开局年份</span><input id="hpmud_campaign_year" type="number" min="1900" max="2020" value="1991"></label>
+                <label><span>起始年级</span><select id="hpmud_campaign_grade">
+                    <option value="1">一年级</option><option value="2">二年级</option><option value="3">三年级</option>
+                    <option value="4">四年级</option><option value="5">五年级</option><option value="6">六年级</option><option value="7">七年级</option>
+                </select></label>
+            </div>
+
+            <div class="hpmud-difficulty" role="radiogroup" aria-label="世界难度">
+                <span class="hpmud-difficulty-title">世界难度</span>
+                <button type="button" role="radio" aria-checked="false" data-difficulty="narrative"><b>叙事</b><small>危险升级较慢</small></button>
+                <button class="active" type="button" role="radio" aria-checked="true" data-difficulty="standard"><b>标准</b><small>完整规则后果</small></button>
+                <button type="button" role="radio" aria-checked="false" data-difficulty="harsh"><b>严酷</b><small>永久后果更早</small></button>
+            </div>
+            <button id="hpmud_new_game" type="button">
+                <span><b>建立新时间线</b><small id="hpmud_campaign_summary">1991 · 一年级 · 标准难度</small></span>
+                <i>→</i>
+            </button>
+        </div>
+        <section class="hpmud-save-library">
+            <header>
+                <div><small>Archive Index</small><h2>读取旧档案</h2></div>
+                <button id="hpmud_refresh_saves" type="button" aria-label="刷新存档">↻</button>
+            </header>
+            <div id="hpmud_save_list" class="hpmud-save-list" aria-live="polite"></div>
+            <footer><span>所有时间线都在这里继续，无需返回酒馆</span><b id="hpmud_save_count">0 个档案</b></footer>
+        </section>
+    </section>
+
+    <section id="hpmud_setup" class="hpmud-setup" aria-label="创建角色与世界配置" hidden>
+        <aside class="hpmud-setup-rail">
+            <div class="hpmud-setup-seal">
+                <img src="/scripts/extensions/hogwarts-mud/assets/icon-wand.png" alt="">
+                <small>Hogwarts · 1991</small>
+                <strong>学生档案</strong>
+            </div>
+            <nav aria-label="建档步骤">
+                <button class="active" type="button" data-hpmud-step="identity"><b>01</b><span>身份</span><small>你是谁</small></button>
+                <button type="button" data-hpmud-step="background"><b>02</b><span>背景</span><small>你从哪里来</small></button>
+                <button type="button" data-hpmud-step="aptitudes"><b>03</b><span>能力</span><small>天赋与属性</small></button>
+                <button type="button" data-hpmud-step="story"><b>04</b><span>故事偏好</span><small>关系与节奏</small></button>
+                <button type="button" data-hpmud-step="models"><b>05</b><span>生成配置</span><small>Preset 与三档 AI</small></button>
+                <button type="button" data-hpmud-step="review"><b>06</b><span>确认入场</span><small>人物卡与世界</small></button>
+            </nav>
+            <p>人物卡确认前不会开始叙事，也不会向模型发送开场消息。</p>
+        </aside>
+
+        <form id="hpmud_setup_form" class="hpmud-setup-sheet">
+            <header class="hpmud-setup-heading">
+                <div><small id="hpmud_setup_kicker">第一卷 · 身份记录</small><h1 id="hpmud_setup_title">先决定谁将收到那封信</h1></div>
+                <span id="hpmud_setup_progress">1 / 6</span>
+            </header>
+
+            <div class="hpmud-setup-pages">
+                <section class="hpmud-setup-page active" data-hpmud-page="identity">
+                    <div class="hpmud-form-grid two">
+                        <label><span>姓名 *</span><input name="character_name" autocomplete="name" maxlength="80" required></label>
+                        <label><span>年龄</span><input name="character_age" type="number" min="10" max="18" value="11"></label>
+                        <label><span>固定出生日期</span><input name="character_birth_date" type="date" value="1980-07-01" required></label>
+                        <label><span>性别表达 / 称谓</span><input name="character_pronouns" maxlength="60" placeholder="例如：她 / she"></label>
+                        <label class="wide"><span>族裔 / 可见文化线索</span><textarea name="character_heritage" rows="2" maxlength="400" placeholder="例如：英籍华裔；只写你希望 NPC 能观察或合理得知的部分"></textarea></label>
+                        <label class="wide"><span>外貌与当前呈现</span><textarea name="character_appearance" rows="4" maxlength="800" placeholder="五官、肤色、发型、身形、穿着、姿态等别人能够观察到的特征"></textarea></label>
+                    </div>
+                    <div class="hpmud-setup-note"><strong>原创角色</strong><span id="hpmud_setup_campaign_note">剧本配置会在确认后成为世界事实。</span></div>
+                </section>
+
+                <section class="hpmud-setup-page" data-hpmud-page="background" hidden>
+                    <div class="hpmud-form-grid two">
+                        <label><span>血统背景</span><select name="blood_status"><option value="">待定</option><option>麻瓜出身</option><option>混血</option><option>纯血</option><option>未知或复杂</option></select></label>
+                        <label><span>家庭经济</span><select name="economy"><option value="">待定</option><option>拮据</option><option>普通</option><option>宽裕</option><option>显赫但受约束</option></select></label>
+                        <label><span>监护人或家庭关系 *</span><input name="guardian" maxlength="240" required></label>
+                        <label><span>成长地点</span><input name="home" maxlength="160" placeholder="城市、村庄或具体住处"></label>
+                        <label><span>最想得到什么 *</span><textarea name="desire" rows="3" maxlength="500" required></textarea></label>
+                        <label><span>最害怕什么 *</span><textarea name="fear" rows="3" maxlength="500" required></textarea></label>
+                        <label><span>习惯或怪癖</span><textarea name="habit" rows="3" maxlength="500"></textarea></label>
+                        <label><span>塑造你的往事</span><textarea name="formative_event" rows="3" maxlength="700"></textarea></label>
+                    </div>
+                </section>
+
+                <section class="hpmud-setup-page" data-hpmud-page="aptitudes" hidden>
+                    <div class="hpmud-aptitude-layout">
+                        <div class="hpmud-form-grid two compact">
+                            <label><span>学习方式</span><input name="learning" maxlength="160"></label>
+                            <label><span>身体与运动</span><input name="physical" maxlength="160"></label>
+                            <label><span>观察方式</span><input name="observation" maxlength="160"></label>
+                            <label><span>社交方式</span><input name="social" maxlength="160"></label>
+                            <label class="wide"><span>压力下的反应</span><input name="pressure" maxlength="240"></label>
+                            <label><span>总体魔法潜质</span><select name="magical_potential"><option value="balanced">均衡</option><option value="volatile">强烈但不稳定</option><option value="patient">起步缓慢、上限较高</option><option value="focused">领域集中</option></select></label>
+                            <label><span>优势领域</span><select name="strong_domain"><option value="">待发现</option><option>魔咒</option><option>变形</option><option>魔药</option><option>草药</option><option>飞行</option><option>心灵</option><option>防御</option></select></label>
+                            <label><span>弱势领域</span><select name="weak_domain"><option value="">待发现</option><option>魔咒</option><option>变形</option><option>魔药</option><option>草药</option><option>飞行</option><option>心灵</option><option>防御</option></select></label>
+                            <label><span>罕见天赋</span><select name="rare_talent"><option value="none">无已知罕见天赋</option><option>蛇佬腔</option><option>易容马格斯倾向</option><option>预言倾向</option><option>自定义，写入背景</option></select></label>
+                        </div>
+                        <section class="hpmud-attributes">
+                            <header><div><strong>六项基础属性</strong><small>单项 7–14</small></div><b><span id="hpmud_attribute_total">63</span> / 63</b></header>
+                            <label><span>体魄</span><input name="attr_physique" type="number" min="7" max="14" value="10"></label>
+                            <label><span>灵巧</span><input name="attr_agility" type="number" min="7" max="14" value="10"></label>
+                            <label><span>感知</span><input name="attr_perception" type="number" min="7" max="14" value="11"></label>
+                            <label><span>智识</span><input name="attr_intellect" type="number" min="7" max="14" value="11"></label>
+                            <label><span>意志</span><input name="attr_willpower" type="number" min="7" max="14" value="11"></label>
+                            <label><span>魅力</span><input name="attr_charisma" type="number" min="7" max="14" value="10"></label>
+                        </section>
+                    </div>
+                </section>
+
+                <section class="hpmud-setup-page" data-hpmud-page="story" hidden>
+                    <div class="hpmud-story-preferences">
+                        <div class="hpmud-form-grid two">
+                            <label><span>故事口味</span><select name="story_tone"><option value="balanced">均衡：冒险、关系与日常并行</option><option value="adventure">惊险冒险：行动、危机与探索优先</option><option value="mystery">秘密推理：线索、谜团与知识优先</option><option value="social">关系群像：社交、冲突与情感优先</option></select></label>
+                            <label><span>社交密度</span><select name="social_density"><option value="intimate">少数深交：人物少但关系深入</option><option value="balanced">均衡：稳定核心与持续新面孔</option><option value="ensemble">热闹群像：更大的同学与熟人网络</option></select></label>
+                            <label><span>相对年龄偏好</span><select name="relative_age_preference"><option value="peer_focused">同龄为主：按玩家当前年龄动态匹配</option><option value="mixed">学生混合：同龄与高低年级并重</option><option value="intergenerational">跨代群像：允许更多成年人与长辈</option></select></label>
+                            <label><span>Canon 人物浓度</span><select name="canon_density"><option value="original_focused">原创为主：Canon 只在职责明确时出现</option><option value="balanced">均衡：Canon 与原创人物混合</option><option value="canon_focused">Canon 密集：优先合理的原著人物</option></select></label>
+                        </div>
+                        <fieldset class="hpmud-relationship-focus">
+                            <legend>希望重点发展的关系体验</legend>
+                            <label><input type="checkbox" name="relationship_focus" value="friendship" checked><span><strong>友情</strong><small>同伴、信任与共同成长</small></span></label>
+                            <label><input type="checkbox" name="relationship_focus" value="romance"><span><strong>青涩好感</strong><small>严格按双方当前年龄与关系发展</small></span></label>
+                            <label><input type="checkbox" name="relationship_focus" value="rivalry" checked><span><strong>宿敌竞争</strong><small>价值观、成绩或行动方式冲突</small></span></label>
+                            <label><input type="checkbox" name="relationship_focus" value="mentorship"><span><strong>引路与师生</strong><small>不等于让教师长期霸占场景</small></span></label>
+                            <label><input type="checkbox" name="relationship_focus" value="family"><span><strong>家庭关系</strong><small>亲人、监护人与家庭责任</small></span></label>
+                        </fieldset>
+                        <p class="hpmud-inline-status">出生日期是固定人物事实；“同龄、年长、年幼”会在每个世界时间点相对玩家年龄重新计算。朋友、宿敌和好感对象只会在实际认识后形成，不是预设配对。</p>
+                    </div>
+                </section>
+
+                <section class="hpmud-setup-page" data-hpmud-page="models" hidden>
+                    <section class="hpmud-context-policy">
+                        <div>
+                            <small>Adaptive Context Budget</small>
+                            <strong>上下文丰俭由人，默认使用 120K</strong>
+                            <span>系统层固定瘦身；可用预算决定记忆层数、RAG 条数与历史深度。</span>
+                        </div>
+                        <div class="hpmud-context-presets" role="group" aria-label="上下文档位">
+                            <button type="button" data-hpmud-context-preset="lean"><b>32K</b><span>精简</span><small>低成本</small></button>
+                            <button type="button" data-hpmud-context-preset="balanced"><b>64K</b><span>标准</span><small>均衡</small></button>
+                            <button type="button" data-hpmud-context-preset="rich"><b>120K</b><span>丰裕</span><small>推荐</small></button>
+                        </div>
+                    </section>
+                    <section class="hpmud-profile-toolbar">
+                        <div>
+                            <small>SillyTavern Connection Profiles</small>
+                            <strong>直接绑定酒馆完整连接配置</strong>
+                            <span id="hpmud_profile_count">正在读取 Profile…</span>
+                        </div>
+                        <button id="hpmud_refresh_profiles" type="button">刷新</button>
+                        <button id="hpmud_edit_profile" type="button">编辑 Profile</button>
+                        <button id="hpmud_create_profile" type="button">新建 Profile</button>
+                    </section>
+                    <div class="hpmud-model-slots">
+                        <article data-slot="low">
+                            <img src="/scripts/extensions/hogwarts-mud/assets/icon-wand.png" alt="">
+                            <div><small>低档 · 每回合</small><h2>现场表演者</h2><p>按当日导演约束表演动作、环境连续性与角色对白，不创造新设定或隐藏逻辑。</p></div>
+                            <label><span>完整连接配置 *</span><select name="profile_low" data-hpmud-profile-slot="low" required></select></label>
+                            <div id="hpmud_profile_detail_low" class="hpmud-profile-detail">尚未选择 Connection Profile</div>
+                            <div class="hpmud-role-generation-settings">
+                                <label><span>Chat Completion Preset</span><span class="hpmud-inline-control"><select name="preset_low" data-hpmud-preset-slot="low"></select><button type="button" data-hpmud-import-preset-role="low">导入</button></span></label>
+                                <label><span>Regex Preset</span><span class="hpmud-inline-control"><select name="regex_low" data-hpmud-regex-slot="low"></select><button type="button" data-hpmud-import-regex-role="low">导入</button></span></label>
+                                <label><span>Context Size</span><input name="context_low" type="number" min="32768" max="2000000" step="1" value="120000"></label>
+                                <label><span>输出安全余量</span><input name="response_low" type="number" min="512" max="128000" step="1" value="12000"></label>
+                                <small id="hpmud_context_summary_low" class="hpmud-context-summary"></small>
+                            </div>
+                        </article>
+                        <article data-slot="medium">
+                            <img src="/scripts/extensions/hogwarts-mud/assets/icon-memory-vial.png" alt="">
+                            <div><small>中档 · 条件触发</small><h2>角色与场景导演</h2><p>结算人物动机、场景封存核心与时间规则；输出余量只负责避免结构化结果被截断。</p></div>
+                            <label><span>完整连接配置</span><select name="profile_medium" data-hpmud-profile-slot="medium"></select></label>
+                            <div id="hpmud_profile_detail_medium" class="hpmud-profile-detail">留空时复用低档连接；中档参数与职责保持独立</div>
+                            <div class="hpmud-role-generation-settings">
+                                <label><span>Chat Completion Preset</span><span class="hpmud-inline-control"><select name="preset_medium" data-hpmud-preset-slot="medium"></select><button type="button" data-hpmud-import-preset-role="medium">导入</button></span></label>
+                                <label><span>Regex Preset</span><span class="hpmud-inline-control"><select name="regex_medium" data-hpmud-regex-slot="medium"></select><button type="button" data-hpmud-import-regex-role="medium">导入</button></span></label>
+                                <label><span>Context Size</span><input name="context_medium" type="number" min="32768" max="2000000" step="1" value="120000"></label>
+                                <label><span>输出安全余量</span><input name="response_medium" type="number" min="512" max="128000" step="1" value="12000"></label>
+                                <small id="hpmud_context_summary_medium" class="hpmud-context-summary"></small>
+                            </div>
+                        </article>
+                        <article data-slot="high">
+                            <img src="/scripts/extensions/hogwarts-mud/assets/icon-map.png" alt="">
+                            <div><small>高档 · 条件触发</small><h2>世界导演</h2><p>隐藏故事真相、复杂因果、原著事件与受控地图提案。</p></div>
+                            <label><span>完整连接配置</span><select name="profile_high" data-hpmud-profile-slot="high"></select></label>
+                            <div id="hpmud_profile_detail_high" class="hpmud-profile-detail">留空时复用角色导演</div>
+                            <div class="hpmud-role-generation-settings">
+                                <label><span>Chat Completion Preset</span><span class="hpmud-inline-control"><select name="preset_high" data-hpmud-preset-slot="high"></select><button type="button" data-hpmud-import-preset-role="high">导入</button></span></label>
+                                <label><span>Regex Preset</span><span class="hpmud-inline-control"><select name="regex_high" data-hpmud-regex-slot="high"></select><button type="button" data-hpmud-import-regex-role="high">导入</button></span></label>
+                                <label><span>Context Size</span><input name="context_high" type="number" min="32768" max="2000000" step="1" value="120000"></label>
+                                <label><span>输出安全余量</span><input name="response_high" type="number" min="512" max="128000" step="1" value="12000"></label>
+                                <small id="hpmud_context_summary_high" class="hpmud-context-summary"></small>
+                            </div>
+                        </article>
+                    </div>
+                    <input id="hpmud_role_preset_file" type="file" accept=".json,.settings,application/json" hidden>
+                    <input id="hpmud_role_regex_file" type="file" accept=".json,application/json" hidden>
+                    <p id="hpmud_setup_model_status" class="hpmud-inline-status">Context Size 是输入窗口；输出安全余量只是防截断上限，不是每轮篇幅目标。三档默认保留 12K，实际篇幅由场景复杂度决定，消耗仍按真实输出计算。</p>
+                </section>
+
+                <section class="hpmud-setup-page" data-hpmud-page="review" hidden>
+                    <div class="hpmud-review-layout">
+                        <section class="hpmud-review-card">
+                            <header><div><small>Player Character</small><h2 id="hpmud_review_name">未命名</h2></div><button id="hpmud_polish_background" type="button">用中档 AI 润色</button></header>
+                            <textarea id="hpmud_polished_background" rows="11" placeholder="系统会根据结构化字段形成背景摘要；你可以继续修改。"></textarea>
+                            <div id="hpmud_review_facts" class="hpmud-review-facts"></div>
+                        </section>
+                        <section class="hpmud-world-card">
+                            <header>
+                                <div><small>Preset MUD Map Pack</small><h2 id="hpmud_review_world_title">英国魔法世界</h2></div>
+                                <b id="hpmud_review_map_stats">10 个原著地点</b>
+                            </header>
+                            <div class="hpmud-map-selectors">
+                                <select id="hpmud_setup_map_scope" aria-label="预览地点地图"></select>
+                                <select id="hpmud_setup_map_level" aria-label="预览地图楼层" hidden></select>
+                            </div>
+                            <div id="hpmud_setup_map" class="hpmud-world-map" aria-label="预设世界地图"></div>
+                            <p>预设拓扑不会由叙事 AI 重建。运行时只记录封锁、损坏、秘密发现和事件造成的结构变化。</p>
+                        </section>
+                    </div>
+                    <label class="hpmud-confirm-row"><input id="hpmud_confirm_facts" type="checkbox"><span><strong>我确认人物卡中的事实</strong><small>开始后仍可查看，但已确认事实不能被 AI 擅自改写。</small></span></label>
+                    <div id="hpmud_setup_errors" class="hpmud-setup-errors" role="alert"></div>
+                </section>
+            </div>
+
+            <footer class="hpmud-setup-footer">
+                <button id="hpmud_setup_previous" type="button" disabled>上一步</button>
+                <span>结构化字段是权威状态，润色文本只负责表达。</span>
+                <button id="hpmud_setup_return_game" type="button" hidden>保存 AI 配置并返回游戏</button>
+                <button id="hpmud_setup_next" class="primary" type="button">下一步</button>
+                <button id="hpmud_start_game" class="primary" type="submit" hidden>确认人物卡并开始</button>
+            </footer>
+        </form>
+    </section>
+
+    <div id="hpmud_workspace" class="hpmud-workspace" hidden>
+        <aside id="hpmud_scene_panel" class="hpmud-scene-panel">
+            <button id="hpmud_scene_collapse" class="hpmud-scene-collapse" type="button" aria-label="收起场景栏">‹</button>
+            <div class="hpmud-side-scroll">
+                <section class="hpmud-side-card">
+                    <header><span>世界地图</span><button type="button" data-hpmud-inspector="map">展开</button></header>
+                    <div id="hpmud_map_mini" class="hpmud-map"></div>
+                </section>
+                <section class="hpmud-side-card">
+                    <header><span>当前互动人物</span><b id="hpmud_people_count">0</b></header>
+                    <div id="hpmud_people" class="hpmud-people"></div>
+                    <details class="hpmud-local-people">
+                        <summary>
+                            <span>当前地点人物</span>
+                            <b id="hpmud_local_people_count">0</b>
+                        </summary>
+                        <div class="hpmud-local-people-body">
+                            <div id="hpmud_local_people" class="hpmud-local-people-list"></div>
+                            <div id="hpmud_local_cohorts" class="hpmud-local-cohorts"></div>
+                        </div>
+                    </details>
+                </section>
+                <section class="hpmud-side-card">
+                    <header><span>现场记录</span></header>
+                    <div id="hpmud_agenda" class="hpmud-agenda">
+                        <span><time>现在</time> 当前场景</span>
+                    </div>
+                </section>
+                <section class="hpmud-side-card hpmud-archive-card">
+                    <header><span>场景档案</span><b id="hpmud_scene_archive_count">0</b></header>
+                    <div id="hpmud_current_scene_card" class="hpmud-current-scene-card"></div>
+                    <div class="hpmud-archive-divider"><span>已封存 · 只读</span></div>
+                    <div id="hpmud_scene_archive_list" class="hpmud-scene-archive-list"></div>
+                </section>
+            </div>
+        </aside>
+
+        <main class="hpmud-story-column">
+            <div id="hpmud_story" class="hpmud-story" aria-live="polite"></div>
+            <form id="hpmud_composer" class="hpmud-composer">
+                <textarea id="hpmud_input" name="turn" rows="3" autocomplete="off" aria-label="写下你的行动、台词或想法" placeholder="写下你的行动、台词或想法……"></textarea>
+                <div id="hpmud_address_preview" class="hpmud-address-preview" aria-live="polite" hidden>
+                    <i>@</i>
+                    <span><strong></strong><small></small></span>
+                    <button id="hpmud_clear_address" type="button" aria-label="清除受话对象">清除</button>
+                </div>
+                <div id="hpmud_movement_preview" class="hpmud-movement-preview" aria-live="polite" hidden>
+                    <i></i>
+                    <span><strong></strong><small></small></span>
+                    <div class="hpmud-movement-actions">
+                        <button id="hpmud_confirm_movement" type="button">设为移动</button>
+                        <button id="hpmud_dismiss_movement" type="button">仅提及</button>
+                    </div>
+                </div>
+                <div id="hpmud_spell_preview" class="hpmud-spell-preview" aria-live="polite" hidden>
+                    <i>✦</i>
+                    <span><strong></strong><small></small></span>
+                    <button id="hpmud_clear_spell" type="button" aria-label="清除结构化咒语">清除</button>
+                </div>
+                <div class="hpmud-composer-row">
+                    <div class="hpmud-expression-tools">
+                        <details class="hpmud-insert-menu">
+                            <summary>插入表达</summary>
+                            <div>
+                                <button type="button" data-hpmud-template="speech">台词</button>
+                                <button type="button" data-hpmud-template="action">动作</button>
+                                <button type="button" data-hpmud-template="thought">内心</button>
+                            </div>
+                        </details>
+                        <details id="hpmud_address_menu" class="hpmud-insert-menu hpmud-address-menu">
+                            <summary>@ 对话</summary>
+                            <div id="hpmud_address_options"></div>
+                        </details>
+                        <div id="hpmud_movement_picker" class="hpmud-movement-picker">
+                            <button
+                                id="hpmud_insert_movement"
+                                class="hpmud-tool-button"
+                                type="button"
+                                aria-expanded="false"
+                                aria-controls="hpmud_movement_panel"
+                            >→ 移动</button>
+                            <section id="hpmud_movement_panel" class="hpmud-movement-panel" aria-label="选择移动目的地" hidden>
+                                <header>
+                                    <span>
+                                        <strong>当前位置可达</strong>
+                                        <small id="hpmud_movement_origin"></small>
+                                    </span>
+                                    <button id="hpmud_close_movement" type="button" aria-label="关闭地点选择">×</button>
+                                </header>
+                                <label class="hpmud-movement-search">
+                                    <span>⌕</span>
+                                    <input id="hpmud_movement_search" type="search" autocomplete="off" placeholder="搜索地点、楼层或房间 ID">
+                                </label>
+                                <div id="hpmud_movement_options" class="hpmud-movement-options"></div>
+                                <footer>
+                                    <button id="hpmud_custom_movement" type="button">手动填写地点</button>
+                                    <small>选择后仅写入输入框，提交时才移动</small>
+                                </footer>
+                            </section>
+                        </div>
+                        <div id="hpmud_spell_picker" class="hpmud-spell-picker">
+                            <button
+                                id="hpmud_insert_spell"
+                                class="hpmud-tool-button"
+                                type="button"
+                                aria-expanded="false"
+                                aria-controls="hpmud_spell_panel"
+                            ><img src="/scripts/extensions/hogwarts-mud/assets/icon-wand.png" alt="">咒语</button>
+                            <section id="hpmud_spell_panel" class="hpmud-spell-panel" aria-label="选择咒语" hidden>
+                                <header>
+                                    <span>
+                                        <strong id="hpmud_spell_panel_title">已学咒语</strong>
+                                        <small id="hpmud_spell_count"></small>
+                                    </span>
+                                    <button id="hpmud_close_spell" type="button" aria-label="关闭咒语选择">×</button>
+                                </header>
+                                <label class="hpmud-spell-search">
+                                    <span>⌕</span>
+                                    <input id="hpmud_spell_search" type="search" autocomplete="off" placeholder="搜索咒文、名称、效果">
+                                </label>
+                                <div id="hpmud_spell_options" class="hpmud-spell-options"></div>
+                                <footer>
+                                    <button id="hpmud_spell_show_all" type="button">尝试未学咒语</button>
+                                    <small>结构化施法必定触发 D20</small>
+                                </footer>
+                            </section>
+                        </div>
+                    </div>
+                    <div class="hpmud-turn-actions">
+                        <button id="hpmud_rollback_turn" class="hpmud-rollback-button" type="button" disabled><span>↶</span>回滚上一轮</button>
+                        <button id="hpmud_end_scene" class="hpmud-end-scene-button" type="button">
+                            <span>◆</span>封存场景
+                        </button>
+                        <button id="hpmud_check" class="hpmud-check-button" type="button"><img src="/scripts/extensions/hogwarts-mud/assets/icon-d20.png" alt="">主动判定</button>
+                        <button class="hpmud-send-button" type="submit">提交回合</button>
+                    </div>
+                </div>
+            </form>
+        </main>
+
+        <aside class="hpmud-inspector">
+            <nav class="hpmud-inspector-tabs" aria-label="检查器">
+                <button class="active" type="button" data-hpmud-tab="character">人物</button>
+                <button type="button" data-hpmud-tab="clues">线索</button>
+                <button type="button" data-hpmud-tab="status">状态</button>
+                <button type="button" data-hpmud-tab="spells">咒语</button>
+                <button type="button" data-hpmud-tab="items">物品</button>
+            </nav>
+            <div id="hpmud_inspector_content" class="hpmud-inspector-content"></div>
+        </aside>
+    </div>
+
+    <dialog id="hpmud_relationship_dialog" class="hpmud-relationship-dialog" aria-labelledby="hpmud_relationship_title">
+        <div class="hpmud-relationship-shell">
+            <header class="hpmud-relationship-header">
+                <div class="hpmud-relationship-title">
+                    <span class="hpmud-relationship-astrolabe" aria-hidden="true"><i></i></span>
+                    <div>
+                        <small>Player-known social constellation</small>
+                        <h2 id="hpmud_relationship_title">关系星图</h2>
+                    </div>
+                </div>
+                <p>只呈现这条时间线中你已知的人物与有向关系</p>
+                <button id="hpmud_relationship_close" type="button" aria-label="关闭关系星图">×</button>
+            </header>
+
+            <section class="hpmud-relationship-toolbar" aria-label="关系星图筛选">
+                <label class="hpmud-relationship-search">
+                    <span aria-hidden="true">⌕</span>
+                    <span class="sr-only">搜索人物</span>
+                    <input id="hpmud_relationship_search" type="search" maxlength="80" autocomplete="off" placeholder="寻找人物星……">
+                </label>
+                <label>
+                    <span>范围</span>
+                    <select id="hpmud_relationship_scope">
+                        <option value="mine">与我有关</option>
+                        <option value="all">全部已知</option>
+                    </select>
+                </label>
+                <label>
+                    <span>关系</span>
+                    <select id="hpmud_relationship_sentiment">
+                        <option value="all">全部关系</option>
+                        <option value="positive">正面</option>
+                        <option value="negative">负面</option>
+                        <option value="complex">复杂</option>
+                    </select>
+                </label>
+                <label>
+                    <span>身份</span>
+                    <select id="hpmud_relationship_category">
+                        <option value="all">全部身份</option>
+                        <option value="house">学院</option>
+                        <option value="family">家庭</option>
+                        <option value="classmate">同学</option>
+                        <option value="professor">教授</option>
+                    </select>
+                </label>
+                <button id="hpmud_relationship_reset" type="button"><span aria-hidden="true">◎</span>重置星位</button>
+                <output id="hpmud_relationship_count">0 人物 · 0 有向关系</output>
+            </section>
+
+            <div class="hpmud-relationship-workbench">
+                <main class="hpmud-relationship-stage">
+                    <div class="hpmud-relationship-compass" aria-hidden="true"><span>N</span><i></i></div>
+                    <div
+                        id="hpmud_relationship_canvas"
+                        class="hpmud-relationship-canvas"
+                        role="application"
+                        tabindex="0"
+                        aria-label="交互式关系星图。方向键选择人物，回车查看详情，Escape 关闭。"
+                        aria-describedby="hpmud_relationship_status"
+                    ></div>
+                    <p id="hpmud_relationship_empty" class="hpmud-relationship-empty" hidden>
+                        <span aria-hidden="true">✦</span>
+                        目前没有符合筛选条件的玩家已知关系
+                    </p>
+                    <div class="hpmud-relationship-legend" aria-label="关系颜色图例">
+                        <span class="neutral">未定</span>
+                        <span class="warmth">温暖</span>
+                        <span class="trust">信任</span>
+                        <span class="respect">尊重</span>
+                        <span class="conflict">冲突</span>
+                        <span class="fear">恐惧</span>
+                        <span class="protect">保护</span>
+                    </div>
+                </main>
+
+                <aside id="hpmud_relationship_detail" class="hpmud-relationship-detail" aria-label="人物或关系详情"></aside>
+            </div>
+
+            <details id="hpmud_relationship_text" class="hpmud-relationship-text">
+                <summary>打开文本关系表 <small>键盘与图形回退</small></summary>
+                <div>
+                    <section>
+                        <h3>已知人物</h3>
+                        <ul id="hpmud_relationship_text_nodes"></ul>
+                    </section>
+                    <section>
+                        <h3>有向关系</h3>
+                        <ul id="hpmud_relationship_text_edges"></ul>
+                    </section>
+                </div>
+            </details>
+            <p id="hpmud_relationship_status" class="sr-only" aria-live="polite"></p>
+        </div>
+    </dialog>
+
+    <dialog id="hpmud_scene_transition_dialog" class="hpmud-dialog hpmud-scene-transition-dialog">
+        <form id="hpmud_scene_transition_form" class="hpmud-dialog-frame">
+            <header>
+                <div><small>Scene Ledger · Atomic Transition</small><h2>封存当前场景</h2></div>
+                <button id="hpmud_scene_transition_cancel" type="button" aria-label="关闭">×</button>
+            </header>
+            <div class="hpmud-dialog-scroll">
+                <section class="hpmud-transition-current">
+                    <span>当前场景</span>
+                    <strong id="hpmud_transition_scene_name">未命名场景</strong>
+                    <small id="hpmud_transition_scene_meta">地点与时间待确认</small>
+                </section>
+                <label class="hpmud-transition-destination">
+                    <span>下一场景意图 <b>导演已预排 · 可修改</b></span>
+                    <input id="hpmud_transition_destination" type="text" maxlength="240" placeholder="导演默认意图会自动填入">
+                    <small id="hpmud_transition_destination_status">正在读取当前场景的后续意图。</small>
+                </label>
+                <fieldset class="hpmud-transition-tier">
+                    <legend>结算层级</legend>
+                    <label>
+                        <input type="radio" name="scene_transition_tier" value="medium" checked>
+                        <span><b>普通切场</b><small>中档 · 收束现场、切换房间、安排下一幕</small></span>
+                    </label>
+                    <label>
+                        <input type="radio" name="scene_transition_tier" value="high">
+                        <span><b>重大转折</b><small>高档 · 仅用于永久后果或复杂因果变化</small></span>
+                    </label>
+                </fieldset>
+                <p class="hpmud-transition-note">旧场景会冻结为只读档案。结算失败时，当前位置与聊天内容保持不变。</p>
+            </div>
+            <footer>
+                <button id="hpmud_scene_transition_back" type="button">继续当前场景</button>
+                <button id="hpmud_scene_transition_submit" type="submit">封存并前往下一幕</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <dialog id="hpmud_scene_archive_dialog" class="hpmud-dialog hpmud-scene-archive-dialog">
+        <div class="hpmud-dialog-frame">
+            <header>
+                <div><small>Closed Scene · Read Only</small><h2 id="hpmud_archive_title">场景档案</h2></div>
+                <button id="hpmud_archive_close" type="button" aria-label="关闭">×</button>
+            </header>
+            <div class="hpmud-dialog-scroll">
+                <section id="hpmud_archive_meta" class="hpmud-archive-meta"></section>
+                <section class="hpmud-archive-records">
+                    <header><span>现场记录</span><small>随场景冻结</small></header>
+                    <div id="hpmud_archive_timeline" class="hpmud-agenda"></div>
+                </section>
+                <div id="hpmud_archive_transcript" class="hpmud-archive-transcript"></div>
+            </div>
+            <footer><span>该场景已经封存，只能阅读，不能继续对话。</span></footer>
+        </div>
+    </dialog>
+
+    <dialog id="hpmud_settings" class="hpmud-dialog">
+        <form method="dialog" class="hpmud-dialog-frame">
+            <header><div><small>Hogwarts MUD</small><h2>世界与生成</h2></div><button value="cancel" type="submit" aria-label="关闭">×</button></header>
+            <div class="hpmud-dialog-scroll">
+                <label class="hpmud-switch-row"><span><strong>启用系统层</strong><small>注入世界规则、人物卡和英语输出契约</small></span><input id="hpmud_prompt_enabled" name="prompt_enabled" type="checkbox"></label>
+                <label><span>世界系统 Prompt</span><textarea id="hpmud_world_prompt" name="world_prompt" rows="8" autocomplete="off"></textarea></label>
+                <label class="hpmud-provider-row"><span><strong>默认翻译源</strong><small>英文原文保存在上下文，中文仅用于显示</small></span><select id="hpmud_translation_provider" name="translation_provider"><option value="local">本地 4B</option><option value="google">Google</option><option value="bing">Bing</option><option value="off">不开</option></select></label>
+                <section class="hpmud-import-card">
+                    <div><strong>酒馆 Preset</strong><small id="hpmud_preset_status">未导入</small></div>
+                    <select id="hpmud_preset_target" name="preset_target" aria-label="Preset 类型"><option value="auto">自动识别</option><option value="openai">Chat Completion</option><option value="textgenerationwebui">Text Completion</option><option value="instruct">Instruct 模板</option><option value="context">Context 模板</option></select>
+                    <button id="hpmud_import_preset" type="button">导入 JSON</button>
+                    <input id="hpmud_preset_file" name="preset_file" type="file" accept=".json,.settings,application/json" hidden>
+                </section>
+                <section class="hpmud-import-card">
+                    <div><strong>酒馆 Regex</strong><small id="hpmud_regex_status">未导入</small></div>
+                    <select id="hpmud_regex_target" name="regex_target" aria-label="Regex 作用域"><option value="global">全局</option><option value="preset">当前 Preset</option></select>
+                    <button id="hpmud_import_regex" type="button">导入 JSON</button>
+                    <input id="hpmud_regex_file" name="regex_files" type="file" accept=".json,application/json" multiple hidden>
+                </section>
+            </div>
+            <footer><button id="hpmud_save_settings" value="default" type="submit">保存</button></footer>
+        </form>
+    </dialog>
+
+    <dialog id="hpmud_profile_editor" class="hpmud-dialog hpmud-profile-editor">
+        <form id="hpmud_profile_form" class="hpmud-dialog-frame">
+            <header>
+                <div><small>SillyTavern Connection Manager</small><h2 id="hpmud_profile_editor_title">新建 Connection Profile</h2></div>
+                <button id="hpmud_profile_cancel" type="button" aria-label="关闭">×</button>
+            </header>
+            <div class="hpmud-dialog-scroll">
+                <input id="hpmud_profile_id" type="hidden">
+                <div class="hpmud-profile-form-grid">
+                    <label class="wide"><span>Profile 名称 *</span><input id="hpmud_profile_name" type="text" maxlength="120" required placeholder="例如：日常叙事 · Gemini 3.1"></label>
+                    <label><span>API</span><select id="hpmud_profile_api_type"><option value="openai">Chat Completion</option></select></label>
+                    <label><span>Chat Completion Source *</span><select id="hpmud_profile_source" required>
+                        <option value="custom">Custom (OpenAI-compatible)</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="openrouter">OpenRouter</option>
+                        <option value="makersuite">Google AI Studio</option>
+                        <option value="claude">Claude</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="mistralai">Mistral AI</option>
+                        <option value="groq">Groq</option>
+                        <option value="xai">xAI</option>
+                        <option value="chutes">Chutes</option>
+                        <option value="siliconflow">SiliconFlow</option>
+                        <option value="zai">Z.AI</option>
+                    </select></label>
+                    <label id="hpmud_profile_endpoint_row" class="wide"><span>Custom Endpoint (Base URL) *</span><input id="hpmud_profile_endpoint" type="url" placeholder="https://example.com/v1"><small>自动调用兼容的 Chat Completions 接口。</small></label>
+                    <label class="wide"><span>API Key</span><input id="hpmud_profile_api_key" type="password" autocomplete="new-password" placeholder="新建时输入；编辑时留空表示保留现有密钥"><small>密钥保存在 SillyTavern Secret Storage，不进入存档。</small></label>
+                    <label><span>Available Models *</span><select id="hpmud_profile_model" required>
+                        <option value="__manual__">手动输入 Model ID…</option>
+                    </select><small>测试连接后，这里会显示服务返回的全部模型。</small></label>
+                    <label><span>Settings Preset</span><select id="hpmud_profile_preset"></select></label>
+                    <label id="hpmud_profile_manual_model_row" class="wide"><span>手动 Model ID *</span><input id="hpmud_profile_manual_model" type="text" placeholder="例如：gemini-3.1-pro-preview"></label>
+                    <label class="wide"><span>Prompt Post-Processing</span><select id="hpmud_profile_post_processing">
+                        <option value="">默认</option>
+                        <option value="merge">Merge</option>
+                        <option value="merge_tools">Merge + Tools</option>
+                        <option value="semi">Semi</option>
+                        <option value="strict">Strict</option>
+                        <option value="single">Single</option>
+                    </select></label>
+                </div>
+                <section class="hpmud-profile-model-loader">
+                    <div><strong>Available Models</strong><small id="hpmud_profile_test_status">保存前可以测试连接并获取模型列表</small></div>
+                    <button id="hpmud_profile_test" type="button">测试并获取模型</button>
+                </section>
+            </div>
+            <footer>
+                <button id="hpmud_profile_delete" class="danger" type="button" hidden>删除 Profile</button>
+                <button id="hpmud_profile_save" type="submit">保存 Connection Profile</button>
+            </footer>
+        </form>
+    </dialog>
+</div>

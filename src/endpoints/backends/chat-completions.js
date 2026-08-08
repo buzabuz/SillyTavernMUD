@@ -2192,6 +2192,13 @@ router.post('/generate', async function (request, response) {
         let headers;
         let bodyParams;
         const isTextCompletion = Boolean(request.body.model && TEXT_COMPLETION_MODELS.includes(request.body.model)) || typeof request.body.messages === 'string';
+        const isHogwartsMudJsonSchema =
+            /^hogwarts_mud_/i.test(
+                String(
+                    request.body.json_schema
+                        ?.name || '',
+                ),
+            );
 
         if (request.body.chat_completion_source === CHAT_COMPLETION_SOURCES.OPENAI) {
             apiUrl = new URL(request.body.reverse_proxy || API_OPENAI).toString();
@@ -2201,7 +2208,18 @@ router.post('/generate', async function (request, response) {
                 logprobs: request.body.logprobs,
                 top_logprobs: undefined,
             };
-
+            if (request.body.response_format?.type === 'json_object') {
+                bodyParams.response_format = { type: 'json_object' };
+            }
+            if (['enabled', 'disabled'].includes(request.body.thinking?.type)) {
+                bodyParams.thinking = { type: request.body.thinking.type };
+            }
+            if (isHogwartsMudJsonSchema &&
+                /^glm-5(?:\.|$)/i.test(String(request.body.model || ''))) {
+                bodyParams.thinking = { type: 'disabled' };
+                bodyParams.enable_thinking = false;
+                bodyParams.reasoning_effort = 'none';
+            }
             // Adjust logprobs params for Chat Completions API, which expects { top_logprobs: number; logprobs: boolean; }
             if (!isTextCompletion && bodyParams.logprobs > 0) {
                 bodyParams.top_logprobs = bodyParams.logprobs;
@@ -2309,7 +2327,15 @@ router.post('/generate', async function (request, response) {
                 logprobs: request.body.logprobs,
                 top_logprobs: undefined,
             };
-
+            if (['enabled', 'disabled'].includes(request.body.thinking?.type)) {
+                bodyParams.thinking = { type: request.body.thinking.type };
+            }
+            if (isHogwartsMudJsonSchema &&
+                /^glm-5(?:\.|$)/i.test(String(request.body.model || ''))) {
+                bodyParams.thinking = { type: 'disabled' };
+                bodyParams.enable_thinking = false;
+                bodyParams.reasoning_effort = 'none';
+            }
             // Adjust logprobs params for Chat Completions API, which expects { top_logprobs: number; logprobs: boolean; }
             if (!isTextCompletion && bodyParams.logprobs > 0) {
                 bodyParams.top_logprobs = bodyParams.logprobs;
@@ -2320,14 +2346,22 @@ router.post('/generate', async function (request, response) {
             mergeObjectWithYaml(headers, request.body.custom_include_headers);
             embedOpenRouterMedia(request.body.messages, { audio: true, video: false });
             if (request.body.json_schema) {
-                bodyParams['response_format'] = {
-                    type: 'json_schema',
-                    json_schema: {
-                        name: request.body.json_schema.name,
-                        strict: request.body.json_schema.strict ?? true,
-                        schema: request.body.json_schema.value,
-                    },
-                };
+                if (isHogwartsMudJsonSchema) {
+                    setJsonObjectFormat(
+                        bodyParams,
+                        request.body.messages,
+                        request.body.json_schema,
+                    );
+                } else {
+                    bodyParams['response_format'] = {
+                        type: 'json_schema',
+                        json_schema: {
+                            name: request.body.json_schema.name,
+                            strict: request.body.json_schema.strict ?? true,
+                            schema: request.body.json_schema.value,
+                        },
+                    };
+                }
             }
         } else if (request.body.chat_completion_source === CHAT_COMPLETION_SOURCES.PERPLEXITY) {
             apiUrl = API_PERPLEXITY;

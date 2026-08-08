@@ -81,6 +81,9 @@ router.post('/google', async (request, response) => {
 
         const text = String(request.body.text ?? '');
         const lang = String(request.body.lang ?? '');
+        const source = String(
+            request.body.source ?? 'auto',
+        ).trim() || 'auto';
 
         if (!text || !lang) {
             return response.sendStatus(400);
@@ -88,7 +91,11 @@ router.post('/google', async (request, response) => {
 
         console.debug('Input text: ' + text);
 
-        const translator = new Translator({ to: lang, requestFunction: fetch });
+        const translator = new Translator({
+            from: source,
+            to: lang,
+            requestFunction: fetch,
+        });
         const translatedText = await translator.translate(text).then(result => result.text);
 
         response.setHeader('Content-Type', 'text/plain; charset=utf-8');

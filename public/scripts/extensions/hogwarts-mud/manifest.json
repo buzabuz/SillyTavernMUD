@@ -1,0 +1,18 @@
+{
+    "display_name": "Hogwarts MUD",
+    "loading_order": 20,
+    "requires": [],
+    "dependencies": [
+        "regex",
+        "connection-manager"
+    ],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "TRAE",
+    "version": "0.1.0",
+    "homePage": "https://github.com/SillyTavern/SillyTavern",
+    "hooks": {
+        "activate": "init"
+    }
+}

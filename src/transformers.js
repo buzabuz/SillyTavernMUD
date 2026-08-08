@@ -142,7 +142,25 @@ export async function getPipeline(task, forceModel = '') {
     return instance;
 }
 
+/**
+ * Disposes a cached transformers.js pipeline.
+ * @param {import('sillytavern-transformers').PipelineType} task Pipeline task.
+ * @returns {Promise<boolean>} Whether a pipeline was disposed.
+ */
+export async function disposePipeline(task) {
+    const entry = tasks[task];
+    if (!entry?.pipeline) {
+        return false;
+    }
+    const instance = entry.pipeline;
+    entry.pipeline = null;
+    entry.currentModel = null;
+    await instance.dispose();
+    return true;
+}
+
 export default {
     getRawImage,
     getPipeline,
+    disposePipeline,
 };
