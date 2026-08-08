@@ -11,7 +11,7 @@ import {
 
 import {
     createSceneItemStates,
-    normalizeInventoryItem,
+    synchronizeHeldItemLocations,
 } from './inventory.js';
 
 import {
@@ -31,6 +31,10 @@ import {
     TEMPORAL_STATE_VERSION,
     WORLD_CHANGE_MIN_DAYS,
 } from './time-environment.js';
+
+import {
+    projectSceneTransitionPresence,
+} from './transition-presence.js';
 
 import {
     applyTransitionWorldChanges,
@@ -158,51 +162,12 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
                 updatedTurn: currentTurn,
                 source: 'medium_transition',
                 significance: 'notable',
-                lastingImpactEn:
-                    update.sceneMemoryEn,
-                lastingImpact:
-                    update.sceneMemory ||
-                    update.sceneMemoryEn,
             },
             'recent',
         );
     });
     next.chapter = nextScene.chapter || nextScene.chapterEn;
     next.location = room.name || nextScene.name || nextScene.nameEn;
-    next.items = (next.items || [])
-        .map((item, index) => {
-            const normalized =
-                normalizeInventoryItem(
-                    item,
-                    index,
-                    {
-                        mapId:
-                            nextScene.mapId,
-                        roomId:
-                            nextScene.roomId,
-                        clock: nextClock,
-                    },
-                );
-            if (
-                normalized.ownerId ===
-                    'player' &&
-                ['carried', 'equipped']
-                    .includes(
-                        normalized.custody,
-                    )
-            ) {
-                return {
-                    ...normalized,
-                    mapId:
-                        nextScene.mapId,
-                    roomId:
-                        nextScene.roomId,
-                    updatedClock:
-                        nextClock,
-                };
-            }
-            return normalized;
-        });
     next.scene = {
         id: nextScene.id,
         name: nextScene.name || nextScene.nameEn,
@@ -461,8 +426,16 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
                         profile
                             .lifeStatusSinceClock ||
                         '',
-            mapId: update?.mapId || current.mapId || nextScene.mapId,
-            roomId: update?.roomId || current.roomId || nextScene.roomId,
+            mapId:
+                update?.mapId ||
+                current.mapId ||
+                profile.mapId ||
+                '',
+            roomId:
+                update?.roomId ||
+                current.roomId ||
+                profile.roomId ||
+                '',
             currentActivityEn: update?.currentActivityEn || current.currentActivityEn || '',
             currentActivity: update?.currentActivity || update?.currentActivityEn ||
                 current.currentActivity || '',
@@ -483,6 +456,47 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
                     '已离开当前场景。',
             })),
     );
+    const presence =
+        projectSceneTransitionPresence(
+            worldState,
+            next,
+            nextScene,
+            room,
+            currentTurn,
+        );
+    next.actors =
+        presence.actors;
+    next.cohorts =
+        presence.cohorts;
+    next.activeInteractionActorIds =
+        presence
+            .activeInteractionActorIds;
+    next.localPresence =
+        presence.localPresence;
+    next.items =
+        synchronizeHeldItemLocations(
+            next.items,
+            {
+                playerMapId:
+                    nextScene.mapId,
+                playerRoomId:
+                    nextScene.roomId,
+                actors:
+                    next.actors,
+                clock:
+                    nextClock,
+            },
+        );
+    next.scene.itemStates =
+        createSceneItemStates(
+            next.items,
+            {
+                mapId:
+                    nextScene.mapId,
+                roomId:
+                    nextScene.roomId,
+            },
+        );
     const lifeStates = new Map(
         next.actors.map(actor => [
             actor.id,

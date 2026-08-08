@@ -154,6 +154,9 @@ export function createStoryRenderer(ports) {
                         () => {
                             session.selectedActorId =
                                 personData.id;
+                            root.classList.add(
+                                'hpmud-inspector-open',
+                            );
                             renderHeaderAndScene();
                             renderInspector(
                                 'actor',

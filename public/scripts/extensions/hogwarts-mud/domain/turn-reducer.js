@@ -38,8 +38,10 @@ import {
 } from './time-environment.js';
 
 import {
-    applyItemUpdates,
-} from './turn-authority.js';
+    applyItemOperations,
+    normalizeItemProposal,
+    queueItemCandidates,
+} from './item-reducer.js';
 
 import {
     validateTurnTransaction,
@@ -374,10 +376,55 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
                 : {}),
         };
     });
-    next.items = applyItemUpdates(
-        next,
-        transaction.itemUpdates || [],
-    );
+    const itemOperations =
+        (
+            transaction
+                .itemOperations ||
+            transaction.itemUpdates ||
+            []
+        )
+            .map(
+                (
+                    operation,
+                    index,
+                ) =>
+                    normalizeItemProposal(
+                        operation,
+                        {
+                            sourceRole:
+                                operation
+                                    .sourceRole ||
+                                'low',
+                            sourceEventId:
+                                transaction
+                                    .eventKnowledge
+                                    ?.eventId ||
+                                `turn_${
+                                    Number(
+                                        next.turn
+                                            ?.count ||
+                                        0,
+                                    ) + 1
+                                }`,
+                            clock:
+                                next.clock,
+                            index,
+                        },
+                    ),
+            )
+            .filter(Boolean);
+    next =
+        applyItemOperations(
+            next,
+            itemOperations,
+        );
+    next =
+        queueItemCandidates(
+            next,
+            transaction
+                .itemCandidates ||
+            [],
+        );
     next = applyMaterialEvents(
         next,
         transaction.materialEvents || [],

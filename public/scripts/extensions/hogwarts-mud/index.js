@@ -94,14 +94,7 @@ import {
     validateCharacterDraft,
 } from './domain/character.js';
 import { resolveActionCheck } from './domain/checks.js';
-import {
-    applyDirectorFoundation,
-    applyOpeningWorldPackage,
-    buildMandatorySceneState,
-    createInitialWorldState,
-    validateDirectorFoundation,
-    validateOpeningWorldPackage,
-} from './domain/initial-world.js';
+import { applyDirectorFoundation, applyOpeningWorldPackage, buildMandatorySceneState, createInitialWorldState, validateDirectorFoundation, validateOpeningWorldPackage } from './domain/initial-world.js';
 import {
     applyGeneratedInteriorMap,
     enterBoundInteriorMap,
@@ -110,6 +103,10 @@ import {
     validateGeneratedInteriorMap,
 } from './domain/interior-map.js';
 import { migrateObservedInventoryState, projectObservedInventoryUpdates } from './domain/inventory.js';
+import { createItemOperationDirective, createItemReferenceDirective, parseItemOperationDirectives } from './domain/item-directive.js';
+import { migrateItemSystemState } from './domain/item-migration.js';
+import { getItemProposalDecision, projectActorItems, projectItemCard, projectItemLedger } from './domain/item-projection.js';
+import { partitionItemProposals, resolveItemCandidate } from './domain/item-reducer.js';
 import { getLocalMapDefinition } from './domain/map-access.js';
 import {
     applyMapProposal,
@@ -167,6 +164,9 @@ import {
     getWorldDate,
     isDailyDirectorPlanCurrent,
 } from './domain/time-environment.js';
+import {
+    projectSceneTransitionPresence,
+} from './domain/transition-presence.js';
 import {
     TRANSLATION_TERM_GLOSSARY,
     applyTranslationGlossaryTargets,
@@ -374,7 +374,7 @@ const platform = {
     createDefaultCharacterDraft,
     createDeterministicPerceptionFallback,
     createFallbackNextSceneIntent,
-    createInitialWorldState,
+    createInitialWorldState, createItemOperationDirective, createItemReferenceDirective,
     createLegacyTurnRollbackCheckpoint,
     createRelationshipGraphController,
     createSpellDirective,
@@ -419,6 +419,7 @@ const platform = {
     migrateActorPresentationState,
     migrateLoadedSocialGraph,
     migrateObservedInventoryState,
+    migrateItemSystemState,
     migrateRelationshipMemoryState,
     migrateSpellbookState,
     normalizeActorMemoryProfile,
@@ -436,10 +437,16 @@ const platform = {
     normalizeTranslationProvider,
     parseCompleteJsonObject,
     parseExplicitMovementDirective,
+    parseItemOperationDirectives,
     parseSpellCastDirectives,
+    partitionItemProposals,
     projectActorSocialRelationships,
+    projectActorItems,
+    projectItemCard,
+    projectItemLedger,
     projectObservedInventoryUpdates,
     projectPeoplePanel,
+    projectSceneTransitionPresence,
     projectSceneArchivePresence,
     protectTranslationTerms,
     reconcileCanonActorDisplayNames,
@@ -454,6 +461,7 @@ const platform = {
     renderExtensionTemplateAsync,
     resolveActionCheck,
     resolveEventWitnesses,
+    resolveItemCandidate,
     resolveLocalMapId,
     resolvePlayerAddressing,
     resolveTemporaryActorRevealedName,
@@ -489,6 +497,7 @@ const platform = {
     validateSceneTransitionPackage,
     validateSocialDirectorResult,
     validateTurnTransaction,
+    getItemProposalDecision,
     writeSecret,
 };
 

@@ -1244,7 +1244,9 @@ export function reduceLocalPresence(
         updatedTurn,
         source: hasMovement
             ? 'movement'
-            : 'actor_position',
+            : cohortIds.length
+                ? 'cohort_roster'
+                : 'actor_position',
     }, {
         actors: projectedActors,
         knownActorIds: (

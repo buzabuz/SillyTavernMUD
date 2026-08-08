@@ -1,0 +1,27 @@
+# Item System V2 Acceptance Checklist
+
+- [x] `items` 区分主人、持有人、位置、状态与穿戴。
+- [x] 获得、携带、放置、穿戴、脱下、赠送、借出、消耗、损坏、清洗、丢失、销毁全部可重放。
+- [x] 偷走改变 holder，不自动改变 owner。
+- [x] 借出保留 owner，并记录 loan。
+- [x] destroyed/consumed Item 不会被普通 carry 复活。
+- [x] 普通校服、课本、办公用品和生活用品不创建 Item。
+- [x] 普通穿着只保存整体 outfit。
+- [x] current presentation 的正式穿戴/手持只使用 Item ID。
+- [x] 模型 proposal 不能直接创建正式 Item。
+- [x] 玩家可收录或忽略候选，操作不阻塞输入。
+- [x] 忽略后正文不变，候选不立即重复出现。
+- [x] NPC hidden Item 不在人物卡或物品库泄漏。
+- [x] medium/high proposal source 已预留但没有实际调用。
+- [x] Canon seed 有来源 URL 和非捏造的时间精度。
+- [x] Tina V1 物品迁移后数量、主人、位置与历史不丢失。
+- [x] 物品库、人物卡和候选提示使用统一组件语言。
+- [x] 桌面、390px、键盘和 reduced-motion 通过。
+- [x] 目标测试、全量测试、ESLint、语法和 diff 检查通过。
+- [x] runtime PRD、字段表与 progress 已更新。
+- [x] 插入表达完整展示十二种 Item 操作。
+- [x] 物品操作与物品引用分别使用结构化 directive。
+- [x] 物品引用由玩家可见的正式 Item 卡生成，包含稳定 ID。
+- [x] directive 只表达意图，不直接调用 Reducer 或绕过 outcome evidence。
+- [x] 未跟踪新物品仍走 proposal/收录流程；hidden Item 不提供引用入口。
+- [x] Item 操作协议 parser、prompt、UI 和浏览器交互已验证。

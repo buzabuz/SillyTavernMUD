@@ -172,7 +172,11 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 
 `eventKnowledge` 先于社交关系保存事件知情范围。人物知道事件不会自动创建关系边或修改关系数值；Social Director 的 `witnessedBy` 必须是每条来源消息已提交 witness 的子集，active interaction、受话目标、同室或 cohort 身份都不能自行升级为见证。
 
-常规语义侧车默认使用 `qwen3:1.7b`、`temperature:0`、`think:false` 和 `num_ctx:4096`。只有玩家明确取得或携带签名、信件、钥匙、魔杖、地图等耐久重要物品时，才条件调用 `qwen3:4b` 的极小背包 Schema；普通食物、餐具和背景道具不会触发。所有建议必须通过逐字证据、稳定 ID、房间可达性和本地 Reducer，模型无权直接写状态。合法物质事件进入 `materialEventLog`，重要持有物进入 `items`，人物当前呈现投影到 `actorPresentations`。当前互动卡司由 Settlement Reducer 保持稀疏；物理同室人物由 `localPresence` 独立保存，退出镜头但没有移动或离场的人仍保留当前位置。侧车调用完成后以 `keep_alive:0` 卸载；不可用时正文仍按 narrative-first 提交。
+常规语义侧车默认使用 `qwen3:1.7b`、`temperature:0`、`think:false` 和 `num_ctx:4096`。只有玩家明确取得或操作签名、信件、钥匙、魔杖、地图等耐久重要物品时，才条件调用 `qwen3:4b` 的极小 Item V2 Schema；普通食物、餐具和背景道具不会触发。所有建议必须通过逐字证据、稳定 ID、房间可达性和本地 Reducer，模型无权直接写状态。合法物质事件进入 `materialEventLog`；新重要物品先进入 `pendingItemProposals`，只有玩家收录后进入 `items`；人物当前呈现以 `outfit + wornItemIds + heldItemIds` 投影到 `actorPresentations`。当前互动卡司由 Settlement Reducer 保持稀疏；物理同室人物由 `localPresence` 独立保存，退出镜头但没有移动或离场的人仍保留当前位置。侧车调用完成后以 `keep_alive:0` 卸载；不可用时正文仍按 narrative-first 提交。
+
+人物后置观察同样只提交建议：`presence=absent` 必须有明确离场动作证据，跨房间更新必须在 evidence 中出现目标房间名称或 ID。形态变化、原地显形、后退、坐下、沉默或退出镜头都不会被 Reducer 当作离场；非法 presence/location 建议不会连带丢弃合法 activity update。
+
+场景转场的 `relationshipUpdates` 是稀疏、可选 proposal。只有人物对玩家的看法因具体亲历事件发生变化时才写入完整、唯一的 8–32 词人物视角记忆；`closureSummaryEn` 不能作为人物记忆 fallback。没有合格更新时保持空数组。旧版 `During the closed scene...materially shaped...` 模板会在加载时幂等清理，不调用模型、不影响其他具体记忆。
 
 历史样本的真实模型基准包含七个前置时间/骰子案例和两个后置观察案例：`qwen3:0.6b` 通过 4/9，`qwen3:1.7b` 通过 9/9，因此常规语义裁判使用 1.7B。4B 仅承担条件式重要物品观察；其 4096 context 实测约占 3.17 GB VRAM，完成后立即卸载。基准可用 `node scripts/benchmark-hogwarts-local-semantic.mjs` 重跑。
 
@@ -318,9 +322,12 @@ Reducer 对每项提案固定执行：来源与维度白名单校验 → impact 
 
 ### 权威物品栏与 NPC 状态
 
-- 每个物品保存 `importance`（关键/重要/普通）、`custody`（随身/装备/存放/消耗/遗失）、持有者和最后位置。每次场景初始化都会在 `scene.itemStates` 固化快照；随身与装备物品跟随玩家移动，存放物品留在原房间。
-- 魔杖、钥匙、信件、日记、地图、许可证、信物和魔法制品等耐久重要物品一旦明确归玩家所有，当前回合必须提交 `itemUpdates.acquire`。旧档迁移会根据已提交的奥利凡德试杖记录补回玩家魔杖。
-- 食物、糖果、饮料、包装和收据等临时小物默认不进入物品栏。只有玩家明确说“收好、带走、放进包里、留着”等行为时才允许记录。
+- Item V2 分开保存 `ownerId`、`holderId`、结构化 `location`、客观外观、状态、来源事件、穿戴、备注、剧情角色、可见性和获得时间精度。借出和偷走只改变当前持有人；赠送才改变主人。移动和转场按 holder 的结构化位置投影，`custody/kind/importance` 只保留为旧调用方兼容字段。
+- 正式操作覆盖获得、携带、放置、穿戴、脱下、赠送、借出、消耗、损坏、清洗、丢失和销毁。destroyed/consumed 不会被普通 carry 复活。人物 `actorPresentations` 以一个整体 `outfit` 表示普通造型，只用 `wornItemIds/heldItemIds` 关联正式物品。
+- 学生的普通校服、羽毛笔和课本，教授的办公用品，店员的普通库存及日常生活用品都是隐含叙事资源，不创建 Item。普通食物、餐具和背景道具可以自然出现，但没有 ID、数量或历史。
+- 低档演员与本地观察器只能提交带逐字证据的 proposal。新对象进入 `pendingItemProposals`，回合后由玩家“收录/忽略”；忽略不改正文，并按稳定 Item ID 抑制立即重现。模型、开场导演和普通 material event 都不能直接创建正式 Item。
+- 魔杖、眼镜等 Canon 标志物由确定性目录按人物和非捏造时间精度 seed；NPC `hidden` Item 可供授权导演使用，但不会出现在玩家物品库、人物卡或 current presentation。运行事务详见 `.trae/specs/hogwarts-runtime-contracts/item-lifecycle.md`。
+- “插入表达”展示十二种 Item 操作，并写入 `【物品操作:carry｜携带】` 这类意图 directive；随后自动打开物品档案，由正式 Item 卡写入 `【物品:stable_id｜显示名】`。parser 只接受当前玩家可见的稳定 ID。directive 不代表动作已经成功，仍由正文结果、观察器、validator 和 Reducer 完成结算。
 - NPC 运行态保存 `lifeStatus`（存活/受伤/失能/失踪/死亡）、公开说明、开始时间和永久标记。每次转场时，转场导演必须为 `actorStates` 中的每个人重新结算该状态；中档可处理可逆的受伤、失能、失踪与恢复，永久死亡只能由高端世界导演提交。死亡人物不能重新在场、被地点居民规则复活或在后续场景发言。
 
 ### Canon 人物目录与故事人物预算
@@ -507,6 +514,18 @@ POST /api/translate/bing
 ```
 
 Google 端点使用 `google-translate-api-x`，Bing 端点使用 `bing-translate-api`。Google 固定源语言为英语并使用 4700 字符安全批次，Bing 使用 900 字符安全批次。两者会在翻译前把人物、地点和高频魔法术语替换为稳定占位符，翻译后恢复权威中文名称。切换翻译源会按来源和格式版本刷新当前范围内的缓存；任何 provider 失败都不会覆盖英文原文。
+
+## 真实运行 PRD
+
+`.trae/specs/hogwarts-runtime-contracts/` 是运行时字段与事务的 living contract：
+
+- `spec.md`：模块入口、事务时序、持久化边界和变更规则。
+- `state-fields.md`：字段路径、真实语义、唯一写入者、读取者和兼容边界。
+- `presence-scene-transition.md`：active/local/witness 分层及课堂 cohort 转场规则。
+- `checklist.md`：新增字段、事务和人物状态的提交门禁。
+- `progress.md`：区分 Verified、Tested 与 Indexed，禁止把“有代码”误写成“运行已验证”。
+
+字段语义不明确时，先查该目录和消息 diagnostics，再查真实 Reducer；不得根据 UI 标签或字段名自行推断。
 
 ## 模块地图
 

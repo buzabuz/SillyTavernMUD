@@ -46,6 +46,23 @@ import {
     validateTransitionWorldChanges,
 } from './world-changes.js';
 
+const TRANSITION_MEMORY_BOILERPLATE_PATTERN =
+    /(?:^During the closed scene,|This experience materially shaped the actor['’]s view of the player\.$)/u;
+
+export function isValidTransitionSceneMemory(
+    value,
+) {
+    const text = String(value || '').trim();
+    const wordCount = countTextWords(text);
+    return (
+        wordCount >= 8 &&
+        wordCount <= 32 &&
+        /[.!?]["'’)]?$/u.test(text) &&
+        !TRANSITION_MEMORY_BOILERPLATE_PATTERN
+            .test(text)
+    );
+}
+
 export function stripSyntheticSceneOpeningActorSegments(
     segments = [],
 ) {
@@ -145,23 +162,6 @@ export function normalizeSceneTransitionPackage(
             ],
         ),
     );
-    const closingMapId =
-        worldState.scene?.mapId ||
-        worldState.map?.activeMapId;
-    const closingRoomId =
-        worldState.scene?.roomId ||
-        worldState.map?.currentLocalNodeId;
-    const witnessIds = (
-        worldState.actors || []
-    )
-        .filter(actor =>
-            actor.present !== false &&
-            (actor.mapId || closingMapId) ===
-                closingMapId &&
-            actor.roomId === closingRoomId)
-        .map(actor => actor.id)
-        .filter(id => profiles.has(id))
-        .slice(0, 6);
     const suppliedRelationshipUpdates =
         Array.isArray(
             normalized.relationshipUpdates,
@@ -177,84 +177,72 @@ export function normalizeSceneTransitionPackage(
                 update,
             ]),
     );
-    const relationshipIds = [
-        ...new Set(
-            suppliedUpdatesById.size
-                ? suppliedUpdatesById.keys()
-                : witnessIds,
-        ),
-    ].slice(0, 6);
-    const closureWords = String(
-        normalized.closureSummaryEn ||
-        worldState.scene?.summaryEn ||
-        'The actor witnessed the player throughout the scene.',
-    )
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-    const fallbackPrefixWords =
-        'During the closed scene,'
-            .split(/\s+/);
-    const fallbackSuffixWords =
-        'This experience materially shaped the actor’s view of the player.'
-            .split(/\s+/);
-    const fallbackClosureWordLimit =
-        32 -
-        fallbackPrefixWords.length -
-        fallbackSuffixWords.length;
-    const fallbackMemory = [
-        ...fallbackPrefixWords,
-        ...closureWords.slice(
-            0,
-            fallbackClosureWordLimit,
-        ),
-        ...fallbackSuffixWords,
-    ]
-        .join(' ');
+    const suppliedMemoryCounts = new Map();
+    suppliedUpdatesById.forEach(update => {
+        const fingerprint = String(
+            update.sceneMemoryEn || '',
+        )
+            .trim()
+            .toLocaleLowerCase();
+        if (!fingerprint) return;
+        suppliedMemoryCounts.set(
+            fingerprint,
+            (
+                suppliedMemoryCounts
+                    .get(fingerprint) ||
+                0
+            ) + 1,
+        );
+    });
     normalized.relationshipUpdates =
-        relationshipIds.map(id => {
-            const supplied =
-                suppliedUpdatesById.get(id) ||
-                {};
-            const profile = profiles.get(id);
-            const suppliedImpression = String(
-                supplied
-                    .impressionOfPlayerEn ||
-                '',
-            ).trim();
-            const existingImpression = String(
-                profile
-                    ?.impressionOfPlayerEn ||
-                '',
-            ).trim();
-            const impressionOfPlayerEn =
-                isValidImpressionShorthand(
-                    suppliedImpression,
+        [...suppliedUpdatesById]
+            .filter(([, supplied]) => {
+                const fingerprint = String(
+                    supplied.sceneMemoryEn || '',
                 )
-                    ? suppliedImpression
-                    : isValidImpressionShorthand(
-                        existingImpression,
+                    .trim()
+                    .toLocaleLowerCase();
+                return (
+                    isValidTransitionSceneMemory(
+                        supplied.sceneMemoryEn,
+                    ) &&
+                    suppliedMemoryCounts
+                        .get(fingerprint) === 1
+                );
+            })
+            .slice(0, 6)
+            .map(([id, supplied]) => {
+                const profile = profiles.get(id);
+                const suppliedImpression = String(
+                    supplied
+                        .impressionOfPlayerEn ||
+                    '',
+                ).trim();
+                const existingImpression = String(
+                    profile
+                        ?.impressionOfPlayerEn ||
+                    '',
+                ).trim();
+                const impressionOfPlayerEn =
+                    isValidImpressionShorthand(
+                        suppliedImpression,
                     )
-                        ? existingImpression
-                        : 'A demanding, unpredictable child who repeatedly tests firm boundaries.';
-            const suppliedMemoryWords = String(
-                supplied.sceneMemoryEn || '',
-            )
-                .trim()
-                .split(/\s+/)
-                .filter(Boolean);
-            const sceneMemoryEn =
-                suppliedMemoryWords.length >= 8
-                    ? suppliedMemoryWords
-                        .slice(0, 32)
-                        .join(' ')
-                    : fallbackMemory;
-            return {
-                id,
-                impressionOfPlayerEn,
-                sceneMemoryEn,
-            };
-        });
+                        ? suppliedImpression
+                        : isValidImpressionShorthand(
+                            existingImpression,
+                        )
+                            ? existingImpression
+                            : 'A demanding, unpredictable child who repeatedly tests firm boundaries.';
+                return {
+                    id,
+                    impressionOfPlayerEn,
+                    sceneMemoryEn:
+                        String(
+                            supplied
+                                .sceneMemoryEn,
+                        ).trim(),
+                };
+            });
     const nextScene = normalized?.nextScene;
     if (!nextScene || typeof nextScene !== 'object') {
         return normalized;
@@ -674,6 +662,7 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
             .map(actor => actor.id),
     );
     const updatedRelationshipIds = new Set();
+    const relationshipMemoryTexts = new Set();
     if (!Array.isArray(relationshipUpdates) ||
         relationshipUpdates.length > 6) {
         errors.push(
@@ -703,15 +692,31 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
                     `关系结算人物 ${update?.id || '?'} 的印象必须是非占位的 1–${IMPRESSION_MAX_WORDS} 词主观 shorthand。`,
                 );
             }
-            const memoryWords = countTextWords(
-                update?.sceneMemoryEn,
-            );
-            if (memoryWords < 8 ||
-                memoryWords > 32) {
+            const memoryText = String(
+                update?.sceneMemoryEn || '',
+            ).trim();
+            const memoryFingerprint =
+                memoryText.toLocaleLowerCase();
+            if (!isValidTransitionSceneMemory(
+                memoryText,
+            )) {
                 errors.push(
-                    `关系结算人物 ${update?.id || '?'} 的章节记忆必须是 8–32 词。`,
+                    `关系结算人物 ${update?.id || '?'} 的章节记忆必须是完整、具体、非模板化的 8–32 词人物视角记忆。`,
                 );
             }
+            if (
+                memoryFingerprint &&
+                relationshipMemoryTexts.has(
+                    memoryFingerprint,
+                )
+            ) {
+                errors.push(
+                    `关系结算人物 ${update?.id || '?'} 复用了其他人物的相同章节记忆。`,
+                );
+            }
+            relationshipMemoryTexts.add(
+                memoryFingerprint,
+            );
         });
     }
 

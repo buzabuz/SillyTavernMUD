@@ -2,6 +2,8 @@ export function createLifecycleRuntime(ports) {
     const {
         createFallbackNextSceneIntent,
         getContext,
+        getLocalMapDefinition =
+        () => null,
         getMudState,
         getRoomName,
         jobRegistry,
@@ -10,13 +12,23 @@ export function createLifecycleRuntime(ports) {
         migrateActorPresentationState,
         migrateLoadedSocialGraph,
         migrateObservedInventoryState,
+        migrateItemSystemState =
+        state => ({
+            state,
+            changed: false,
+        }),
         migrateRelationshipMemoryState,
         migrateSpellbookState,
         normalizeCausalCollapseState,
         normalizeModelSlots,
         projectActorSocialRelationships,
+        projectSceneTransitionPresence =
+        null,
         reconcileCanonActorDisplayNames,
         reconcileTemporaryActorDisplayNames,
+        reduceLocalPresence =
+        state =>
+            state.localPresence,
         saveMetadataDebounced,
         validateNextSceneIntent,
     } = ports;
@@ -102,6 +114,21 @@ export function createLifecycleRuntime(ports) {
             Object.assign(
                 state,
                 inventoryMigration.state,
+            );
+            saveMetadataDebounced();
+            changed = true;
+        }
+        const itemSystemMigration =
+            migrateItemSystemState(
+                state,
+            );
+        if (
+            itemSystemMigration.changed
+        ) {
+            Object.assign(
+                state,
+                itemSystemMigration
+                    .state,
             );
             saveMetadataDebounced();
             changed = true;
@@ -196,6 +223,202 @@ export function createLifecycleRuntime(ports) {
             state.actorLibrary =
             projectedActorLibrary;
             changed = true;
+        }
+        const presenceMapId =
+            state.map?.activeMapId ||
+            state.scene?.mapId ||
+            '';
+        const presenceRoomId =
+            state.map
+                ?.currentLocalNodeId ||
+            state.scene?.roomId ||
+            '';
+        const staleLocalPresence =
+            Boolean(
+                presenceMapId &&
+                presenceRoomId &&
+                state.localPresence &&
+                (
+                    state
+                        .localPresence
+                        .mapId !==
+                        presenceMapId ||
+                    state
+                        .localPresence
+                        .roomId !==
+                        presenceRoomId
+                ),
+            );
+        const archivedClassCohortIds =
+            new Set(
+                state
+                    .sceneArchive
+                    ?.at(-1)
+                    ?.localCohortIds ||
+                [],
+            );
+        const missingClassCohort =
+            /_classroom$/u.test(
+                presenceRoomId,
+            ) &&
+            !(
+                state.localPresence
+                    ?.cohortIds ||
+                []
+            ).length &&
+            (
+                state.cohorts ||
+                []
+            ).some(cohort =>
+                cohort.source ===
+                    'class_roster' &&
+                archivedClassCohortIds
+                    .has(
+                        cohort.id,
+                    ));
+        if (
+            (
+                staleLocalPresence ||
+                missingClassCohort
+            ) &&
+            projectSceneTransitionPresence
+        ) {
+            const map =
+                getLocalMapDefinition(
+                    presenceMapId,
+                    state.map,
+                );
+            const room =
+                [
+                    ...(map?.nodes ||
+                        []),
+                    ...(
+                        state.map
+                            ?.generatedLocalNodes ||
+                        []
+                    ).filter(candidate =>
+                        candidate.mapId ===
+                            presenceMapId),
+                ].find(candidate =>
+                    candidate.id ===
+                        presenceRoomId) ||
+                {
+                    id:
+                        presenceRoomId,
+                    kind:
+                        /_classroom$/u
+                            .test(
+                                presenceRoomId,
+                            )
+                            ? 'classroom'
+                            : '',
+                };
+            const transitionPresence =
+                projectSceneTransitionPresence(
+                    state,
+                    state,
+                    {
+                        ...state.scene,
+                        mapId:
+                            presenceMapId,
+                        roomId:
+                            presenceRoomId,
+                        actorStates:
+                            (
+                                state.actors ||
+                                []
+                            )
+                                .filter(actor =>
+                                    actor.present ===
+                                        true)
+                                .map(actor => ({
+                                    id:
+                                        actor.id,
+                                    present:
+                                        true,
+                                })),
+                    },
+                    room,
+                    Number(
+                        state.turn
+                            ?.count ||
+                        0,
+                    ),
+                );
+            state.actors =
+                transitionPresence
+                    .actors;
+            state.cohorts =
+                transitionPresence
+                    .cohorts;
+            state
+                .activeInteractionActorIds =
+                transitionPresence
+                    .activeInteractionActorIds;
+            state.localPresence =
+                transitionPresence
+                    .localPresence;
+            changed = true;
+        }
+        const activeInteractionActorIds =
+            (
+                state.actors ||
+                []
+            )
+                .filter(actor =>
+                    actor.present ===
+                        true)
+                .map(actor =>
+                    actor.id);
+        if (
+            JSON.stringify(
+                state
+                    .activeInteractionActorIds ||
+                [],
+            ) !==
+            JSON.stringify(
+                activeInteractionActorIds,
+            )
+        ) {
+            state
+                .activeInteractionActorIds =
+            activeInteractionActorIds;
+            changed = true;
+        }
+        if (
+            presenceMapId &&
+            presenceRoomId
+        ) {
+            const localPresence =
+                reduceLocalPresence(
+                    state,
+                    {
+                        mapId:
+                            presenceMapId,
+                        roomId:
+                            presenceRoomId,
+                        updatedTurn:
+                            Number(
+                                state.turn
+                                    ?.count ||
+                                0,
+                            ),
+                    },
+                );
+            if (
+                JSON.stringify(
+                    state.localPresence ||
+                    {},
+                ) !==
+                JSON.stringify(
+                    localPresence ||
+                    {},
+                )
+            ) {
+                state.localPresence =
+                    localPresence;
+                changed = true;
+            }
         }
         if (!Array.isArray(state.sceneArchive)) {
             state.sceneArchive = [];

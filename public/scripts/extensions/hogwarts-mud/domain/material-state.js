@@ -489,6 +489,17 @@ export function applyMaterialEvents(
             event.category ===
                 'appearance_change'
         ) {
+            if (
+                [
+                    'accessory_changed',
+                    'object_held',
+                    'object_released',
+                ].includes(
+                    event.type,
+                )
+            ) {
+                continue;
+            }
             const previous =
                 next.actorPresentations[
                     event.actorId
@@ -509,65 +520,6 @@ export function applyMaterialEvents(
                         ? ''
                         : event
                             .valueText;
-            } else if (
-                event.type ===
-                    'accessory_changed'
-            ) {
-                const accessories = {
-                    ...(previous
-                        .accessories ||
-                        {}),
-                };
-                const accessorySlot =
-                    event.slot ===
-                        'unspecified'
-                        ? 'accessory'
-                        : event.slot;
-                if (
-                    event.operation ===
-                        'remove'
-                ) {
-                    if (
-                        event.slot ===
-                            'unspecified'
-                    ) {
-                        for (
-                            const key
-                            of Object.keys(
-                                accessories,
-                            )
-                        ) {
-                            if (
-                                !event
-                                    .valueText ||
-                                materialFingerprint(
-                                    accessories[
-                                        key
-                                    ],
-                                ).includes(
-                                    materialFingerprint(
-                                        event
-                                            .valueText,
-                                    ),
-                                )
-                            ) {
-                                delete accessories[
-                                    key
-                                ];
-                            }
-                        }
-                    } else {
-                        delete accessories[
-                            accessorySlot
-                        ];
-                    }
-                } else {
-                    accessories[
-                        accessorySlot
-                    ] = event.valueText;
-                }
-                presentation.accessories =
-                    accessories;
             } else if (
                 event.type ===
                     'hairstyle_changed'
@@ -626,73 +578,6 @@ export function applyMaterialEvents(
                                     .valueText,
                             ),
                         ));
-            } else if (
-                event.type ===
-                    'object_held'
-            ) {
-                const heldItems = {
-                    ...(previous
-                        .heldItems ||
-                        {}),
-                };
-                heldItems[
-                    event.hand
-                ] = event.objectText;
-                presentation.heldItems =
-                    heldItems;
-                presentation.heldObject =
-                    Object.values(
-                        heldItems,
-                    ).filter(Boolean)
-                        .join(' / ');
-            } else if (
-                event.type ===
-                    'object_released'
-            ) {
-                const heldItems = {
-                    ...(previous
-                        .heldItems ||
-                        {}),
-                };
-                if (
-                    event.hand ===
-                        'unspecified'
-                ) {
-                    for (
-                        const key
-                        of Object.keys(
-                            heldItems,
-                        )
-                    ) {
-                        if (
-                            !event
-                                .objectText ||
-                            materialFingerprint(
-                                heldItems[key],
-                            ).includes(
-                                materialFingerprint(
-                                    event
-                                        .objectText,
-                                ),
-                            )
-                        ) {
-                            delete heldItems[
-                                key
-                            ];
-                        }
-                    }
-                } else {
-                    delete heldItems[
-                        event.hand
-                    ];
-                }
-                presentation.heldItems =
-                    heldItems;
-                presentation.heldObject =
-                    Object.values(
-                        heldItems,
-                    ).filter(Boolean)
-                        .join(' / ');
             }
             next.actorPresentations[
                 event.actorId
@@ -1040,6 +925,14 @@ export function buildCurrentMaterialState(
                                     presentation
                                         .heldObject ||
                                     '',
+                                wornItemIds:
+                                    presentation
+                                        .wornItemIds ||
+                                    [],
+                                heldItemIds:
+                                    presentation
+                                        .heldItemIds ||
+                                    [],
                                 updatedClock:
                                     presentation
                                         .updatedClock ||

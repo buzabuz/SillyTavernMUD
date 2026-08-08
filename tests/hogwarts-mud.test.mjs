@@ -1812,18 +1812,13 @@ test('opening world package commits a home map, present NPCs, and dramatic confl
         clock: '1991-07-24 · 09:10',
         label: 'Her mother opens the Hogwarts letter.',
     }]);
-    assert.equal(
-        state.items[0].importance,
-        'key',
+    assert.deepEqual(
+        state.items,
+        [],
     );
-    assert.equal(
-        state.items[0].custody,
-        'carried',
-    );
-    assert.equal(
-        state.scene.itemStates[0]
-            .custody,
-        'carried',
+    assert.deepEqual(
+        state.scene.itemStates,
+        [],
     );
     assert.equal(
         state.actors[0].lifeStatus,
@@ -2005,7 +2000,7 @@ test('entity migration backfills an owned wand without inventorying incidental f
     assert.equal(migrated.changed, true);
     assert.equal(
         migrated.state.entityStateVersion,
-        1,
+        2,
     );
     assert.ok(
         migrated.state.items.some(item =>
@@ -4336,22 +4331,34 @@ test('local inventory observation admits only evidenced durable player possessio
         {
             id:
                 'harry_potter_autograph',
-            action:
+            operation:
                 'acquire',
+            type: 'document',
             labelEn:
                 'Harry Potter Autograph',
             label:
                 '哈利·波特的签名',
-            detailEn:
+            appearanceEn:
                 'Lavender\'s Sorting parchment bearing Harry Potter\'s crooked H autograph.',
-            detail:
+            appearance:
                 '拉文德的分院笔记羊皮纸，上面留着哈利·波特歪歪扭扭的 H 签名。',
-            importance:
-                'important',
-            custody:
-                'carried',
             ownerId:
                 'player',
+            holderId:
+                'player',
+            targetHolderId: '',
+            transferMode:
+                'none',
+            storyRoles: [],
+            visibility:
+                'public',
+            isEquipped: false,
+            held: false,
+            sourceKind:
+                'player',
+            evidenceText:
+                playerAction,
+            confidence: 0.96,
         },
     );
 });
@@ -5401,9 +5408,10 @@ test('scene transition validation locks an explicit player destination', () => {
             missingRelationships,
             state,
         );
-    assert.ok(
+    assert.equal(
         locallySettled.relationshipUpdates
-            .length > 0,
+            .length,
+        0,
     );
     assert.equal(
         validateSceneTransitionPackage(
@@ -5472,7 +5480,7 @@ test('compact scene-seal core normalizes into a valid transition without optiona
     );
 });
 
-test('scene transition fallback memories cap the final English word count', () => {
+test('scene transition does not fabricate actor memories from a closure summary', () => {
     const state = createSceneTransitionState();
     const payload =
         createSceneTransitionPackage();
@@ -5489,20 +5497,9 @@ test('scene transition fallback memories cap the final English word count', () =
             payload,
             state,
         );
-    const memoryWordCounts =
-        normalized.relationshipUpdates
-            .map(update =>
-                update.sceneMemoryEn
-                    .trim()
-                    .split(/\s+/)
-                    .filter(Boolean)
-                    .length);
-
-    assert.ok(memoryWordCounts.length > 0);
-    assert.equal(
-        memoryWordCounts.every(count =>
-            count >= 8 && count <= 32),
-        true,
+    assert.deepEqual(
+        normalized.relationshipUpdates,
+        [],
     );
     assert.equal(
         validateSceneTransitionPackage(
@@ -5510,6 +5507,77 @@ test('scene transition fallback memories cap the final English word count', () =
             state,
         ).valid,
         true,
+    );
+});
+
+test('scene transition keeps only complete unique actor-centered memories', () => {
+    const state = createSceneTransitionState();
+    const payload =
+        createSceneTransitionPackage();
+    payload.relationshipUpdates = [
+        {
+            id: 'minerva_mcgonagall',
+            impressionOfPlayerEn:
+                'Alarmed by Tina but attentive to her courage.',
+            sceneMemoryEn:
+                'During the closed scene, Tina caused trouble. This experience materially shaped the actor’s view of the player.',
+        },
+        {
+            id: 'old_archivist',
+            impressionOfPlayerEn:
+                'Curious about Tina.',
+            sceneMemoryEn:
+                'Tina refused McGonagall twice',
+        },
+        {
+            id: 'tina_mother',
+            impressionOfPlayerEn:
+                'Protective but increasingly impressed.',
+            sceneMemoryEn:
+                'Tina defended the signed reply when McGonagall reached for it, which made Mei see her defiance as protective rather than careless.',
+        },
+    ];
+
+    const normalized =
+        normalizeSceneTransitionPackage(
+            payload,
+            state,
+        );
+
+    assert.deepEqual(
+        normalized.relationshipUpdates
+            .map(update => update.id),
+        ['tina_mother'],
+    );
+    assert.equal(
+        validateSceneTransitionPackage(
+            normalized,
+            state,
+        ).valid,
+        true,
+    );
+});
+
+test('scene transition prompt requests sparse actor-centered relationship memories', async () => {
+    const source = await readFile(
+        new URL(
+            '../public/scripts/extensions/hogwarts-mud/workflows/scene-transition.js',
+            import.meta.url,
+        ),
+        'utf8',
+    );
+
+    assert.match(
+        source,
+        /"relationshipUpdates": \[/u,
+    );
+    assert.match(
+        source,
+        /Never use closureSummaryEn as a relationship memory\./u,
+    );
+    assert.match(
+        source,
+        /Omit unchanged actors and use an empty array/u,
     );
 });
 
@@ -6569,6 +6637,28 @@ test('scene transition atomically archives the old scene and commits the next ro
         actor.id === 'minerva_mcgonagall').present, true);
     assert.equal(next.actors.find(actor =>
         actor.id === 'tina_mother').present, false);
+    assert.deepEqual(
+        next.activeInteractionActorIds,
+        [
+            'minerva_mcgonagall',
+        ],
+    );
+    assert.deepEqual(
+        next.localPresence,
+        {
+            version: 1,
+            mapId:
+                'zhang_home',
+            roomId:
+                'back_garden',
+            occupantActorIds: [],
+            cohortIds: [],
+            updatedTurn:
+                next.turn.count,
+            source:
+                'scene_roster',
+        },
+    );
     const mcgonagall = next.actorLibrary.find(
         actor =>
             actor.id ===
@@ -6606,6 +6696,192 @@ test('scene transition atomically archives the old scene and commits the next ro
         next.memoryDirector
             .lastReviewedTurn,
         next.turn.count,
+    );
+});
+
+test('classroom transition keeps a full local cohort while limiting the active cast', () => {
+    const state =
+        createSceneTransitionState();
+    const cohortMemberIds = [
+        'tina_mother',
+        'classmate_a',
+        'classmate_b',
+    ];
+    state.actorLibrary.push(
+        {
+            id:
+                'classmate_a',
+            nameEn:
+                'Classmate A',
+        },
+        {
+            id:
+                'classmate_b',
+            nameEn:
+                'Classmate B',
+        },
+    );
+    state.actors.push(
+        ...[
+            'classmate_a',
+            'classmate_b',
+        ].map(id => ({
+            id,
+            nameEn: id,
+            present: false,
+            lifeStatus:
+                'alive',
+            mapId:
+                'zhang_home',
+            roomId:
+                'charms_classroom',
+        })),
+    );
+    state.actors =
+        state.actors.map(actor => ({
+            ...actor,
+            mapId:
+                'zhang_home',
+            roomId:
+                'charms_classroom',
+        }));
+    state.scene.roomId =
+        'charms_classroom';
+    state.map
+        .currentLocalNodeId =
+        'charms_classroom';
+    state.map.customLocalMaps[0]
+        .nodes = [
+            {
+                id:
+                    'charms_classroom',
+                name:
+                    '魔咒课教室',
+                nameEn:
+                    'Charms Classroom',
+                levelId:
+                    'ground_floor',
+                kind:
+                    'classroom',
+            },
+            {
+                id:
+                    'transfiguration_classroom',
+                name:
+                    '变形术教室',
+                nameEn:
+                    'Transfiguration Classroom',
+                levelId:
+                    'ground_floor',
+                kind:
+                    'classroom',
+            },
+        ];
+    state.localPresence = {
+        version: 1,
+        mapId:
+            'zhang_home',
+        roomId:
+            'charms_classroom',
+        occupantActorIds:
+            cohortMemberIds,
+        cohortIds: [
+            'gryffindor_year1_charms_1991',
+        ],
+        updatedTurn: 0,
+        source:
+            'cohort_roster',
+    };
+    state.cohorts = [{
+        version: 1,
+        id:
+            'gryffindor_year1_charms_1991',
+        labelEn:
+            'Gryffindor first-years in Charms',
+        mapId:
+            'zhang_home',
+        roomId:
+            'charms_classroom',
+        knownMemberActorIds:
+            cohortMemberIds,
+        source:
+            'class_roster',
+    }];
+    const payload =
+        createSceneTransitionPackage(
+            'transfiguration_classroom',
+        );
+    payload.nextScene.nameEn =
+        'Transfiguration Classroom';
+    payload.nextScene.summaryEn =
+        'The class takes its seats for Transfiguration.';
+    payload.nextScene.actorStates[0]
+        .roomId =
+        'transfiguration_classroom';
+    payload.nextScene
+        .followingSceneIntent
+        .roomId =
+        'transfiguration_classroom';
+
+    const next =
+        applySceneTransition(
+            state,
+            payload,
+            {
+                id:
+                    state.scene.id,
+                status:
+                    'closed',
+            },
+            {
+                expectedMapId:
+                    'zhang_home',
+                expectedRoomId:
+                    'transfiguration_classroom',
+            },
+        );
+
+    assert.deepEqual(
+        next.activeInteractionActorIds,
+        [
+            'minerva_mcgonagall',
+        ],
+    );
+    assert.deepEqual(
+        next.localPresence,
+        {
+            version: 1,
+            mapId:
+                'zhang_home',
+            roomId:
+                'transfiguration_classroom',
+            occupantActorIds: [
+                'classmate_a',
+                'classmate_b',
+                'minerva_mcgonagall',
+                'tina_mother',
+            ],
+            cohortIds: [
+                'gryffindor_year1_transfiguration_1991',
+            ],
+            updatedTurn: 0,
+            source:
+                'cohort_roster',
+        },
+    );
+    assert.equal(
+        next.actors.find(actor =>
+            actor.id ===
+                'classmate_a')
+            .present,
+        false,
+    );
+    assert.equal(
+        next.actors.find(actor =>
+            actor.id ===
+                'classmate_a')
+            .roomId,
+        'transfiguration_classroom',
     );
 });
 
@@ -10466,7 +10742,7 @@ test('unsettled turn detection resumes only an explicit trailing player turn', (
     );
 });
 
-test('turn settlement records important possessions and filters incidental consumables', () => {
+test('turn settlement never lets legacy model item updates create formal possessions directly', () => {
     const foundation =
         createDirectorFoundation();
     const base = createInitialWorldState(
@@ -10519,15 +10795,7 @@ test('turn settlement records important possessions and filters incidental consu
         transaction,
         'I accept the wand.',
     );
-    assert.equal(next.items.length, 1);
-    assert.equal(
-        next.items[0].custody,
-        'carried',
-    );
-    assert.equal(
-        next.items[0].roomId,
-        'ollivanders',
-    );
+    assert.equal(next.items.length, 0);
 
     const missingWand =
         structuredClone(transaction);
@@ -10574,8 +10842,8 @@ test('turn settlement records important possessions and filters incidental consu
         'I keep the pasty in my bag.',
     );
     assert.equal(
-        kept.items[0].id,
-        'caramel_pasty',
+        kept.items.length,
+        0,
     );
 });
 
@@ -10772,6 +11040,56 @@ test('legacy relationship migration backfills witnessed turn memories', () => {
         migrated.state.actorLibrary[1]
             .sharedMemories.everyday.length,
         0,
+    );
+});
+
+test('current relationship migration prunes legacy transition filler idempotently', () => {
+    const state = createInitialWorldState(
+        createDefaultCharacterDraft(),
+        {},
+    );
+    const foundation = createDirectorFoundation();
+    state.actorLibrary = [{
+        ...foundation.actorLibrary[0],
+        sharedMemories: {
+            core: [],
+            recent: [{
+                id: 'legacy_transition_filler',
+                summaryEn:
+                    'During the closed scene, Tina claimed the This experience materially shaped the actor’s view of the player.',
+                summary:
+                    'During the closed scene, Tina claimed the This experience materially shaped the actor’s view of the player.',
+                source: 'medium_transition',
+            }, {
+                id: 'specific_transition_memory',
+                summaryEn:
+                    'Tina defended Mei when McGonagall challenged the signed reply.',
+                summary:
+                    'Tina defended Mei when McGonagall challenged the signed reply.',
+                source: 'medium_transition',
+            }],
+            everyday: [],
+        },
+    }];
+
+    const migrated =
+        migrateRelationshipMemoryState(
+            state,
+            [],
+        );
+    assert.equal(migrated.changed, true);
+    assert.deepEqual(
+        migrated.state.actorLibrary[0]
+            .sharedMemories.recent
+            .map(memory => memory.id),
+        ['specific_transition_memory'],
+    );
+    assert.equal(
+        migrateRelationshipMemoryState(
+            migrated.state,
+            [],
+        ).changed,
+        false,
     );
 });
 

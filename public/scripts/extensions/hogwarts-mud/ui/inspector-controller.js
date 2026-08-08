@@ -1,3 +1,8 @@
+import {
+    createItemCard,
+    createItemLedger,
+} from './item-components.js';
+
 export function createInspectorController(ports) {
     const {
         refs,
@@ -8,13 +13,17 @@ export function createInspectorController(ports) {
         SPELL_LEARNING_SOURCE_LABELS,
         buildActorAppearanceView,
         buildSocialAudienceProjection,
+        createItemReferenceDirective,
         getKnownSpellMap,
         getRoomName,
         getSpellDefinition,
         getSpellProficiency,
         getWorldState,
         initials,
+        insertAtCursor,
         normalizeActorMemoryProfile,
+        projectActorItems,
+        projectItemLedger,
         projectPeoplePanel,
         renderInspectorMap,
         setComposerAddressTarget,
@@ -508,9 +517,21 @@ export function createInspectorController(ports) {
                     }
                     : null,
                 appearance.presentation
+                    .wornItems.length
+                    ? {
+                        label: '正式穿戴',
+                        detail:
+                            appearance
+                                .presentation
+                                .wornItems
+                                .join(' · '),
+                    }
+                    : null,
+                appearance.presentation
                     .accessories.length
                     ? {
-                        label: '饰品',
+                        label:
+                            '隐含饰品',
                         detail:
                             appearance
                                 .presentation
@@ -570,6 +591,40 @@ export function createInspectorController(ports) {
                     ),
                 ),
             );
+            const formalItems =
+                projectActorItems(
+                    state,
+                    session
+                        .selectedActorId,
+                );
+            if (
+                formalItems.length
+            ) {
+                const itemList =
+                    document.createElement(
+                        'div',
+                    );
+                itemList.className =
+                    'hpmud-item-grid hpmud-actor-item-grid';
+                formalItems
+                    .forEach(item =>
+                        itemList.append(
+                            createItemCard(
+                                item,
+                                {
+                                    compact:
+                                        true,
+                                },
+                            ),
+                        ));
+                inspectorElement
+                    .append(
+                        createInspectorCard(
+                            '正式物品',
+                            itemList,
+                        ),
+                    );
+            }
             inspectorElement.append(createInspectorCard('公开档案', createList([
                 {
                     label: '固定外貌',
@@ -773,11 +828,52 @@ export function createInspectorController(ports) {
             );
             return;
         }
+        if (tab === 'items') {
+            const referenceItem =
+                item => {
+                    const directive =
+                        createItemReferenceDirective(
+                            item,
+                        );
+                    if (!directive) {
+                        return;
+                    }
+                    insertAtCursor(
+                        directive,
+                    );
+                    root.classList.remove(
+                        'hpmud-inspector-open',
+                    );
+                    root.querySelector(
+                        '#hpmud_character',
+                    )?.setAttribute(
+                        'aria-expanded',
+                        'false',
+                    );
+                    toastr.success(
+                        `已引用 ${item.label} · ${item.id}`,
+                    );
+                };
+            inspectorElement.append(
+                createInspectorCard(
+                    '',
+                    createItemLedger(
+                        projectItemLedger(
+                            state,
+                        ),
+                        {
+                            onReferenceItem:
+                                referenceItem,
+                        },
+                    ),
+                ),
+            );
+            return;
+        }
 
         const map = {
             clues: ['线索', state.clues.filter(clue => clue.discovered === true)],
             status: ['状态', state.status],
-            items: ['物品', state.items],
         };
         const [title, entries] = map[tab] ?? map.clues;
         inspectorElement.append(createInspectorCard(title, createList(entries)));

@@ -116,6 +116,7 @@ const TASK3_INTERNAL_EXPORTS = new Set([
     'PLAYER_KEEP_ITEM_PATTERN',
     'SHARED_MEMORY_TIERS',
     'SOCIAL_RELATIONSHIP_DIMENSION_SET',
+    'synchronizeHeldItemLocations',
     'upsertSharedMemory',
 ]);
 

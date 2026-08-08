@@ -1,6 +1,11 @@
 import {
     MATERIAL_STATE_SCHEMA_VERSION,
 } from '../material-schema.js';
+import {
+    isItemVisibleToPlayer,
+    normalizeCurrentPresentation,
+    normalizeItem,
+} from './item-schema.js';
 
 export const ACTOR_PRESENTATION_VERSION = 1;
 const ACTOR_VISUAL_DESCRIPTION_VERSION = 1;
@@ -320,6 +325,70 @@ export function buildActorAppearanceView(
                 actorId
             ] ||
         {};
+    const knownActorIds =
+        new Set([
+            actorId,
+            ...(
+                worldState
+                    ?.actorLibrary ||
+                []
+            )
+                .filter(entry =>
+                    entry.playerKnown ===
+                        true ||
+                    entry.knownToPlayer ===
+                        true ||
+                    Boolean(
+                        entry
+                            .introducedClock,
+                    ) ||
+                    Boolean(
+                        entry
+                            .firstImpressionClock,
+                    ))
+                .map(entry =>
+                    entry.id),
+        ]);
+    const itemById =
+        new Map(
+            (
+                worldState?.items ||
+                []
+            )
+                .map(
+                    (
+                        item,
+                        index,
+                    ) =>
+                        normalizeItem(
+                            item,
+                            index,
+                        ),
+                )
+                .filter(item =>
+                    isItemVisibleToPlayer(
+                        item,
+                        knownActorIds,
+                    ))
+                .map(item => [
+                    item.id,
+                    item,
+                ]),
+        );
+    const normalizedPresentation =
+        normalizeCurrentPresentation(
+            presentation,
+            {
+                validItemIds:
+                    new Set(
+                        itemById.keys(),
+                    ),
+                clock:
+                    worldState
+                        ?.clock ||
+                    '',
+            },
+        );
     const accessories =
         Object.values(
             presentation.accessories ||
@@ -337,19 +406,72 @@ export function buildActorAppearanceView(
                     condition
                         .resultText)
         .filter(Boolean);
+    const wornItems =
+        normalizedPresentation
+            .wornItemIds
+            .map(itemId => {
+                const item =
+                    itemById.get(
+                        itemId,
+                    );
+                return item
+                    ? item.label ||
+                        item.labelEn
+                    : '';
+            })
+            .filter(Boolean);
     const heldItems =
-        Object.entries(
-            presentation.heldItems ||
-            {},
-        )
-            .filter(([, item]) =>
-                item)
-            .map(([hand, item]) => ({
-                hand,
-                item,
-            }));
+        normalizedPresentation
+            .heldItemIds
+            .map(itemId => {
+                const item =
+                    itemById.get(
+                        itemId,
+                    );
+                return item
+                    ? {
+                        hand:
+                            'unspecified',
+                        item:
+                            item.label ||
+                            item.labelEn,
+                        itemId,
+                    }
+                    : null;
+            })
+            .filter(Boolean);
+    const hasFormalHeldReferences =
+        Array.isArray(
+            presentation.heldItemIds,
+        ) &&
+        presentation.heldItemIds
+            .some(Boolean);
     if (
         !heldItems.length &&
+        !hasFormalHeldReferences
+    ) {
+        heldItems.push(
+            ...Object.entries(
+                presentation
+                    .heldItems ||
+                {},
+            )
+                .filter(([, item]) =>
+                    item)
+                .map(
+                    ([
+                        hand,
+                        item,
+                    ]) => ({
+                        hand,
+                        item,
+                    }),
+                ),
+        );
+    }
+    if (
+        !heldItems.length &&
+        !hasFormalHeldReferences &&
         presentation.heldObject
     ) {
         heldItems.push({
@@ -372,16 +494,18 @@ export function buildActorAppearanceView(
             '',
         presentation: {
             outfit:
-                presentation.outfit ||
+                normalizedPresentation
+                    .outfit ||
                 '',
             accessories,
+            wornItems,
             hair:
                 presentation.hair ||
                 '',
             visibleConditions,
             heldItems,
             updatedClock:
-                presentation
+                normalizedPresentation
                     .updatedClock ||
                 '',
         },

@@ -18,6 +18,7 @@ export function createUiBindings(ports) {
         closeMovementPicker,
         closeSpellPicker,
         collectModelSlots,
+        createItemOperationDirective,
         deleteProfileEditor,
         getSelectedProfileForEditing,
         getSettings,
@@ -341,6 +342,16 @@ export function createUiBindings(ports) {
         });
         listen(root.querySelector('#hpmud_character'), 'click', () => {
             if (isGameStarted() && workspaceElement.hidden === false) {
+                const open =
+                    root.classList.toggle(
+                        'hpmud-inspector-open',
+                    );
+                root.querySelector(
+                    '#hpmud_character',
+                )?.setAttribute(
+                    'aria-expanded',
+                    String(open),
+                );
                 renderInspector('character');
             }
         });
@@ -348,7 +359,15 @@ export function createUiBindings(ports) {
             listen(button, 'click', () => renderInspector(button.dataset.hpmudTab));
         });
         root.querySelectorAll('[data-hpmud-inspector]').forEach(button => {
-            listen(button, 'click', () => renderInspector(button.dataset.hpmudInspector));
+            listen(button, 'click', () => {
+                root.classList.add(
+                    'hpmud-inspector-open',
+                );
+                renderInspector(
+                    button.dataset
+                        .hpmudInspector,
+                );
+            });
         });
         root.querySelectorAll('[data-hpmud-template]').forEach(button => {
             listen(button, 'click', () => {
@@ -360,6 +379,43 @@ export function createUiBindings(ports) {
                 const [text, caret] = templates[button.dataset.hpmudTemplate];
                 insertAtCursor(text, caret);
                 button.closest('details').removeAttribute('open');
+            });
+        });
+        root.querySelectorAll(
+            '[data-hpmud-item-operation]',
+        ).forEach(button => {
+            listen(button, 'click', () => {
+                const directive =
+                    createItemOperationDirective(
+                        button.dataset
+                            .hpmudItemOperation,
+                    );
+                if (!directive) {
+                    return;
+                }
+                insertAtCursor(
+                    directive,
+                );
+                button.closest(
+                    'details',
+                ).removeAttribute(
+                    'open',
+                );
+                root.classList.add(
+                    'hpmud-inspector-open',
+                );
+                root.querySelector(
+                    '#hpmud_character',
+                )?.setAttribute(
+                    'aria-expanded',
+                    'true',
+                );
+                renderInspector(
+                    'items',
+                );
+                toastr.info(
+                    '已插入操作；请从物品档案引用对象。',
+                );
             });
         });
         listen(root.querySelector(

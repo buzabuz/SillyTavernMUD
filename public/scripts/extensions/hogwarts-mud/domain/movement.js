@@ -3,6 +3,7 @@
 import {
     createSceneItemStates,
     normalizeInventoryItem,
+    synchronizeHeldItemLocations,
 } from './inventory.js';
 
 import {
@@ -496,59 +497,6 @@ export function applyPlayerMovement(
                 next.scene.roomId =
                     destination.roomId;
             }
-            next.items =
-                (next.items || [])
-                    .map((item, index) => {
-                        const normalized =
-                            normalizeInventoryItem(
-                                item,
-                                index,
-                                {
-                                    mapId:
-                                        destination
-                                            .mapId,
-                                    roomId:
-                                        destination
-                                            .roomId,
-                                    clock:
-                                        next.clock,
-                                },
-                            );
-                        return normalized
-                            .ownerId ===
-                                'player' &&
-                            [
-                                'carried',
-                                'equipped',
-                            ].includes(
-                                normalized
-                                    .custody,
-                            )
-                            ? {
-                                ...normalized,
-                                mapId:
-                                    destination
-                                        .mapId,
-                                roomId:
-                                    destination
-                                        .roomId,
-                            }
-                            : normalized;
-                    });
-            if (next.scene) {
-                next.scene.itemStates =
-                    createSceneItemStates(
-                        next.items,
-                        {
-                            mapId:
-                                destination
-                                    .mapId,
-                            roomId:
-                                destination
-                                    .roomId,
-                        },
-                    );
-            }
             if (companionIds.length) {
                 const companions =
                     new Set(
@@ -579,6 +527,36 @@ export function applyPlayerMovement(
                                             .roomId,
                                 }
                                 : actor);
+            }
+            next.items =
+                synchronizeHeldItemLocations(
+                    next.items,
+                    {
+                        playerMapId:
+                            destination
+                                .mapId,
+                        playerRoomId:
+                            destination
+                                .roomId,
+                        actors:
+                            next.actors,
+                        clock:
+                            next.clock,
+                    },
+                );
+            if (next.scene) {
+                next.scene.itemStates =
+                    createSceneItemStates(
+                        next.items,
+                        {
+                            mapId:
+                                destination
+                                    .mapId,
+                            roomId:
+                                destination
+                                    .roomId,
+                        },
+                    );
             }
             const movement = {
                 attempted: true,
@@ -666,10 +644,25 @@ export function applyPlayerMovement(
         'wizard_intent',
     ];
     const hasSchoolTravelAuthority =
-        (worldState.items || []).some(item =>
-            item.ownerId === 'player' &&
-            ['carried', 'equipped']
-                .includes(item.custody) &&
+        (worldState.items || []).some(
+            (
+                source,
+                index,
+            ) => {
+                const item =
+                    normalizeInventoryItem(
+                        source,
+                        index,
+                    );
+                return item.holderId ===
+                    'player' &&
+                ![
+                    'consumed',
+                    'lost',
+                    'destroyed',
+                ].includes(
+                    item.state,
+                ) &&
             (
                 item.id ===
                     'acceptance_letter' ||
@@ -677,7 +670,9 @@ export function applyPlayerMovement(
                     .test(
                         `${item.labelEn || ''} ${item.label || ''}`,
                     )
-            ));
+            );
+            },
+        );
     if (
         [
             fromRoomId,
@@ -792,44 +787,6 @@ export function applyPlayerMovement(
     if (next.scene) {
         next.scene.roomId = destination.roomId;
     }
-    next.items = (next.items || [])
-        .map((item, index) => {
-            const normalized =
-                normalizeInventoryItem(
-                    item,
-                    index,
-                    {
-                        mapId,
-                        roomId:
-                            destination.roomId,
-                        clock: next.clock,
-                    },
-                );
-            return normalized.ownerId ===
-                'player' &&
-                ['carried', 'equipped']
-                    .includes(
-                        normalized.custody,
-                    )
-                ? {
-                    ...normalized,
-                    mapId,
-                    roomId:
-                        destination.roomId,
-                }
-                : normalized;
-        });
-    if (next.scene) {
-        next.scene.itemStates =
-            createSceneItemStates(
-                next.items,
-                {
-                    mapId,
-                    roomId:
-                        destination.roomId,
-                },
-            );
-    }
     if (companionIds.length) {
         const companions = new Set(companionIds);
         const routeRooms = new Set(path.roomIds);
@@ -843,6 +800,31 @@ export function applyPlayerMovement(
                     roomId: destination.roomId,
                 }
                 : actor);
+    }
+    next.items =
+        synchronizeHeldItemLocations(
+            next.items,
+            {
+                playerMapId:
+                    mapId,
+                playerRoomId:
+                    destination.roomId,
+                actors:
+                    next.actors,
+                clock:
+                    next.clock,
+            },
+        );
+    if (next.scene) {
+        next.scene.itemStates =
+            createSceneItemStates(
+                next.items,
+                {
+                    mapId,
+                    roomId:
+                        destination.roomId,
+                },
+            );
     }
     const movement = {
         attempted: true,
