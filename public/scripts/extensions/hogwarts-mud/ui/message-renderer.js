@@ -1,6 +1,9 @@
 import {
     createItemCandidateCard,
 } from './item-components.js';
+import {
+    createSpellCandidateCard,
+} from './spell-components.js';
 
 export function createMessageRenderer(ports) {
     const {
@@ -11,11 +14,14 @@ export function createMessageRenderer(ports) {
         LIVE_STREAM_PHASE_LABELS,
         MAX_RENDERED_MESSAGES,
         acceptItemCandidate,
+        acceptSpellCandidate,
         getContext,
         getItemProposalDecision,
+        getSpellProposalDecision,
         getSettings,
         getWorldState,
         ignoreItemCandidate,
+        ignoreSpellCandidate,
         initials,
         normalizeTranslationProvider,
         projectItemCard,
@@ -462,6 +468,33 @@ export function createMessageRenderer(ports) {
                                 acceptItemCandidate,
                             onIgnore:
                                 ignoreItemCandidate,
+                        },
+                    ),
+                );
+            });
+        const spellCandidates =
+            message.extra
+                ?.hogwartsMud
+                ?.turnTransaction
+                ?.spellCandidates ||
+            [];
+        spellCandidates
+            .forEach(candidate => {
+                const decision =
+                    getSpellProposalDecision(
+                        state,
+                        candidate.key,
+                    ) ||
+                    'pending';
+                article.append(
+                    createSpellCandidateCard(
+                        candidate,
+                        {
+                            decision,
+                            onAccept:
+                                acceptSpellCandidate,
+                            onIgnore:
+                                ignoreSpellCandidate,
                         },
                     ),
                 );

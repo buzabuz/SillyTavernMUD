@@ -31,6 +31,8 @@ prose mention
 
 ```text
 low item_update + local observer item_update
+-> fold each narrative state proposal exactly once
+-> normalize operation and legacy action to the same atomic verb
 -> normalizeItemProposal()
 -> exact evidence check against player action / English segments
 -> existing stable item ID
@@ -56,6 +58,14 @@ low item_update + local observer item_update
 3. evidence 明确描述对应的 `lose/destroy/consume/damage/clean` 状态动作。
 
 该门禁在 local observer projection 和 proposal partition 两层执行。它只拒绝明显不相关的 proposal，不替代语义 observer，也不让 Reducer 阅读正文。
+
+`destroy` 与 `lose` 必须保持区分：
+
+- 普通 `vanished/disappeared` 只支持 `lose`。
+- `ruin/remains/wreck ... vanished/disappeared` 表示残骸被清除，可支持 `destroy`。
+- 具体 Item 名称或类型仍必须在同一 evidence 中出现。
+
+Narrative `stateProposals` 的 `item_update.item.operation` 会同时投影为兼容 `action`，避免旧 validator 只读 `action` 时丢弃合法 V2 操作。proposal fold 删除已消费的 `stateProposals`，重复经过 authority reconciler 不得复制同一 Item update。
 
 ## 玩家决策
 
@@ -131,7 +141,7 @@ resolveItemCandidate()
 | `damage` | 不变 | 不变 | `state=damaged` |
 | `clean` | 不变 | 不变 | 只允许 dirty -> intact |
 | `lose` | 不变 | 清 holder，保留最后位置 | `state=lost` |
-| `destroy` | 不变 | 清 holder | `state=destroyed`，不可 carry 复活 |
+| `destroy` | 不变 | 保留 holder/location 并继续跟随 | `state=destroyed`，清穿戴/手持展示，不可 carry 复活 |
 
 偷走使用已有 Item 的 `acquire + transferMode=theft`：只改变 holder，不改变 owner。归还使用 `transferMode=return` 和结构化目标 holder。
 
@@ -143,7 +153,7 @@ resolveItemCandidate()
 - 玩家 `spatial/map` 位置；
 - runtime actor 的 `mapId/roomId`。
 
-所有权不参与位置判断。玩家借来的物品跟随玩家，NPC 借走或偷走的物品跟随 NPC。移动、内部地图、空间修复、回滚和场景转场都在人物位置提交后调用同一投影。
+所有权不参与位置判断。玩家借来的物品跟随玩家，NPC 借走或偷走的物品跟随 NPC。`destroyed` 仍是可追责、可定位的稳定 Item，保留当前 holder 并继续跟随，供后续修复或替换流程引用；只有 `lose` 和 `consume` 清空 holder。移动、内部地图、空间修复、回滚和场景转场都在人物位置提交后调用同一投影。
 
 ## Current Presentation
 
@@ -183,6 +193,7 @@ resolveItemCandidate()
 - 卡片显示类型、状态、主人/持有人、位置、剧情角色、获得精度与来源。
 - 回合候选默认只显示名称、类型/转移关系和收录/忽略操作；外观、归属、位置和原始 evidence 在 hover、keyboard focus 或“详情”按钮中展示。
 - 收录/忽略成功后立即就地更新状态并显示本地 toast；accepted 卡只保留“详情”。
+- Item/Spell 候选卡是消息流中的普通内容，不得通过 timer、`scrollIntoView()` 或 `scrollTop` 写入强迫自身进入视窗。
 - 关闭的原生 `<details>` 菜单内容必须 `display:none`，不得形成覆盖其他按钮的幽灵点击区域。
 - “插入表达”展示十二 operation；正式 Item 卡提供“引用到输入”并写入稳定 ID。
 - 窄屏由 `hpmud-inspector-open` 打开 UI-only 检查器抽屉；不写世界状态。

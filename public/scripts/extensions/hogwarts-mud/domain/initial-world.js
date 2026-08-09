@@ -267,6 +267,8 @@ export function createInitialWorldState(character, modelSlots, campaign = create
                     .grade,
                 '',
             ),
+        pendingSpellProposals: [],
+        spellProposalDecisions: [],
         status: [
             { label: '体力', detail: '稳定' },
             { label: '压力', detail: '平静' },

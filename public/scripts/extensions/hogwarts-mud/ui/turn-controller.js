@@ -131,6 +131,7 @@ export function createTurnController(ports) {
         const spellCasts =
             parseSpellCastDirectives(
                 text,
+                getMudState(),
             );
         if (!addressing.valid) {
             toastr.warning(

@@ -159,6 +159,7 @@ import {
     reconcileVisibleActorPresenceState,
 } from './domain/spatial-reconciliation.js';
 import { migrateSpellbookState } from './domain/spell-state.js';
+import * as spellProposalPorts from './domain/spell-proposals.js';
 import {
     buildBehavioralEnvironment,
     getWorldDate,
@@ -200,14 +201,11 @@ import {
     resolveEventWitnesses,
     validatePerceptionContract,
 } from './presence-witness-contract.js';
+import { reconcileObservedPerceptionWithFallback } from './domain/perception-reconciliation.js';
 import {
-    SPELL_CATALOG,
-    SPELL_LEARNING_SOURCE_LABELS,
-    createSpellDirective,
-    getSpellDefinition,
-    getSpellProficiency,
-    parseSpellCastDirectives,
-    removeSpellCastDirectives,
+    SPELL_CATALOG, SPELL_LEARNING_SOURCE_LABELS, createSpellDirective,
+    getSpellDefinition, getSpellDefinitions, getSpellProficiency,
+    parseSpellCastDirectives, removeSpellCastDirectives,
 } from './spell-catalog.js';
 import {
     MAP_DIRECTOR_TRIGGERS,
@@ -329,6 +327,7 @@ const platform = {
     SOCIAL_GRAPH_EXTRACTOR_VERSION,
     SPELL_CATALOG,
     SPELL_LEARNING_SOURCE_LABELS,
+    ...spellProposalPorts,
     TRANSLATION_FORMAT_VERSION,
     TRANSLATION_TERM_GLOSSARY,
     admitCurrentLocationResidents,
@@ -410,6 +409,7 @@ const platform = {
     getSceneDestinationAuthority,
     getScriptsByType,
     getSpellDefinition,
+    getSpellDefinitions,
     getSpellProficiency,
     getWorldDate,
     isDailyDirectorPlanCurrent,
@@ -447,7 +447,7 @@ const platform = {
     projectObservedInventoryUpdates,
     projectPeoplePanel,
     projectSceneTransitionPresence,
-    projectSceneArchivePresence,
+    projectSceneArchivePresence, reconcileObservedPerceptionWithFallback,
     protectTranslationTerms,
     reconcileCanonActorDisplayNames,
     reconcileSpatialState,

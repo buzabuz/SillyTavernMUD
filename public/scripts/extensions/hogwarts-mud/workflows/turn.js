@@ -33,6 +33,8 @@ export function createTurnWorkflow(ports) {
         ensureSocialDirectorCatchup,
         finalizeTurnDiagnostics =
         () => null,
+        extractSpellCandidates =
+        () => [],
         filterKnowledgeForAudience,
         findUnsettledTurn,
         generateScenePerformance,
@@ -52,6 +54,11 @@ export function createTurnWorkflow(ports) {
         parseSpellCastDirectives,
         partitionItemProposals,
         reconcileSpatialState,
+        reconcileAuthoritativeSpellNarrative =
+        transaction => ({
+            transaction,
+            corrections: [],
+        }),
         reconcileTurnActorPresenceWithSpatialState,
         reconcileVisibleActorPresenceState,
         reduceLocalPresence,
@@ -421,6 +428,7 @@ export function createTurnWorkflow(ports) {
             let spellCasts =
             parseSpellCastDirectives(
                 playerAction,
+                state,
             );
             let addressing =
             resolvePlayerAddressing(
@@ -804,6 +812,28 @@ export function createTurnWorkflow(ports) {
                         : null,
                     checkResolution,
                 );
+                const spellReconciliation =
+                reconcileAuthoritativeSpellNarrative(
+                    transaction,
+                    state,
+                );
+                transaction =
+                spellReconciliation
+                    .transaction;
+                if (
+                    spellReconciliation
+                        .corrections
+                        .length
+                ) {
+                    recordTurnDiagnostic(
+                        'spell_authority_reconciliation',
+                        {
+                            corrections:
+                                spellReconciliation
+                                    .corrections,
+                        },
+                    );
+                }
                 transaction.spellCasts =
                 structuredClone(
                     spellCasts,
@@ -921,6 +951,26 @@ export function createTurnWorkflow(ports) {
                     ).values(),
                 ];
                 transaction.itemUpdates = [];
+                transaction.spellCandidates =
+                extractSpellCandidates(
+                    transaction,
+                    state,
+                    {
+                        sourceEventId:
+                            itemSourceEventId,
+                        sourceMessageIds:
+                            playerMessageId >=
+                                0
+                                ? [
+                                    playerMessageId,
+                                ]
+                                : [],
+                        clock:
+                            state.clock,
+                        playerAction:
+                            narrativePlayerAction,
+                    },
+                );
                 transaction.materialExtraction = {
                     schemaVersion: 1,
                     source:

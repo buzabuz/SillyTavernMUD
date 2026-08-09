@@ -46,9 +46,6 @@ export function createStoryRenderer(ports) {
         sceneArchiveDialog,
     } = refs;
 
-    let itemCandidateRevealTimer =
-        null;
-
     function initials(name) {
         return String(name || '?')
             .split(/\s+/)
@@ -510,6 +507,8 @@ export function createStoryRenderer(ports) {
         const context = getContext();
         const state = getWorldState();
         const sceneId = state.scene?.id || '';
+        const initialSceneLoad =
+            !session.renderedSceneId;
         const sceneChanged =
             session.renderedSceneId !==
             sceneId;
@@ -804,14 +803,9 @@ export function createStoryRenderer(ports) {
         const scrollMode =
             resolveStoryScrollMode({
                 preserveScrollAnchor,
+                initialSceneLoad,
                 newAssistantMessageId,
                 wasNearBottom,
-                turnActive:
-                    jobRegistry
-                        .turnActive,
-                sceneTransitionActive:
-                    jobRegistry
-                        .sceneTransitionActive,
             });
         if (scrollMode === 'preserve') {
             storyElement.scrollTop += storyElement.scrollHeight - previousHeight;
@@ -835,44 +829,6 @@ export function createStoryRenderer(ports) {
             }
         } else if (scrollMode === 'bottom') {
             storyElement.scrollTop = storyElement.scrollHeight;
-            clearTimeout(
-                itemCandidateRevealTimer,
-            );
-            itemCandidateRevealTimer =
-                setTimeout(
-                    () => {
-                        const candidate =
-                            storyElement
-                                .querySelector(
-                                    '.hpmud-item-candidate:last-of-type',
-                                );
-                        if (!candidate) {
-                            return;
-                        }
-                        const storyRect =
-                            storyElement
-                                .getBoundingClientRect();
-                        const candidateRect =
-                            candidate
-                                .getBoundingClientRect();
-                        if (
-                            candidateRect.top <
-                                storyRect.top
-                        ) {
-                            storyElement.scrollTop +=
-                                candidateRect.top -
-                                storyRect.top;
-                        } else if (
-                            candidateRect.bottom >
-                                storyRect.bottom
-                        ) {
-                            storyElement.scrollTop +=
-                                candidateRect.bottom -
-                                storyRect.bottom;
-                        }
-                    },
-                    100,
-                );
         }
     }
 

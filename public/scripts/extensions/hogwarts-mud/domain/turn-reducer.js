@@ -32,6 +32,12 @@ import {
 import {
     settleSpellProgress,
 } from './spell-state.js';
+import {
+    applyWitnessedEventMemories,
+} from './event-memory.js';
+import {
+    queueSpellCandidates,
+} from './spell-proposals.js';
 
 import {
     advanceWorldClock,
@@ -265,6 +271,17 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
             return normalized;
         },
     );
+    next =
+        applyWitnessedEventMemories(
+            next,
+            transaction,
+            {
+                clock:
+                    next.clock,
+                turn:
+                    committedTurn,
+            },
+        );
     const profiles = new Map(
         next.actorLibrary.map(profile => [
             profile.id,
@@ -423,6 +440,13 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
             next,
             transaction
                 .itemCandidates ||
+            [],
+        );
+    next =
+        queueSpellCandidates(
+            next,
+            transaction
+                .spellCandidates ||
             [],
         );
     next = applyMaterialEvents(

@@ -27,13 +27,15 @@ export function resolveNewAssistantStoryMessageId(
 
 export function resolveStoryScrollMode({
     preserveScrollAnchor,
+    initialSceneLoad = false,
     newAssistantMessageId,
     wasNearBottom,
-    turnActive,
-    sceneTransitionActive,
 }) {
     if (preserveScrollAnchor) {
         return 'preserve';
+    }
+    if (initialSceneLoad) {
+        return 'retain';
     }
     if (
         Number.isInteger(
@@ -42,11 +44,7 @@ export function resolveStoryScrollMode({
     ) {
         return 'new-assistant-top';
     }
-    if (
-        wasNearBottom ||
-        turnActive ||
-        sceneTransitionActive
-    ) {
+    if (wasNearBottom) {
         return 'bottom';
     }
     return 'retain';

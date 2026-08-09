@@ -12,6 +12,13 @@
 - `actorId=player` 永远非法；玩家已经提交的 direct/broadcast speech 不得再次出现在 assistant 输出。
 - 每个 direct speech block 必须得到目标 NPC 的可见回应，但“回应”不等于复述玩家台词。
 
+## 当前态权威
+
+- `scene.summary/summaryEn` 是新场景的开场快照。场景 timeline 超过一个条目后，Performer 投影必须省略该摘要。
+- `scene.timelineEntries` 是按时间排序的历史，不是同时存在的事实集合；后续形态、位置、在场和物质状态覆盖早期条目。
+- 当前 `actors[].currentActivityEn`、`presentActors`、`currentMaterialState`、`currentRoomState` 和结构化位置是当前态权威。
+- 玩家或 NPC 台词可以回忆旧形态、开玩笑、推测或说错；台词不能创建第二实体，也不能让同一人物的历史形态与当前形态同时存在。
+
 ## 流式状态
 
 ```text
@@ -32,6 +39,9 @@ connecting
 - 新 assistant 消息首次进入当前场景时，story viewport 定位到该消息顶部，让玩家从第一段自然向下阅读。
 - 同一消息后续因翻译、inspector、候选决策或普通重绘更新时，不得再次抢夺滚动位置。
 - 首次加载已有存档时沿用一般滚动策略，不把历史最后一条消息误判为刚提交的新回复。
+- 首次 scene render 的空/隐藏 story 容器不得参与 `wasNearBottom` 判断。`initialSceneLoad` 固定使用 `retain`，避免容器从几十像素扩张到完整历史高度时先滚底再被布局拉回。
+- 生成期间只有原本已接近底部的读者才跟随 loading 卡；`turnActive` 或 `sceneTransitionActive` 不得覆盖用户阅读位置。
+- Item/Spell 候选卡不得主动写入 story `scrollTop`。候选是否在视窗内不是滚动决策依据。
 
 ## 修复边界
 

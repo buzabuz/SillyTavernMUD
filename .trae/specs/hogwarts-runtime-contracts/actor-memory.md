@@ -18,6 +18,24 @@ observed actor-specific event
 
 普通回合的 `actorUpdates[].memoryUpdate` 由 turn validator 校验人物在场、证据与字段质量，再写入对应 tier。该事务不受场景转场 fallback 影响。
 
+### 公开事件见证记忆
+
+人物特定 proposal 之外，规则层会从已提交 `eventKnowledge` 投影公共见证记忆：
+
+```text
+eventKnowledge
+  perception = room/area + notable/major + concealment != successful
+  witnessActorIds = resolved physical witnesses
+-> applyWitnessedEventMemories()
+-> one stable event_witness memory per actual witness
+```
+
+- Reducer 只消费结构化 `eventId/summaryEn/perception/witnessActorIds`，不解析正文。
+- 相同 `eventId` 对同一人物幂等，不重复写入。
+- 记忆使用中性事件事实；它证明人物见证了事件，不自动创建关系、impression 或 lasting impact。
+- target-only、subtle、成功隐蔽或没有稳定 event ID 的事件不做公共投影。
+- 教室中的爆炸、公开成功示范、教授表扬、学院加扣分等 notable/major 结果应覆盖完整课堂 witness roster。
+
 ## 场景转场
 
 中/高档 transition prompt 的 `relationshipUpdates` 是可选、稀疏数组：

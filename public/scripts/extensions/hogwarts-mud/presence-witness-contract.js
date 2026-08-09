@@ -1323,7 +1323,7 @@ export function createDeterministicPerceptionFallback(
     const privatePattern =
         /(?:\bwhisper(?:ed|s|ing)?\b|\bpassed? (?:a )?(?:note|paper)\b|\bnote\b|\bsecretly\b|\bquietly\b|耳语|低声|悄声|纸条|传纸|偷偷|悄悄)/iu;
     const publicPattern =
-        /(?:\b(?:shout|yell|scream|explosion|explode|blast|crash|alarm|announce|levitat|injur|damage|fire)\w*\b|喊|大叫|尖叫|爆炸|轰鸣|撞击|宣布|公告|悬浮|受伤|伤害|起火)/iu;
+        /(?:\b(?:shout|yell|scream|explosion|explode|blast|crash|alarm|announce|levitat|injur|damage|fire)\w*\b|\bsuccessfully demonstrat(?:e|ed|es|ing)\b|\b(?:a|one|\d+) points? to (?:gryffindor|slytherin|ravenclaw|hufflepuff)\b|\b(?:very promising start|well done|excellent work)\b|喊|大叫|尖叫|爆炸|轰鸣|撞击|宣布|公告|悬浮|受伤|伤害|起火|成功示范|(?:格兰芬多|斯莱特林|拉文克劳|赫奇帕奇).{0,12}加[一二三四五六七八九十\d]+分|表现很好|做得好)/iu;
     const notePattern =
         /(?:\b(?:note|paper)\b|纸条|传纸)/iu;
     const whisperPattern =

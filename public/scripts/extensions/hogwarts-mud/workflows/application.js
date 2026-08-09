@@ -69,6 +69,7 @@ export function createWorkflowApplication(ports) {
         createTurnPerformanceBudget,
         createTurnRetryCheckpoint,
         enterBoundInteriorMap,
+        extractSpellCandidates,
         extension_settings,
         filterKnowledgeForAudience,
         findLocalRoomPath,
@@ -77,6 +78,7 @@ export function createWorkflowApplication(ports) {
         formatNextSceneIntent,
         formatRetrievedKnowledge,
         getActiveAddressingState,
+        getAuthoritativeSceneSpells,
         getConnectionProfiles,
         getContext,
         getFailedPlayerTurn,
@@ -119,7 +121,9 @@ export function createWorkflowApplication(ports) {
         projectSceneTransitionPresence,
         protectTranslationTerms,
         reconcileCanonActorDisplayNames,
+        reconcileObservedPerceptionWithFallback,
         reconcileSpatialState,
+        reconcileAuthoritativeSpellNarrative,
         reconcileTemporaryActorDisplayNames,
         reconcileTurnActorPresenceWithSpatialState,
         reconcileVisibleActorPresenceState,
@@ -133,6 +137,7 @@ export function createWorkflowApplication(ports) {
         resolveEventWitnesses,
         resolveItemCandidate,
         resolvePlayerAddressing,
+        resolveSpellCandidate,
         resolveTemporaryActorRevealedName,
         restoreTranslationTerms,
         retrieveKnowledge,
@@ -440,6 +445,7 @@ export function createWorkflowApplication(ports) {
         extractRoleResponseText,
         formatRetrievedKnowledge,
         getActiveAddressingState,
+        getAuthoritativeSceneSpells,
         getRequestHeaders,
         getSettings,
         parseItemOperationDirectives,
@@ -470,6 +476,7 @@ export function createWorkflowApplication(ports) {
         findLocalRoomPath,
         getRequestHeaders,
         projectObservedInventoryUpdates,
+        reconcileObservedPerceptionWithFallback,
         validatePerceptionContract,
     });
 
@@ -523,7 +530,9 @@ export function createWorkflowApplication(ports) {
         parseItemOperationDirectives,
         parseSpellCastDirectives,
         partitionItemProposals,
+        extractSpellCandidates,
         reconcileSpatialState,
+        reconcileAuthoritativeSpellNarrative,
         reconcileTurnActorPresenceWithSpatialState,
         reconcileVisibleActorPresenceState,
         reduceLocalPresence,
@@ -588,6 +597,45 @@ export function createWorkflowApplication(ports) {
                 'ignored',
             );
 
+    async function decideSpellCandidate(
+        key,
+        decision,
+    ) {
+        const context =
+            getContext();
+        const result =
+            resolveSpellCandidate(
+                getMudState(),
+                key,
+                decision,
+            );
+        if (!result.changed) {
+            renderAll();
+            return result;
+        }
+        context.chatMetadata
+            .hogwartsMud =
+            result.state;
+        await context
+            .saveMetadata();
+        applySystemPrompt();
+        renderAll();
+        return result;
+    }
+
+    const acceptSpellCandidate =
+        key =>
+            decideSpellCandidate(
+                key,
+                'accepted',
+            );
+    const ignoreSpellCandidate =
+        key =>
+            decideSpellCandidate(
+                key,
+                'ignored',
+            );
+
 
     return {
         getSettings,
@@ -628,5 +676,7 @@ export function createWorkflowApplication(ports) {
         preparePlayableState,
         acceptItemCandidate,
         ignoreItemCandidate,
+        acceptSpellCandidate,
+        ignoreSpellCandidate,
     };
 }

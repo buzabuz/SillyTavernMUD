@@ -10,6 +10,7 @@ const CYTOSCAPE_CDN_URL =
 const CYTOSCAPE_SCRIPT_ID = 'hpmud_cytoscape_runtime';
 const PREFERENCE_VERSION = 1;
 const PREFERENCE_PREFIX = 'hpmud.relationshipGraph';
+export const FILTERED_RELATIONSHIP_EDGE_OPACITY = 0.05;
 
 const DIMENSION_LABELS = Object.freeze({
     familiarity: '熟悉',
@@ -906,11 +907,33 @@ export function filterRelationshipGraphProjection(
                 nodeMatchesCategory(node, filters.category))
             .forEach(node => nodeIds.add(node.id));
     }
+    const edgeIds =
+        new Set(
+            edges.map(edge =>
+                edge.elementId),
+        );
+    const contextEdgeIds =
+        new Set(
+            projection.edges
+                .filter(edge =>
+                    !edgeIds.has(
+                        edge.elementId,
+                    ) &&
+                    nodeIds.has(
+                        edge.sourceId,
+                    ) &&
+                    nodeIds.has(
+                        edge.targetId,
+                    ))
+                .map(edge =>
+                    edge.elementId),
+        );
     return {
         nodes: projection.nodes.filter(node => nodeIds.has(node.id)),
         edges,
         nodeIds,
-        edgeIds: new Set(edges.map(edge => edge.elementId)),
+        edgeIds,
+        contextEdgeIds,
     };
 }
 
@@ -1006,6 +1029,15 @@ export function getRelationshipGraphStyles({
             selector: 'edge.hpmud-graph-focus',
             style: {
                 'width': 'mapData(width, 1, 8, 3, 10)',
+            },
+        },
+        {
+            selector:
+                'edge.hpmud-graph-filtered',
+            style: {
+                'opacity':
+                    FILTERED_RELATIONSHIP_EDGE_OPACITY,
+                'events': 'no',
             },
         },
     ];
@@ -1468,9 +1500,26 @@ export function createRelationshipGraphController({
                     );
                 });
                 cy.edges().forEach(edge => {
+                    const isVisible =
+                        visibleProjection
+                            .edgeIds
+                            .has(
+                                edge.id(),
+                            );
+                    const isContext =
+                        visibleProjection
+                            .contextEdgeIds
+                            .has(
+                                edge.id(),
+                            );
                     edge.toggleClass(
                         'hpmud-graph-hidden',
-                        !visibleProjection.edgeIds.has(edge.id()),
+                        !isVisible &&
+                            !isContext,
+                    );
+                    edge.toggleClass(
+                        'hpmud-graph-filtered',
+                        isContext,
                     );
                 });
                 cy.elements().removeClass(
@@ -1578,6 +1627,13 @@ export function createRelationshipGraphController({
             selectNode(event.target.id());
         });
         cy.on('tap', 'edge', event => {
+            if (
+                event.target.hasClass(
+                    'hpmud-graph-filtered',
+                )
+            ) {
+                return;
+            }
             selectEdge(event.target.id());
         });
         cy.on('tap', event => {

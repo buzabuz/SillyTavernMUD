@@ -24,6 +24,10 @@ import {
     resolveItemCandidate,
 } from '../public/scripts/extensions/hogwarts-mud/domain/item-reducer.js';
 import {
+    normalizeSpellProposal,
+    resolveSpellCandidate,
+} from '../public/scripts/extensions/hogwarts-mud/domain/spell-proposals.js';
+import {
     createWorkflowApplication,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/application.js';
 import { createOpeningWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/opening.js';
@@ -114,6 +118,17 @@ function createTurnPerformancePromptHarness() {
             () => '',
         getActiveAddressingState:
             () => ({}),
+        getAuthoritativeSceneSpells:
+            () => [{
+                spellId:
+                    'match_to_needle_transfiguration',
+                incantation:
+                    'Acufors',
+                name:
+                    '火柴变针',
+                nameEn:
+                    'Match-to-Needle Transfiguration',
+            }],
         parseItemOperationDirectives:
             () => ({
                 directives: [],
@@ -444,6 +459,156 @@ test('initial scene performer prompt forbids replaying player speech as output d
             .speechText,
         'Please teach me.',
     );
+    assert.equal(
+        userPayload
+            .authoritativeSceneSpells[0]
+            .incantation,
+        'Acufors',
+    );
+    assert.match(
+        systemPrompt,
+        /authoritativeSceneSpells is binding spell identity/u,
+    );
+});
+
+test('scene performer drops a stale opening form after the timeline advances', () => {
+    const workflow =
+        createTurnPerformancePromptHarness();
+    const state = {
+        clock:
+            '1991-09-02 · 12:30',
+        scene: {
+            id:
+                'transfiguration_after_break',
+            nameEn:
+                'Transfiguration Classroom',
+            summaryEn:
+                'A tabby cat rests on the professor\'s desk.',
+            timelineEntries: [
+                {
+                    clock:
+                        '1991-09-02 · 11:30',
+                    label:
+                        'A tabby cat watches the class.',
+                },
+                {
+                    clock:
+                        '1991-09-02 · 11:45',
+                    label:
+                        'McGonagall transforms back and begins teaching.',
+                },
+            ],
+        },
+        map: {},
+        actors: [{
+            id:
+                'minerva_mcgonagall',
+            nameEn:
+                'Minerva McGonagall',
+            roleEn:
+                'Professor',
+            publicDescriptionEn:
+                'A tall, stern witch.',
+            currentActivityEn:
+                'Pacing the aisles in human form.',
+            present: true,
+        }],
+        actorLibrary: [],
+        items: [],
+    };
+    const prompt =
+        workflow.createScenePerformancePrompt(
+            state,
+            'Lavender recalls petting the cat.',
+            {
+                elapsedMinutes: 15,
+                minimumWords: 240,
+                maximumWords: 560,
+            },
+            [],
+            null,
+            null,
+            null,
+            {
+                valid: true,
+                actorIds: [],
+            },
+            [],
+            {
+                mode: 'rich',
+                label: 'rich',
+                inputBudget: 108000,
+                ragLimit: 10,
+                memoryLimits: {},
+            },
+        );
+    const systemPrompt =
+        prompt[0].content;
+    const userPayload =
+        JSON.parse(
+            prompt[1].content,
+        );
+
+    assert.equal(
+        Object.hasOwn(
+            userPayload.currentScene,
+            'summaryEn',
+        ),
+        false,
+    );
+    assert.equal(
+        userPayload.currentScene
+            .timelineEntries
+            .length,
+        2,
+    );
+    assert.equal(
+        userPayload.presentActors[0]
+            .currentActivityEn,
+        'Pacing the aisles in human form.',
+    );
+    assert.match(
+        systemPrompt,
+        /past transformation of one actor is not a second simultaneous creature/u,
+    );
+    assert.match(
+        systemPrompt,
+        /timelineEntries is chronological history, not a set of simultaneous facts/u,
+    );
+
+    state.scene.timelineEntries =
+        state.scene.timelineEntries
+            .slice(0, 1);
+    const openingPayload =
+        JSON.parse(
+            workflow
+                .createScenePerformancePrompt(
+                    state,
+                    '',
+                    {
+                        elapsedMinutes:
+                            15,
+                        minimumWords:
+                            240,
+                        maximumWords:
+                            560,
+                    },
+                    [],
+                    null,
+                    null,
+                    null,
+                    {
+                        valid: true,
+                        actorIds: [],
+                    },
+                )[1]
+                .content,
+        );
+    assert.equal(
+        openingPayload.currentScene
+            .summaryEn,
+        'A tabby cat rests on the professor\'s desk.',
+    );
 });
 
 test('Item candidate acceptance persists and renders without knowledge or model work', async () => {
@@ -655,6 +820,178 @@ test('Item candidate acceptance persists and renders without knowledge or model 
     assert.equal(
         renders,
         2,
+    );
+});
+
+test('custom spell candidate acceptance persists locally without knowledge or model work', async () => {
+    const candidate =
+        normalizeSpellProposal(
+            {
+                incantation:
+                    'Nebula Verto',
+                sourceActorId:
+                    'canon_hermione_jean_granger',
+                evidenceText:
+                    'The incantation is Nebula Verto.',
+                effectEn:
+                    'It makes writing glow.',
+            },
+            {
+                sourceEventId:
+                    'test_spell_candidate',
+                clock:
+                    '1991-09-02 · 12:30',
+            },
+        );
+    const state = {
+        clock:
+            '1991-09-02 · 12:30',
+        turn: {
+            count: 96,
+        },
+        campaign: {
+            grade: 1,
+        },
+        character: {
+            confirmed: true,
+        },
+        spellbook: {
+            version: 2,
+            known: [],
+            lastScannedMessageId:
+                -1,
+        },
+        pendingSpellProposals: [
+            candidate,
+        ],
+        spellProposalDecisions: [],
+    };
+    let metadataSaves = 0;
+    let knowledgeSyncs = 0;
+    let renders = 0;
+    let promptUpdates = 0;
+    const context = {
+        chatMetadata: {
+            hogwartsMud:
+                state,
+        },
+        saveMetadata:
+            async () => {
+                metadataSaves++;
+            },
+    };
+    const slots = {
+        low: {
+            profileId: '',
+        },
+        medium: {
+            profileId: '',
+        },
+        high: {
+            profileId: '',
+        },
+    };
+    const application =
+        createWorkflowApplication({
+            DEFAULT_SETTINGS: {
+                promptVersion: 1,
+                modelSlots: slots,
+                translationProvider:
+                    'off',
+            },
+            DEFAULT_WORLD_PROMPT: '',
+            extension_settings: {},
+            getContext: () =>
+                context,
+            normalizeModelSlots:
+                value =>
+                    structuredClone(
+                        value ||
+                        slots,
+                    ),
+            normalizeTranslationProvider:
+                value =>
+                    value ||
+                    'off',
+            uuidv4: () =>
+                'fixture',
+            resolveSpellCandidate,
+            syncKnowledgeBase:
+                async () => {
+                    knowledgeSyncs++;
+                    await new Promise(
+                        () => {},
+                    );
+                },
+            retrieveKnowledge:
+                async () => [],
+            applySystemPrompt:
+                () => {
+                    promptUpdates++;
+                },
+            renderAll:
+                () => {
+                    renders++;
+                },
+        });
+
+    const result =
+        await Promise.race([
+            application
+                .acceptSpellCandidate(
+                    candidate.key,
+                ),
+            new Promise(
+                (
+                    _resolve,
+                    reject,
+                ) =>
+                    setTimeout(
+                        () =>
+                            reject(
+                                new Error(
+                                    'spell candidate acceptance timed out',
+                                ),
+                            ),
+                        250,
+                    ),
+            ),
+        ]);
+
+    assert.equal(
+        result.changed,
+        true,
+    );
+    assert.equal(
+        metadataSaves,
+        1,
+    );
+    assert.equal(
+        knowledgeSyncs,
+        0,
+    );
+    assert.equal(
+        promptUpdates,
+        1,
+    );
+    assert.equal(
+        renders,
+        1,
+    );
+    assert.equal(
+        context.chatMetadata
+            .hogwartsMud
+            .pendingSpellProposals
+            .length,
+        0,
+    );
+    assert.equal(
+        context.chatMetadata
+            .hogwartsMud
+            .spellbook
+            .known[0]
+            .spellId,
+        'custom_nebula_verto',
     );
 });
 

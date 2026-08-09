@@ -24,6 +24,9 @@ import {
     validateItemUpdates,
     validateTemporaryActorEntrances,
 } from './turn-authority.js';
+import {
+    normalizeItemOperation,
+} from './item-schema.js';
 
 export const NARRATIVE_TURN_PROTOCOL_VERSION =
     2;
@@ -276,7 +279,10 @@ export function foldNarrativeTurnProposals(
             ? [...payload.revealedClues]
             : [];
 
-    payload.stateProposals
+    (
+        payload.stateProposals ||
+        []
+    )
         .forEach(proposal => {
             if (
                 !proposal ||
@@ -408,8 +414,24 @@ export function foldNarrativeTurnProposals(
                         proposal.item,
                     )
                 ) {
+                    const operation =
+                        normalizeItemOperation(
+                            proposal.item
+                                .operation ||
+                            proposal.item
+                                .action,
+                        );
                     itemUpdates.push(
-                        proposal.item,
+                        {
+                            ...proposal.item,
+                            ...(operation
+                                ? {
+                                    operation,
+                                    action:
+                                        operation,
+                                }
+                                : {}),
+                        },
                     );
                 } else {
                     appendSettlementWarning(
@@ -479,6 +501,7 @@ export function foldNarrativeTurnProposals(
         entrances;
     payload.revealedClues =
         revealedClues;
+    delete payload.stateProposals;
     return payload;
 }
 

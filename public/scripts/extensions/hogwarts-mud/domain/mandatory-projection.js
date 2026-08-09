@@ -241,6 +241,7 @@ function projectMandatorySceneState(
                 const spell =
                     getSpellDefinition(
                         entry.spellId,
+                        worldState,
                     );
                 return spell
                     ? {

@@ -102,6 +102,22 @@
 - [x] 真实浏览器验证 failure 卡和未新增 spellbook。
 - [x] 全量 `296/296`、ESLint、语法与 diff 检查通过，用户确认最终语义。
 
+## Authoritative / Custom Spell Lifecycle 闭环
+
+- [x] scene intent 可解析的 Catalog spell 每回合进入 `authoritativeSceneSpells`。
+- [x] 权威 spell 的教学、示范和施放强制使用完全一致的 incantation。
+- [x] 单一权威场景中的替代咒文在提交前确定性对齐，不进入 custom 候选。
+- [x] 明确未知教学生成 `pendingSpellProposals`；权威场景中独立新咒语与权威纠错可同时结算。
+- [x] 玩家明确写出的自由咒语标记进入同一候选链，不直接写 spellbook。
+- [x] 自定义咒语由玩家收录/忽略，模型不能直接写 spellbook。
+- [x] accepted custom definition 可在快捷栏、人物检查器、施法解析和 D20 中使用。
+- [x] 候选 accept/ignore 只保存 metadata、刷新 prompt 和重绘，不等待模型/知识库。
+- [x] message 200 的 `Acus/阿库斯` 已备份后全部修为 `Acufors`，并补入 spellbook。
+- [x] 权威冲突、自定义候选、收录、快捷施法和 UI 接线有回归测试。
+- [x] 全量 Hogwarts Node `310/310`、项目级 Hogwarts ESLint、语法、diff 和模块尺寸门禁通过。
+- [x] 浏览器验证 message 200、三项已学咒语，以及真实 `Nebula Verto` 待选卡的详情/收录/忽略。
+- [x] 用户确认后已清理 debug server、instrumentation 和会话文件。
+
 ## Ordinary Turn Player-Speech Replay 闭环
 
 - [x] 已从持久化 diagnostics 还原 initial、repair、validation 与 commit 时序。
@@ -128,3 +144,45 @@
 - [x] targeted UI/模块测试 `18/18`、ESLint、语法与 diff 检查通过。
 - [x] 全量 Hogwarts Node `299/299` 测试通过。
 - [x] 用户确认后已清理 UI instrumentation 和剩余调试文件。
+
+## Relationship Filter Context Edges 闭环
+
+- [x] 已证明 Lavender→Player 权威关系仍存在，未发生数据丢失。
+- [x] 当前可见边、计数、详情和文本回退继续严格服从筛选条件。
+- [x] 端点仍可见的筛选外 player-known 边进入独立 `contextEdgeIds`。
+- [x] 背景边固定为 5% 不透明度，且不可点击。
+- [x] 隐私投影未授权边和端点已被人物筛选移除的边不会淡显。
+- [x] Tina 档案在负面筛选下验证 6 条命中边、27 条背景边。
+- [x] 目标关系图测试、ESLint、语法和 diff 检查通过。
+- [x] 全量 Hogwarts Node `300/300` 测试通过，浏览器无 Cytoscape 样式警告。
+
+## Classroom Item / Scroll / Witness Memory 闭环
+
+- [x] 已从 message 202 diagnostics 证明模型提交了 quill destroy proposal。
+- [x] Narrative Item state proposal 只折叠一次，并规范为 `operation + action`。
+- [x] `ruin/remains/wreck ... vanished` 可支持 destroy；普通 vanished 仍只支持 lose。
+- [x] 当前羽毛笔已修复为 `destroyed + holderId=player`，Item 卡显示“已销毁 / 持有人 Tina / 随 Tina”。
+- [x] 首次 scene load 固定 `retain`，空 story 不参与 near-bottom 判断。
+- [x] 浏览器 reload 后 1 秒与 3 秒 `scrollTop=0`，无首次 bottom 跳转。
+- [x] generation 不再覆盖离开底部的阅读位置；Item/Spell 候选卡不再通过 timer 强制进入视窗。
+- [x] 成功公开示范、教授表扬和学院加分按 room-wide 处理。
+- [x] 合法 observer 输出不能缩窄确定性 room-wide notable/major perception。
+- [x] room-wide notable/major eventKnowledge 按稳定 event ID 幂等写给每名 witness。
+- [x] Hermione 获表扬和 quill 爆炸两件事均写入课堂 8 名 witness 的中性记忆。
+- [x] Item、scroll、perception、observer override、event witness memory 目标测试通过。
+- [x] 全量 Hogwarts Node `308/308`、项目级 ESLint、完整扩展语法、diff 和模块尺寸门禁通过。
+- [x] 用户确认后已清理本次 instrumentation、debug server 和会话文件。
+
+## McGonagall Form Authority 闭环
+
+- [x] 已由 request diagnostics 排除 Prompt 上限与上下文裁剪。
+- [x] 已证明没有独立猫 actor 或当前 material entity。
+- [x] 已定位冲突为开场 `scene.summaryEn` 与当前人形 actor 同时注入。
+- [x] timeline 推进后 Performer 不再接收开场 summary。
+- [x] Prompt 明确 timeline 是时序，后续形态覆盖早期形态。
+- [x] 玩家/NPC 台词不会创建旧形态的第二实体。
+- [x] message 205 正文、译文、segments、swipe 与 diagnostics 已备份并修复。
+- [x] 目标 Prompt 测试和 post-fix 离线重放通过。
+- [x] 全量 Hogwarts Node `311/311`、ESLint、语法、diff 与模块尺寸门禁通过。
+- [x] 浏览器确认错误双实体句消失、修正收束存在、麦格人物卡只有一张。
+- [x] 用户确认后已清理本次 instrumentation、debug server 和会话文件。

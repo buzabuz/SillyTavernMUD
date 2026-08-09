@@ -343,7 +343,9 @@ export function detectActionCheck(
             spellCast?.spellId ||
             parseSpellCastDirectives(
                 action,
+                worldState,
             )[0]?.spellId,
+            worldState,
         );
     const knownSpell =
         structuredSpell
@@ -453,7 +455,9 @@ export function resolveActionCheck(
             spellCast?.spellId ||
             parseSpellCastDirectives(
                 playerAction,
+                worldState,
             )[0]?.spellId,
+            worldState,
         );
     const spellObservation =
         structuredSpell
@@ -466,6 +470,7 @@ export function resolveActionCheck(
         getSpellDefinition(
             spellObservation
                 ?.spellId,
+            worldState,
         );
     const hasSemanticCheck =
         semanticCheck &&
@@ -838,6 +843,7 @@ export function validateCheckResolution(check, worldState) {
         check.spell &&
         !getSpellDefinition(
             check.spell.spellId,
+            worldState,
         )
     ) {
         errors.push(
@@ -849,6 +855,7 @@ export function validateCheckResolution(check, worldState) {
         !getSpellDefinition(
             check.spellObservation
                 .spellId,
+            worldState,
         )
     ) {
         errors.push(

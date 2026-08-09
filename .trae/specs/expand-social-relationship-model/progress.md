@@ -1,4 +1,12 @@
 
+## 2026-08-09 Filtered Edge Context
+
+- 用户确认 Lavender 等关系并未丢失，而是被持久化的关系类型筛选隐藏；权威存档仍有 Lavender→Player `warmth=97 / closeness=33 / familiarity=33` 和 9 条 evidence。
+- 关系筛选继续严格决定当前可见边、计数、详情和文本回退；新增 `contextEdgeIds` 只保存端点仍可见的筛选外 player-known 边。
+- Cytoscape 用独立 `hpmud-graph-filtered` class 将背景边固定为 `opacity=0.05`；点击背景边不会打开详情。
+- Tina 真实档案在 `全部已知 + 负面` 下保持 20 人、6 条当前可见边，并将其余 27 条作为背景；Lavender→Player 为 `visible=false/context=true`。
+- 目标关系图测试 8/8、全量 Hogwarts Node `300/300`、ESLint、语法和 diff 检查通过；浏览器未出现 Cytoscape 样式警告。
+
 ## Round 3
 - 完成 v2 社交关系模型端到端接入确认，并验证运行时旧维度清零与 Tina 关系数据恢复。
 - 修复只读加载时快照意外写回、学院关系 10/32 维投影及 autocomplete 守卫问题。
