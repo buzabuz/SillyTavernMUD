@@ -18,6 +18,8 @@
 - `presence-scene-transition.md`：active/local/witness 与转场投影。
 - `item-lifecycle.md`：Item proposal、Reducer、迁移、呈现与 UI 可见性。
 - `actor-memory.md`：人物记忆证据、转场稀疏更新、质量门禁与旧档清理。
+- `spell-observation.md`：咒语观测 D20、获知边界、教学旁路与 Catalog 权威。
+- `ordinary-turn-repair.md`：首次 Performer 输出、流式预览、一次结构修复与失败恢复。
 
 ## 持久化边界
 
@@ -58,6 +60,7 @@
 player message
 -> local adjudication
 -> low-tier scene performance
+-> reject replayed player speech and non-NPC dialogue actor IDs
 -> turn settlement graph
 -> local observation
 -> partition existing Item operations / new Item candidates

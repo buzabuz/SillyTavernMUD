@@ -7,6 +7,15 @@
 - UI 只能读取本表列出的世界字段，页面交互状态写入 `ui/session-state.js`。
 - 任何人物名单都必须注明它表达 active、local、participant 还是 witness。
 
+## UI session 字段
+
+这些字段只存在于当前页面实例，不写入 JSONL 世界权威。
+
+| 字段路径 | 真实语义 | 唯一写入者 | 主要读取者 | 兼容/诊断 |
+| --- | --- | --- | --- | --- |
+| `session.liveSceneStream` | 当前生成阶段、内部 raw 长度、恢复 segments 与判定预览 | app controller、turn workflow | loading card renderer | segments 仅供内部诊断；提交前不得渲染为正文 |
+| `session.latestStoryMessageId` | 当前 scene 最近一次已渲染的消息 ID | story renderer | story scroll resolver | 新 assistant ID 只触发一次顶部定位；scene 切换时清空 |
+
 ## 世界根字段
 
 | 字段路径 | 真实语义 | 唯一写入者 | 主要读取者 | 兼容/诊断 |
@@ -17,8 +26,8 @@
 | `modelSlots` | role 到 Connection Profile/预算映射 | settings controller、slot migration | model adapter、workflows | `responseHeadroomVersion` 管迁移 |
 | `clock` | 当前权威世界时间 | turn/transition reducers | 全部导演、UI | 正文不能反写 |
 | `chapter`、`location` | 当前玩家可见章节与地点标签 | opening/transition reducers | UI、prompt | `scene/map` 才是结构权威 |
-| `turn` | 回合计数、状态、错误、最近耗时 | turn reducer/workflow | recovery、UI、directors | 同一回合重试必须幂等 |
-| `checks` | 已提交判定记录 | check/turn reducer | prompt、inspector | 模型只提议是否判定 |
+| `turn` | 回合计数、状态、错误、最近耗时 | turn reducer/workflow | recovery、UI、directors | 同一回合重试必须幂等；`resolving` 不授权 reload 自动调用模型 |
+| `checks` | 已提交判定记录 | check/turn reducer | prompt、inspector | 可解析的主动咒语观测会覆盖错误 semantic no-check，并固定只投一次 D20 |
 
 ## 场景、地图与空间
 
@@ -76,7 +85,7 @@ actorLibrary membership != physical presence
 | `actorPresentations[actorId].wornItemIds/heldItemIds` | 正式穿戴与手持 Item 引用 | Item Reducer、migration | prompt、inspector | 只引用可用 Item ID；hidden 解析受可见性约束 |
 | `actorPresentations[actorId].updatedClock` | 当前呈现最后变更时间 | appearance/material/Item Reducer | UI、prompt | 不由普通隐含物品使用刷新 |
 | `actorPresentations.*.accessories/heldItems/heldObject` | V1 自由文本呈现 | 仅旧档迁移输入 | legacy display fallback | 新回合不再写入 |
-| `spellbook` | 已学法术与来源 | spell reducer/migration | check、prompt、UI | 年级是指导，不是硬门禁 |
+| `spellbook` | 已学法术与来源 | spell reducer/migration | check、prompt、UI | 主动观测仅 `success_with_cost+` 学习；NPC 明确教学可在观测失败后学习；年级不是硬门禁 |
 
 ## 社交、记忆与导演
 
@@ -99,9 +108,10 @@ actorLibrary membership != physical presence
 | `extra.hogwartsMud.itemDirectiveErrors[]` | 孤立、未知或非法 Item directive diagnostics | turn workflow deterministic parser | debug | 不阻断正文，不猜测替代 Item |
 | `extra.hogwartsMud.segments[]` | 英文权威 narration/dialogue 分段 | scene performer/transition opening | render、observe、archive |
 | `extra.hogwartsMud.turnTransaction` | 已提交回合事务快照 | turn workflow | retry、migration、debug |
+| `extra.hogwartsMud.turnTransaction.checkResolution.spellObservation` | 主动观测的内部 spell 目标与 D20 结果 | check resolver / turn workflow | performer、spell reducer、check card | failure 时公开 UI/正文不得泄露 spell identity |
 | `extra.hogwartsMud.turnTransaction.itemOperations[]` | 对已有正式 Item 的证据化操作 | turn workflow | turn validator/reducer、debug | 只允许稳定已有 ID |
 | `extra.hogwartsMud.turnTransaction.itemCandidates[]` | 本回合发现的新 Item 候选快照 | turn workflow | message renderer、retry | 只允许 `acquire`，不等于正式入库 |
-| `extra.hogwartsMud.turnDiagnostics` | bounded 回合诊断 | turn diagnostics recorder | 后续 debug |
+| `extra.hogwartsMud.turnDiagnostics` | bounded 回合诊断，含 initial/repair request、response、validation 与 commit/error 边界 | turn diagnostics recorder | 后续 debug |
 | `extra.hogwartsMud.sceneTransition.diagnostics` | actor states、active/local 提交对比 | transition message builder | 后续转场 debug |
 | `extra.hogwartsMud.sourceEn` | 英文事实原文 | message builder | translation/render |
 | `extra.hogwartsMud.translatedZh` | 显示译文缓存 | translation workflow | renderer；不得参与状态提取 |

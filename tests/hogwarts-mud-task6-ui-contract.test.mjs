@@ -17,6 +17,10 @@ import {
     shouldTranslateRenderedMessage,
 } from '../public/scripts/extensions/hogwarts-mud/runtime/read-only-policy.js';
 import { createUiSessionState } from '../public/scripts/extensions/hogwarts-mud/ui/session-state.js';
+import {
+    resolveNewAssistantStoryMessageId,
+    resolveStoryScrollMode,
+} from '../public/scripts/extensions/hogwarts-mud/ui/story-scroll.js';
 
 const PROJECT_ROOT = fileURLToPath(
     new URL('../', import.meta.url),
@@ -104,6 +108,10 @@ test('UI session state is instance-local and excludes world authority', () => {
 
     assert.equal(right.selectedActorId, '');
     assert.equal(right.liveSceneStream, null);
+    assert.equal(
+        right.latestStoryMessageId,
+        null,
+    );
     for (const authorityKey of [
         'character',
         'clock',
@@ -120,6 +128,127 @@ test('UI session state is instance-local and excludes world authority', () => {
             false,
         );
     }
+});
+
+test('live generation stays loading-only until a final message is committed', async () => {
+    const source =
+        await readFile(
+            path.join(
+                CLIENT_ROOT,
+                'ui',
+                'message-renderer.js',
+            ),
+            'utf8',
+        );
+    const liveRenderer =
+        source.slice(
+            source.indexOf(
+                'function renderLiveSceneStream()',
+            ),
+            source.indexOf(
+                'function renderMessage(',
+            ),
+        );
+
+    assert.match(
+        liveRenderer,
+        /createGenerationStatusCard/u,
+    );
+    assert.match(
+        liveRenderer,
+        /正文将在校验并提交后一次显示/u,
+    );
+    assert.doesNotMatch(
+        liveRenderer,
+        /renderSegmentedMessage/u,
+    );
+    assert.doesNotMatch(
+        liveRenderer,
+        /hpmud-streaming-turn|段已落笔/u,
+    );
+});
+
+test('a newly committed assistant message anchors at its top exactly once', () => {
+    const latestAssistant = {
+        messageId: 200,
+        message: {
+            is_user: false,
+            is_system: false,
+        },
+    };
+    const newAssistantMessageId =
+        resolveNewAssistantStoryMessageId(
+            199,
+            latestAssistant,
+        );
+
+    assert.equal(
+        newAssistantMessageId,
+        200,
+    );
+    assert.equal(
+        resolveNewAssistantStoryMessageId(
+            null,
+            latestAssistant,
+        ),
+        null,
+    );
+    assert.equal(
+        resolveNewAssistantStoryMessageId(
+            200,
+            latestAssistant,
+        ),
+        null,
+    );
+    assert.equal(
+        resolveNewAssistantStoryMessageId(
+            199,
+            {
+                messageId: 200,
+                message: {
+                    is_user: true,
+                },
+            },
+        ),
+        null,
+    );
+    assert.equal(
+        resolveStoryScrollMode({
+            preserveScrollAnchor:
+                false,
+            newAssistantMessageId,
+            wasNearBottom: false,
+            turnActive: true,
+            sceneTransitionActive:
+                false,
+        }),
+        'new-assistant-top',
+    );
+    assert.equal(
+        resolveStoryScrollMode({
+            preserveScrollAnchor:
+                false,
+            newAssistantMessageId:
+                null,
+            wasNearBottom: false,
+            turnActive: true,
+            sceneTransitionActive:
+                false,
+        }),
+        'bottom',
+    );
+    assert.equal(
+        resolveStoryScrollMode({
+            preserveScrollAnchor:
+                true,
+            newAssistantMessageId,
+            wasNearBottom: true,
+            turnActive: true,
+            sceneTransitionActive:
+                true,
+        }),
+        'preserve',
+    );
 });
 
 test('action ports bind workflows to UI without importing the composition root', () => {

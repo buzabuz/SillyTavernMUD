@@ -480,9 +480,11 @@ node scripts/migrate-hogwarts-presence-witness.mjs --restore-manifest path/to/ma
 
 ### 咒语本与熟练度
 
-- 权威咒语目录保存稳定 ID、原文咒文、效果、目标类型、难度、风险、合法性和常规课程年级。
+- 权威咒语目录保存稳定 ID、非空咒文、效果、目标类型、难度、风险、合法性和常规课程年级。Canon 只给 technique、没有咒文时允许用 `game_extension_canon_gap` 补齐可玩咒文，但不伪称官方 Canon；火柴变针使用 `Acufors`。
 - `curriculumYear` 只表示霍格沃茨通常何时教学，绝不限制学习或施放。玩家可以在任何年级通过课堂、图书馆自学、私下教授或自行实验学会任意咒语。
 - 课堂正文明确教学或示范某个咒语时，该咒语自动进入咒语本；玩家首次结构化尝试未知咒语时，也会按“自行实验”或“自行学习”进入咒语本。
+- 玩家主动尝试辨认当前场景的咒语时，规则层从 scene intent 解析稳定 ID 并投一次感知 D20。失败只显示“未能辨认咒语”，不泄露名称且不学习；成功但有代价及以上才通过观测学习。
+- 即使玩家观测失败，NPC 后续明确念出、写出、解释或示范仍按教学学习；AI 正文稳定 spell marker 同样可登记，但不会增加玩家施法次数。
 - 熟练度按每次施法判定增长：失败仍获得少量经验，成功、重大成功获得更多经验。等级分为初学、练习中、熟练、精通和专家。
 - 已学咒语会出现在输入框快捷栏和检查器“咒语”页；未知咒语不会占用快捷栏，但始终可以从完整目录尝试。
 
@@ -523,6 +525,7 @@ Google 端点使用 `google-translate-api-x`，Bing 端点使用 `bing-translate
 - `spec.md`：模块入口、事务时序、持久化边界和变更规则。
 - `state-fields.md`：字段路径、真实语义、唯一写入者、读取者和兼容边界。
 - `presence-scene-transition.md`：active/local/witness 分层及课堂 cohort 转场规则。
+- `ordinary-turn-repair.md`：首次 Performer 输出、流式预览、一次结构修复与失败恢复。
 - `checklist.md`：新增字段、事务和人物状态的提交门禁。
 - `progress.md`：区分 Verified、Tested 与 Indexed，禁止把“有代码”误写成“运行已验证”。
 

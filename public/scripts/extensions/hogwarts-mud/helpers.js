@@ -174,7 +174,7 @@ export {
 } from './domain/spatial-reconciliation.js';
 
 export {
-    migrateSpellbookState, settleSpellProgress,
+    migrateSpellbookState, resolveSpellObservation, settleSpellProgress,
 } from './domain/spell-state.js';
 
 export {

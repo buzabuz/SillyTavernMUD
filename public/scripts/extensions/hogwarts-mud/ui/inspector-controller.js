@@ -759,7 +759,8 @@ export function createInspectorController(ports) {
                                 'small',
                             );
                         title.textContent =
-                            spell.incantation;
+                            spell.incantation ||
+                            spell.nameEn;
                         use.type =
                             'button';
                         use.textContent =

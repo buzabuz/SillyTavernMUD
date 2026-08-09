@@ -67,6 +67,12 @@ const createSpell = (
     sourceTier:
         options.sourceTier ||
         'book_canon',
+    incantationKnown:
+        options.incantationKnown ??
+        Boolean(incantation),
+    sourceUrl:
+        options.sourceUrl ||
+        '',
     aliases:
         Object.freeze(
             options.aliases ||
@@ -92,6 +98,37 @@ export const SPELL_CATALOG = Object.freeze([
             target: 'object',
             aliases: [
                 'Levitation Charm',
+            ],
+        },
+    ),
+    createSpell(
+        'match_to_needle_transfiguration',
+        'Acufors',
+        '火柴变针',
+        'Match-to-Needle Transfiguration',
+        'transfiguration',
+        '将火柴变形成针。',
+        'Transfigure a match into a needle.',
+        1,
+        'elementary',
+        {
+            target: 'object',
+            subject:
+                'Transfiguration',
+            sourceTier:
+                'game_extension_canon_gap',
+            sourceUrl:
+                'https://www.harrypotter.com/features/magical-spells-we-first-learned-in-philosophers-stone',
+            aliases: [
+                'Match-to-Needle Exercise',
+                'Match to Needle Exercise',
+                'Match-to-Needle Transfiguration',
+                'Acufors',
+                'transform a match into a needle',
+                'alter the physical properties of this match to resemble a needle',
+                '火柴变针',
+                '火柴变成针',
+                '将火柴变成针',
             ],
         },
     ),
@@ -1180,11 +1217,13 @@ export function findSpellReferences(
             [
                 spell.incantation,
                 ...spell.aliases,
-            ].some(alias =>
-                new RegExp(
-                    `(?<![\\p{L}\\p{N}_])${escapeRegExp(alias)}(?![\\p{L}\\p{N}_])`,
-                    'iu',
-                ).test(source)))
+            ]
+                .filter(Boolean)
+                .some(alias =>
+                    new RegExp(
+                        `(?<![\\p{L}\\p{N}_])${escapeRegExp(alias)}(?![\\p{L}\\p{N}_])`,
+                        'iu',
+                    ).test(source)))
         .sort((left, right) =>
             left.curriculumYear -
             right.curriculumYear ||

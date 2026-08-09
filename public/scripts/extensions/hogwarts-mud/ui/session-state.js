@@ -20,6 +20,7 @@ export function createUiSessionState({
         selectedActorId: '',
         liveSceneStream: null,
         renderedSceneId: '',
+        latestStoryMessageId: null,
         currentSceneMessageLimit:
             currentScenePageSize,
         archiveListLimit:

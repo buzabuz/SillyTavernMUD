@@ -12,6 +12,7 @@ import {
 import {
     getKnownSpell,
     getSpellProficiencyModifier,
+    resolveSpellObservation,
 } from './spell-state.js';
 
 const CHECK_OUTCOMES = Object.freeze([
@@ -358,7 +359,12 @@ export function detectActionCheck(
                 label:
                     `施法检定 · ${structuredSpell.name}`,
                 labelEn:
-                    `Spellcasting check · ${structuredSpell.incantation}`,
+                    `Spellcasting check · ${
+                        structuredSpell
+                            .incantation ||
+                        structuredSpell
+                            .nameEn
+                    }`,
                 attribute:
                     'willpower',
                 targetAttribute:
@@ -449,6 +455,18 @@ export function resolveActionCheck(
                 playerAction,
             )[0]?.spellId,
         );
+    const spellObservation =
+        structuredSpell
+            ? null
+            : resolveSpellObservation(
+                worldState,
+                playerAction,
+            );
+    const observedSpell =
+        getSpellDefinition(
+            spellObservation
+                ?.spellId,
+        );
     const hasSemanticCheck =
         semanticCheck &&
         typeof semanticCheck ===
@@ -503,6 +521,30 @@ export function resolveActionCheck(
                     },
                 },
             );
+    } else if (
+        spellObservation &&
+        observedSpell
+    ) {
+        detected = {
+            id: 'perception',
+            label: '咒语观测',
+            labelEn:
+                'Spell observation',
+            attribute: 'perception',
+            targetAttribute:
+                'agility',
+            skill: 'investigation',
+            opposed: false,
+            dcAdjustment:
+                observedSpell
+                    .dcAdjustment,
+            forced: true,
+            target: null,
+            spellObservation:
+                structuredClone(
+                    spellObservation,
+                ),
+        };
     } else if (
         hasSemanticCheck
     ) {
@@ -740,6 +782,18 @@ export function resolveActionCheck(
                 },
             }
             : {}),
+        ...(
+            detected
+                .spellObservation
+                ? {
+                    spellObservation:
+                        structuredClone(
+                            detected
+                                .spellObservation,
+                        ),
+                }
+                : {}
+        ),
         resolvedAt: new Date().toISOString(),
     };
 }
@@ -788,6 +842,17 @@ export function validateCheckResolution(check, worldState) {
     ) {
         errors.push(
             '施法判定引用了未知咒语。',
+        );
+    }
+    if (
+        check.spellObservation &&
+        !getSpellDefinition(
+            check.spellObservation
+                .spellId,
+        )
+    ) {
+        errors.push(
+            '咒语观测引用了未知咒语。',
         );
     }
     if (!['difficulty', 'opposed'].includes(check.hidden?.mode)) {

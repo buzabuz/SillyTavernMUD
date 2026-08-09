@@ -281,8 +281,8 @@ const PROFILE_SECRET_KEYS = Object.freeze({
 const MANUAL_MODEL_VALUE = '__manual__';
 const LIVE_STREAM_PHASE_LABELS = Object.freeze({
     connecting: '正在铺开羊皮纸',
-    receiving: '英文原稿实时书写',
-    repairing: '结构校对后重新落笔',
+    receiving: '正在生成完整回复',
+    repairing: '结构校对后重新整理',
     translating: '原稿完成，正在译入中文',
     committing: '正在装订现场记录',
 });
