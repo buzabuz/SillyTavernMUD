@@ -932,7 +932,6 @@ function applyOneOperation(
     ) {
         next.state =
             'destroyed';
-        next.holderId = '';
         next.isEquipped =
             false;
     }

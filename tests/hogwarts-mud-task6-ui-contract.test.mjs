@@ -168,6 +168,92 @@ test('live generation stays loading-only until a final message is committed', as
     );
 });
 
+test('custom spell candidates reuse deterministic accept and ignore UI flow', async () => {
+    const [
+        messageSource,
+        spellComponentSource,
+        appControllerSource,
+        workflowSource,
+    ] = await Promise.all([
+        readFile(
+            path.join(
+                CLIENT_ROOT,
+                'ui',
+                'message-renderer.js',
+            ),
+            'utf8',
+        ),
+        readFile(
+            path.join(
+                CLIENT_ROOT,
+                'ui',
+                'spell-components.js',
+            ),
+            'utf8',
+        ),
+        readFile(
+            path.join(
+                CLIENT_ROOT,
+                'ui',
+                'app-controller.js',
+            ),
+            'utf8',
+        ),
+        readFile(
+            path.join(
+                CLIENT_ROOT,
+                'workflows',
+                'application.js',
+            ),
+            'utf8',
+        ),
+    ]);
+
+    assert.match(
+        messageSource,
+        /turnTransaction[\s\S]*?spellCandidates/u,
+    );
+    assert.match(
+        messageSource,
+        /createSpellCandidateCard/u,
+    );
+    assert.match(
+        spellComponentSource,
+        /发现新咒语/u,
+    );
+    assert.match(
+        spellComponentSource,
+        /收录/u,
+    );
+    assert.match(
+        spellComponentSource,
+        /忽略/u,
+    );
+    assert.match(
+        appControllerSource,
+        /pendingSpellProposals:/u,
+    );
+    assert.match(
+        appControllerSource,
+        /spellProposalDecisions:/u,
+    );
+    assert.match(
+        workflowSource,
+        /acceptSpellCandidate/u,
+    );
+    assert.doesNotMatch(
+        workflowSource.slice(
+            workflowSource.indexOf(
+                'async function decideSpellCandidate',
+            ),
+            workflowSource.indexOf(
+                'const acceptSpellCandidate',
+            ),
+        ),
+        /syncLocalKnowledge|sendRoleRequest/u,
+    );
+});
+
 test('a newly committed assistant message anchors at its top exactly once', () => {
     const latestAssistant = {
         messageId: 200,
@@ -218,9 +304,6 @@ test('a newly committed assistant message anchors at its top exactly once', () =
                 false,
             newAssistantMessageId,
             wasNearBottom: false,
-            turnActive: true,
-            sceneTransitionActive:
-                false,
         }),
         'new-assistant-top',
     );
@@ -231,9 +314,16 @@ test('a newly committed assistant message anchors at its top exactly once', () =
             newAssistantMessageId:
                 null,
             wasNearBottom: false,
-            turnActive: true,
-            sceneTransitionActive:
+        }),
+        'retain',
+    );
+    assert.equal(
+        resolveStoryScrollMode({
+            preserveScrollAnchor:
                 false,
+            newAssistantMessageId:
+                null,
+            wasNearBottom: true,
         }),
         'bottom',
     );
@@ -243,11 +333,21 @@ test('a newly committed assistant message anchors at its top exactly once', () =
                 true,
             newAssistantMessageId,
             wasNearBottom: true,
-            turnActive: true,
-            sceneTransitionActive:
-                true,
         }),
         'preserve',
+    );
+    assert.equal(
+        resolveStoryScrollMode({
+            preserveScrollAnchor:
+                false,
+            initialSceneLoad:
+                true,
+            newAssistantMessageId:
+                null,
+            wasNearBottom:
+                true,
+        }),
+        'retain',
     );
 });
 
@@ -430,7 +530,7 @@ test('narrow layouts expose the inspector as a UI-only drawer', async () => {
         storyRendererSource,
         /classList\.add\(\s*'hpmud-inspector-open'/u,
     );
-    assert.match(
+    assert.doesNotMatch(
         storyRendererSource,
         /setTimeout\([\s\S]*?\.hpmud-item-candidate:last-of-type[\s\S]*?100,/u,
     );

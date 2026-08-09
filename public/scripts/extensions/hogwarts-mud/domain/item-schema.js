@@ -149,7 +149,7 @@ const HIGH_RISK_ITEM_OPERATION_PATTERNS =
         lose:
             /(?:\b(?:lose|lost|missing|misplaced|gone|disappear(?:ed)?|vanish(?:ed)?|left behind|could not find|couldn't find)\b|丢失|弄丢|不见|遗失|找不到|落下)/iu,
         destroy:
-            /(?:\b(?:destroy(?:ed)?|shatter(?:ed)?|burn(?:ed|t)? to (?:ash|cinders)|irreparably ruined)\b|销毁|摧毁|彻底烧毁|碎成|无法修复)/iu,
+            /(?:\b(?:destroy(?:ed)?|shatter(?:ed)?|burn(?:ed|t)? to (?:ash|cinders)|irreparably ruined)\b|\b(?:ruin|remains|wreck)\b.{0,48}\b(?:vanish(?:ed)?|disappear(?:ed)?)\b|销毁|摧毁|彻底烧毁|碎成|无法修复|(?:残骸|遗骸).{0,24}(?:消失|不见))/iu,
         consume:
             /(?:\b(?:consume[ds]?|ate|eaten|drank|drunk|used up|finished)\b|消耗|吃掉|喝掉|用完)/iu,
         damage:
@@ -339,10 +339,8 @@ export function deriveLegacyCustody(
         return 'consumed';
     }
     if (
-        [
-            'lost',
-            'destroyed',
-        ].includes(item.state)
+        item.state ===
+            'lost'
     ) {
         return 'lost';
     }
@@ -568,7 +566,6 @@ export function normalizeItem(
             [
                 'consumed',
                 'lost',
-                'destroyed',
             ].includes(state)
                 ? ''
                 : holderId,

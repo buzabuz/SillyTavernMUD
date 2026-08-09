@@ -7,7 +7,6 @@ import {
     parseSpellCastDirectives,
     SPELL_CATALOG_VERSION,
 } from '../spell-catalog.js';
-
 const SPELL_TEACHING_PATTERN =
     /(?:教学|教会|讲解|解释|说明|示范|演示|练习|念出|说出|写下|尝试这个咒语|跟着念|照着第?\s*\d+\s*页|teach|taught|explain|demonstrat|practi[cs]e|pronounc|try (?:it|this spell)|repeat after|writ(?:e|es|ten).{0,40}(?:board|blackboard)|page\s+\d+)/iu;
 const SPELL_SELF_STUDY_PATTERN =
@@ -160,6 +159,7 @@ function upsertLearnedSpell(
     const spell =
         getSpellDefinition(
             spellId,
+            spellbook,
         );
     if (!spell) {
         return null;
@@ -308,11 +308,36 @@ export function migrateSpellbookState(
         );
     const previous =
         JSON.stringify(
-            next.spellbook ||
-            null,
+            {
+                spellbook:
+                    next.spellbook ||
+                    null,
+                pendingSpellProposals:
+                    next
+                        .pendingSpellProposals ||
+                    [],
+                spellProposalDecisions:
+                    next
+                        .spellProposalDecisions ||
+                    [],
+            },
         );
     next.spellbook =
         normalized;
+    next.pendingSpellProposals =
+        Array.isArray(
+            next.pendingSpellProposals,
+        )
+            ? next
+                .pendingSpellProposals
+            : [];
+    next.spellProposalDecisions =
+        Array.isArray(
+            next.spellProposalDecisions,
+        )
+            ? next
+                .spellProposalDecisions
+            : [];
     const startIndex =
         Math.max(
             0,
@@ -347,6 +372,7 @@ export function migrateSpellbookState(
                 ) {
                     parseSpellCastDirectives(
                         text,
+                        next,
                     ).forEach(cast => {
                         const source =
                             getSpellLearningSource(
@@ -383,6 +409,7 @@ export function migrateSpellbookState(
                 ) {
                     findSpellReferences(
                         text,
+                        next,
                     ).forEach(spell => {
                         upsertLearnedSpell(
                             next.spellbook,
@@ -416,9 +443,18 @@ export function migrateSpellbookState(
         state: next,
         changed:
             previous !==
-            JSON.stringify(
-                next.spellbook,
-            ),
+            JSON.stringify({
+                spellbook:
+                    next.spellbook,
+                pendingSpellProposals:
+                    next
+                        .pendingSpellProposals ||
+                    [],
+                spellProposalDecisions:
+                    next
+                        .spellProposalDecisions ||
+                    [],
+            }),
     };
 }
 
@@ -471,6 +507,7 @@ export function settleSpellProgress(
                 .spellCasts
             : parseSpellCastDirectives(
                 playerAction,
+                worldState,
             );
     const narrativeText = [
         transaction.publicEventEn,
@@ -485,6 +522,7 @@ export function settleSpellProgress(
     const narrativeDirectives =
         parseSpellCastDirectives(
             narrativeText,
+            worldState,
         );
     const spellObservation =
         transaction
@@ -530,6 +568,7 @@ export function settleSpellProgress(
             const spell =
                 getSpellDefinition(
                     cast.spellId,
+                    next,
                 );
             if (!spell) {
                 return;
@@ -559,6 +598,7 @@ export function settleSpellProgress(
             getSpellDefinition(
                 spellObservation
                     .spellId,
+                next,
             );
         if (
             spell &&
@@ -599,6 +639,7 @@ export function settleSpellProgress(
     }
     findSpellReferences(
         narrativeText,
+        next,
     ).forEach(spell => {
         if (
             SPELL_TEACHING_PATTERN

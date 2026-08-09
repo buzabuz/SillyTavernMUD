@@ -350,6 +350,22 @@ Continue from this exact state. Perform present NPCs using the supplied personal
                     ? state
                         .itemProposalDecisions
                     : [],
+            pendingSpellProposals:
+                Array.isArray(
+                    state
+                        .pendingSpellProposals,
+                )
+                    ? state
+                        .pendingSpellProposals
+                    : [],
+            spellProposalDecisions:
+                Array.isArray(
+                    state
+                        .spellProposalDecisions,
+                )
+                    ? state
+                        .spellProposalDecisions
+                    : [],
             spellbook:
                 state.spellbook ||
                 {

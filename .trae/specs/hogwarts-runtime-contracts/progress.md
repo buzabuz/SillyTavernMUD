@@ -15,7 +15,7 @@
 | Ordinary turn settlement | Tested | player-speech replay diagnostics、首次 Prompt 契约、narrative-first、repair、retry、presence/witness tests | 用下一次自然回合验证首次响应不再因 `actorId=player` 进入 repair |
 | Spatial / movement / maps | Tested | movement、reachability、sightline、migration tests | 建结构化房间权威页 |
 | Item V2 / material / appearance / spell | Verified | Item 证据门禁、spell observation 三路径、296/296 全量、真实 JSONL/浏览器验证 | 后续只接 medium/high authorized hidden proposal 入口 |
-| Social / memory / event knowledge | Verified | social contract、witness whitelist、transition sparse memory、旧 filler 幂等迁移、289/289 测试 | 建 directional evidence 页 |
+| Social / memory / event knowledge | Verified | social contract、witness whitelist、关系筛选 5% 背景边、transition sparse memory、旧 filler 幂等迁移 | 建 directional evidence 页 |
 | Opening / directors / world change | Indexed | 现有 opening/pacing/transition tests | 补调用预算与状态机页 |
 | Knowledge / translation | Indexed | 现有 glossary、batch、knowledge tests | 补事实/显示边界页 |
 | Save / read-only / UI session | Tested | readonly E2E、Task 5/6 tests | 建 host persistence 页 |
@@ -127,6 +127,35 @@
 - 三路径 fixture：failure 不学；D20 15 success-with-cost 学习；failure + McGonagall explains `Acufors` 学习。
 - 验证：Hogwarts Node `296/296`、目标 ESLint、语法与 diff 检查通过；用户确认最终语义。
 
+## 2026-08-09 Authoritative / Custom Spell Lifecycle 审计
+
+- message 200 中 Hermione 明确说 `The incantation is Acus` 并示范，但 spellbook 扫描到 message 200 后仍只有两个咒语。
+- pre-fix 日志证明双层断裂：
+  - scene intent 是 Match-to-Needle，但普通教学回合没有 `checkResolution.spellObservation`，Prompt 未收到 `Acufors` 权威；
+  - `SPELL_TEACHING_PATTERN=true`，但 `findSpellReferences()` 对未知 `Acus` 返回空，spellbook 前后不变。
+- 修复后每回合从 scene/next intent 投影 `authoritativeSceneSpells`；单一权威场景的显式错误咒文在 transaction 提交前确定性对齐。
+- 自定义入口按单条咒文上下文判定：明确 `The incantation is X` / `咒语是 X` 进入 `pendingSpellProposals`；即使场景有权威，明确声明为另一种原创咒语或给出独立效果且不指向权威 technique 时仍保留。仅同一 technique 的替代词被纠正。
+- 完成审计发现旧实现把 `authoritativeSceneSpells` 非空当作全局禁用开关，并会把独立 `Nebula Verto` 一并改成 `Acufors`；修复后同一事务只纠正 `Acus/Mutare -> Acufors`，同时产出 `custom_nebula_verto`。
+- 玩家自由咒语标记也进入 proposal：当前 message 202 的 `✦【咒语:Nebula Verto】` 已补为 pending candidate，但未自动学习。候选把本次反噬保存为 observed narrative evidence，并标记 `risk=unknown`。
+- accepted custom spell 可生成稳定 `✦【咒语:custom_*】` marker，经过快捷栏、parser、check validator 和 D20；ignored 决策按 ID 抑制重现。
+- candidate accept/ignore 与 Item 一样只执行 Reducer、metadata save、prompt refresh 和 render，不调用模型或知识库。
+- 当前 JSONL：
+  - 原始备份 SHA `684d3baf...542f`；
+  - `Acus/阿库斯` 从正文、译文、segments、transaction 和 diagnostics 清零；
+  - `Acufors` 统一为权威文本；
+  - `match_to_needle_transfiguration` 以 Hermione 课堂教学来源加入 spellbook；
+  - `custom_nebula_verto` 只进入 `pendingSpellProposals`，等待玩家收录/忽略；
+  - 浏览器加载并完成确定性 v2 normalization 后 SHA `7385cd47...aa85`。
+- post-fix 日志：Prompt 包含 `Acufors` authority；权威场景 custom candidate 为空；教学命中 Catalog；无权威 workshop 提取 `custom_nebula_verto`。
+- 全量 Hogwarts Node `310/310`、项目级 Hogwarts ESLint、完整语法、diff 和模块尺寸门禁通过。
+- 浏览器验证：
+  - message 200 只显示权威 `Acufors`；
+  - 咒语检查器显示悬浮咒、咒立停、火柴变针三项；
+  - message 203 显示真实 `Nebula Verto` 待选卡及“详情/收录/忽略”，在玩家决策前咒语本仍只有三项；
+  - 离屏 `Nebula Verto` 候选卡显示“详情/收录/忽略”，accept 后生成 `✦【咒语:custom_nebula_verto】` 且 parser 可识别；
+  - 真实 candidate 来自 message 202 的玩家自由咒语标记与已提交反噬结果，未伪造新剧情且未调用模型。
+- 用户最终点击收录：`pending=[]`、decision=`accepted`，spellbook 新增 `custom_nebula_verto`，内嵌 definition 保留 observed backfire evidence、`risk=unknown` 与 `sourceTier=player_confirmed_custom`。
+
 ## 2026-08-09 Ordinary Turn Player-Speech Replay 审计
 
 - trace `turn-d822117c-d67b-4339-a897-3a81f1f8187e` 显示首次请求 46.068 秒后返回 12 段，其中把玩家原话写成 `dialogue` 且使用非法 `actorId=player`。
@@ -147,3 +176,56 @@
 - post-fix detached DOM：message 200 选择 `new-assistant-top`，scroll 精确落在 `684`；首次加载与同 ID 重绘不触发新消息定位。
 - 浏览器只读验收加载 message 200 的 11 个正式 segments，streaming turn 为 0、composer 可用；没有 submit、retry 或 generation 请求。
 - 全量 Hogwarts Node `299/299`、ESLint、语法与 diff 检查通过。
+
+## 2026-08-09 Relationship Filter Context Edge 审计
+
+- 用户确认关系“消失”来自 `关系=负面` 筛选，而非 Reducer、迁移或存档丢边。
+- Tina 权威存档仍有 Lavender→Player：`warmth=97 / closeness=33 / familiarity=33`，并保留 9 条 evidence。
+- `filterRelationshipGraphProjection()` 继续用 `edges/edgeIds` 表达严格命中结果，新增 `contextEdgeIds` 表达端点仍在画布上的筛选外 player-known 边。
+- 背景边使用独立 Cytoscape class，固定 `opacity=0.05`，不响应点击，不进入计数、详情和文本回退；端点被范围/身份/搜索移除时仍完全隐藏。
+- 真实浏览器 `全部已知 + 负面` 显示 20 人、6 条当前有向关系；运行投影保留 27 条背景边，Lavender→Player 为 `visible=false/context=true`。
+- 目标关系图测试 8/8、全量 Hogwarts Node `300/300`、ESLint、语法与 diff 检查通过；浏览器未出现 Cytoscape 样式警告。
+
+## 2026-08-09 Classroom Item / Scroll / Witness Memory 审计
+
+- message 202 明确描述黄铜笔尖断裂、残骸消失，模型也提交 `item_update.operation=destroy`；存档却保留 `intact`。
+- pre-fix Item 证据：
+  - state proposal 在重复 authority fold 中出现两次；
+  - legacy transaction 曾记录 `action 无效`；
+  - 当前 core validator 可接受 operation，但 high-risk grounding 不认识 `the smoking ruin of the quill vanished entirely`，最终 operation 仍为空。
+- Item 修复：
+  - proposal fold 消费后删除 `stateProposals`，保证幂等；
+  - V2 operation 同时投影 legacy action；
+  - destroy 只增加 `ruin/remains/wreck ... vanished/disappeared`，普通 vanished 不升级为销毁；
+  - destroyed Item 保留 holder/location 并继续随 holder 移动；lose/consume 才清 holder。
+- pre-fix scroll 日志：首次 render 从 `44px` 空容器开始，`wasNearBottom=true`，选择 bottom；完整 DOM 高度变成 `10808px` 后 scrollTop 被重排到 `5846`。
+- scroll 修复：`initialSceneLoad` 固定 `retain`；浏览器 reload 后 1 秒和 3 秒均 `scrollTop=0`。
+- 用户继续验收时发现 generation 滚动在 `11741 ↔ 6351.5` 间反复跳转：`turnActive` 强制滚底后，100ms Item timer 又把历史 accepted 候选卡拉入视窗。
+- 最终 scroll 修复：只有原本 near-bottom 才跟随 loading；删除候选卡 timer 和所有候选卡 `scrollTop` 写入。新页面非底部重绘日志为 `scrollMode=retain`。
+- Hermione 表扬回合 pre-fix 为 `visual=none/audible=target`，原因是 fallback 未识别成功示范、公开表扬和学院加分。
+- perception 修复：
+  - 上述明确成果进入 public pattern；
+  - observer 可给更广范围，但不能把确定性 room-wide notable/major 结果缩窄为 target-only。
+- memory 修复：新增 `event-memory.js`，只消费结构化 room-wide notable/major eventKnowledge，为实际 witness 写入稳定、幂等、中性的 `event_witness` memory；不解析正文、不创建关系或 impression。
+- 当前 JSONL 已备份并修复：
+  - 备份 SHA `bf8c7521...dc377`；
+  - quill 为 `destroyed + holderId=player + custody=carried`，message 202 保留 destroy operation；
+  - Hermione 成功、表扬和加一分的 eventKnowledge 扩为课堂 8 人；
+  - 表扬与爆炸两件事均写入 8 名 witness；
+  - 当前自动保存后 SHA `2c63fc03...091e0`。
+- 浏览器验证：羽毛笔 Item 卡显示“已销毁 / 持有人 Tina / 随 Tina”；praise witness count=8；八名人物各有两条对应 `event_witness` 记忆。
+- 目标回归 5/5、全量 Hogwarts Node `308/308`、项目级 Hogwarts ESLint、完整扩展 `node --check`、diff 和模块尺寸门禁通过。
+
+## 2026-08-09 McGonagall Form Authority 审计
+
+- message 205 同时写出人形麦格巡视教室和“桌上的虎斑猫仍未移动”，错误地把同一人物的历史 Animagus 形态当成第二实体。
+- request diagnostics 明确排除 context ceiling：`169794 / 298080` 字符，`contextTrimmed=false`，原始与 limited player action/sequence 完全一致。
+- pre-fix Prompt 同时包含：
+  - `currentScene.summaryEn` 的开场虎斑猫快照；
+  - `presentActors[minerva_mcgonagall]` 的人形教授与 `Pacing the aisles...`；
+  - `distinctCatActors=[]`，material state 也没有独立猫。
+- 修复后，timeline 超过一个条目时 Performer 投影省略开场 `summary/summaryEn`；timeline 明确为时序历史，当前 actor/material/room state 覆盖旧形态。玩家或 NPC 台词不能创建第二实体。
+- 同一真实状态离线重放：`currentSceneHasSummaryEn=false`、`catMentionCount=0`、人形活动保留 1 次。
+- 当前 JSONL 已独立备份并修复 message 205 的正文、译文、segments、swipe 与 diagnostics；错误英文/中文片段计数均为 0。
+- 浏览器验证：错误双实体句不存在，修正后的“教授自己看起来完全有能力一跃而下”存在，麦格人物卡仅 1 张。
+- 全量 Hogwarts Node `311/311`、项目级 ESLint、完整语法、diff 和模块尺寸门禁通过。

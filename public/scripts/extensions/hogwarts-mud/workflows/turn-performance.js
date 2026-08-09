@@ -16,6 +16,8 @@ export function createTurnPerformanceWorkflow(ports) {
         extractRoleResponseText,
         formatRetrievedKnowledge,
         getActiveAddressingState,
+        getAuthoritativeSceneSpells =
+        () => [],
         getRequestHeaders,
         getSettings,
         parseItemOperationDirectives,
@@ -130,6 +132,39 @@ export function createTurnPerformanceWorkflow(ports) {
         return projected;
     }
 
+    function projectCurrentSceneForPerformance(
+        scene,
+    ) {
+        if (
+            !scene ||
+            typeof scene !==
+                'object'
+        ) {
+            return null;
+        }
+        const {
+            summary,
+            summaryEn,
+            ...currentScene
+        } = scene;
+        const hasProgressed =
+            (
+                scene.timelineEntries ||
+                []
+            ).length > 1;
+        return {
+            ...currentScene,
+            ...(
+                hasProgressed
+                    ? {}
+                    : {
+                        summary,
+                        summaryEn,
+                    }
+            ),
+        };
+    }
+
     function createScenePerformancePrompt(
         state,
         playerAction,
@@ -239,6 +274,10 @@ export function createTurnPerformanceWorkflow(ports) {
                 ?.pendingBeat,
             addressing,
         );
+        const authoritativeSceneSpells =
+        getAuthoritativeSceneSpells(
+            state,
+        );
         return [
             {
                 role: 'system',
@@ -249,7 +288,7 @@ ${CANON_CAST_IDENTITY_CONTRACT}
 Strict boundaries:
 - segments is the only required output field. State bookkeeping is handled by a deterministic settlement graph after your response. Omit optional metadata whenever no real state change occurred.
 - You may perform mundane blocking, gestures, conversation, sensory changes, and ordinary consequences that follow directly from the player's stated action.
-- You may not directly create a new location, formal NPC, Item, spell, relationship, hidden fact, clue, rule result, or plot turn. You may submit an item_update proposal; a new object remains only a player-review candidate until the player explicitly records it. The sole NPC exception is temporaryActorPromotionPolicy: promote a specific unnamed crowd member whom the player has already selected for direct, continuing interaction.
+- You may not directly establish a new location, formal NPC, Item, spell, relationship, hidden fact, clue, rule result, or plot turn as authoritative state. You may submit an item_update proposal; a new object remains only a player-review candidate until the player explicitly records it. A genuinely new incantation may appear in observable narrative only under the authoritativeSceneSpells rule below and likewise remains a player-review candidate. The sole NPC exception is temporaryActorPromotionPolicy: promote a specific unnamed crowd member whom the player has already selected for direct, continuing interaction.
 - playerTurnSequence is the sole authoritative ordered player input. direct_speech and broadcast_speech entries are already routed by the rules layer; action entries are never spoken dialogue. Preserve lineIndex and speechOrder. Never infer, replace, or merge an addressee from prose.
 - playerTurnSequence is input context, not output material. The player's submitted action and speech are already visible in chat: never copy, quote, paraphrase, translate, or reenact them in segments; never emit a dialogue segment with actorId "player". Begin with observable consequences and NPC/environment responses. Every output dialogue segment must be new NPC speech using an exact actorId from presentActors.
 - addressing is routing metadata for playerTurnSequence. Do not reinterpret playerAction or names inside action entries to infer another addressee.
@@ -262,6 +301,9 @@ Strict boundaries:
 - stateProposals are sparse, optional hints. Emit one only when the prose actually changes an NPC's activity/presence/room, creates a temporary actor, changes an item, or supplies a directly witnessed social hint. Never repeat unchanged state.
 - social_hint is optional and actor-scoped. Never write core memory, relationship labels, private facts, or deductions. The settlement graph enforces visibility, cooldown, and significance independently.
 - Follow the committed scene, actor profiles, local records, and today's medium-tier directives exactly.
+- currentScene.summary/summaryEn is supplied only while it still describes the scene opening. After the scene timeline advances, current actors, currentActivityEn, currentMaterialState, currentRoomState, and timelineEntries are the binding present-tense authority.
+- currentScene.timelineEntries is chronological history, not a set of simultaneous facts. Later form, position, presence, and material entries supersede earlier ones.
+- Player or NPC dialogue may recall an earlier form, use a nickname, joke, speculate, or simply be mistaken. Such speech does not create another entity or override presentActors. A past transformation of one actor is not a second simultaneous creature unless a separate current actor or material entity explicitly exists.
 - Daily directives can outlive a scene transition. Current committed scene, location, rooms, and currentActivityEn always override stale locations or completed actions mentioned in a daily directive.
 - behavioralEnvironment is binding current context. Materially embody time period, daylight, sleep pressure, curfew, weather, exposure, clothing, shelter, noise, and activity effects when relevant. It overrides stale daily timing or location guidance. Do not recite it as a checklist.
 - If pacingDirective is supplied, it is already committed mid-tier authority. Realize its beat and pressure during this turn using only the actors already present in this input, plus any player-selected unnamed person who must be promoted under temporaryActorPromotionPolicy. Do not add anything else beyond that directive.
@@ -285,6 +327,7 @@ Strict boundaries:
 - actor_move proposals may move an NPC only through existing connected rooms on the same map. Omit the proposal when no movement occurs.
 - If checkResolution is supplied, the local rules layer has already resolved the uncertain action. Depict its exact outcome and consequences; never reroll, change the modifier, soften a failure, or stop before the resolved outcome.
 - If checkResolution.spellObservation is supplied, the player actively tried to identify that catalog spell or technique. Apply the resolved observation outcome. On failure or catastrophic_failure, do not reveal its name, incantation, effect, or stable ID unless a present NPC explicitly teaches or explains it during this result. On success_with_cost, success, or critical_success, name the supplied spell and incantation visibly; only those outcomes learn through observation.
+- authoritativeSceneSpells is binding spell identity for the current scene. If an NPC names, writes, teaches, explains, demonstrates, or casts one of these spells, use its exact spellId, incantation, name, and effect. Never invent a synonym, substitute incantation, or custom spell for the same technique. You may introduce a genuinely new custom incantation only when it is not a replacement for any authoritativeSceneSpells entry; the rules layer will treat it as a player-review candidate rather than established Canon.
 - Never reveal checkResolution.hidden, an opponent roll, or an exact hidden difficulty in prose or dialogue.
 - If checkResolution is null, do not invent a roll or claim that a check occurred.
 - The scene must plausibly cover ${budget.elapsedMinutes} in-world minutes. This is a duration to dramatize, not a timestamp to mention.
@@ -300,6 +343,7 @@ Strict boundaries:
 - A 15-minute turn must materially advance at least one concrete axis: NPC initiative, access change, practical procedure, new bounded information, or social position. Furnishings, bystander reactions, and repeated explanations do not count by themselves.
 - If momentumDirective.explicitProgressionRequest is true, complete that requested procedural step in the prose. An optional signals.sceneProgression may report the completion, but omission never invalidates good prose.
 - If momentumDirective.intentLocationReached is true, entry, lining up, opening doors, introductions, songs, announcements, and "about to begin" beats are setup rather than completed procedure units. Render at least momentumDirective.minimumCompletedProcedureUnits finished unit beyond setup before stopping.
+- When signals.sceneProgression is supplied, summaryEn must include every consequential public result from this response: tracked Item damage/destruction, teacher praise or House-point awards, public reprimands, and other room-visible outcomes. Do not reduce a multi-result public event to only its first action.
 - signals.eventEnded is optional and true only when a bounded interaction or procedure phase genuinely closes. Omit signals rather than filling them mechanically.
 - If pacingDirective is visibly realized, signals.pacingBeatRealized may be true. The settlement graph does not require this bookkeeping field.
 
@@ -414,7 +458,10 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         }
                         : null,
                     clockBeforeTurn: state.clock,
-                    currentScene: state.scene,
+                    currentScene:
+                    projectCurrentSceneForPerformance(
+                        state.scene,
+                    ),
                     currentLocation: state.location,
                     currentRoomId: state.map?.currentLocalNodeId,
                     currentRoomState:
@@ -478,6 +525,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     movementResolution,
                     momentumDirective,
                     checkResolution,
+                    authoritativeSceneSpells,
                     mentionedKnownActors,
                     spatialContext: buildSpatialContext(state),
                     temporaryActorPromotionPolicy:

@@ -5,13 +5,13 @@ export function createComposerController(ports) {
     } = ports;
 
     const {
-        SPELL_CATALOG,
         SPELL_LEARNING_SOURCE_LABELS,
         createSpellDirective,
         findLocalRoomPath,
         getLocalMapDefinition,
         getRoomName,
         getSpellDefinition,
+        getSpellDefinitions,
         getSpellProficiency,
         getWorldState,
         parseExplicitMovementDirective,
@@ -584,6 +584,7 @@ export function createComposerController(ports) {
         const marker =
             createSpellDirective(
                 spell.id,
+                getWorldState(),
             );
         const needsTarget =
             [
@@ -625,6 +626,7 @@ export function createComposerController(ports) {
         const spell =
             getSpellDefinition(
                 spellId,
+                getWorldState(),
             );
         if (!spell) {
             return;
@@ -636,6 +638,7 @@ export function createComposerController(ports) {
         const existing =
             parseSpellCastDirectives(
                 composerInput.value,
+                getWorldState(),
             )[0];
         if (existing) {
             const lineStart =
@@ -741,8 +744,12 @@ export function createComposerController(ports) {
                 .toLocaleLowerCase();
         const source =
             session.spellPickerShowAll
-                ? SPELL_CATALOG
-                : SPELL_CATALOG
+                ? getSpellDefinitions(
+                    state,
+                )
+                : getSpellDefinitions(
+                    state,
+                )
                     .filter(spell =>
                         knownById.has(
                             spell.id,
@@ -999,6 +1006,7 @@ export function createComposerController(ports) {
         const cast =
             parseSpellCastDirectives(
                 composerInput.value,
+                getWorldState(),
             )[0];
         if (!cast) {
             preview.hidden = true;
@@ -1007,6 +1015,7 @@ export function createComposerController(ports) {
         const spell =
             getSpellDefinition(
                 cast.spellId,
+                getWorldState(),
             );
         const learned =
             getKnownSpellMap()

@@ -188,6 +188,13 @@ import {
     PRESET_LOCAL_MAPS,
 } from '../public/scripts/extensions/hogwarts-mud/map-pack.js';
 import {
+    extractSpellCandidates,
+    getAuthoritativeSceneSpells,
+    queueSpellCandidates,
+    reconcileAuthoritativeSpellNarrative,
+    resolveSpellCandidate,
+} from '../public/scripts/extensions/hogwarts-mud/domain/spell-proposals.js';
+import {
     CANON_CHARACTER_CATALOG,
     CANON_PLAYABLE_CHARACTER_CATALOG,
     findCanonCharacter,
@@ -204,6 +211,7 @@ import {
 import { PRESET_WORLD_MAP } from '../public/scripts/extensions/hogwarts-mud/world-data.js';
 import {
     buildPlayerKnownRelationshipProjection,
+    FILTERED_RELATIONSHIP_EDGE_OPACITY,
     filterRelationshipGraphProjection,
     getRelationshipGraphStyles,
 } from '../public/scripts/extensions/hogwarts-mud/relationship-graph.js';
@@ -12781,6 +12789,147 @@ test('relationship graph renders familiarity-only edges as neutral instead of co
     );
 });
 
+test('relationship filters retain excluded edges as five-percent visual context only', () => {
+    const projection =
+        buildPlayerKnownRelationshipProjection({
+            actorLibrary: [
+                {
+                    id:
+                        'lavender',
+                    nameEn:
+                        'Lavender Brown',
+                    knownToPlayer:
+                        true,
+                },
+                {
+                    id:
+                        'hermione',
+                    nameEn:
+                        'Hermione Granger',
+                    knownToPlayer:
+                        true,
+                },
+                {
+                    id: 'dean',
+                    nameEn:
+                        'Dean Thomas',
+                    knownToPlayer:
+                        true,
+                },
+            ],
+            socialGraph: {
+                version: 2,
+                relationships: [
+                    {
+                        id:
+                            'lavender_player',
+                        sourceActorId:
+                            'lavender',
+                        targetActorId:
+                            'player',
+                        familiarity: 33,
+                        closeness: 33,
+                        warmth: 97,
+                        knownToPlayer:
+                            true,
+                    },
+                    {
+                        id:
+                            'hermione_player',
+                        sourceActorId:
+                            'hermione',
+                        targetActorId:
+                            'player',
+                        familiarity: 60,
+                        warmth: 16,
+                        tension: 100,
+                        knownToPlayer:
+                            true,
+                    },
+                    {
+                        id:
+                            'dean_player',
+                        sourceActorId:
+                            'dean',
+                        targetActorId:
+                            'player',
+                        familiarity: 12,
+                        knownToPlayer:
+                            true,
+                    },
+                ],
+            },
+        });
+    const visible =
+        filterRelationshipGraphProjection(
+            projection,
+            {
+                scope: 'all',
+                sentiment: 'negative',
+                category: 'all',
+                query: '',
+            },
+        );
+    const edgeById =
+        new Map(
+            projection.edges.map(edge => [
+                edge.id,
+                edge,
+            ]),
+        );
+
+    assert.deepEqual(
+        visible.edges.map(edge =>
+            edge.id),
+        ['hermione_player'],
+    );
+    assert.deepEqual(
+        new Set(
+            visible.contextEdgeIds,
+        ),
+        new Set([
+            edgeById
+                .get('lavender_player')
+                .elementId,
+            edgeById
+                .get('dean_player')
+                .elementId,
+        ]),
+    );
+    assert.equal(
+        visible.edgeIds.has(
+            edgeById
+                .get('lavender_player')
+                .elementId,
+        ),
+        false,
+    );
+    assert.equal(
+        visible.nodes.some(node =>
+            node.id === 'lavender'),
+        true,
+    );
+
+    const filteredEdgeStyle =
+        getRelationshipGraphStyles()
+            .find(entry =>
+                entry.selector ===
+                'edge.hpmud-graph-filtered')
+            ?.style;
+    assert.equal(
+        filteredEdgeStyle?.opacity,
+        FILTERED_RELATIONSHIP_EDGE_OPACITY,
+    );
+    assert.equal(
+        filteredEdgeStyle?.events,
+        'no',
+    );
+    assert.equal(
+        FILTERED_RELATIONSHIP_EDGE_OPACITY,
+        0.05,
+    );
+});
+
 test('relationship graph separates reciprocal directed edges instead of stacking their colors', () => {
     const projection =
         buildPlayerKnownRelationshipProjection({
@@ -15496,6 +15645,449 @@ test('explicit NPC explanation teaches a spell after failed player observation',
             .some(entry =>
                 entry.spellId ===
                 'match_to_needle_transfiguration'),
+    );
+});
+
+test('scene authority reconciles a conflicting taught incantation and blocks a custom candidate', () => {
+    const state =
+        createSceneTransitionState();
+    state.scene.nameEn =
+        'Transfiguration Classroom';
+    state.scene.nextSceneIntent = {
+        titleEn:
+            'The Match-to-Needle Exercise',
+        summaryEn:
+            'Professor McGonagall asks the class to transform a match into a needle.',
+    };
+    const authority =
+        getAuthoritativeSceneSpells(
+            state,
+        );
+    assert.deepEqual(
+        authority.map(spell => ({
+            spellId:
+                spell.spellId,
+            incantation:
+                spell.incantation,
+        })),
+        [{
+            spellId:
+                'match_to_needle_transfiguration',
+            incantation:
+                'Acufors',
+        }],
+    );
+    const result =
+        reconcileAuthoritativeSpellNarrative(
+            {
+                publicEventEn:
+                    'Hermione teaches Acus.',
+                segments: [
+                    {
+                        type:
+                            'dialogue',
+                        actorId:
+                            'canon_hermione_jean_granger',
+                        textEn:
+                            'The incantation is Acus. Repeat it precisely.',
+                    },
+                    {
+                        type:
+                            'dialogue',
+                        actorId:
+                            'canon_hermione_jean_granger',
+                        textEn:
+                            'Acus!',
+                    },
+                ],
+            },
+            state,
+        );
+    assert.deepEqual(
+        result.corrections,
+        [{
+            from: 'Acus',
+            to: 'Acufors',
+            spellId:
+                'match_to_needle_transfiguration',
+        }],
+    );
+    assert.equal(
+        result.transaction
+            .segments[0]
+            .textEn,
+        'The incantation is Acufors. Repeat it precisely.',
+    );
+    assert.equal(
+        result.transaction
+            .segments[1]
+            .textEn,
+        'Acufors!',
+    );
+    assert.deepEqual(
+        extractSpellCandidates(
+            result.transaction,
+            state,
+        ),
+        [],
+    );
+});
+
+test('scene authority corrects a replacement while preserving a distinct custom spell', () => {
+    const state =
+        createSceneTransitionState();
+    state.scene.nameEn =
+        'Transfiguration Classroom';
+    state.scene.nextSceneIntent = {
+        titleEn:
+            'The Match-to-Needle Exercise',
+        summaryEn:
+            'Professor McGonagall asks the class to transform a match into a needle.',
+    };
+    const result =
+        reconcileAuthoritativeSpellNarrative(
+            {
+                publicEventEn:
+                    'Hermione teaches the assigned technique and then demonstrates a separate original charm.',
+                segments: [
+                    {
+                        type:
+                            'dialogue',
+                        actorId:
+                            'canon_hermione_jean_granger',
+                        textEn:
+                            'I devised a new incantation for the match-to-needle technique. The incantation is Acus.',
+                    },
+                    {
+                        type:
+                            'dialogue',
+                        actorId:
+                            'canon_hermione_jean_granger',
+                        textEn:
+                            'I devised a different original spell. The incantation is Nebula Verto. It makes writing glow.',
+                    },
+                    {
+                        type:
+                            'dialogue',
+                        actorId:
+                            'canon_hermione_jean_granger',
+                        textEn:
+                            'The incantation is Mutare. It transforms a match.',
+                    },
+                ],
+            },
+            state,
+        );
+
+    assert.deepEqual(
+        result.corrections,
+        [
+            {
+                from: 'Acus',
+                to: 'Acufors',
+                spellId:
+                    'match_to_needle_transfiguration',
+            },
+            {
+                from: 'Mutare',
+                to: 'Acufors',
+                spellId:
+                    'match_to_needle_transfiguration',
+            },
+        ],
+    );
+    assert.match(
+        result.transaction
+            .segments[0]
+            .textEn,
+        /The incantation is Acufors\./u,
+    );
+    assert.match(
+        result.transaction
+            .segments[1]
+            .textEn,
+        /The incantation is Nebula Verto\./u,
+    );
+    assert.match(
+        result.transaction
+            .segments[2]
+            .textEn,
+        /The incantation is Acufors\./u,
+    );
+    const candidates =
+        extractSpellCandidates(
+            result.transaction,
+            state,
+            {
+                sourceEventId:
+                    'mixed_authority_custom',
+                sourceMessageIds:
+                    [205],
+                clock:
+                    '1991-09-02 · 12:45',
+            },
+        );
+    assert.equal(
+        candidates.length,
+        1,
+    );
+    assert.equal(
+        candidates[0].id,
+        'custom_nebula_verto',
+    );
+    assert.deepEqual(
+        candidates[0]
+            .authorityConflicts,
+        [],
+    );
+});
+
+test('a player-declared freeform spell becomes a review candidate under scene authority', () => {
+    const state =
+        createSceneTransitionState();
+    state.scene.nameEn =
+        'Transfiguration Classroom';
+    state.scene.nextSceneIntent = {
+        titleEn:
+            'The Match-to-Needle Exercise',
+        summaryEn:
+            'Professor McGonagall asks the class to transform a match into a needle.',
+    };
+    const candidates =
+        extractSpellCandidates(
+            {
+                publicEventEn:
+                    'Tina tested an undocumented incantation and caused a magical backfire.',
+                segments: [{
+                    type:
+                        'narration',
+                    textEn:
+                        'The undocumented incantation struck the brass quill and produced a cloud of metallic smoke.',
+                }],
+            },
+            state,
+            {
+                sourceEventId:
+                    'player_custom_spell',
+                sourceMessageIds:
+                    [201, 202],
+                clock:
+                    '1991-09-02 · 12:30',
+                playerAction:
+                    '✦【咒语:match_to_needle_transfiguration】 I cast Acufors, then test ✦【咒语:Nebula Verto】 on the quill.',
+            },
+        );
+
+    assert.equal(
+        candidates.length,
+        1,
+    );
+    assert.equal(
+        candidates[0].id,
+        'custom_nebula_verto',
+    );
+    assert.equal(
+        candidates[0]
+            .evidenceText,
+        '✦【咒语:Nebula Verto】',
+    );
+    assert.match(
+        candidates[0]
+            .definition
+            .effectEn,
+        /^Observed narrative evidence:/u,
+    );
+    assert.equal(
+        candidates[0]
+            .definition
+            .risk,
+        'unknown',
+    );
+    const queued =
+        queueSpellCandidates(
+            state,
+            candidates,
+        );
+    assert.equal(
+        queued
+            .pendingSpellProposals
+            .length,
+        1,
+    );
+    assert.equal(
+        queued.spellbook
+            .known
+            .some(entry =>
+                entry.spellId ===
+                'custom_nebula_verto'),
+        false,
+    );
+});
+
+test('explicit non-catalog teaching becomes a player-reviewed custom spell', () => {
+    const state =
+        createSceneTransitionState();
+    state.scene.nameEn =
+        'Unused Classroom';
+    state.scene.nextSceneIntent = {
+        titleEn:
+            'Independent Experiment',
+        summaryEn:
+            'A student tests an original magical technique.',
+    };
+    const transaction = {
+        publicEventEn:
+            'A student teaches Tina a new spell that makes paper glow.',
+        segments: [{
+            type: 'dialogue',
+            actorId:
+                'canon_hermione_jean_granger',
+            textEn:
+                'The incantation is Nebula Verto. It makes the writing glow.',
+        }],
+    };
+    const candidates =
+        extractSpellCandidates(
+            transaction,
+            state,
+            {
+                sourceEventId:
+                    'custom_spell_event',
+                sourceMessageIds:
+                    [201],
+                clock:
+                    '1991-09-02 · 12:30',
+            },
+        );
+    assert.equal(
+        candidates.length,
+        1,
+    );
+    assert.equal(
+        candidates[0].id,
+        'custom_nebula_verto',
+    );
+    assert.equal(
+        candidates[0]
+            .incantation,
+        'Nebula Verto',
+    );
+    const queued =
+        queueSpellCandidates(
+            state,
+            candidates,
+        );
+    assert.equal(
+        queued
+            .pendingSpellProposals
+            .length,
+        1,
+    );
+    assert.equal(
+        queued.spellbook
+            .known
+            .some(entry =>
+                entry.spellId ===
+                'custom_nebula_verto'),
+        false,
+    );
+    const ignored =
+        resolveSpellCandidate(
+            queued,
+            candidates[0].key,
+            'ignored',
+        ).state;
+    assert.equal(
+        ignored
+            .pendingSpellProposals
+            .length,
+        0,
+    );
+    assert.equal(
+        ignored
+            .spellProposalDecisions[0]
+            .decision,
+        'ignored',
+    );
+    assert.equal(
+        queueSpellCandidates(
+            ignored,
+            candidates,
+        )
+            .pendingSpellProposals
+            .length,
+        0,
+    );
+    assert.equal(
+        ignored.spellbook
+            .known
+            .some(entry =>
+                entry.spellId ===
+                'custom_nebula_verto'),
+        false,
+    );
+    const accepted =
+        resolveSpellCandidate(
+            queued,
+            candidates[0].key,
+            'accepted',
+        );
+    assert.equal(
+        accepted.changed,
+        true,
+    );
+    const learned =
+        accepted.state
+            .spellbook
+            .known
+            .find(entry =>
+                entry.spellId ===
+                'custom_nebula_verto');
+    assert.ok(learned);
+    assert.equal(
+        learned.definition
+            .incantation,
+        'Nebula Verto',
+    );
+    assert.equal(
+        accepted.state
+            .pendingSpellProposals
+            .length,
+        0,
+    );
+    const marker =
+        createSpellDirective(
+            learned.spellId,
+            accepted.state,
+        );
+    assert.equal(
+        marker,
+        '✦【咒语:custom_nebula_verto】',
+    );
+    assert.deepEqual(
+        parseSpellCastDirectives(
+            marker,
+            accepted.state,
+        ).map(cast =>
+            cast.spellId),
+        ['custom_nebula_verto'],
+    );
+    const check =
+        resolveActionCheck(
+            accepted.state,
+            `${marker} *我念出：“Nebula Verto！”*`,
+            {
+                randomInt:
+                    () => 15,
+            },
+        );
+    assert.equal(
+        check.spell.spellId,
+        'custom_nebula_verto',
+    );
+    assert.equal(
+        check.spell.known,
+        true,
     );
 });
 

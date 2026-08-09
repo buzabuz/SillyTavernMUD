@@ -26,6 +26,9 @@ import {
 import {
     validateItemOperation,
 } from './item-reducer.js';
+import {
+    normalizeSpellProposal,
+} from './spell-proposals.js';
 
 import {
     findLocalRoomPath,
@@ -732,6 +735,7 @@ export function validateTurnTransaction(
                         !getSpellDefinition(
                             cast
                                 ?.spellId,
+                            worldState,
                         )
                     ) {
                         errors.push(
@@ -831,6 +835,61 @@ export function validateTurnTransaction(
             ),
         );
     });
+    if (
+        transaction
+            .spellCandidates !==
+            undefined &&
+        !Array.isArray(
+            transaction
+                .spellCandidates,
+        )
+    ) {
+        errors.push(
+            'spellCandidates 必须是数组。',
+        );
+    } else {
+        (
+            transaction
+                .spellCandidates ||
+            []
+        ).forEach(
+            (
+                candidate,
+                index,
+            ) => {
+                const normalized =
+                    normalizeSpellProposal(
+                        candidate,
+                        {
+                            index,
+                        },
+                    );
+                if (
+                    !normalized ||
+                    normalized.key !==
+                        candidate.key ||
+                    !candidate
+                        .evidenceText
+                ) {
+                    errors.push(
+                        `待收录咒语 ${candidate?.id || '?'} 无效或缺少教学证据。`,
+                    );
+                }
+                if (
+                    candidate
+                        ?.sourceActorId &&
+                    !actorIds.has(
+                        candidate
+                            .sourceActorId,
+                    )
+                ) {
+                    errors.push(
+                        `待收录咒语 ${candidate.id || '?'} 引用了未知教学者 ${candidate.sourceActorId}。`,
+                    );
+                }
+            },
+        );
+    }
     (transaction.actorUpdates || []).forEach(update => {
         if (!actorIds.has(update.id)) {
             errors.push(`人物更新引用了不存在的角色 ${update.id || '?'}。`);

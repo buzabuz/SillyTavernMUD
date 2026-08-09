@@ -178,6 +178,12 @@ export {
 } from './domain/spell-state.js';
 
 export {
+    SPELL_PROPOSAL_VERSION, extractSpellCandidates, getAuthoritativeSceneSpells,
+    getSpellProposalDecision, normalizeSpellProposal, queueSpellCandidates,
+    reconcileAuthoritativeSpellNarrative, resolveSpellCandidate,
+} from './domain/spell-proposals.js';
+
+export {
     BEHAVIORAL_ENVIRONMENT_VERSION, GOSSIP_CHANNEL_VALUES, TEMPORAL_STATE_VERSION, WORLD_CHANGE_MIN_DAYS,
     WORLD_NEWS_CATEGORY_VALUES, advanceWorldClock, buildBehavioralEnvironment, getWorldClockGapMinutes,
     getWorldDate, isDailyDirectorPlanCurrent, reconcileTemporalState,
@@ -235,7 +241,11 @@ export {
 } from './presence-witness-contract.js';
 
 export {
+    reconcileObservedPerceptionWithFallback,
+} from './domain/perception-reconciliation.js';
+
+export {
     SPELL_CATALOG, SPELL_CATALOG_VERSION, SPELL_LEARNING_SOURCE_LABELS, createSpellDirective,
-    findSpellReferences, getSpellDefinition, getSpellProficiency, normalizeSpellbook,
+    findSpellReferences, getSpellDefinition, getSpellDefinitions, getSpellProficiency, normalizeCustomSpellDefinition, normalizeSpellbook,
     parseSpellCastDirectives, removeSpellCastDirectives,
 } from './spell-catalog.js';

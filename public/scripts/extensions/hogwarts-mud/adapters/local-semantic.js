@@ -6,6 +6,13 @@ export function createLocalSemanticAdapter(ports) {
         findLocalRoomPath,
         getRequestHeaders,
         projectObservedInventoryUpdates,
+        reconcileObservedPerceptionWithFallback =
+        (
+            observed,
+            fallback,
+        ) =>
+            observed ||
+            fallback,
         validatePerceptionContract,
     } = ports;
     const OBSERVED_ACTOR_DEPARTURE_PATTERN =
@@ -1250,12 +1257,17 @@ export function createLocalSemanticAdapter(ports) {
                     'successful' &&
             /(?:\b(?:secretly|stealth|sneak|hide|conceal)\w*\b|偷偷|悄悄|隐蔽|隐藏)/iu
                 .test(playerAction);
+            const fallbackPerception =
+            createFallbackPerception();
             const perception =
             perceptionValidation.valid &&
             !rejectedFailedConcealment
-                ? perceptionValidation
-                    .value
-                : createFallbackPerception();
+                ? reconcileObservedPerceptionWithFallback(
+                    perceptionValidation
+                        .value,
+                    fallbackPerception,
+                )
+                : fallbackPerception;
             observation.result ??= {};
             observation.result
                 .perception =

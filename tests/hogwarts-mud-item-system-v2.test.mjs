@@ -40,6 +40,9 @@ import {
     projectObservedInventoryUpdates,
     synchronizeHeldItemLocations,
 } from '../public/scripts/extensions/hogwarts-mud/domain/inventory.js';
+import {
+    settleNarrativeTurnPerformance,
+} from '../public/scripts/extensions/hogwarts-mud/domain/turn-protocol.js';
 
 function createState(
     {
@@ -587,19 +590,23 @@ test('Item V2 reducer applies all twelve operations with owner-holder invariants
         const [
             operation,
             expectedState,
+            expectedHolderId,
         ]
         of [
             [
                 'consume',
                 'consumed',
+                '',
             ],
             [
                 'lose',
                 'lost',
+                '',
             ],
             [
                 'destroy',
                 'destroyed',
+                'player',
             ],
         ]
     ) {
@@ -614,7 +621,18 @@ test('Item V2 reducer applies all twelve operations with owner-holder invariants
         );
         assert.equal(
             result.items[0].holderId,
-            '',
+            expectedHolderId,
+        );
+        assert.equal(
+            result.items[0].custody,
+            expectedHolderId
+                ? 'carried'
+                : (
+                    operation ===
+                        'consume'
+                        ? 'consumed'
+                        : 'lost'
+                ),
         );
     }
 
@@ -904,6 +922,108 @@ test('high-risk Item operations require evidence for both the Item and state cha
                 ],
             },
         ).operations.length,
+        1,
+    );
+});
+
+test('destroyed Item remains are grounded and narrative proposals fold once', () => {
+    const quill =
+        createItem({
+            id:
+                'harry_spare_brass_quill',
+            type: 'tool',
+            labelEn:
+                'Harry\'s Spare Brass Quill',
+            label:
+                '哈利的备用黄铜羽毛笔',
+            appearanceEn:
+                'A brass-nibbed quill.',
+            ownerId:
+                'canon_harry_james_potter',
+            holderId:
+                'player',
+        });
+    const state =
+        createState({
+            items: [quill],
+        });
+    const evidence =
+        'the smoking ruin of the quill vanished entirely';
+    const payload =
+        settleNarrativeTurnPerformance(
+            {
+                segments: [{
+                    type: 'narration',
+                    textEn:
+                        `McGonagall flicked her wand and ${evidence}.`,
+                }],
+                stateProposals: [{
+                    type:
+                        'item_update',
+                    item: {
+                        id:
+                            quill.id,
+                        operation:
+                            'destroy',
+                        type: 'tool',
+                        ownerId:
+                            quill.ownerId,
+                        holderId:
+                            quill.holderId,
+                        evidenceText:
+                            evidence,
+                    },
+                }],
+            },
+            state,
+        );
+
+    assert.equal(
+        payload.itemUpdates
+            .length,
+        1,
+    );
+    assert.equal(
+        payload.itemUpdates[0]
+            .operation,
+        'destroy',
+    );
+    assert.equal(
+        payload.itemUpdates[0]
+            .action,
+        'destroy',
+    );
+    assert.equal(
+        isItemOperationEvidenceGrounded(
+            quill,
+            'destroy',
+            evidence,
+        ),
+        true,
+    );
+    assert.equal(
+        isItemOperationEvidenceGrounded(
+            quill,
+            'destroy',
+            'The quill vanished from the desk.',
+        ),
+        false,
+    );
+    const partitioned =
+        partitionItemProposals(
+            payload.itemUpdates,
+            state,
+            {
+                sourceTexts: [
+                    payload
+                        .segments[0]
+                        .textEn,
+                ],
+            },
+        );
+    assert.equal(
+        partitioned.operations
+            .length,
         1,
     );
 });
@@ -1239,7 +1359,7 @@ test('item projections group history, filter hidden NPC items and expose candida
     );
 });
 
-test('held item locations follow the current holder instead of the owner', () => {
+test('destroyed item remains follow the current holder instead of the owner', () => {
     const state = createState({
         items: [
             createItem({
@@ -1247,6 +1367,7 @@ test('held item locations follow the current holder instead of the owner', () =>
                 holderId:
                     'canon_lavender_brown',
                 transferMode: 'loan',
+                state: 'destroyed',
                 location: {
                     mapId: 'old_map',
                     roomId: 'old_room',
@@ -1289,6 +1410,18 @@ test('held item locations follow the current holder instead of the owner', () =>
     assert.equal(
         item.ownerId,
         'player',
+    );
+    assert.equal(
+        item.holderId,
+        'canon_lavender_brown',
+    );
+    assert.equal(
+        item.state,
+        'destroyed',
+    );
+    assert.equal(
+        item.custody,
+        'carried',
     );
 });
 

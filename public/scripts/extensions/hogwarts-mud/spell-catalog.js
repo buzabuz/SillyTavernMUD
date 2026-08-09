@@ -80,7 +80,7 @@ const createSpell = (
         ),
 });
 
-export const SPELL_CATALOG_VERSION = 1;
+export const SPELL_CATALOG_VERSION = 2;
 export const SPELL_DIRECTIVE_PREFIX = '✦';
 
 export const SPELL_CATALOG = Object.freeze([
@@ -1119,25 +1119,228 @@ function normalizeSpellId(
         );
 }
 
+export function normalizeCustomSpellDefinition(
+    source,
+    index = 0,
+) {
+    if (
+        !source ||
+        typeof source !==
+            'object' ||
+        Array.isArray(source)
+    ) {
+        return null;
+    }
+    const incantation =
+        String(
+            source.incantation ||
+            '',
+        )
+            .normalize('NFKC')
+            .replace(/\s+/gu, ' ')
+            .trim()
+            .slice(0, 80);
+    if (!incantation) {
+        return null;
+    }
+    const fallbackId =
+        `custom_${
+            normalizeSpellId(
+                incantation,
+            ) ||
+            `spell_${index + 1}`
+        }`;
+    const id =
+        normalizeSpellId(
+            source.id ||
+            fallbackId,
+        );
+    if (
+        !/^custom_[a-z0-9_]{1,72}$/u
+            .test(id)
+    ) {
+        return null;
+    }
+    const difficulty =
+        Object.hasOwn(
+            DIFFICULTY_ADJUSTMENTS,
+            source.difficulty,
+        )
+            ? source.difficulty
+            : 'standard';
+    return {
+        id,
+        incantation,
+        name:
+            String(
+                source.name ||
+                `自定义咒语 · ${incantation}`,
+            ).slice(0, 120),
+        nameEn:
+            String(
+                source.nameEn ||
+                `Custom Spell · ${incantation}`,
+            ).slice(0, 120),
+        category:
+            String(
+                source.category ||
+                'custom',
+            ).slice(0, 48),
+        effect:
+            String(
+                source.effect ||
+                '效果由已收录的叙事证据定义。',
+            ).slice(0, 300),
+        effectEn:
+            String(
+                source.effectEn ||
+                'Its effect is defined by the accepted narrative evidence.',
+            ).slice(0, 300),
+        curriculumYear: 0,
+        subject:
+            String(
+                source.subject ||
+                'Independent Magic',
+            ).slice(0, 80),
+        difficulty,
+        dcAdjustment:
+            DIFFICULTY_ADJUSTMENTS[
+                difficulty
+            ],
+        target:
+            [
+                'self',
+                'person',
+                'creature',
+                'object',
+                'effect',
+                'area',
+            ].includes(
+                source.target,
+            )
+                ? source.target
+                : 'object',
+        opposed:
+            source.opposed ===
+            true,
+        targetAttribute:
+            String(
+                source
+                    .targetAttribute ||
+                'willpower',
+            ),
+        risk:
+            String(
+                source.risk ||
+                'unknown',
+            ),
+        legality:
+            String(
+                source.legality ||
+                'unknown',
+            ),
+        learningMode:
+            'independent',
+        sourceTier:
+            'player_confirmed_custom',
+        incantationKnown:
+            true,
+        sourceUrl: '',
+        aliases: [
+            ...new Set([
+                incantation,
+                ...(
+                    Array.isArray(
+                        source.aliases,
+                    )
+                        ? source.aliases
+                        : []
+                ),
+            ]),
+        ]
+            .map(value =>
+                String(value || '')
+                    .trim())
+            .filter(Boolean)
+            .slice(0, 16),
+        custom: true,
+    };
+}
+
+export function getSpellDefinitions(
+    source = null,
+) {
+    const known =
+        Array.isArray(source)
+            ? source
+            : source?.spellbook
+                ?.known ||
+                source?.known ||
+                [];
+    const custom =
+        (
+            Array.isArray(known)
+                ? known
+                : []
+        )
+            .map(
+                (
+                    entry,
+                    index,
+                ) =>
+                    normalizeCustomSpellDefinition(
+                        entry
+                            ?.definition,
+                        index,
+                    ),
+            )
+            .filter(Boolean);
+    const byId =
+        new Map(
+            SPELL_CATALOG.map(spell => [
+                spell.id,
+                spell,
+            ]),
+        );
+    custom.forEach(spell =>
+        byId.set(
+            spell.id,
+            spell,
+        ));
+    return [
+        ...byId.values(),
+    ];
+}
+
 export function getSpellDefinition(
     spellId,
+    source = null,
 ) {
+    const normalizedId =
+        normalizeSpellId(
+            spellId,
+        );
     return (
         SPELL_CATALOG_BY_ID.get(
-            normalizeSpellId(
-                spellId,
-            ),
+            normalizedId,
         ) ||
+        getSpellDefinitions(
+            source,
+        ).find(spell =>
+            spell.id ===
+            normalizedId) ||
         null
     );
 }
 
 export function createSpellDirective(
     spellId,
+    source = null,
 ) {
     const spell =
         getSpellDefinition(
             spellId,
+            source,
         );
     return spell
         ? `${SPELL_DIRECTIVE_PREFIX}【咒语:${spell.id}】`
@@ -1146,6 +1349,7 @@ export function createSpellDirective(
 
 export function parseSpellCastDirectives(
     text,
+    source = null,
 ) {
     const pattern =
         /(?:✦\s*)?【\s*咒语\s*:\s*([a-z0-9_]+)\s*】/giu;
@@ -1160,6 +1364,7 @@ export function parseSpellCastDirectives(
         const spell =
             getSpellDefinition(
                 match[1],
+                source,
             );
         if (
             !spell ||
@@ -1209,10 +1414,13 @@ function escapeRegExp(
 
 export function findSpellReferences(
     text,
+    definitionsSource = null,
 ) {
-    const source =
+    const textSource =
         String(text || '');
-    return SPELL_CATALOG
+    return getSpellDefinitions(
+        definitionsSource,
+    )
         .filter(spell =>
             [
                 spell.incantation,
@@ -1223,7 +1431,7 @@ export function findSpellReferences(
                     new RegExp(
                         `(?<![\\p{L}\\p{N}_])${escapeRegExp(alias)}(?![\\p{L}\\p{N}_])`,
                         'iu',
-                    ).test(source)))
+                    ).test(textSource)))
         .sort((left, right) =>
             left.curriculumYear -
             right.curriculumYear ||
@@ -1267,10 +1475,26 @@ export function normalizeKnownSpell(
             }
             : entry ||
             {};
+    const customDefinition =
+        normalizeCustomSpellDefinition(
+            source.definition,
+            index,
+        );
     const spell =
-        getSpellDefinition(
-            source.spellId ||
-            source.id,
+        SPELL_CATALOG_BY_ID.get(
+            normalizeSpellId(
+                source.spellId ||
+                source.id,
+            ),
+        ) ||
+        (
+            customDefinition?.id ===
+                normalizeSpellId(
+                    source.spellId ||
+                    source.id,
+                )
+                ? customDefinition
+                : null
         );
     if (!spell) {
         return null;
@@ -1370,6 +1594,12 @@ export function normalizeKnownSpell(
                 source.sortOrder ??
                 index,
             ),
+        ...(customDefinition
+            ? {
+                definition:
+                    customDefinition,
+            }
+            : {}),
     };
 }
 

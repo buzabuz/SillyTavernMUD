@@ -725,6 +725,7 @@ export function createInspectorController(ports) {
                         const spell =
                             getSpellDefinition(
                                 entry.spellId,
+                                state,
                             );
                         if (!spell) {
                             return;

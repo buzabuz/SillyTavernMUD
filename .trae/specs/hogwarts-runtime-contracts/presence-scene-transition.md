@@ -13,6 +13,7 @@ event witness = 针对单个事件按感知证据解析的见证范围
 - actor 只存在于 `actorLibrary` 不能证明在场。
 - scene actor state、已提交位置、scene roster、cohort roster 都是合法占位证据。
 - witness 不反写 active 或 local。
+- room-wide notable/major eventKnowledge 可投影为每名实际 witness 的中性事实记忆；target-only、subtle 或成功隐蔽事件不得批量写入。
 
 ## 写入链路
 
@@ -24,6 +25,15 @@ event witness = 针对单个事件按感知证据解析的见证范围
 4. `resolveEventWitnesses()` 使用 local + perception 计算事件见证。
 5. `applyPresenceWitnessTransaction()` 提交 local/event knowledge。
 6. `people-projection.js` 分别投影 active 和 local-only。
+
+确定性 public-result authority 还包含：
+
+- 爆炸、伤害、喊叫、广播与结构化施法；
+- 明确的成功公开示范；
+- 教授的 `well done/excellent/promising start` 等公开表扬；
+- 明确给学院加分的课堂宣告。
+
+即使玩家最初只 direct-address 一名人物，只要结果正文出现上述 room-visible/audible 成果，perception 必须是 room-wide。Schema 合法的 observer 输出可以给出更广范围，但不能把确定性 room-wide notable/major 结果缩窄成 target-only。耳语、纸条和成功隐蔽仍保持私密。
 
 后置 observer 的人物建议必须再经过确定性证据门禁：
 

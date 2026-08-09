@@ -7,6 +7,7 @@ import {
     createDeterministicPerceptionFallback,
     normalizeEventKnowledge,
     normalizePerception,
+    reconcileObservedPerceptionWithFallback,
     reduceLocalPresence,
     resolveEventWitnesses,
     validatePerceptionContract,
@@ -14,6 +15,9 @@ import {
 import {
     validateObservedPerception,
 } from '../src/hogwarts-mud/local-semantic-adjudicator.js';
+import {
+    applyWitnessedEventMemories,
+} from '../public/scripts/extensions/hogwarts-mud/domain/event-memory.js';
 
 const roomId = 'charms_classroom';
 const mapId = 'hogwarts_castle';
@@ -192,6 +196,221 @@ test('a public classroom accident reaches every occupant and the stable class co
         resolution
             .witnessBasis.hermione,
         'room_visual_audible',
+    );
+});
+
+test('public classroom achievement overrides direct-address privacy', () => {
+    const perception =
+        createDeterministicPerceptionFallback({
+            playerAction:
+                'Tina quietly asks Hermione for help.',
+            narrativeText:
+                'Hermione successfully demonstrated a partial metallic transformation. McGonagall called it a very promising start and awarded one point to Gryffindor.',
+            playerTurnSequence: [{
+                type:
+                    'direct_speech',
+                targetActorId:
+                    'hermione',
+            }],
+            targetActorIds: [
+                'hermione',
+            ],
+            actors,
+        });
+
+    assert.equal(
+        perception.visualScope,
+        'room',
+    );
+    assert.equal(
+        perception.audibleScope,
+        'room',
+    );
+    assert.equal(
+        perception.salience,
+        'notable',
+    );
+});
+
+test('valid observer output cannot narrow deterministic public evidence', () => {
+    const fallback =
+        makePerception({
+            visualScope:
+                'room',
+            audibleScope:
+                'room',
+            salience:
+                'notable',
+            source:
+                'deterministic_fallback',
+        });
+    const observed =
+        makePerception({
+            visualScope:
+                'none',
+            audibleScope:
+                'target',
+            salience:
+                'normal',
+            directParticipantActorIds: [
+                'hermione',
+            ],
+            source:
+                'post_turn_observer',
+        });
+
+    assert.deepEqual(
+        reconcileObservedPerceptionWithFallback(
+            observed,
+            fallback,
+        ),
+        fallback,
+    );
+    const privateFallback =
+        makePerception({
+            visualScope:
+                'none',
+            audibleScope:
+                'target',
+            salience:
+                'subtle',
+            concealment:
+                'successful',
+            source:
+                'deterministic_fallback',
+        });
+    assert.deepEqual(
+        reconcileObservedPerceptionWithFallback(
+            observed,
+            privateFallback,
+        ),
+        observed,
+    );
+});
+
+test('room-wide notable event knowledge becomes neutral memory for every witness', () => {
+    const perception =
+        makePerception({
+            salience:
+                'major',
+        });
+    const resolution =
+        resolveEventWitnesses({
+            perception,
+            localPresence,
+            actors,
+        });
+    const eventKnowledge =
+        normalizeEventKnowledge({
+            sceneId:
+                'first_charms_class',
+            sourceMessageIds: [
+                201,
+                202,
+            ],
+            summaryEn:
+                'Tina destroyed Harry\'s spare quill in a public magical backfire.',
+            ...resolution,
+            perception,
+            source:
+                'deterministic_fallback',
+        }, {
+            actors,
+            cohortIds: [
+                cohort.id,
+            ],
+            sourceTexts: [
+                perception
+                    .evidenceText,
+            ],
+        });
+    const state = {
+        clock:
+            '1991-09-02 · 12:30',
+        turn: {
+            count: 96,
+        },
+        actorLibrary:
+            actors.map(actor => ({
+                id: actor.id,
+                sharedMemories: {
+                    core: [],
+                    recent: [],
+                    everyday: [],
+                },
+            })),
+    };
+    const transaction = {
+        publicEvent:
+            '蒂娜在公开的魔法反噬中毁掉了哈利的备用羽毛笔。',
+        eventKnowledge,
+    };
+    const first =
+        applyWitnessedEventMemories(
+            state,
+            transaction,
+        );
+    const second =
+        applyWitnessedEventMemories(
+            first,
+            transaction,
+        );
+    const witnessProfiles =
+        first.actorLibrary
+            .filter(profile =>
+                resolution
+                    .witnessActorIds
+                    .includes(
+                        profile.id,
+                    ));
+
+    assert.equal(
+        witnessProfiles.length,
+        roomActorIds.length,
+    );
+    assert.equal(
+        witnessProfiles.every(profile =>
+            profile
+                .sharedMemories
+                .everyday
+                .some(memory =>
+                    memory.eventId ===
+                    eventKnowledge
+                        .eventId &&
+                    memory.source ===
+                    'event_witness')),
+        true,
+    );
+    assert.deepEqual(
+        second.actorLibrary,
+        first.actorLibrary,
+    );
+    const privateEvent = {
+        ...eventKnowledge,
+        eventId:
+            'private_event',
+        perception: {
+            ...perception,
+            visualScope:
+                'none',
+            audibleScope:
+                'target',
+            salience:
+                'subtle',
+        },
+        witnessActorIds: [
+            'harry',
+        ],
+    };
+    assert.deepEqual(
+        applyWitnessedEventMemories(
+            state,
+            {
+                eventKnowledge:
+                    privateEvent,
+            },
+        ),
+        state,
     );
 });
 

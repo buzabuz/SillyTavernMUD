@@ -145,6 +145,8 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 
 低档使用 narrative-first V2 协议：唯一必填输出是有序 `segments`。人物进出、活动、移动、物品和社交变化只在实际发生时通过稀疏 `stateProposals` 提议；`eventEnded`、节奏完成和程序进度属于可选 `signals`。响应随后进入不调用模型的 `Turn Settlement Graph`，依次接受正文、折叠 proposal、校验权威状态并生成兼容事务。无效 proposal 单独丢弃并记入 `settlementWarnings`，缺失摘要、信号或在场快照不会触发修复调用；服务端图不可用时使用同一组本地 reducer 降级。旧 V1 完整 JSON 继续兼容。
 
+生成期间 story 只显示原子 loading card，完整事务提交后才展示正文。新 assistant 消息只在首次提交时定位到消息顶部；翻译和普通重绘不抢滚动。首次加载已有 scene 时固定保留顶部位置，不能把几十像素的空容器误判为“用户在底部”后滚到完整历史末尾。
+
 已接受正文在提交前会再经过同一 Ollama 侧车的后置观察。观察器只读取玩家原文与英文权威分段，不允许中文翻译参与状态提取；它结合当前人物 ID 和地图房间，以 JSON Schema 稀疏输出 `materialEvents`、事件边界和人物活动/离场建议。统一物质 Schema 分为 `scene_change` 与 `appearance_change`：场景变化覆盖摆放、移动、移除、调整、破坏、修复、弄脏和清理；外貌变化覆盖服装、饰品、发型、可见状态及恢复、拿起和放下手持物。完整字段定义仍集中在 `material-schema.js`。
 
 #### 人物占位、事件见证与写入所有权
@@ -168,9 +170,9 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 
 普通回合固定为：`/local/adjudicate` 前置判断时间、判定需求与隐蔽意图，但不写 witness；低档生成 narrative-first 正文；Turn Settlement Graph 接受正文并结算权威状态；随后仅调用一次 `/local/observe`，在同一响应中提取 material、actor update、event boundary 和 `perception`；Presence Reducer 更新 occupants/cohorts；Witness Resolver 确定性生成 participant/witness/cohort/basis；Event Knowledge Reducer 写入 `eventKnowledge`；Social Director 只在既有事件边界或补算时机消费已提交 witness，最后由 Social Reducer 提交关系变化，并由 Knowledge/Archive Projector 生成派生记录。感知不会新增第二次本地观察，也不会增加低、中、高档模型调用。
 
-本地后置观察不可用、超时、返回无效 JSON 或 perception 未通过校验时，正文仍正常提交。确定性回退把结构化施法、公开伤害、喊叫、爆炸、教授公告和 `broadcast_speech` 视为 room scope；`direct_speech` 默认仅目标可听；普通动作默认 nearby；明确耳语、纸条和成功隐蔽默认 target；无法确认施事者时使用 `attribution=unknown`。回退记录统一标记 `source=deterministic_fallback`，最终 witness 仍由 Witness Resolver 计算。
+本地后置观察不可用、超时、返回无效 JSON 或 perception 未通过校验时，正文仍正常提交。确定性回退把结构化施法、公开伤害、喊叫、爆炸、教授公告、成功公开示范、公开表扬/学院加分和 `broadcast_speech` 视为 room scope；`direct_speech` 默认仅目标可听；普通动作默认 nearby；明确耳语、纸条和成功隐蔽默认 target；无法确认施事者时使用 `attribution=unknown`。Schema 合法的 observer 可扩大范围，但不能把确定性 room-wide notable/major 结果缩窄为 target-only。回退记录统一标记 `source=deterministic_fallback`，最终 witness 仍由 Witness Resolver 计算。
 
-`eventKnowledge` 先于社交关系保存事件知情范围。人物知道事件不会自动创建关系边或修改关系数值；Social Director 的 `witnessedBy` 必须是每条来源消息已提交 witness 的子集，active interaction、受话目标、同室或 cohort 身份都不能自行升级为见证。
+`eventKnowledge` 先于社交关系保存事件知情范围。人物知道事件不会自动创建关系边或修改关系数值；Social Director 的 `witnessedBy` 必须是每条来源消息已提交 witness 的子集，active interaction、受话目标、同室或 cohort 身份都不能自行升级为见证。room-wide notable/major 事件会按稳定 event ID 给每名实际 witness 投影一条中性事实记忆；target-only、subtle 和成功隐蔽事件不批量写入。
 
 常规语义侧车默认使用 `qwen3:1.7b`、`temperature:0`、`think:false` 和 `num_ctx:4096`。只有玩家明确取得或操作签名、信件、钥匙、魔杖、地图等耐久重要物品时，才条件调用 `qwen3:4b` 的极小 Item V2 Schema；普通食物、餐具和背景道具不会触发。所有建议必须通过逐字证据、稳定 ID、房间可达性和本地 Reducer，模型无权直接写状态。合法物质事件进入 `materialEventLog`；新重要物品先进入 `pendingItemProposals`，只有玩家收录后进入 `items`；人物当前呈现以 `outfit + wornItemIds + heldItemIds` 投影到 `actorPresentations`。当前互动卡司由 Settlement Reducer 保持稀疏；物理同室人物由 `localPresence` 独立保存，退出镜头但没有移动或离场的人仍保留当前位置。侧车调用完成后以 `keep_alive:0` 卸载；不可用时正文仍按 narrative-first 提交。
 
@@ -185,6 +187,8 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 人物栏使用同样的双层投影。“当前互动人物”保留完整人物卡和快捷输入；可折叠的“当前地点人物”以低对比样式显示其余玩家已知 occupants，并用“另有……成员若干”概括 cohort。地点层不会显示玩家未知人物，也不会仅因人物在同室就授予其事件知识；桌面、390px 窄屏、键盘操作和 `prefers-reduced-motion` 均使用同一语义。
 
 权威时钟不是展示标签。规则层按当前日期、六小时时段、区域、地图和房间确定性派生 `behavioralEnvironment`，包含时段、日照、室内/室外暴露、霍格沃茨宵禁、睡眠压力、稳定天气、温度和行为约束。同一时间地点刷新后结果不变，也不增加模型调用。普通回合和转场开场必须让相关影响进入人物作息、音量、衣着、取暖、遮蔽、路线、视野或计划；室内天气只通过窗户、声响、穿堂风、湿衣物和室外安排表现，不机械播报天气。当前场景和环境优先于已经过期的每日地点或活动指令。
+
+`scene.summary/summaryEn` 记录新场景的开场快照，不是永久当前态。场景 timeline 推进后，普通 Performer 不再接收该摘要，只读取按时序排列的 timeline、当前 actor 活动、当前 material/room state 和结构化位置；后续条目覆盖早期形态与位置。人物台词可以回忆旧形态、开玩笑或说错，但不能据此创建第二实体。例如人物已经从 Animagus 形态恢复后，关于“猫”的回忆不能让桌上同时再出现一只猫。
 
 四名以上 NPC 的群像场景不会把玩家当作主持人。低档应形成一个主要回应线程、选择性的辅助插话、NPC 之间的侧线交流和同时发生的独立动作；角色可以忽略部分问题、继续手头事务、彼此打断或保持沉默，禁止把玩家的问题列表拆成 NPC 依次完整作答的“答题面板”。这是 Prompt 层的表演要求，不会用本地规则作废一份结构合法的完整回复；若输出因其他结构或权威错误必须修复，修复 Prompt 继续携带同一群像约束。
 
@@ -312,7 +316,7 @@ Reducer 对每项提案固定执行：来源与维度白名单校验 → impact 
 
 #### 关系星图与隐私
 
-游戏顶栏始终提供“关系星图”固定入口。它在当前页面打开独立大面板，不离开聊天，也不改动输入草稿或场景状态。星图使用 Cytoscape.js 展示分离的有向双边，支持人物搜索、范围/正负复杂度/身份筛选、缩放、平移、拖拽、重置布局和证据详情；节点位置与筛选偏好按时间线保存在本地。键盘焦点、`prefers-reduced-motion` 和完整文本关系表作为无障碍与运行时回退。
+游戏顶栏始终提供“关系星图”固定入口。它在当前页面打开独立大面板，不离开聊天，也不改动输入草稿或场景状态。星图使用 Cytoscape.js 展示分离的有向双边，支持人物搜索、范围/正负复杂度/身份筛选、缩放、平移、拖拽、重置布局和证据详情；节点位置与筛选偏好按时间线保存在本地。筛选外但两个端点仍可见的 player-known 边以 5% 不透明度保留为不可交互背景，不进入当前关系计数、详情或文本回退。键盘焦点、`prefers-reduced-motion` 和完整文本关系表作为无障碍与运行时回退。
 
 星图只读取 player-known 投影：玩家发出的有向边、显式标记为玩家知情的边，或至少有一条 `witnessedBy` 包含 `player` 的 evidence 才可见；详情中的 evidence 还会再次按玩家见证过滤。没有玩家见证且未被告知的 NPC→NPC/NPC→玩家关系、标签和来源不会显示，也不能通过节点位置、颜色或 tooltip 暗示。NPC 知识胶囊同样只包含该 NPC 亲历或见证的关系信息；仅仅成为 `targetActorId` 不会自动获得知情权。
 
@@ -324,6 +328,7 @@ Reducer 对每项提案固定执行：来源与维度白名单校验 → impact 
 
 - Item V2 分开保存 `ownerId`、`holderId`、结构化 `location`、客观外观、状态、来源事件、穿戴、备注、剧情角色、可见性和获得时间精度。借出和偷走只改变当前持有人；赠送才改变主人。移动和转场按 holder 的结构化位置投影，`custody/kind/importance` 只保留为旧调用方兼容字段。
 - 正式操作覆盖获得、携带、放置、穿戴、脱下、赠送、借出、消耗、损坏、清洗、丢失和销毁。destroyed/consumed 不会被普通 carry 复活。人物 `actorPresentations` 以一个整体 `outfit` 表示普通造型，只用 `wornItemIds/heldItemIds` 关联正式物品。
+- Narrative Item proposal 只折叠一次，并同时规范为 V2 `operation` 与 legacy `action`。普通 `vanished` 仍表示丢失；只有 `ruin/remains/wreck ... vanished` 这类明确残骸消失证据才能支持销毁。
 - 学生的普通校服、羽毛笔和课本，教授的办公用品，店员的普通库存及日常生活用品默认是隐含叙事资源。完成的赠送、借用、归还、偷取或玩家明确保留会让该具体对象进入候选；普通背景提及仍没有 ID、数量或历史。
 - 低档演员与本地观察器只能提交带逐字证据的 proposal。新对象进入 `pendingItemProposals`，回合后由玩家“收录/忽略”；忽略不改正文，并按稳定 Item ID 抑制立即重现。`lose/destroy/consume/damage/clean` 还必须同时命中该 Item 与对应状态动作。模型、开场导演和普通 material event 都不能直接创建正式 Item。
 - 候选决策是纯本地 Reducer 事务，只保存 metadata、刷新 prompt 并重绘，不调用或等待 knowledge/model。pending/decision 都进入 UI 世界投影；成功后卡片即时切换状态并显示 toast。
@@ -485,6 +490,8 @@ node scripts/migrate-hogwarts-presence-witness.mjs --restore-manifest path/to/ma
 - 课堂正文明确教学或示范某个咒语时，该咒语自动进入咒语本；玩家首次结构化尝试未知咒语时，也会按“自行实验”或“自行学习”进入咒语本。
 - 玩家主动尝试辨认当前场景的咒语时，规则层从 scene intent 解析稳定 ID 并投一次感知 D20。失败只显示“未能辨认咒语”，不泄露名称且不学习；成功但有代价及以上才通过观测学习。
 - 即使玩家观测失败，NPC 后续明确念出、写出、解释或示范仍按教学学习；AI 正文稳定 spell marker 同样可登记，但不会增加玩家施法次数。
+- scene/next intent 命中的 Catalog spell 每回合作为 `authoritativeSceneSpells` 约束 Performer；同一 technique 不得被模型替换成别的咒文，单一权威场景的显式冲突会在提交前确定性对齐。
+- 正文明确定义的未知 incantation，或玩家明确写出的自由咒语标记，会像物品候选一样显示“收录/忽略”。即使场景存在 Catalog 权威，明确是另一种新咒语且效果不指向该权威 technique 时仍可进入候选；同一 technique 的替代词则必须纠正为权威咒文。模型不能直接创建已学咒语；玩家收录后才以内嵌 custom definition 写入 spellbook，并获得稳定 ID、快捷栏引用和正常施法 D20。未知自定义咒语默认风险未知，单次叙事结果只作为观察证据。
 - 熟练度按每次施法判定增长：失败仍获得少量经验，成功、重大成功获得更多经验。等级分为初学、练习中、熟练、精通和专家。
 - 已学咒语会出现在输入框快捷栏和检查器“咒语”页；未知咒语不会占用快捷栏，但始终可以从完整目录尝试。
 
