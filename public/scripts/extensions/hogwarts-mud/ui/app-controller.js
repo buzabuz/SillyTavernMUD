@@ -334,6 +334,22 @@ Continue from this exact state. Perform present NPCs using the supplied personal
             opening: state.opening || null,
             clues: Array.isArray(state.clues) ? state.clues : [],
             items: Array.isArray(state.items) ? state.items : [],
+            pendingItemProposals:
+                Array.isArray(
+                    state
+                        .pendingItemProposals,
+                )
+                    ? state
+                        .pendingItemProposals
+                    : [],
+            itemProposalDecisions:
+                Array.isArray(
+                    state
+                        .itemProposalDecisions,
+                )
+                    ? state
+                        .itemProposalDecisions
+                    : [],
             spellbook:
                 state.spellbook ||
                 {

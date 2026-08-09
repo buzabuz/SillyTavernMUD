@@ -74,3 +74,16 @@
 - [x] 旧 filler 可幂等清理，当前存档 dry-run `8 -> 0 -> no-op`。
 - [x] Prompt Schema、normalizer、validator、archive 与 migration 均有回归测试。
 - [x] 全量 `289/289` 通过，用户刷新后确认 UI 正确。
+
+## Item Loan / Evidence / Candidate UI 闭环
+
+- [x] 完成的 gift/loan/return/theft 可让普通隐含物品进入候选。
+- [x] 高风险状态操作需要 source + Item + operation 三层 grounding。
+- [x] turn 93 错误 parchment loss 已删除，正式 Item 已恢复。
+- [x] turn 94 quill loan 已补为候选并由玩家收录。
+- [x] accept/ignore 不调用或等待 knowledge/model。
+- [x] UI 投影包含 pending proposal 与 decision；幂等重试会重绘。
+- [x] 成功后卡片即时更新、显示 toast，accepted 只保留详情。
+- [x] 关闭 details 菜单不形成幽灵点击区域。
+- [x] 真实浏览器验证 accepted 状态和八个 More 菜单按钮命中。
+- [x] 全量 `293/293`、ESLint、语法与 diff 检查通过。

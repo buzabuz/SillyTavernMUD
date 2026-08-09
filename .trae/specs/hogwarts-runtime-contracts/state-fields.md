@@ -64,12 +64,12 @@ actorLibrary membership != physical presence
 | `items[].ownerId/holderId` | 社会/法律主人和当前持有人 | Item Reducer | operation validation、UI、movement | 借出/偷走只改变 holder；`custody` 仅兼容 |
 | `items[].location` | 当前 `mapId/roomId/placement` | Item Reducer、holder-location projector | scene snapshot、UI、prompt | 有 holder 时按 holder 结构位置跟随 |
 | `items[].appearanceEn/appearance` | 客观可见外观 | accepted proposal、migration、Canon seed | UI、prompt | 不保存主观价值判断 |
-| `items[].state/isEquipped` | 完好、损坏、脏污、消耗、丢失、销毁及正式穿戴 | Item Reducer | presentation sync、UI | destroyed/consumed 不被 carry 复活 |
+| `items[].state/isEquipped` | 完好、损坏、脏污、消耗、丢失、销毁及正式穿戴 | Item Reducer | presentation sync、UI | 高风险状态操作需 Item + 动作双重 evidence；destroyed/consumed 不被 carry 复活 |
 | `items[].sourceEventId/notesEn/notes` | 首次建档来源与有界事实备注 | accepted proposal、migration、Canon seed | UI、debug、director context | Canon 另存 `sourceUrl` |
 | `items[].storyRoles/visibility` | 社会意义、线索、承诺等剧情角色及玩家可见性 | Item Reducer、authorized migration | Item projection、director context | `hidden` 不进入玩家 projection |
 | `items[].acquiredAt/transferMode/updatedClock` | 获得时间精度、最近转移语义和更新时间 | Item Reducer、migration | UI、debug | 不捏造未知精确时刻 |
-| `pendingItemProposals[]` | 等待玩家收录/忽略的新 Item 候选 | turn reducer、candidate queue | message/UI projection | 最多 24；模型不能直接写 `items` |
-| `itemProposalDecisions[]` | 已收录/忽略候选的稳定决策指纹 | candidate resolver | candidate partition、message renderer | 最多 120；ignored 按 item ID 抑制重现 |
+| `pendingItemProposals[]` | 等待玩家收录/忽略的新 Item 候选 | turn reducer、candidate queue | message/UI projection | 最多 24；普通物品完成 gift/loan/return/theft 后也可进入；模型不能直接写 `items` |
+| `itemProposalDecisions[]` | 已收录/忽略候选的稳定决策指纹 | candidate resolver | candidate partition、message renderer、UI world projection | 最多 120；纯本地提交，不等待 knowledge/model；ignored 按 item ID 抑制重现 |
 | `scene.itemStates[]` | 当前场景正式物品派生快照 | turn/transition/item projector | prompt、archive | 从 `items` 重建，不是独立权威 |
 | `materialEventLog[]` | 已校验物质变化事件 | material reducer | knowledge、debug | 普通手持物/饰品只留事件与正文，不创建 Item |
 | `actorPresentations[actorId].outfit` | 普通穿着的整体造型文本 | appearance/material reducer | prompt、inspector | 不拆普通服装数量 |

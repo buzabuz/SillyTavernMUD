@@ -1,5 +1,6 @@
 import {
     inferItemType,
+    isItemOperationEvidenceGrounded,
     normalizeItem,
 } from './item-schema.js';
 
@@ -211,13 +212,20 @@ export function projectObservedInventoryUpdates(
     playerAction,
     narrativeText,
 ) {
-    const existingIds =
-        new Set(
+    const existingItemsById =
+        new Map(
             (
                 worldState.items ||
                 []
-            ).map(item =>
-                item.id),
+            ).map(item => [
+                item.id,
+                item,
+            ]),
+        );
+    const existingIds =
+        new Set(
+            existingItemsById
+                .keys(),
         );
     const validHolderIds =
         new Set([
@@ -311,6 +319,21 @@ export function projectObservedInventoryUpdates(
             existingIds.has(
                 observed.id,
             );
+        const existingItem =
+            existingItemsById.get(
+                observed.id,
+            );
+        if (
+            existing &&
+            !isItemOperationEvidenceGrounded(
+                existingItem,
+                observed.operation ||
+                    observed.action,
+                evidence,
+            )
+        ) {
+            continue;
+        }
         if (
             !existing &&
             (
@@ -387,6 +410,16 @@ export function projectObservedInventoryUpdates(
             const explicitlyKept =
                 PLAYER_KEEP_ITEM_PATTERN
                     .test(evidence);
+            const explicitTransfer =
+                [
+                    'gift',
+                    'loan',
+                    'theft',
+                    'return',
+                ].includes(
+                    observed
+                        .transferMode,
+                );
             const meaningful =
                 (
                     observed.storyRoles ||
@@ -394,7 +427,8 @@ export function projectObservedInventoryUpdates(
                 ).length > 0 ||
                 IMPORTANT_ITEM_PATTERN
                     .test(candidateText) ||
-                explicitlyKept;
+                explicitlyKept ||
+                explicitTransfer;
             if (
                 !meaningful ||
                 !(
@@ -407,6 +441,7 @@ export function projectObservedInventoryUpdates(
                             candidateText,
                         ) &&
                     !explicitlyKept &&
+                    !explicitTransfer &&
                     !(
                         observed
                             .storyRoles ||

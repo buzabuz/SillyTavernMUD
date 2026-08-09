@@ -26,9 +26,9 @@ Implemented and verified.
 
 ### Automated
 
-- Added `tests/hogwarts-mud-item-system-v2.test.mjs` with 14 focused cases.
+- Added `tests/hogwarts-mud-item-system-v2.test.mjs` with 17 focused cases.
 - Covered all twelve operations, owner/holder separation, loan/theft, terminal states, candidate evidence, accept/ignore, stable ignored keys, V1 five-item migration, Canon seed, hidden visibility, presentation IDs and holder-location following.
-- Full Hogwarts Node suite: `289/289` passed with `--experimental-vm-modules`.
+- Full Hogwarts Node suite: `293/293` passed with `--experimental-vm-modules`.
 - Target ESLint passed.
 - `node --check` passed for every changed JS/MJS module.
 - `git diff --check` passed.
@@ -45,7 +45,9 @@ Loaded the current Tina archive at `http://127.0.0.1:8000/` without submitting a
 - Canon source links rendered as keyboard-focusable anchors.
 - Narrow-screen inspector drawer opened from the character button and from a scene actor.
 - Network log contained static resources, metadata/knowledge sync and tokenizer dry-run requests; no model-generation request was made.
-- No pending candidate existed in the real archive, so the browser did not fabricate one. Candidate accept/ignore was exercised through the real domain resolver tests; UI button wiring, 420px single-column CSS, focus and reduced-motion are locked by Task 6 source contracts.
+- A repaired real borrowed-quill candidate was accepted without model work. The compact card switched to a green `已收录` state and retained only “详情”.
+- Closed native details menus now have zero layout size; an opened More menu exposed eight buttons whose center hit targets all resolved to the intended button.
+- Candidate accept/ignore, no-op rerender, 420px CSS, focus, reduced-motion and pending/decision UI projection are locked by Task 5/6 contracts.
 
 ### Composer Item Protocol
 
@@ -60,7 +62,8 @@ Loaded the current Tina archive at `http://127.0.0.1:8000/` without submitting a
 ## Implemented Boundaries
 
 - New model objects become pending proposals, never formal `items`.
-- Ordinary identity supplies and free-text held objects remain implicit.
+- Ordinary identity supplies and free-text held objects remain implicit until a concrete gift/loan/return/theft or deliberate retention makes the object persistent.
+- High-risk Item state changes require exact source, Item and operation grounding before the reducer.
 - Material observation no longer writes new legacy `accessories/heldItems/heldObject`.
 - Item movement follows `holderId`, not `ownerId`, across movement, transition, interior-map, spatial repair and rollback.
 - Hidden formal Item IDs are filtered before ledger, actor-card and presentation resolution.

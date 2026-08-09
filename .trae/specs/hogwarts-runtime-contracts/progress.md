@@ -14,7 +14,7 @@
 | Presence / scene transition / people projection | Verified | Tina 转场与 turn 93 修复存档、4 active / 8 local、observer departure grounding、286/286 测试 | 补 dorm/family cohort 转场案例 |
 | Ordinary turn settlement | Tested | narrative-first、repair、retry、presence/witness tests | 建独立字段时序页 |
 | Spatial / movement / maps | Tested | movement、reachability、sightline、migration tests | 建结构化房间权威页 |
-| Item V2 / material / appearance / spell | Verified | 14 项 Item 专测、284/284 全量、Tina 真实存档九卡投影、Composer 双段指令、Ron owner/holder、无生成请求 | 后续只接 medium/high authorized hidden proposal 入口 |
+| Item V2 / material / appearance / spell | Verified | 17 项 Item 专测、293/293 全量、loan implicit-boundary、high-risk evidence、candidate local commit、真实浏览器命中验证 | 后续只接 medium/high authorized hidden proposal 入口 |
 | Social / memory / event knowledge | Verified | social contract、witness whitelist、transition sparse memory、旧 filler 幂等迁移、289/289 测试 | 建 directional evidence 页 |
 | Opening / directors / world change | Indexed | 现有 opening/pacing/transition tests | 补调用预算与状态机页 |
 | Knowledge / translation | Indexed | 现有 glossary、batch、knowledge tests | 补事实/显示边界页 |
@@ -91,3 +91,22 @@
   - 旧档加载幂等清理精确匹配的历史 filler。
 - post-fix 当前存档 dry-run：filler `8 -> 0`，第二次运行 `changed=false`；具体麦格记忆仍可提交。
 - 验证：Hogwarts Node `289/289`、目标 ESLint、语法与 diff 检查通过；用户刷新后确认模板记忆消失。
+
+## 2026-08-09 Item Loan / Evidence / Candidate UI 审计
+
+- turn 94 正文明确由 Harry 提供备用黄铜羽毛笔，但 4B inventory observer 因“generic quill”规则返回空数组。
+- 修复后，完成 gift/loan/return/theft 的具体普通物品越过 implicit boundary，进入玩家候选；新 loan 保留 Harry owner、player holder 和 `transferMode=loan`。
+- turn 93 的签名羊皮纸错误 `lose` 只满足“evidence 是正文子串”，证据实际描述猫变麦格。
+- projection 与 partition 现在对 `lose/destroy/consume/damage/clean` 要求 Item 名词和对应状态动作双重证据。
+- 当前 JSONL 已备份并修复：
+  - 签名羊皮纸恢复 `intact + holderId=player`；
+  - 无效 turn 93 `lose` 删除；
+  - 羽毛笔候选补入 turn 94，后由玩家收录。
+- candidate accept 首次卡在 awaited knowledge sync；移除该步骤后只执行 reducer、metadata save、prompt refresh 与 render。
+- UI 世界投影补齐 pending/decisions；幂等重试也重绘，成功后卡片即时切换并显示 toast。
+- 真实浏览器验证：
+  - accepted 羽毛笔卡仅保留“详情”，绿色“已收录”可见；
+  - 关闭 `<details>` 菜单尺寸为零；
+  - 打开“更多”后八个按钮全部命中自身；
+  - 用户确认按钮和状态反馈正常。
+- 验证：Hogwarts Node `293/293`、目标 ESLint、语法与 diff 检查通过；无剧情模型调用。

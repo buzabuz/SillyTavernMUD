@@ -41,6 +41,9 @@ export function createStoryRenderer(ports) {
         sceneArchiveDialog,
     } = refs;
 
+    let itemCandidateRevealTimer =
+        null;
+
     function initials(name) {
         return String(name || '?')
             .split(/\s+/)
@@ -771,6 +774,44 @@ export function createStoryRenderer(ports) {
             storyElement.scrollTop += storyElement.scrollHeight - previousHeight;
         } else if (wasNearBottom || jobRegistry.turnActive || jobRegistry.sceneTransitionActive) {
             storyElement.scrollTop = storyElement.scrollHeight;
+            clearTimeout(
+                itemCandidateRevealTimer,
+            );
+            itemCandidateRevealTimer =
+                setTimeout(
+                    () => {
+                        const candidate =
+                            storyElement
+                                .querySelector(
+                                    '.hpmud-item-candidate:last-of-type',
+                                );
+                        if (!candidate) {
+                            return;
+                        }
+                        const storyRect =
+                            storyElement
+                                .getBoundingClientRect();
+                        const candidateRect =
+                            candidate
+                                .getBoundingClientRect();
+                        if (
+                            candidateRect.top <
+                                storyRect.top
+                        ) {
+                            storyElement.scrollTop +=
+                                candidateRect.top -
+                                storyRect.top;
+                        } else if (
+                            candidateRect.bottom >
+                                storyRect.bottom
+                        ) {
+                            storyElement.scrollTop +=
+                                candidateRect.bottom -
+                                storyRect.bottom;
+                        }
+                    },
+                    100,
+                );
         }
     }
 

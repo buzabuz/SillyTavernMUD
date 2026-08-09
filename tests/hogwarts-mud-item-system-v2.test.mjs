@@ -1,5 +1,6 @@
 /* eslint-disable playwright/expect-expect */
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -30,6 +31,7 @@ import {
     resolveItemCandidate,
 } from '../public/scripts/extensions/hogwarts-mud/domain/item-reducer.js';
 import {
+    isItemOperationEvidenceGrounded,
     isItemVisibleToPlayer,
     normalizeCurrentPresentation,
     normalizeItem,
@@ -806,6 +808,190 @@ test('candidate partition requires grounded evidence and keeps hidden objects ou
         [
             'grounded_letter',
         ],
+    );
+});
+
+test('high-risk Item operations require evidence for both the Item and state change', () => {
+    const autograph = createItem({
+        id:
+            'harry_signed_parchment',
+        type: 'document',
+        labelEn:
+            'Harry Potter Autograph',
+        label:
+            '哈利·波特亲笔签名',
+        appearanceEn:
+            'A signed parchment bearing Harry Potter\'s crooked H.',
+    });
+    const state = createState({
+        items: [
+            autograph,
+        ],
+    });
+    const catEvidence =
+        'The cat stood up. Professor McGonagall stood precisely where the cat had been.';
+    const lostEvidence =
+        'The signed parchment slipped from Tina\'s bag and was lost beneath the moving staircase.';
+    const observed = evidenceText => ({
+        id:
+            'harry_signed_parchment',
+        operation: 'lose',
+        sourceKind: 'narrative',
+        evidenceText,
+        confidence: 0.99,
+    });
+
+    assert.equal(
+        isItemOperationEvidenceGrounded(
+            autograph,
+            'lose',
+            catEvidence,
+        ),
+        false,
+    );
+    assert.deepEqual(
+        projectObservedInventoryUpdates(
+            [
+                observed(
+                    catEvidence,
+                ),
+            ],
+            state,
+            '',
+            catEvidence,
+        ),
+        [],
+    );
+    assert.deepEqual(
+        partitionItemProposals(
+            [
+                observed(
+                    catEvidence,
+                ),
+            ],
+            state,
+            {
+                sourceTexts: [
+                    catEvidence,
+                ],
+            },
+        ).operations,
+        [],
+    );
+
+    const projected =
+        projectObservedInventoryUpdates(
+            [
+                observed(
+                    lostEvidence,
+                ),
+            ],
+            state,
+            '',
+            lostEvidence,
+        );
+    assert.equal(
+        projected.length,
+        1,
+    );
+    assert.equal(
+        partitionItemProposals(
+            projected,
+            state,
+            {
+                sourceTexts: [
+                    lostEvidence,
+                ],
+            },
+        ).operations.length,
+        1,
+    );
+});
+
+test('a completed loan promotes an ordinary quill to a player-confirmed candidate', () => {
+    const evidence =
+        'Harry nudged a spare brass quill toward Tina and told her she could use it.';
+    const state = createState();
+    const projected =
+        projectObservedInventoryUpdates(
+            [{
+                id:
+                    'harry_spare_brass_quill',
+                operation:
+                    'acquire',
+                type: 'tool',
+                labelEn:
+                    'Harry\'s Spare Brass Quill',
+                labelZh:
+                    '哈利的备用黄铜羽毛笔',
+                appearanceEn:
+                    'A spare writing quill with a brass nib.',
+                appearanceZh:
+                    '一支带黄铜笔尖的备用羽毛笔。',
+                ownerId:
+                    'canon_harry_james_potter',
+                holderId: 'player',
+                transferMode: 'loan',
+                storyRoles: [],
+                visibility: 'public',
+                held: false,
+                sourceKind:
+                    'narrative',
+                evidenceText:
+                    evidence,
+                confidence: 0.95,
+            }],
+            state,
+            '',
+            evidence,
+        );
+    const partitioned =
+        partitionItemProposals(
+            projected,
+            state,
+            {
+                sourceTexts: [
+                    evidence,
+                ],
+            },
+        );
+
+    assert.equal(
+        partitioned.candidates.length,
+        1,
+    );
+    assert.equal(
+        partitioned.candidates[0]
+            .transferMode,
+        'loan',
+    );
+    assert.equal(
+        partitioned.candidates[0]
+            .item.ownerId,
+        'canon_harry_james_potter',
+    );
+    assert.equal(
+        partitioned.candidates[0]
+            .item.holderId,
+        'player',
+    );
+});
+
+test('inventory observer prompt treats completed transfers as an implicit-item boundary', async () => {
+    const source = await readFile(
+        new URL(
+            '../src/hogwarts-mud/local-semantic-adjudicator.js',
+            import.meta.url,
+        ),
+        'utf8',
+    );
+    assert.match(
+        source,
+        /A completed gift, loan, return, or theft crosses the implicit-item boundary/u,
+    );
+    assert.match(
+        source,
+        /quill\|pen\|textbook/u,
     );
 });
 

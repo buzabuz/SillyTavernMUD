@@ -9,7 +9,7 @@
 - 损坏、清洗、消耗、丢失或销毁会影响后续剧情；
 - 玩家明确决定收录。
 
-普通校服、课本、羽毛笔、办公用品、店铺库存和生活用品是隐含叙事资源。它们可以自然出现在英文正文和 `materialEventLog`，但没有 ID、数量、所有权历史或 Item 卡。
+普通校服、课本、羽毛笔、办公用品、店铺库存和生活用品默认是隐含叙事资源。它们可以自然出现在英文正文和 `materialEventLog`，但没有 ID、数量、所有权历史或 Item 卡。一旦一个具体对象完成赠送、借用、归还、偷取或被玩家明确保留，它就越过隐含边界，按正式候选流程处理。
 
 ## 权威分层
 
@@ -45,7 +45,17 @@ low item_update + local observer item_update
 -> render quiet candidate docket
 ```
 
-无证据、未知人物 ID、隐藏新候选、非 `acquire` 新对象和普通隐含物品不会进入 pending 队列。单个 proposal 失败不允许改写正文。
+无证据、未知人物 ID、隐藏新候选、非 `acquire` 新对象和未发生具体转移的普通隐含物品不会进入 pending 队列。完成 gift/loan/return/theft 的普通对象具有追踪意义；新对象仍使用 `acquire` candidate，并通过 `ownerId/holderId/transferMode` 保存转移关系。单个 proposal 失败不允许改写正文。
+
+## Item Evidence 门禁
+
+已有正式 Item 的高风险状态操作必须同时满足：
+
+1. `evidenceText` 是玩家动作或英文结果正文的精确子串；
+2. evidence 提到该 Item 的稳定标签、ID 派生名词或类型名词；
+3. evidence 明确描述对应的 `lose/destroy/consume/damage/clean` 状态动作。
+
+该门禁在 local observer projection 和 proposal partition 两层执行。它只拒绝明显不相关的 proposal，不替代语义 observer，也不让 Reducer 阅读正文。
 
 ## 玩家决策
 
@@ -65,6 +75,17 @@ low item_update + local observer item_update
 ```
 
 候选 key 对新物品使用稳定 Item ID，不使用正文措辞。旧 decision 的 `itemId` 也参与抑制，因此同一候选换一种 evidenceText 不会立刻重现。收录/忽略不调用低、中、高档模型。
+
+候选决策是纯本地事务：
+
+```text
+resolveItemCandidate()
+-> saveMetadata()
+-> applySystemPrompt()
+-> renderAll()
+```
+
+不得等待 knowledge/vector 同步。幂等重试即使 `changed=false` 也必须重绘，以修复旧 DOM。UI 世界投影必须同时携带 `pendingItemProposals` 和 `itemProposalDecisions`，否则已决候选会被错误重画为 pending。
 
 ## Composer 操作协议
 
@@ -160,6 +181,9 @@ low item_update + local observer item_update
 - `hidden` 永不进入玩家 ledger、人物卡或 presentation 文本 fallback。
 - 当前物品与失去/消耗历史分组显示。
 - 卡片显示类型、状态、主人/持有人、位置、剧情角色、获得精度与来源。
+- 回合候选默认只显示名称、类型/转移关系和收录/忽略操作；外观、归属、位置和原始 evidence 在 hover、keyboard focus 或“详情”按钮中展示。
+- 收录/忽略成功后立即就地更新状态并显示本地 toast；accepted 卡只保留“详情”。
+- 关闭的原生 `<details>` 菜单内容必须 `display:none`，不得形成覆盖其他按钮的幽灵点击区域。
 - “插入表达”展示十二 operation；正式 Item 卡提供“引用到输入”并写入稳定 ID。
 - 窄屏由 `hpmud-inspector-open` 打开 UI-only 检查器抽屉；不写世界状态。
 - 420px 以下 Item grid 单列；按钮保留键盘焦点，reduced-motion 关闭候选动画。

@@ -368,61 +368,155 @@ export function createItemCandidateCard(
     docket.dataset
         .itemProposalKey =
         candidate.key;
-    const heading =
+    docket.tabIndex = 0;
+
+    const summary =
         document.createElement(
-            'header',
+            'div',
+        );
+    summary.className =
+        'hpmud-item-candidate-summary';
+    const mark =
+        appendText(
+            summary,
+            'span',
+            'hpmud-item-candidate-mark',
+            item.typeLabel
+                .slice(0, 1),
+        );
+    mark.setAttribute(
+        'aria-hidden',
+        'true',
+    );
+    const copy =
+        document.createElement(
+            'span',
+        );
+    const status =
+        appendText(
+            copy,
+            'small',
+            '',
+            decision ===
+                'pending'
+                ? '发现物品'
+                : decision ===
+                    'accepted'
+                    ? '已收录'
+                    : '已忽略',
         );
     appendText(
-        heading,
-        'small',
-        '',
-        'ITEM LEDGER · 待确认',
-    );
-    appendText(
-        heading,
+        copy,
         'strong',
         '',
-        decision ===
-            'accepted'
-            ? '已收录到物品档案'
-            : decision ===
-                'ignored'
-                ? '已忽略这条候选'
-                : '发现可能值得收录的物品',
+        item.label,
     );
-    docket.append(
-        heading,
-        createItemCard(
-            item,
-            {
-                compact: true,
-            },
-        ),
+    appendText(
+        copy,
+        'span',
+        'hpmud-item-candidate-meta',
+        [
+            item.typeLabel,
+            item.transferLabel,
+        ]
+            .filter(Boolean)
+            .join(' · ') ||
+            item.stateLabel,
     );
-    if (
-        candidate.evidenceText
-    ) {
-        const evidence =
-            document.createElement(
-                'blockquote',
-            );
-        evidence.textContent =
-            candidate
-                .evidenceText;
-        docket.append(
-            evidence,
+    summary.append(copy);
+
+    const details =
+        document.createElement(
+            'div',
+        );
+    details.className =
+        'hpmud-item-candidate-details';
+    details.id =
+        `hpmud-item-candidate-details-${
+            String(candidate.key || '')
+                .replace(
+                    /[^a-z0-9_-]+/giu,
+                    '-',
+                )
+        }`;
+    details.setAttribute(
+        'role',
+        'tooltip',
+    );
+    docket.setAttribute(
+        'aria-describedby',
+        details.id,
+    );
+    appendText(
+        details,
+        'p',
+        'hpmud-item-candidate-appearance',
+        item.appearance,
+    );
+    appendText(
+        details,
+        'p',
+        'hpmud-item-candidate-custody',
+        [
+            item.ownershipLabel,
+            item.locationLabel,
+            item.stateLabel,
+        ]
+            .filter(Boolean)
+            .join(' · '),
+    );
+    if (candidate.evidenceText) {
+        appendText(
+            details,
+            'blockquote',
+            '',
+            candidate.evidenceText,
         );
     }
+
+    const actions =
+        document.createElement(
+            'div',
+        );
+    actions.className =
+        'hpmud-item-candidate-actions';
+    const info =
+        document.createElement(
+            'button',
+        );
+    info.type = 'button';
+    info.className =
+        'hpmud-item-candidate-info';
+    info.textContent =
+        '详情';
+    info.setAttribute(
+        'aria-expanded',
+        'false',
+    );
+    info.setAttribute(
+        'aria-controls',
+        details.id,
+    );
+    info.addEventListener(
+        'click',
+        () => {
+            const open =
+                docket.classList
+                    .toggle(
+                        'is-details-open',
+                    );
+            info.setAttribute(
+                'aria-expanded',
+                String(open),
+            );
+        },
+    );
+    actions.append(info);
+
     if (
         decision ===
             'pending'
     ) {
-        const actions =
-            document.createElement(
-                'div',
-            );
-        actions.className =
-            'hpmud-item-candidate-actions';
         const accept =
             document.createElement(
                 'button',
@@ -454,6 +548,34 @@ export function createItemCandidateCard(
                     await handler?.(
                         candidate.key,
                     );
+                    const resolvedDecision =
+                        button === accept
+                            ? 'accepted'
+                            : 'ignored';
+                    if (docket.isConnected) {
+                        docket.className =
+                            `hpmud-item-candidate decision-${resolvedDecision}`;
+                        status.textContent =
+                            resolvedDecision ===
+                                'accepted'
+                                ? '已收录'
+                                : '已忽略';
+                        actions.replaceChildren(
+                            info,
+                        );
+                    }
+                    if (
+                        resolvedDecision ===
+                            'accepted'
+                    ) {
+                        toastr.success(
+                            '已收录到物品档案',
+                        );
+                    } else {
+                        toastr.info(
+                            '已忽略这条物品候选',
+                        );
+                    }
                 } catch (error) {
                     accept.disabled =
                         false;
@@ -470,6 +592,21 @@ export function createItemCandidateCard(
                             error,
                         ),
                     );
+                } finally {
+                    if (
+                        button.isConnected &&
+                        button.textContent ===
+                            '处理中…'
+                    ) {
+                        accept.disabled =
+                            false;
+                        ignore.disabled =
+                            false;
+                        button.textContent =
+                            button === accept
+                                ? '收录'
+                                : '忽略';
+                    }
                 }
             };
         accept.addEventListener(
@@ -492,9 +629,30 @@ export function createItemCandidateCard(
             accept,
             ignore,
         );
-        docket.append(
-            actions,
-        );
     }
+    docket.addEventListener(
+        'keydown',
+        event => {
+            if (
+                event.key !==
+                    'Escape'
+            ) {
+                return;
+            }
+            docket.classList.remove(
+                'is-details-open',
+            );
+            info.setAttribute(
+                'aria-expanded',
+                'false',
+            );
+            docket.focus();
+        },
+    );
+    docket.append(
+        summary,
+        actions,
+        details,
+    );
     return docket;
 }

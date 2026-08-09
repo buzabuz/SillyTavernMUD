@@ -19,6 +19,13 @@ import {
 import {
     projectSceneTransitionPresence,
 } from '../public/scripts/extensions/hogwarts-mud/domain/transition-presence.js';
+import {
+    normalizeItemProposal,
+    resolveItemCandidate,
+} from '../public/scripts/extensions/hogwarts-mud/domain/item-reducer.js';
+import {
+    createWorkflowApplication,
+} from '../public/scripts/extensions/hogwarts-mud/workflows/application.js';
 import { createOpeningWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/opening.js';
 import { createTurnWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/turn.js';
 
@@ -308,6 +315,218 @@ function createTurnHarness({
         workflow,
     };
 }
+
+test('Item candidate acceptance persists and renders without knowledge or model work', async () => {
+    const candidate =
+        normalizeItemProposal(
+            {
+                id:
+                    'test_borrowed_quill',
+                operation:
+                    'acquire',
+                type: 'tool',
+                labelEn:
+                    'Borrowed Quill',
+                label:
+                    '借来的羽毛笔',
+                ownerId:
+                    'canon_harry_james_potter',
+                holderId: 'player',
+                appearanceEn:
+                    'A borrowed brass-nibbed quill.',
+                appearance:
+                    '一支借来的黄铜笔尖羽毛笔。',
+                transferMode: 'loan',
+                evidenceText:
+                    'Harry offered Tina the quill.',
+            },
+            {
+                sourceRole:
+                    'local_observer',
+                sourceEventId:
+                    'test_item_candidate',
+                clock:
+                    '1991-09-02 · 12:00',
+            },
+        );
+    const state = {
+        clock:
+            '1991-09-02 · 12:00',
+        character: {
+            confirmed: true,
+        },
+        map: {
+            activeMapId:
+                'hogwarts_castle',
+            currentLocalNodeId:
+                'transfiguration_classroom',
+        },
+        scene: {
+            itemStates: [],
+        },
+        items: [],
+        actors: [{
+            id:
+                'canon_harry_james_potter',
+        }],
+        actorLibrary: [{
+            id:
+                'canon_harry_james_potter',
+        }],
+        actorPresentations: {},
+        pendingItemProposals: [
+            candidate,
+        ],
+        itemProposalDecisions: [],
+    };
+    let metadataSaves = 0;
+    let knowledgeSyncs = 0;
+    let renders = 0;
+    let promptUpdates = 0;
+    const context = {
+        chatMetadata: {
+            hogwartsMud:
+                state,
+        },
+        saveMetadata:
+            async () => {
+                metadataSaves++;
+            },
+    };
+    const slots = {
+        low: {
+            profileId: '',
+        },
+        medium: {
+            profileId: '',
+        },
+        high: {
+            profileId: '',
+        },
+    };
+    const application =
+        createWorkflowApplication({
+            DEFAULT_SETTINGS: {
+                promptVersion: 1,
+                modelSlots: slots,
+                translationProvider:
+                    'off',
+            },
+            DEFAULT_WORLD_PROMPT: '',
+            extension_settings: {},
+            getContext: () =>
+                context,
+            normalizeModelSlots:
+                value =>
+                    structuredClone(
+                        value ||
+                        slots,
+                    ),
+            normalizeTranslationProvider:
+                value =>
+                    value ||
+                    'off',
+            uuidv4: () =>
+                'fixture',
+            resolveItemCandidate,
+            syncKnowledgeBase:
+                async () => {
+                    knowledgeSyncs++;
+                    await new Promise(
+                        () => {},
+                    );
+                },
+            retrieveKnowledge:
+                async () => [],
+            applySystemPrompt:
+                () => {
+                    promptUpdates++;
+                },
+            renderAll:
+                () => {
+                    renders++;
+                },
+        });
+
+    const result =
+        await Promise.race([
+            application
+                .acceptItemCandidate(
+                    candidate.key,
+                ),
+            new Promise(
+                (
+                    _resolve,
+                    reject,
+                ) =>
+                    setTimeout(
+                        () =>
+                            reject(
+                                new Error(
+                                    'candidate acceptance timed out',
+                                ),
+                            ),
+                        250,
+                    ),
+            ),
+        ]);
+
+    assert.equal(
+        result.changed,
+        true,
+    );
+    assert.equal(
+        metadataSaves,
+        1,
+    );
+    assert.equal(
+        knowledgeSyncs,
+        0,
+    );
+    assert.equal(
+        promptUpdates,
+        1,
+    );
+    assert.equal(
+        renders,
+        1,
+    );
+    assert.equal(
+        context.chatMetadata
+            .hogwartsMud
+            .pendingItemProposals
+            .length,
+        0,
+    );
+    assert.equal(
+        context.chatMetadata
+            .hogwartsMud
+            .items[0]
+            .id,
+        'test_borrowed_quill',
+    );
+    const replay =
+        await application
+            .acceptItemCandidate(
+                candidate.key,
+            );
+    assert.equal(
+        replay.changed,
+        false,
+    );
+    assert.equal(
+        metadataSaves,
+        1,
+    );
+    assert.equal(
+        knowledgeSyncs,
+        0,
+    );
+    assert.equal(
+        renders,
+        2,
+    );
+});
 
 test('runtime gate and job registries keep suppression and locks instance-local', () => {
     const leftGate = createAutomaticWorkGate();

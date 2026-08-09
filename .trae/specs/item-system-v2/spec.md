@@ -11,7 +11,7 @@
 - 正式 Item 只保存会影响所有权、社会关系、线索、承诺或后续剧情的物品。
 - 支持获得、携带、放置、穿戴、脱下、赠送、借出、消耗、损坏、清洗、丢失和销毁。
 - 所有权与当前持有人分离；借出和偷走不自动改变主人。
-- 普通校服、课本、羽毛笔、办公用品、店铺商品和生活用品保持隐含，不创建 Item。
+- 普通校服、课本、羽毛笔、办公用品、店铺商品和生活用品默认保持隐含；完成的赠送、借用、归还、偷取或玩家明确保留会使该具体对象进入候选。
 - 模型只能提交 proposal；新物品必须由玩家收录后才进入正式物品库。
 - 人物当前造型保留整体文本，同时以 Item ID 关联正式穿戴物与手持物。
 - NPC 隐藏物品可存在于事实层，但玩家 UI 不得全知显示。
@@ -140,7 +140,8 @@ Implicit items:
 
 - may appear naturally in prose;
 - have no ID, ownership history, quantity or item card;
-- cannot be transferred into formal state until a proposal is accepted;
+- become an explicit proposal when a specific object is given, lent, returned, stolen or deliberately retained;
+- cannot enter formal state until that proposal is accepted;
 - are forgotten when no longer narratively relevant.
 
 ## Explicit Items
@@ -176,6 +177,8 @@ model item_update proposal
 
 `pendingItemProposals` is world authority for unresolved candidates. `ignoredItemProposalKeys` prevents the same candidate from immediately resurfacing.
 
+Accept/ignore is a local reducer transaction. It saves metadata and rerenders immediately; it does not call or await narrative models, inventory observers, embeddings or knowledge-base synchronization. The UI projection must include both pending proposals and decisions so an accepted card cannot reappear as pending.
+
 Reserved proposal sources:
 
 `low | medium | high | local_observer | user | canon_migration`
@@ -196,8 +199,10 @@ Visual tone: a restrained Hogwarts evidence ledger, not a game inventory grid.
 - One shared item card component for item library and actor cards.
 - Strong label, type seal, owner/holder line, state/custody chips and short appearance.
 - Story roles use quiet marginalia marks rather than bright rarity colours.
-- Candidate appears below the completed assistant turn as a slim parchment docket.
+- Candidate appears below the completed assistant turn as a compact evidence strip.
 - “收录” is primary but calm; “忽略” is text-like and does not block the composer.
+- The default strip shows only label, type/transfer relation and actions. Appearance, ownership/location and source evidence move to a hover/focus/touch details surface.
+- Accepted/ignored state updates immediately with a local toast; accepted cards retain only the details action.
 - Empty states explain implicit items rather than claiming the character owns nothing.
 - Desktop and 390px layouts, keyboard focus and reduced-motion are required.
 

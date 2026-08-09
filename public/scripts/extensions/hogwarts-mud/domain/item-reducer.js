@@ -8,6 +8,7 @@ import {
     ITEM_PROPOSAL_VERSION,
     ITEM_STATE_VALUES,
     ITEM_TRANSFER_MODE_VALUES,
+    isItemOperationEvidenceGrounded,
     normalizeCurrentPresentation,
     normalizeItem,
     normalizeItemOperation,
@@ -447,13 +448,20 @@ export function partitionItemProposals(
             .map(value =>
                 String(value || ''))
             .filter(Boolean);
-    const existingIds =
-        new Set(
+    const existingItemsById =
+        new Map(
             (
                 worldState.items ||
                 []
-            ).map(item =>
-                item.id),
+            ).map(item => [
+                item.id,
+                item,
+            ]),
+        );
+    const existingIds =
+        new Set(
+            existingItemsById
+                .keys(),
         );
     const decisions =
         new Set(
@@ -534,6 +542,19 @@ export function partitionItemProposals(
                         proposal.id,
                     )
                 ) {
+                    if (
+                        !isItemOperationEvidenceGrounded(
+                            existingItemsById
+                                .get(
+                                    proposal.id,
+                                ),
+                            proposal.operation,
+                            proposal
+                                .evidenceText,
+                        )
+                    ) {
+                        return;
+                    }
                     operations.push(
                         proposal,
                     );
