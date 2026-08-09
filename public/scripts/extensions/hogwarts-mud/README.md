@@ -324,8 +324,9 @@ Reducer 对每项提案固定执行：来源与维度白名单校验 → impact 
 
 - Item V2 分开保存 `ownerId`、`holderId`、结构化 `location`、客观外观、状态、来源事件、穿戴、备注、剧情角色、可见性和获得时间精度。借出和偷走只改变当前持有人；赠送才改变主人。移动和转场按 holder 的结构化位置投影，`custody/kind/importance` 只保留为旧调用方兼容字段。
 - 正式操作覆盖获得、携带、放置、穿戴、脱下、赠送、借出、消耗、损坏、清洗、丢失和销毁。destroyed/consumed 不会被普通 carry 复活。人物 `actorPresentations` 以一个整体 `outfit` 表示普通造型，只用 `wornItemIds/heldItemIds` 关联正式物品。
-- 学生的普通校服、羽毛笔和课本，教授的办公用品，店员的普通库存及日常生活用品都是隐含叙事资源，不创建 Item。普通食物、餐具和背景道具可以自然出现，但没有 ID、数量或历史。
-- 低档演员与本地观察器只能提交带逐字证据的 proposal。新对象进入 `pendingItemProposals`，回合后由玩家“收录/忽略”；忽略不改正文，并按稳定 Item ID 抑制立即重现。模型、开场导演和普通 material event 都不能直接创建正式 Item。
+- 学生的普通校服、羽毛笔和课本，教授的办公用品，店员的普通库存及日常生活用品默认是隐含叙事资源。完成的赠送、借用、归还、偷取或玩家明确保留会让该具体对象进入候选；普通背景提及仍没有 ID、数量或历史。
+- 低档演员与本地观察器只能提交带逐字证据的 proposal。新对象进入 `pendingItemProposals`，回合后由玩家“收录/忽略”；忽略不改正文，并按稳定 Item ID 抑制立即重现。`lose/destroy/consume/damage/clean` 还必须同时命中该 Item 与对应状态动作。模型、开场导演和普通 material event 都不能直接创建正式 Item。
+- 候选决策是纯本地 Reducer 事务，只保存 metadata、刷新 prompt 并重绘，不调用或等待 knowledge/model。pending/decision 都进入 UI 世界投影；成功后卡片即时切换状态并显示 toast。
 - 魔杖、眼镜等 Canon 标志物由确定性目录按人物和非捏造时间精度 seed；NPC `hidden` Item 可供授权导演使用，但不会出现在玩家物品库、人物卡或 current presentation。运行事务详见 `.trae/specs/hogwarts-runtime-contracts/item-lifecycle.md`。
 - “插入表达”展示十二种 Item 操作，并写入 `【物品操作:carry｜携带】` 这类意图 directive；随后自动打开物品档案，由正式 Item 卡写入 `【物品:stable_id｜显示名】`。parser 只接受当前玩家可见的稳定 ID。directive 不代表动作已经成功，仍由正文结果、观察器、validator 和 Reducer 完成结算。
 - NPC 运行态保存 `lifeStatus`（存活/受伤/失能/失踪/死亡）、公开说明、开始时间和永久标记。每次转场时，转场导演必须为 `actorStates` 中的每个人重新结算该状态；中档可处理可逆的受伤、失能、失踪与恢复，永久死亡只能由高端世界导演提交。死亡人物不能重新在场、被地点居民规则复活或在后续场景发言。

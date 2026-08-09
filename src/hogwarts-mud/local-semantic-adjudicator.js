@@ -1441,8 +1441,9 @@ Rules:
 - A malformed, orphaned, hidden, or unknown-ID directive must not produce an inventory update.
 - Return an empty array unless an exact source clause establishes acquire, carry, place, equip, unequip, give, lend, consume, damage, clean, lose, or destroy.
 - A signed autograph, personal letter, key, wand, map, named keepsake, clue-bearing document, promise token, socially meaningful gift, or signature accessory may become a new candidate.
-- Ignore food, drinks, wrappers, cutlery, generic quills, generic books, classroom supplies, routine shop stock, ordinary uniforms, generic clothing and everyday objects unless the player deliberately marks one for retention or the completed event gives it social/plot significance.
+- Ignore food, drinks, wrappers, cutlery, generic quills, generic books, classroom supplies, routine shop stock, ordinary uniforms, generic clothing and everyday objects unless the player deliberately marks one for retention, the completed event gives it social/plot significance, or the object is visibly given, lent, borrowed, returned, or stolen.
 - Ordinary identity-appropriate objects remain implicit and receive no ID, quantity or history.
+- A completed gift, loan, return, or theft crosses the implicit-item boundary even for an ordinary quill, book, classroom supply, or everyday object. Emit a proposal so owner and holder can remain distinct. For a new borrowed object, use operation acquire, preserve the lender as ownerId, set the borrower as holderId, and use transferMode loan.
 - New candidates use operation acquire and a stable descriptive snake_case ID. They are only proposals; the player decides whether to record them.
 - Existing possessions must reuse a supplied inventory ID.
 - New candidates require accurate English and Simplified Chinese labels and objective appearances.
@@ -1458,7 +1459,7 @@ Rules:
 Example: playerAction "Tina拿起哈利签过名的羊皮纸并带着它去上课" => acquire one document candidate owned and held by player, storyRoles social and keepsake, using that exact clause as evidence.`;
 
 const INVENTORY_CANDIDATE_ITEM_PATTERN =
-    /(?:\b(?:autograph|signed (?:parchment|note|paper|book)|letter|key|wand|map|journal|diary|ring|ribbon|glasses|spectacles|amulet|artifact|heirloom|keepsake|permit|token)\b|签名|签过名|亲笔签名|信件|钥匙|魔杖|地图|日记|戒指|丝带|眼镜|护符|魔法物品|传家宝|纪念品|许可证|信物)/iu;
+    /(?:\b(?:autograph|signed (?:parchment|note|paper|book)|letter|key|wand|map|journal|diary|ring|ribbon|glasses|spectacles|amulet|artifact|heirloom|keepsake|permit|token|quill|pen|textbook)\b|签名|签过名|亲笔签名|信件|钥匙|魔杖|地图|日记|戒指|丝带|眼镜|护符|魔法物品|传家宝|纪念品|许可证|信物|羽毛笔|钢笔|课本)/iu;
 const INVENTORY_CANDIDATE_POSSESSION_PATTERN =
     /(?:\b(?:acquire|equip|unequip|take|takes|took|pick(?:ed)? up|receive[ds]?|accept(?:ed)?|claim(?:ed)?|keep|kept|carry|carried|hold(?:ing)?|held|clamped on|wear|wore|remove[ds]?|give|gave|lend|lent|borrow|place[ds]?|put|consume[ds]?|break|broke|damage[ds]?|clean[eds]?|wash(?:ed)?|lose|lost|destroy(?:ed)?)\b|获得|携带|拿起|拿到|拿走|收下|收到|接过|认领|保留|留着|带着|握着|攥着|手里|随身|装进|放下|放置|穿戴|穿上|戴上|脱下|摘下|赠送|送给|借出|借给|借来|消耗|吃掉|喝掉|损坏|打坏|清洗|洗净|丢失|弄丢|销毁|摧毁|放进口袋|放进包)/iu;
 

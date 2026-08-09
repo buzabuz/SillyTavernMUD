@@ -290,8 +290,20 @@ test('narrow layouts expose the inspector as a UI-only drawer', async () => {
         /\.hpmud-app\.hpmud-inspector-open \.hpmud-inspector/u,
     );
     assert.match(
+        styleSource,
+        /\.hpmud-topbar \{[\s\S]*?position: relative;[\s\S]*?z-index: 30;/u,
+    );
+    assert.match(
+        styleSource,
+        /\.hpmud-more:not\(\[open\]\) > \.hpmud-more-menu,[\s\S]*?\.hpmud-insert-menu:not\(\[open\]\) > div \{[\s\S]*?display: none;/u,
+    );
+    assert.match(
         storyRendererSource,
         /classList\.add\(\s*'hpmud-inspector-open'/u,
+    );
+    assert.match(
+        storyRendererSource,
+        /setTimeout\([\s\S]*?\.hpmud-item-candidate:last-of-type[\s\S]*?100,/u,
     );
     assert.match(
         itemComponentsSource,
@@ -300,6 +312,42 @@ test('narrow layouts expose the inspector as a UI-only drawer', async () => {
     assert.match(
         itemComponentsSource,
         /ignore\.addEventListener\(\s*'click'/u,
+    );
+    assert.match(
+        itemComponentsSource,
+        /hpmud-item-candidate-details/u,
+    );
+    assert.match(
+        itemComponentsSource,
+        /aria-expanded/u,
+    );
+    assert.match(
+        itemComponentsSource,
+        /actions\.replaceChildren\(\s*info/u,
+    );
+    assert.match(
+        itemComponentsSource,
+        /toastr\.success\(\s*'已收录到物品档案'/u,
+    );
+    assert.match(
+        styleSource,
+        /\.hpmud-item-candidate:hover \.hpmud-item-candidate-details[\s\S]*?\.hpmud-item-candidate:focus-within \.hpmud-item-candidate-details/u,
+    );
+    assert.match(
+        styleSource,
+        /\.hpmud-item-candidate-details \{[\s\S]*?position: absolute/u,
+    );
+    assert.match(
+        styleSource,
+        /\.hpmud-item-candidate-details \{[\s\S]*?pointer-events: none/u,
+    );
+    assert.match(
+        styleSource,
+        /\.hpmud-item-candidate\.decision-accepted[\s\S]*?\.hpmud-item-candidate-summary small \{[\s\S]*?color: var\(--hp-success\)/u,
+    );
+    assert.doesNotMatch(
+        styleSource,
+        /hpmud-item-candidate-details[\s\S]{0,700}pointer-events: auto/u,
     );
     assert.match(
         styleSource,
@@ -325,6 +373,7 @@ test('Item operation UI separates operation choice from stable Item references',
         performanceSource,
         observerSource,
         styleSource,
+        appControllerSource,
     ] = await Promise.all([
         readFile(
             path.join(
@@ -386,6 +435,14 @@ test('Item operation UI separates operation choice from stable Item references',
             path.join(
                 CLIENT_ROOT,
                 'style.css',
+            ),
+            'utf8',
+        ),
+        readFile(
+            path.join(
+                CLIENT_ROOT,
+                'ui',
+                'app-controller.js',
             ),
             'utf8',
         ),
@@ -469,6 +526,14 @@ test('Item operation UI separates operation choice from stable Item references',
     assert.match(
         styleSource,
         /\.hpmud-item-reference/u,
+    );
+    assert.match(
+        appControllerSource,
+        /pendingItemProposals:/u,
+    );
+    assert.match(
+        appControllerSource,
+        /itemProposalDecisions:/u,
     );
 });
 

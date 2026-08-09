@@ -5,7 +5,7 @@
 - [x] 偷走改变 holder，不自动改变 owner。
 - [x] 借出保留 owner，并记录 loan。
 - [x] destroyed/consumed Item 不会被普通 carry 复活。
-- [x] 普通校服、课本、办公用品和生活用品不创建 Item。
+- [x] 普通校服、课本、办公用品和生活用品默认隐含；具体转移或明确保留后可进入候选。
 - [x] 普通穿着只保存整体 outfit。
 - [x] current presentation 的正式穿戴/手持只使用 Item ID。
 - [x] 模型 proposal 不能直接创建正式 Item。
@@ -25,3 +25,7 @@
 - [x] directive 只表达意图，不直接调用 Reducer 或绕过 outcome evidence。
 - [x] 未跟踪新物品仍走 proposal/收录流程；hidden Item 不提供引用入口。
 - [x] Item 操作协议 parser、prompt、UI 和浏览器交互已验证。
+- [x] 高风险 Item 状态变更同时校验 Item 与操作 evidence。
+- [x] accept/ignore 只走本地 Reducer + metadata + render，不等待 knowledge/model。
+- [x] pending/decision 投影、幂等重绘、即时 toast 与 accepted 状态有回归覆盖。
+- [x] 关闭菜单无幽灵点击区域，真实浏览器按钮命中验证通过。

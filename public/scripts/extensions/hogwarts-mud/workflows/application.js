@@ -562,6 +562,7 @@ export function createWorkflowApplication(ports) {
                 decision,
             );
         if (!result.changed) {
+            renderAll();
             return result;
         }
         context.chatMetadata
@@ -569,7 +570,6 @@ export function createWorkflowApplication(ports) {
             result.state;
         await context
             .saveMetadata();
-        await syncLocalKnowledge();
         applySystemPrompt();
         renderAll();
         return result;
