@@ -9,9 +9,11 @@ import {
 } from '../spell-catalog.js';
 
 const SPELL_TEACHING_PATTERN =
-    /(?:教学|教会|讲解|示范|演示|练习|尝试这个咒语|跟着念|照着第?\s*\d+\s*页|teach|taught|demonstrat|practi[cs]e|try (?:it|this spell)|repeat after|writ(?:e|es|ten).{0,40}(?:board|blackboard)|page\s+\d+)/iu;
+    /(?:教学|教会|讲解|解释|说明|示范|演示|练习|念出|说出|写下|尝试这个咒语|跟着念|照着第?\s*\d+\s*页|teach|taught|explain|demonstrat|practi[cs]e|pronounc|try (?:it|this spell)|repeat after|writ(?:e|es|ten).{0,40}(?:board|blackboard)|page\s+\d+)/iu;
 const SPELL_SELF_STUDY_PATTERN =
     /(?:自学|学习|研究|阅读|照着书|查阅|笔记|偷偷学|self[- ]?study|learn|study|research|read(?:ing)?|from (?:a|the) book|notes?)/iu;
+const SPELL_OBSERVATION_INTENT_PATTERN =
+    /(?:(?:看清|辨认|认出|观察|查看|阅读|解读|研究|学习|记住|理解|identify|observe|inspect|read|study|learn|understand).{0,120}(?:咒语|咒文|法术|变形术|incantation|spell|transfiguration)|(?:咒语|咒文|法术|变形术|incantation|spell|transfiguration).{0,120}(?:看清|辨认|认出|观察|查看|阅读|解读|研究|学习|记住|理解|identify|observe|inspect|read|study|learn|understand))/iu;
 const SPELL_SOURCE_PRIORITY =
     Object.freeze({
         experiment: 0,
@@ -28,6 +30,87 @@ const SPELL_OUTCOME_XP =
         success: 8,
         critical_success: 12,
     });
+const SPELL_OBSERVATION_LEARNED_OUTCOMES =
+    new Set([
+        'success_with_cost',
+        'success',
+        'critical_success',
+    ]);
+
+export function resolveSpellObservation(
+    worldState,
+    playerAction,
+) {
+    const action =
+        String(playerAction || '');
+    if (
+        !SPELL_OBSERVATION_INTENT_PATTERN
+            .test(action)
+    ) {
+        return null;
+    }
+    const scene =
+        worldState?.scene ||
+        {};
+    const intent =
+        scene.nextSceneIntent ||
+        {};
+    const actionReferences =
+        findSpellReferences(
+            action,
+        );
+    const contextValues = [
+        scene.nameEn,
+        scene.name,
+        scene.summaryEn,
+        scene.summary,
+        intent.titleEn,
+        intent.title,
+        intent.summaryEn,
+        intent.summary,
+        intent.triggerEn,
+        intent.trigger,
+    ].filter(Boolean);
+    const contextReferences =
+        findSpellReferences(
+            contextValues.join('\n'),
+        );
+    const spell =
+        actionReferences[0] ||
+        contextReferences[0];
+    if (!spell) {
+        return null;
+    }
+    return {
+        version: 1,
+        spellId:
+            spell.id,
+        name:
+            spell.name,
+        nameEn:
+            spell.nameEn,
+        incantation:
+            spell.incantation,
+        incantationKnown:
+            spell.incantationKnown,
+        source:
+            actionReferences.length
+                ? 'player_reference'
+                : 'scene_instruction',
+        evidenceText:
+            actionReferences.length
+                ? action.slice(0, 500)
+                : String(
+                    contextValues.find(value =>
+                        findSpellReferences(
+                            value,
+                        ).some(reference =>
+                            reference.id ===
+                            spell.id)) ||
+                    '',
+                ).slice(0, 500),
+    };
+}
 
 function createLearnedSpellEntry(
     spellId,
@@ -399,8 +482,20 @@ export function settleSpellProgress(
     ]
         .filter(Boolean)
         .join('\n');
+    const narrativeDirectives =
+        parseSpellCastDirectives(
+            narrativeText,
+        );
+    const spellObservation =
+        transaction
+            .checkResolution
+            ?.spellObservation ||
+        null;
     if (
         !casts.length &&
+        !narrativeDirectives
+            .length &&
+        !spellObservation &&
         !SPELL_TEACHING_PATTERN
             .test(narrativeText)
     ) {
@@ -423,6 +518,85 @@ export function settleSpellProgress(
                     '',
             },
         );
+    const sceneLabel =
+        next.scene?.nameEn ||
+        next.scene?.name ||
+        'the current scene';
+    const classObservation =
+        /(?:class|lesson|教室|课堂|课)/iu
+            .test(sceneLabel);
+    narrativeDirectives
+        .forEach(cast => {
+            const spell =
+                getSpellDefinition(
+                    cast.spellId,
+                );
+            if (!spell) {
+                return;
+            }
+            upsertLearnedSpell(
+                next.spellbook,
+                spell.id,
+                {
+                    source:
+                        classObservation
+                            ? 'class'
+                            : 'self_study',
+                    detail:
+                        `Observed ${spell.incantation || spell.nameEn} during ${sceneLabel}.`,
+                    clock:
+                        next.clock,
+                    turn:
+                        next.turn
+                            ?.count ||
+                        0,
+                    proficiencyXp: 1,
+                },
+            );
+        });
+    if (spellObservation) {
+        const spell =
+            getSpellDefinition(
+                spellObservation
+                    .spellId,
+            );
+        if (
+            spell &&
+            SPELL_OBSERVATION_LEARNED_OUTCOMES
+                .has(
+                    transaction
+                        .checkResolution
+                        ?.outcome,
+                )
+        ) {
+            const detail =
+                `Actively observed ${spell.incantation} during ${sceneLabel}.`;
+            upsertLearnedSpell(
+                next.spellbook,
+                spell.id,
+                {
+                    source:
+                        classObservation
+                            ? 'class'
+                            : 'self_study',
+                    detail,
+                    clock:
+                        next.clock,
+                    turn:
+                        next.turn
+                            ?.count ||
+                        0,
+                    proficiencyXp:
+                        SPELL_OUTCOME_XP[
+                            transaction
+                                .checkResolution
+                                ?.outcome
+                        ] ??
+                        1,
+                },
+            );
+        }
+    }
     findSpellReferences(
         narrativeText,
     ).forEach(spell => {

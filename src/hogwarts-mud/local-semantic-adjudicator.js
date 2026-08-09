@@ -1370,6 +1370,7 @@ Check rules:
 - A check is required only for a meaningful uncertain attempted action with consequences.
 - Ordinary conversation, asking questions, attending class, waiting, sleeping, handing over an object, sitting down, or deterministic movement requires no check.
 - Physical force, stealth, theft, persuasion, deception, investigation under uncertainty, or spellcasting may require a check.
+- Actively trying to read, identify, copy, or understand a visible spell under uncertainty (blurred writing, distance, concealment, unfamiliar technique, interruption, or time pressure) requires one perception or intellect check. Merely hearing that a spell exists does not.
 - forcedCheck is a boolean input. When it is false, never use forced_general.
 - Select one supplied ruleId and one supplied present actor ID only. Use none when no check is required.
 - forcedCheck=true always requires forced_general when no more specific rule applies.
@@ -1382,7 +1383,8 @@ Calibration examples:
 4. action "*坐在这里等了两个小时*" => elapsedMinutes 120, mode explicit_duration, basis explicit, no check.
 5. action "*睡了八个小时，第二天早上醒来*" => elapsedMinutes 480, mode sleep, basis explicit, no check.
 6. action "*用力把面前的男孩推倒*" => elapsedMinutes 15, check.required true, ruleId physical_force.
-7. direct speech "我要推理一下你为什么不肯签名" => elapsedMinutes 15, check.required false. The word 推理 is quoted speech, not an enacted investigation.`;
+7. direct speech "我要推理一下你为什么不肯签名" => elapsedMinutes 15, check.required false. The word 推理 is quoted speech, not an enacted investigation.
+8. action "*眯着眼睛辨认黑板上模糊的咒语*" => elapsedMinutes 15, check.required true, ruleId perception.`;
 
 const POST_TURN_SYSTEM = `You are a sparse observer of an already-written RPG turn. Extract only explicit observable changes from playerAction and narrativeSegments.
 

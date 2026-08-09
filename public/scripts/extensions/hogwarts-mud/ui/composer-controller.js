@@ -871,7 +871,10 @@ export function createComposerController(ports) {
             progress.className =
                 'hpmud-spell-progress';
             name.textContent =
-                `${spell.incantation} · ${spell.name}`;
+                `${
+                    spell.incantation ||
+                    spell.nameEn
+                } · ${spell.name}`;
             meta.textContent = [
                 spell.effect,
                 learned

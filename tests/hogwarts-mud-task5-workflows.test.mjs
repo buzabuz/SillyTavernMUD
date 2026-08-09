@@ -27,6 +27,7 @@ import {
     createWorkflowApplication,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/application.js';
 import { createOpeningWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/opening.js';
+import { createTurnPerformanceWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/turn-performance.js';
 import { createTurnWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/turn.js';
 
 function createOpeningHarness(responses) {
@@ -66,6 +67,66 @@ function createOpeningHarness(responses) {
         },
         workflow,
     };
+}
+
+function createTurnPerformancePromptHarness() {
+    return createTurnPerformanceWorkflow({
+        CANON_CAST_IDENTITY_CONTRACT: '',
+        CANON_WIT_TONE_CONTRACT: '',
+        CONTEXT_SIZE_PRESETS: {
+            rich: 120000,
+        },
+        DEFAULT_MODEL_SLOTS: {
+            low: {
+                maxResponseLength: 12000,
+            },
+        },
+        buildActorContinuityCapsules:
+            () => [],
+        buildActorKnowledgeCapsules:
+            () => [],
+        buildBehavioralEnvironment:
+            () => ({}),
+        buildCurrentMaterialState:
+            () => ({}),
+        buildSpatialContext:
+            () => ({}),
+        buildStructuredPlayerTurnSequence:
+            () => [{
+                type: 'direct_speech',
+                lineIndex: 0,
+                speechOrder: 0,
+                targetActorId: 'hermione',
+                speechText:
+                    'Please teach me.',
+            }],
+        buildTemporaryActorPromotionPolicy:
+            () => ({}),
+        createContextBudgetPlan:
+            () => ({
+                mode: 'rich',
+                label: 'rich',
+                inputBudget: 108000,
+                ragLimit: 10,
+                memoryLimits: {},
+            }),
+        formatRetrievedKnowledge:
+            () => '',
+        getActiveAddressingState:
+            () => ({}),
+        parseItemOperationDirectives:
+            () => ({
+                directives: [],
+                errors: [],
+            }),
+        removeExplicitAddressDirective:
+            value => value,
+        resolvePlayerAddressing:
+            () => ({
+                valid: true,
+                actorIds: ['hermione'],
+            }),
+    });
 }
 
 function createTurnHarness({
@@ -315,6 +376,75 @@ function createTurnHarness({
         workflow,
     };
 }
+
+test('initial scene performer prompt forbids replaying player speech as output dialogue', () => {
+    const workflow =
+        createTurnPerformancePromptHarness();
+    const prompt =
+        workflow.createScenePerformancePrompt(
+            {
+                clock:
+                    '1991-09-02 · 12:00',
+                scene: {},
+                map: {},
+                actors: [{
+                    id: 'hermione',
+                    nameEn:
+                        'Hermione Granger',
+                    present: true,
+                }],
+                actorLibrary: [],
+                items: [],
+            },
+            'Please teach me.',
+            {
+                elapsedMinutes: 15,
+                minimumWords: 240,
+                maximumWords: 560,
+            },
+            [],
+            null,
+            null,
+            null,
+            {
+                valid: true,
+                actorIds: ['hermione'],
+            },
+            [],
+            {
+                mode: 'rich',
+                label: 'rich',
+                inputBudget: 108000,
+                ragLimit: 10,
+                memoryLimits: {},
+            },
+        );
+    const systemPrompt =
+        prompt[0].content;
+    const userPayload =
+        JSON.parse(
+            prompt[1].content,
+        );
+
+    assert.match(
+        systemPrompt,
+        /playerTurnSequence is input context, not output material/u,
+    );
+    assert.match(
+        systemPrompt,
+        /never emit a dialogue segment with actorId "player"/u,
+    );
+    assert.match(
+        systemPrompt,
+        /Every output dialogue segment must be new NPC speech/u,
+    );
+    assert.equal(
+        userPayload
+            .playerTurnSequence[0]
+            .speechText,
+        'Please teach me.',
+    );
+});
 
 test('Item candidate acceptance persists and renders without knowledge or model work', async () => {
     const candidate =

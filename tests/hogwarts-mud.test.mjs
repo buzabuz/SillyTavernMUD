@@ -131,6 +131,7 @@ import {
     recoverScenePerformancePayload,
     recoverSceneTransitionPayload,
     resolveActionCheck,
+    resolveSpellObservation,
     resolvePlayerAddressing,
     resolvePlayerMovement,
     resolveSceneTransitionDestination,
@@ -15212,6 +15213,9 @@ test('spell catalog uses curriculum year only as guidance and structured markers
             Number.isInteger(
                 spell.curriculumYear,
             ) &&
+            Boolean(
+                spell.incantation,
+            ) &&
             !Object.hasOwn(
                 spell,
                 'minimumYear',
@@ -15305,6 +15309,225 @@ test('a structured spell always rolls even when semantic adjudication says no ch
             state,
         ).valid,
         true,
+    );
+});
+
+test('active scene-spell observation rolls once and learns only on a successful result', () => {
+    const state =
+        createSceneTransitionState();
+    state.scene.nameEn =
+        'Transfiguration Classroom';
+    state.scene.nextSceneIntent = {
+        titleEn:
+            'The Match-to-Needle Exercise',
+        summaryEn:
+            'Professor McGonagall asks the class to transform a match into a needle.',
+    };
+    const action =
+        '*眯着眼睛想要看清黑板上的咒语，但麦格教授的草书太模糊了。*';
+    const observation =
+        resolveSpellObservation(
+            state,
+            action,
+        );
+    assert.equal(
+        observation.spellId,
+        'match_to_needle_transfiguration',
+    );
+    assert.equal(
+        observation.incantationKnown,
+        true,
+    );
+    assert.equal(
+        observation.incantation,
+        'Acufors',
+    );
+    const check =
+        resolveActionCheck(
+            state,
+            action,
+            {
+                semanticCheck: {
+                    required: false,
+                    ruleId: 'none',
+                    targetActorId: '',
+                },
+                randomInt:
+                    () => 3,
+            },
+        );
+    assert.equal(
+        check.kind,
+        'perception',
+    );
+    assert.deepEqual(
+        check.rolls,
+        [3],
+    );
+    assert.equal(
+        check.spellObservation
+            .spellId,
+        observation.spellId,
+    );
+    assert.equal(
+        validateCheckResolution(
+            check,
+            state,
+        ).valid,
+        true,
+    );
+    const next =
+        settleSpellProgress(
+            state,
+            action,
+            {
+                checkResolution:
+                    check,
+                publicEventEn:
+                    'Tina cannot make out every detail on the blackboard.',
+                segments: [],
+            },
+        );
+    const failedLearning =
+        next.spellbook
+            .known
+            .find(entry =>
+                entry.spellId ===
+                observation.spellId);
+    assert.equal(
+        failedLearning,
+        undefined,
+    );
+    const successfulCheck =
+        resolveActionCheck(
+            state,
+            action,
+            {
+                semanticCheck: {
+                    required: false,
+                    ruleId: 'none',
+                    targetActorId: '',
+                },
+                randomInt:
+                    () => 15,
+            },
+        );
+    const successfulState =
+        settleSpellProgress(
+            state,
+            action,
+            {
+                checkResolution:
+                    successfulCheck,
+                publicEventEn:
+                    'Tina identifies Acufors on the blackboard.',
+                segments: [],
+            },
+        );
+    const learned =
+        successfulState
+            .spellbook
+            .known
+            .find(entry =>
+                entry.spellId ===
+                observation.spellId);
+    assert.ok(learned);
+    assert.equal(
+        learned.learnedSource,
+        'class',
+    );
+    assert.equal(
+        learned.attempts,
+        0,
+    );
+    assert.match(
+        learned.learnedSourceDetail,
+        /Acufors/u,
+    );
+});
+
+test('explicit NPC explanation teaches a spell after failed player observation', () => {
+    const state =
+        createSceneTransitionState();
+    state.scene.nameEn =
+        'Transfiguration Classroom';
+    state.scene.nextSceneIntent = {
+        titleEn:
+            'The Match-to-Needle Exercise',
+    };
+    const action =
+        '*眯着眼睛辨认黑板上模糊的咒语。*';
+    const failedCheck =
+        resolveActionCheck(
+            state,
+            action,
+            {
+                semanticCheck: {
+                    required: false,
+                    ruleId: 'none',
+                    targetActorId: '',
+                },
+                randomInt:
+                    () => 3,
+            },
+        );
+    const next =
+        settleSpellProgress(
+            state,
+            action,
+            {
+                checkResolution:
+                    failedCheck,
+                publicEventEn:
+                    'Professor McGonagall explains Acufors to the class.',
+                segments: [{
+                    type:
+                        'dialogue',
+                    actorId:
+                        'minerva_mcgonagall',
+                    textEn:
+                        'The incantation is Acufors. Repeat it precisely.',
+                }],
+            },
+        );
+    assert.ok(
+        next.spellbook
+            .known
+            .some(entry =>
+                entry.spellId ===
+                'match_to_needle_transfiguration'),
+    );
+});
+
+test('an AI-visible spell marker records the referenced spell without counting a cast', () => {
+    const state =
+        createSceneTransitionState();
+    state.scene.nameEn =
+        'Transfiguration Classroom';
+    const marker =
+        createSpellDirective(
+            'match_to_needle_transfiguration',
+        );
+    const next =
+        settleSpellProgress(
+            state,
+            '',
+            {
+                publicEventEn:
+                    `Professor McGonagall demonstrates ${marker}.`,
+                segments: [],
+            },
+        );
+    const learned =
+        next.spellbook
+            .known
+            .find(entry =>
+                entry.spellId ===
+                'match_to_needle_transfiguration');
+    assert.ok(learned);
+    assert.equal(
+        learned.attempts,
+        0,
     );
 });
 

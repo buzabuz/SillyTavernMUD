@@ -1,3 +1,8 @@
+import {
+    resolveNewAssistantStoryMessageId,
+    resolveStoryScrollMode,
+} from './story-scroll.js';
+
 export function createStoryRenderer(ports) {
     const {
         refs,
@@ -505,13 +510,39 @@ export function createStoryRenderer(ports) {
         const context = getContext();
         const state = getWorldState();
         const sceneId = state.scene?.id || '';
-        if (session.renderedSceneId !== sceneId) {
+        const sceneChanged =
+            session.renderedSceneId !==
+            sceneId;
+        if (sceneChanged) {
             session.renderedSceneId = sceneId;
+            session.latestStoryMessageId =
+                null;
             session.currentSceneMessageLimit = CURRENT_SCENE_PAGE_SIZE;
             session.archiveListLimit = ARCHIVE_LIST_PAGE_SIZE;
         }
         const entries = getCurrentSceneMessageEntries(context, state);
         const visibleEntries = entries.slice(-session.currentSceneMessageLimit);
+        const latestEntry =
+            visibleEntries.at(-1) ||
+            null;
+        const newAssistantMessageId =
+            resolveNewAssistantStoryMessageId(
+                session
+                    .latestStoryMessageId,
+                latestEntry,
+            );
+        session.latestStoryMessageId =
+            Number.isInteger(
+                Number(
+                    latestEntry
+                        ?.messageId,
+                ),
+            )
+                ? Number(
+                    latestEntry
+                        .messageId,
+                )
+                : null;
         const previousHeight = storyElement.scrollHeight;
         const wasNearBottom = storyElement.scrollHeight - storyElement.scrollTop - storyElement.clientHeight < 100;
         storyElement.replaceChildren();
@@ -770,9 +801,39 @@ export function createStoryRenderer(ports) {
             storyElement.append(failure);
         }
 
-        if (preserveScrollAnchor) {
+        const scrollMode =
+            resolveStoryScrollMode({
+                preserveScrollAnchor,
+                newAssistantMessageId,
+                wasNearBottom,
+                turnActive:
+                    jobRegistry
+                        .turnActive,
+                sceneTransitionActive:
+                    jobRegistry
+                        .sceneTransitionActive,
+            });
+        if (scrollMode === 'preserve') {
             storyElement.scrollTop += storyElement.scrollHeight - previousHeight;
-        } else if (wasNearBottom || jobRegistry.turnActive || jobRegistry.sceneTransitionActive) {
+        } else if (
+            scrollMode ===
+            'new-assistant-top'
+        ) {
+            const finalMessage =
+                storyElement
+                    .querySelector(
+                        `[data-message-id="${newAssistantMessageId}"]`,
+                    );
+            if (finalMessage) {
+                storyElement.scrollTop =
+                    Math.max(
+                        0,
+                        finalMessage
+                            .offsetTop -
+                            16,
+                    );
+            }
+        } else if (scrollMode === 'bottom') {
             storyElement.scrollTop = storyElement.scrollHeight;
             clearTimeout(
                 itemCandidateRevealTimer,

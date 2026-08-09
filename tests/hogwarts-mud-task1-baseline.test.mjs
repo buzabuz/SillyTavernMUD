@@ -26,9 +26,9 @@ const SERVER_ROOT = 'src/hogwarts-mud';
 const HELPERS_FILE = `${CLIENT_ROOT}/helpers.js`;
 const INDEX_FILE = `${CLIENT_ROOT}/index.js`;
 const HELPERS_EXPORT_BASELINE = Object.freeze({
-    count: 292,
+    count: 293,
     sha256:
-        '7276535e9a69489e18aebcc7f5a13a1c3dab8133b40378d2d9f144b0f3c8c0d8',
+        '320efe8d7500da96fad29a11b055c3a1bc494fbc1e393856699935a240a001e8',
 });
 const INDEX_EXPORTS = Object.freeze([
     'SOCIAL_DIRECTOR_RESPONSE_SCHEMA',

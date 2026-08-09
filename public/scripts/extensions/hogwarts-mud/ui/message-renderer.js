@@ -48,6 +48,14 @@ export function createMessageRenderer(ports) {
         const targetText = check.target?.name
             ? `对抗 ${check.target.name} · 难度隐藏`
             : '环境难度隐藏';
+        const observationSucceeded =
+            [
+                'success_with_cost',
+                'success',
+                'critical_success',
+            ].includes(
+                check.outcome,
+            );
         const spellText =
             check.spell
                 ? [
@@ -73,7 +81,16 @@ export function createMessageRenderer(ports) {
                         )}`
                         : '未学咒语 · 实验难度',
                 ].join(' · ')
-                : '';
+                : check.spellObservation
+                    ? observationSucceeded
+                        ? [
+                            check
+                                .spellObservation
+                                .incantation,
+                            '主动观测',
+                        ].join(' · ')
+                        : '未能辨认咒语'
+                    : '';
         card.innerHTML = `
         <div class="hpmud-check-die">
             <small>D20</small>
@@ -500,86 +517,49 @@ export function createMessageRenderer(ports) {
 
     function renderLiveSceneStream() {
         const phase = session.liveSceneStream?.phase || 'connecting';
-        const segments = session.liveSceneStream?.segments || [];
-        if (!segments.length) {
-            const generation = createGenerationStatusCard({
-                tier: 'low',
-                eyebrow: 'ON-SCENE PERFORMER · LIVE',
-                title: LIVE_STREAM_PHASE_LABELS[phase],
-                detail: '正在建立分段结构；第一段完成后会立即出现在这里。',
-                steps: [
-                    '读取行动',
-                    '书写现场',
-                    '译入中文',
-                    '提交状态',
-                ],
-                activeStep: phase === 'connecting'
+        const detailByPhase = {
+            connecting:
+                '正在读取玩家行动、现场事实与导演指令。',
+            receiving:
+                '正在生成完整回复；正文将在校验并提交后一次显示。',
+            repairing:
+                '初稿未通过结构校验，正在重新整理；正文只在最终提交后显示。',
+            translating:
+                '完整原稿已通过结构校验，正在翻译并准备提交。',
+            committing:
+                '正在提交世界状态与最终消息。',
+        };
+        return createGenerationStatusCard({
+            tier: 'low',
+            eyebrow:
+                'ON-SCENE PERFORMER · ATOMIC',
+            title:
+                LIVE_STREAM_PHASE_LABELS[
+                    phase
+                ] ||
+                '正在生成完整回复',
+            detail:
+                detailByPhase[phase] ||
+                detailByPhase.receiving,
+            steps: [
+                '读取行动',
+                '生成完整回复',
+                '译入中文',
+                '提交状态',
+            ],
+            activeStep:
+                phase === 'connecting'
                     ? 0
-                    : phase === 'receiving' ||
-                        phase === 'repairing'
+                    : phase ===
+                            'receiving' ||
+                        phase ===
+                            'repairing'
                         ? 1
-                        : phase === 'translating'
+                        : phase ===
+                              'translating'
                             ? 2
                             : 3,
-            });
-            if (!session.liveSceneStream?.checkResolution) {
-                return generation;
-            }
-            const stack = document.createElement('div');
-            stack.className = 'hpmud-live-stack';
-            stack.append(
-                renderCheckCard(
-                    session.liveSceneStream.checkResolution,
-                    { live: true },
-                ),
-                generation,
-            );
-            return stack;
-        }
-        const message = {
-            name: 'Scene',
-            mes: '',
-            is_user: false,
-            is_system: false,
-            extra: {
-                hogwartsMud: {
-                    turnTransaction: {
-                        checkResolution:
-                            session.liveSceneStream?.checkResolution,
-                    },
-                },
-            },
-        };
-        const article = renderSegmentedMessage(
-            message,
-            -1,
-            segments,
-        );
-        article.classList.add('hpmud-streaming-turn');
-        article.setAttribute('aria-live', 'polite');
-
-        const status = document.createElement('div');
-        status.className = 'hpmud-streaming-status';
-        const mark = document.createElement('span');
-        const label = document.createElement('strong');
-        const count = document.createElement('small');
-        mark.className = 'hpmud-streaming-mark';
-        label.textContent = LIVE_STREAM_PHASE_LABELS[phase];
-        count.textContent =
-            `${segments.filter(segment => !segment.partial).length} 段已落笔`;
-        status.append(mark, label, count);
-        article.prepend(status);
-
-        const lastBlock = article.querySelector(
-            '.hpmud-scene-segment:last-child',
-        );
-        const lastSegment = segments.at(-1);
-        if (lastBlock &&
-            lastSegment?.partial &&
-            ['receiving', 'repairing'].includes(phase)) {
-            lastBlock.classList.add('is-streaming');
-        }
-        return article;
+        });
     }
 
     function renderMessage(message, messageId) {
