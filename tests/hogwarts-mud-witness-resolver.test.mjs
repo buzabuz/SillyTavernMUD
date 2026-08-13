@@ -344,8 +344,13 @@ test('room-wide notable event knowledge becomes neutral memory for every witness
         });
     const eventKnowledge =
         normalizeEventKnowledge({
+            version: 2,
+            eventKind:
+                'observed',
             sceneId:
                 'first_charms_class',
+            clock:
+                '1991-09-02 · 12:30',
             sourceMessageIds: [
                 201,
                 202,
@@ -481,8 +486,13 @@ test('Event player ACL is false by default, ignores model input, and becomes vis
         });
     const proposed =
         normalizeEventKnowledge({
+            version: 2,
+            eventKind:
+                'observed',
             sceneId:
                 'first_charms_class',
+            clock:
+                '1991-09-02 · 12:30',
             sourceMessageIds: [202],
             summaryEn:
                 'Tina levitated Ron instead of the feather.',
@@ -867,8 +877,13 @@ test('turn witness fields and event knowledge persist idempotently into world st
         });
     const eventKnowledge =
         normalizeEventKnowledge({
+            version: 2,
+            eventKind:
+                'observed',
             sceneId:
                 'first_charms_class',
+            clock:
+                '1991-09-02 · 12:30',
             sourceMessageIds: [191],
             summaryEn:
                 'Tina levitated Ron instead of the feather.',

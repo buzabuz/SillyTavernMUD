@@ -1,20 +1,23 @@
 import {
-    IMPRESSION_MAX_WORDS,
-    isValidImpressionShorthand,
     normalizeActorMemoryProfile,
     SHARED_MEMORY_TIERS,
 } from './actor-memory.js';
 import {
     addActorMemoryRefV1,
     assertActorContextStateV1,
-    recordActorAppraisalV1,
     removeActorMemoryRefsV1,
 } from './actor-context-runtime.js';
 
 import {
+    applyAppraisalProposals,
     applyPersonSchemaOperations,
-    reduceMemorySynapse,
 } from './memory-synapse-reducer.js';
+import {
+    createAppraisalId,
+} from './memory-synapse-schema.js';
+import {
+    validateSocialGraphV3,
+} from './social-migration.js';
 
 export function getActorMemoryEntries(profile) {
     const normalized =
@@ -250,23 +253,24 @@ export function validateMemoryConsolidation(
             return;
         }
         reviewedIds.add(review.id);
-        if (review.impressionOfPlayerEn !== undefined) {
-            const impression = String(
-                review.impressionOfPlayerEn || '',
-            ).trim();
-            if (!isValidImpressionShorthand(
-                impression,
-            )) {
-                errors.push(
-                    `人物 ${review.id} 的整理后印象必须是 1–${IMPRESSION_MAX_WORDS} 词的主观 shorthand。`,
-                );
-            }
+        const reviewKeys =
+            Object.keys(review);
+        if (
+            reviewKeys.length !== 2 ||
+            reviewKeys.some(key =>
+                ![
+                    'id',
+                    'operations',
+                ].includes(key))
+        ) {
+            errors.push(
+                `人物 ${review.id} 的整理包含未授权字段。`,
+            );
         }
         const operations = Array.isArray(review.operations)
             ? review.operations
             : [];
-        if (!operations.length &&
-            !review.impressionOfPlayerEn) {
+        if (!operations.length) {
             errors.push(
                 `人物 ${review.id} 的整理没有任何变化。`,
             );
@@ -301,9 +305,12 @@ export function validateMemoryConsolidation(
                 .map(id => entries.get(id))
                 .filter(Boolean);
             if (sources.length !== sourceIds.length ||
+                sources.some(source =>
+                    source.recordType !==
+                        'appraisal') ||
                 sourceIds.some(id => usedSourceIds.has(id))) {
                 errors.push(
-                    `人物 ${review.id} 的记忆来源不存在或被重复使用。`,
+                    `人物 ${review.id} 的记忆来源必须是未重复使用的 AppraisalRef。`,
                 );
             }
             sourceIds.forEach(id =>
@@ -435,32 +442,21 @@ export function normalizeMemoryConsolidationPayload(
         reviewedIds.add(review.id);
         return true;
     });
-    normalized.statements =
-        Array.isArray(
-            normalized.statements,
-        )
-            ? normalized.statements
-            : Array.isArray(
-                normalized
-                    .socialStatements,
+    for (const field of [
+        'reportedEvents',
+        'recipientAppraisals',
+        'identityClaims',
+        'relationshipClaims',
+        'personReferences',
+        'relationshipEvidence',
+    ]) {
+        normalized[field] =
+            Array.isArray(
+                normalized[field],
             )
-                ? normalized
-                    .socialStatements
+                ? normalized[field]
                 : [];
-    normalized.relationshipEvidence =
-        Array.isArray(
-            normalized
-                .relationshipEvidence,
-        )
-            ? normalized
-                .relationshipEvidence
-            : Array.isArray(
-                normalized
-                    .socialRelationshipEvidence,
-            )
-                ? normalized
-                    .socialRelationshipEvidence
-                : [];
+    }
     normalized.schemaOperations =
         Array.isArray(
             normalized
@@ -470,6 +466,236 @@ export function normalizeMemoryConsolidationPayload(
                 .schemaOperations
             : [];
     return normalized;
+}
+
+function getProtectedAppraisalIds(
+    state,
+) {
+    const protectedIds =
+        new Set();
+    for (const entry of Object.values(
+        state.actorMemoryIndex
+            ?.byActorId ||
+        {},
+    )) {
+        if (entry.firstImpressionRef) {
+            protectedIds.add(
+                entry.firstImpressionRef,
+            );
+        }
+        for (const tier of [
+            'core',
+            'recent',
+            'everyday',
+        ]) {
+            for (const reference of (
+                entry[tier] || []
+            )) {
+                if (
+                    reference.recordType ===
+                        'appraisal'
+                ) {
+                    protectedIds.add(
+                        reference.recordId,
+                    );
+                }
+            }
+        }
+    }
+    for (const schema of (
+        state.memorySynapse
+            ?.personSchemas ||
+        []
+    )) {
+        for (const appraisalId of [
+            ...(schema
+                .supportAppraisalIds ||
+                []),
+            ...(schema
+                .counterAppraisalIds ||
+                []),
+        ]) {
+            protectedIds.add(
+                appraisalId,
+            );
+        }
+    }
+    for (const appraisal of (
+        state.memorySynapse
+            ?.appraisals ||
+        []
+    )) {
+        if (
+            appraisal
+                .supersedesAppraisalId ||
+            appraisal.supersededById
+        ) {
+            protectedIds.add(
+                appraisal.id,
+            );
+            if (
+                appraisal
+                    .supersedesAppraisalId
+            ) {
+                protectedIds.add(
+                    appraisal
+                        .supersedesAppraisalId,
+                );
+            }
+            if (appraisal.supersededById) {
+                protectedIds.add(
+                    appraisal
+                        .supersededById,
+                );
+            }
+        }
+    }
+    return protectedIds;
+}
+
+function createMergedAppraisalProposal(
+    state,
+    actorId,
+    operation,
+) {
+    const byId =
+        new Map(
+            (
+                state.memorySynapse
+                    ?.appraisals ||
+                []
+            ).map(appraisal => [
+                appraisal.id,
+                appraisal,
+            ]),
+        );
+    const sources =
+        operation.sourceIds
+            .map(id =>
+                byId.get(id));
+    if (
+        sources.some(source =>
+            !source) ||
+        sources.some(source =>
+            source.observerId !==
+                actorId) ||
+        new Set(
+            sources.map(source =>
+                source.targetId),
+        ).size !== 1
+    ) {
+        throw new TypeError(
+            `Memory consolidation for ${actorId} has incompatible Appraisal sources.`,
+        );
+    }
+    return {
+        observerId: actorId,
+        targetId:
+            sources[0].targetId,
+        summaryEn:
+            operation.summaryEn,
+        sourceEventIds: [
+            ...new Set(
+                sources.flatMap(
+                    source =>
+                        source
+                            .sourceEventIds ||
+                        [],
+                ),
+            ),
+        ].sort(),
+        activationSchemaIds: [
+            ...new Set(
+                sources.flatMap(
+                    source =>
+                        source
+                            .activationSchemaIds ||
+                        [],
+                ),
+            ),
+        ].sort(),
+        derivedSchemaIds: [
+            ...new Set(
+                sources.flatMap(
+                    source =>
+                        source
+                            .derivedSchemaIds ||
+                        [],
+                ),
+            ),
+        ].sort(),
+        contextTags: [
+            ...new Set([
+                'memory_consolidation',
+                ...sources.flatMap(
+                    source =>
+                        source
+                            .contextTags ||
+                        [],
+                ),
+            ]),
+        ].sort(),
+        confidence:
+            sources.reduce(
+                (sum, source) =>
+                    sum +
+                    Number(
+                        source
+                            .confidence ||
+                        0,
+                    ),
+                0,
+            ) /
+            sources.length,
+        supersedesAppraisalId:
+            '',
+    };
+}
+
+function rebindRelationshipReceipts(
+    state,
+    replacementBySourceId,
+) {
+    for (const receipt of (
+        state.socialGraph
+            ?.relationshipEvidence ||
+        []
+    )) {
+        const replacementId =
+            replacementBySourceId
+                .get(
+                    receipt.appraisalId,
+                );
+        if (
+            replacementId ===
+                undefined
+        ) {
+            continue;
+        }
+        const replacement =
+            (
+                state.memorySynapse
+                    ?.appraisals ||
+                []
+            ).find(appraisal =>
+                appraisal.id ===
+                    replacementId);
+        receipt.appraisalId =
+            replacement &&
+            replacement.observerId ===
+                receipt.sourceActorId &&
+            replacement.targetId ===
+                receipt.targetActorId &&
+            (
+                replacement
+                    .sourceEventIds ||
+                []
+            ).includes(
+                receipt.eventId,
+            )
+                ? replacement.id
+                : '';
+    }
 }
 
 export function applyMemoryConsolidation(
@@ -508,81 +734,137 @@ export function applyMemoryConsolidation(
         0,
         Number(next.turn?.count || 0),
     );
+    const replacementBySourceId =
+        new Map();
+    const deletionCandidates =
+        new Set();
     for (const review of reviews.values()) {
-        if (review.impressionOfPlayerEn) {
-            recordActorAppraisalV1(
-                next,
-                {
-                    actorId:
-                        review.id,
-                    summaryEn:
-                        review
-                            .impressionOfPlayerEn,
-                    kind:
-                        'memory_consolidation_impression',
-                    tier: 'recent',
-                },
-            );
-        }
-        for (const [
-            operationIndex,
-            operation,
-        ] of (
-                review.operations ||
+        for (const operation of (
+            review.operations ||
             []
-            ).entries()) {
+        )) {
+            let replacementId = '';
+            if (
+                operation.targetTier !==
+                    'forget'
+            ) {
+                if (
+                    operation
+                        .sourceIds
+                        .length === 1
+                ) {
+                    replacementId =
+                        operation
+                            .sourceIds[0];
+                } else {
+                    const proposal =
+                        createMergedAppraisalProposal(
+                            next,
+                            review.id,
+                            operation,
+                        );
+                    next =
+                        applyAppraisalProposals(
+                            next,
+                            [proposal],
+                        );
+                    replacementId =
+                        createAppraisalId(
+                            proposal,
+                        );
+                }
+            }
             removeActorMemoryRefsV1(
                 next,
                 review.id,
                 operation.sourceIds,
             );
-            if (
-                operation.targetTier ===
-                'forget'
-            ) {
-                continue;
+            for (const sourceId of (
+                operation.sourceIds
+            )) {
+                replacementBySourceId
+                    .set(
+                        sourceId,
+                        replacementId,
+                    );
+                if (
+                    sourceId !==
+                        replacementId
+                ) {
+                    deletionCandidates
+                        .add(sourceId);
+                }
             }
-            const appraisalId =
-                recordActorAppraisalV1(
+            if (replacementId) {
+                addActorMemoryRefV1(
                     next,
+                    review.id,
+                    operation
+                        .targetTier,
                     {
-                        actorId:
-                            review.id,
-                        summaryEn:
-                            operation
-                                .summaryEn,
-                        kind:
-                            `memory_consolidation_${currentTurn}_${operationIndex + 1}`,
-                        tier:
-                            operation
-                                .targetTier,
+                        recordType:
+                            'appraisal',
+                        recordId:
+                            replacementId,
+                        addedClock:
+                            next.clock,
                     },
                 );
-            addActorMemoryRefV1(
-                next,
-                review.id,
-                operation.targetTier,
-                {
-                    recordType:
-                        'appraisal',
-                    recordId:
-                        appraisalId,
-                    addedClock:
-                        next.clock,
-                },
-            );
+            }
         }
     }
     next =
-        reduceMemorySynapse(
+        applyPersonSchemaOperations(
             next,
+            payload
+                .schemaOperations ||
+                [],
+        );
+    rebindRelationshipReceipts(
+        next,
+        replacementBySourceId,
+    );
+    const protectedIds =
+        getProtectedAppraisalIds(
+            next,
+        );
+    const deletedIds =
+        new Set(
+            [...deletionCandidates]
+                .filter(id =>
+                    !protectedIds.has(id)),
+        );
+    next.memorySynapse
+        .appraisals =
+        (
+            next.memorySynapse
+                ?.appraisals ||
+            []
+        ).filter(appraisal =>
+            !deletedIds.has(
+                appraisal.id,
+            ));
+    const socialValidation =
+        validateSocialGraphV3(
+            next.socialGraph,
             {
-                schemaOperations:
-                    payload
-                        .schemaOperations ||
+                eventKnowledge:
+                    next.eventKnowledge ||
+                    [],
+                appraisals:
+                    next.memorySynapse
+                        ?.appraisals ||
                     [],
             },
         );
+    if (!socialValidation.valid) {
+        throw new TypeError(
+            socialValidation.errors
+                .join(' '),
+        );
+    }
+    next.socialGraph =
+        socialValidation.value;
     const eventBoundary =
         next.memoryDirector
             ?.pendingEventBoundary;

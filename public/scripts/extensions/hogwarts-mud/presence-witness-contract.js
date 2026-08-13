@@ -9,6 +9,9 @@ import {
     COHORT_SOURCE_VALUES,
     CONCEALMENT_VALUES,
     EVENT_KNOWLEDGE_CONTRACT_KEYS,
+    EVENT_KNOWLEDGE_KIND_VALUES,
+    EVENT_KNOWLEDGE_OBSERVED_KEYS,
+    EVENT_KNOWLEDGE_REPORTED_KEYS,
     EVENT_KNOWLEDGE_SCHEMA_VERSION,
     EVENT_KNOWLEDGE_SOURCE_VALUES,
     LOCAL_PRESENCE_CONTRACT_KEYS,
@@ -18,12 +21,28 @@ import {
     PERCEPTION_SCHEMA_VERSION,
     PERCEPTION_SOURCE_VALUES,
     PRESENCE_WITNESS_SCHEMA_VERSION,
+    REPORTED_EVENT_CONTRACT_KEYS,
+    REPORTED_EVENT_STATEMENT_KIND_VALUES,
     SALIENCE_VALUES,
+    SOURCE_SEGMENT_REF_CONTRACT_KEYS,
     VISUAL_SCOPE_VALUES,
     WITNESS_BASIS_VALUES,
     WITNESS_RESOLUTION_CONTRACT_KEYS,
     WITNESS_RESOLUTION_SCHEMA_VERSION,
 } from './domain/presence-witness-schema.js';
+import {
+    projectActorEventKnowledge,
+} from './domain/actor-event-knowledge.js';
+import {
+    createReportedEventKnowledgeId,
+    getEventKnowledgeSourceMessageIds,
+    normalizeReportedEvent,
+} from './domain/reported-event-contract.js';
+import {
+    createEventKnowledgeId,
+    createStableContractId,
+    normalizeStableContractId,
+} from './domain/stable-contract-id.js';
 
 export {
     ACTOR_EVENT_KNOWLEDGE_KIND_VALUES,
@@ -36,6 +55,9 @@ export {
     COHORT_SOURCE_VALUES,
     CONCEALMENT_VALUES,
     EVENT_KNOWLEDGE_CONTRACT_KEYS,
+    EVENT_KNOWLEDGE_KIND_VALUES,
+    EVENT_KNOWLEDGE_OBSERVED_KEYS,
+    EVENT_KNOWLEDGE_REPORTED_KEYS,
     EVENT_KNOWLEDGE_SCHEMA_VERSION,
     EVENT_KNOWLEDGE_SOURCE_VALUES,
     LOCAL_PRESENCE_CONTRACT_KEYS,
@@ -45,15 +67,23 @@ export {
     PERCEPTION_SCHEMA_VERSION,
     PERCEPTION_SOURCE_VALUES,
     PRESENCE_WITNESS_SCHEMA_VERSION,
+    REPORTED_EVENT_CONTRACT_KEYS,
+    REPORTED_EVENT_STATEMENT_KIND_VALUES,
     SALIENCE_VALUES,
+    SOURCE_SEGMENT_REF_CONTRACT_KEYS,
     VISUAL_SCOPE_VALUES,
     WITNESS_BASIS_VALUES,
     WITNESS_RESOLUTION_CONTRACT_KEYS,
     WITNESS_RESOLUTION_SCHEMA_VERSION,
 };
+export {
+    createEventKnowledgeId,
+    createReportedEventKnowledgeId,
+    createStableContractId,
+    getEventKnowledgeSourceMessageIds,
+    projectActorEventKnowledge,
+};
 
-const STABLE_ID_PATTERN =
-    /^[a-z][a-z0-9_]{0,79}$/;
 const UNAVAILABLE_LIFE_STATUSES =
     new Set([
         'dead',
@@ -70,92 +100,10 @@ function stableCompare(left, right) {
             : 0;
 }
 
-function canonicalize(value) {
-    if (Array.isArray(value)) {
-        return value.map(canonicalize);
-    }
-    if (
-        value &&
-        typeof value === 'object'
-    ) {
-        return Object.fromEntries(
-            Object.keys(value)
-                .sort(stableCompare)
-                .map(key => [
-                    key,
-                    canonicalize(value[key]),
-                ]),
-        );
-    }
-    return value ?? null;
-}
-
-function stableHash(value) {
-    const source =
-        JSON.stringify(canonicalize(value));
-    let first = 0x811c9dc5;
-    let second = 0x9e3779b9;
-    for (
-        let index = 0;
-        index < source.length;
-        index += 1
-    ) {
-        const code =
-            source.charCodeAt(index);
-        first = Math.imul(
-            first ^ code,
-            0x01000193,
-        );
-        second = Math.imul(
-            second ^ code,
-            0x85ebca6b,
-        );
-    }
-    return [
-        first >>> 0,
-        second >>> 0,
-    ].map(part =>
-        part.toString(16)
-            .padStart(8, '0'))
-        .join('');
-}
-
-function slugify(value) {
-    return String(value || '')
-        .trim()
-        .toLocaleLowerCase('en-US')
-        .replace(/[^a-z0-9]+/gu, '_')
-        .replace(/^_+|_+$/gu, '')
-        .slice(0, 36);
-}
-
-export function createStableContractId(
-    prefix,
-    identity,
-) {
-    const normalizedPrefix =
-        slugify(prefix) || 'record';
-    const hint = slugify(
-        typeof identity === 'object'
-            ? identity?.labelEn ||
-                identity?.sceneId ||
-                identity?.mapId
-            : identity,
-    );
-    return [
-        normalizedPrefix,
-        hint,
-        stableHash(identity),
-    ].filter(Boolean)
-        .join('_')
-        .slice(0, 80);
-}
-
 function normalizeId(value) {
-    const id = String(value || '').trim();
-    return STABLE_ID_PATTERN.test(id)
-        ? id
-        : '';
+    return normalizeStableContractId(
+        value,
+    );
 }
 
 function buildActorIndex(actors = []) {
@@ -516,28 +464,26 @@ export function normalizeLocalPresence(
     };
 }
 
-function hasOnlyAllowedKeys(
-    value,
-    allowedKeys,
-) {
-    return Object.keys(value)
-        .every(key =>
-            allowedKeys.includes(key));
+function hasOnlyAllowedKeys(value, allowedKeys) {
+    return Object.keys(value).every(key =>
+        allowedKeys.includes(key));
 }
 
-function validationResult(
-    value,
-    valid,
-    message,
-) {
+function hasExactKeys(value, expectedKeys) {
+    return Boolean(
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        Object.keys(value).length === expectedKeys.length &&
+        Object.keys(value).every(key =>
+            expectedKeys.includes(key)),
+    );
+}
+function validationResult(value, valid, message) {
     return {
         valid,
-        errors: valid
-            ? []
-            : [message],
-        value: valid
-            ? value
-            : null,
+        errors: valid ? [] : [message],
+        value: valid ? value : null,
     };
 }
 
@@ -848,25 +794,6 @@ function normalizeMessageIds(values) {
     });
 }
 
-export function createEventKnowledgeId(
-    {
-        sceneId,
-        sourceMessageIds,
-    } = {},
-) {
-    return createStableContractId(
-        'event',
-        {
-            sceneId:
-                normalizeId(sceneId),
-            sourceMessageIds:
-                normalizeMessageIds(
-                    sourceMessageIds,
-                ),
-        },
-    );
-}
-
 export function normalizeEventKnowledge(
     eventKnowledge,
     options = {},
@@ -879,10 +806,29 @@ export function normalizeEventKnowledge(
     ) {
         return null;
     }
+    if (
+        eventKnowledge.eventKind ===
+            'reported'
+    ) {
+        return normalizeReportedEvent(
+            eventKnowledge,
+            options,
+        );
+    }
+    if (
+        eventKnowledge.eventKind !==
+            'observed'
+    ) {
+        return null;
+    }
     const sceneId =
         normalizeId(
             eventKnowledge.sceneId,
         );
+    const clock =
+        String(
+            eventKnowledge.clock || '',
+        ).trim();
     const sourceMessageIds =
         normalizeMessageIds(
             eventKnowledge
@@ -905,6 +851,7 @@ export function normalizeEventKnowledge(
         );
     if (
         !sceneId ||
+        !clock ||
         !sourceMessageIds.length ||
         !summaryEn ||
         !perception ||
@@ -928,6 +875,7 @@ export function normalizeEventKnowledge(
     return {
         version:
             EVENT_KNOWLEDGE_SCHEMA_VERSION,
+        eventKind: 'observed',
         eventId:
             normalizeId(
                 eventKnowledge.eventId,
@@ -937,6 +885,7 @@ export function normalizeEventKnowledge(
                 sourceMessageIds,
             }),
         sceneId,
+        clock,
         sourceMessageIds,
         summaryEn,
         activationSchemaIds:
@@ -969,91 +918,58 @@ export function validateEventKnowledgeContract(
             options,
         );
     const perceptionValidation =
-        validatePerceptionContract(
-            eventKnowledge?.perception,
-            options,
+        eventKnowledge?.eventKind ===
+            'observed'
+            ? validatePerceptionContract(
+                eventKnowledge
+                    ?.perception,
+                options,
+            )
+            : {
+                valid: true,
+            };
+    const allowedKeys =
+        eventKnowledge?.eventKind ===
+            'observed'
+            ? EVENT_KNOWLEDGE_OBSERVED_KEYS
+            : EVENT_KNOWLEDGE_REPORTED_KEYS;
+    const reportKeysValid =
+        eventKnowledge?.eventKind !==
+            'reported' ||
+        (
+            hasExactKeys(
+                eventKnowledge.report,
+                REPORTED_EVENT_CONTRACT_KEYS,
+            ) &&
+            (
+                eventKnowledge.report
+                    ?.sourceSegmentRefs ||
+                []
+            ).every(reference =>
+                hasExactKeys(
+                    reference,
+                    SOURCE_SEGMENT_REF_CONTRACT_KEYS,
+                ))
         );
     const valid = Boolean(normalized) &&
+        eventKnowledge?.version ===
+            EVENT_KNOWLEDGE_SCHEMA_VERSION &&
+        EVENT_KNOWLEDGE_KIND_VALUES
+            .includes(
+                eventKnowledge
+                    ?.eventKind,
+            ) &&
         perceptionValidation.valid &&
-        hasOnlyAllowedKeys(
+        hasExactKeys(
             eventKnowledge,
-            EVENT_KNOWLEDGE_CONTRACT_KEYS,
-        );
+            allowedKeys,
+        ) &&
+        reportKeysValid;
     return validationResult(
         normalized,
         valid,
         'Event knowledge contract is invalid.',
     );
-}
-
-function projectKnownEvent(
-    event,
-    knowledgeKind,
-) {
-    return {
-        ...structuredClone(event),
-        knowledgeKind,
-    };
-}
-
-export function projectActorEventKnowledge(
-    worldState = {},
-    actorId,
-) {
-    const normalizedActorId =
-        normalizeId(actorId);
-    const direct = [];
-    const witnessed = [];
-    for (
-        const event
-        of Array.isArray(
-            worldState.eventKnowledge,
-        )
-            ? worldState.eventKnowledge
-            : []
-    ) {
-        if (
-            (
-                event
-                    ?.participantActorIds ||
-                []
-            ).includes(
-                normalizedActorId,
-            )
-        ) {
-            direct.push(
-                projectKnownEvent(
-                    event,
-                    'direct',
-                ),
-            );
-            continue;
-        }
-        if (
-            (
-                event
-                    ?.witnessActorIds ||
-                []
-            ).includes(
-                normalizedActorId,
-            )
-        ) {
-            witnessed.push(
-                projectKnownEvent(
-                    event,
-                    'witnessed',
-                ),
-            );
-        }
-    }
-    return {
-        version:
-            ACTOR_EVENT_KNOWLEDGE_SCHEMA_VERSION,
-        direct,
-        witnessed,
-        // Reserved for explicit, provenance-bearing propagation.
-        reported: [],
-    };
 }
 
 export function projectSceneArchivePresence(
@@ -1107,9 +1023,9 @@ export function projectSceneArchivePresence(
             (
                 !sourceMessageIds.size ||
                 (
-                    event
-                        .sourceMessageIds ||
-                    []
+                    getEventKnowledgeSourceMessageIds(
+                        event,
+                    )
                 ).some(messageId =>
                     sourceMessageIds
                         .has(messageId))
@@ -1849,6 +1765,23 @@ export function reduceEventKnowledge(
             )
             : [];
     }
+    if (
+        normalized.eventKind ===
+            'reported' &&
+        (
+            normalized.report
+                ?.speakerId ===
+                'player' ||
+            (
+                normalized.report
+                    ?.recipientIds ||
+                []
+            ).includes('player')
+        )
+    ) {
+        normalized.knownToPlayer =
+            true;
+    }
     const byId =
         new Map(
             (
@@ -1866,14 +1799,39 @@ export function reduceEventKnowledge(
         byId.get(
             normalized.eventId,
         );
+    if (existing) {
+        const comparableExisting = {
+            ...existing,
+            knownToPlayer: false,
+        };
+        const comparableNext = {
+            ...normalized,
+            knownToPlayer: false,
+        };
+        if (
+            JSON.stringify(
+                comparableExisting,
+            ) !==
+            JSON.stringify(
+                comparableNext,
+            )
+        ) {
+            throw new TypeError(
+                `Conflicting Event ${normalized.eventId}.`,
+            );
+        }
+    }
     byId.set(
         normalized.eventId,
         {
-            ...normalized,
+            ...(existing || normalized),
             knownToPlayer:
                 existing
                     ?.knownToPlayer ===
-                true,
+                    true ||
+                normalized
+                    .knownToPlayer ===
+                    true,
         },
     );
     return [...byId.values()]
@@ -1958,9 +1916,8 @@ export function markCommittedMessageEventsKnownToPlayer(
                         .has(
                             event?.eventId,
                         ) &&
-                    normalizeMessageIds(
-                        event
-                            ?.sourceMessageIds,
+                    getEventKnowledgeSourceMessageIds(
+                        event,
                     ).includes(
                         messageId,
                     )
@@ -1979,6 +1936,8 @@ export function applyPresenceWitnessTransaction(
         );
     next.presenceWitnessVersion =
         PRESENCE_WITNESS_SCHEMA_VERSION;
+    next.eventKnowledgeVersion =
+        EVENT_KNOWLEDGE_SCHEMA_VERSION;
     next.activeInteractionActorIds =
         normalizeActiveInteractionActorIds(
             transaction
@@ -2029,6 +1988,8 @@ export function createDefaultPresenceWitnessState() {
     return {
         presenceWitnessVersion:
             PRESENCE_WITNESS_SCHEMA_VERSION,
+        eventKnowledgeVersion:
+            EVENT_KNOWLEDGE_SCHEMA_VERSION,
         activeInteractionActorIds: [],
         localPresence:
             createDefaultLocalPresence(),

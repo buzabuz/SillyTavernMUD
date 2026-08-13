@@ -13,7 +13,7 @@ export const NPC_IDENTITY_PROMPT_BOUNDARY = `
 Identity prompt boundary:
 - identityProjection is observer-scoped and clock-scoped. authority is available only to the matching subject actor; claims are attributed statements, never objective truth.
 - A model may use only claims visible inside its matching observer capsule. Never transfer one observer's Identity knowledge to another actor or the narrator.
-- Model output cannot write authority Identity, person reference resolution, or a formal family edge. It may only repeat evidence-grounded attributed claims through the existing Social Director statements channel.
+- Model output cannot write authority Identity, person reference resolution, or a formal family edge. It may only repeat evidence-grounded attributed claims through committed reported Events.
 - Current goal, mood, intent, and activity are dynamic actor state outside Identity. Never propose or store them as Identity fields.`;
 
 const PROMPT_RUNTIME_ACTOR_FIELDS =
@@ -312,6 +312,36 @@ function cloneRecords(
     );
 }
 
+function claimOccurredByClock(
+    claim,
+    worldState,
+    clock,
+) {
+    if (
+        claim?.sourceKind ===
+            'authority'
+    ) {
+        return true;
+    }
+    const event =
+        (
+            worldState
+                ?.eventKnowledge ||
+            []
+        ).find(candidate =>
+            candidate.eventId ===
+                claim
+                    ?.reportedEventId);
+    return (
+        event?.eventKind ===
+            'reported' &&
+        occurredByClock(
+            event.clock,
+            clock,
+        )
+    );
+}
+
 export function buildNpcIdentityPromptProjection(
     worldState = {},
     subjectActorId,
@@ -342,8 +372,9 @@ export function buildNpcIdentityPromptProjection(
             .filter(claim =>
                 claim.subjectId ===
                     subjectId &&
-                occurredByClock(
-                    claim.clock,
+                claimOccurredByClock(
+                    claim,
+                    worldState,
                     clock,
                 ));
     const relationshipClaims =
@@ -351,8 +382,9 @@ export function buildNpcIdentityPromptProjection(
             .filter(claim =>
                 claim.subjectId ===
                     subjectId &&
-                occurredByClock(
-                    claim.clock,
+                claimOccurredByClock(
+                    claim,
+                    worldState,
                     clock,
                 ));
     const visibleReferenceIds =
@@ -361,16 +393,6 @@ export function buildNpcIdentityPromptProjection(
                 .map(claim =>
                     claim.targetRefId),
         );
-    const attributedStatements =
-        social.statements
-            .filter(statement =>
-                statement.subjectId ===
-                    subjectId &&
-                occurredByClock(
-                    statement.lastClock ||
-                    statement.firstClock,
-                    clock,
-                ));
     const authority =
         (
             observerId === subjectId ||
@@ -411,10 +433,6 @@ export function buildNpcIdentityPromptProjection(
                                     reference.id,
                                 )),
                 ),
-            attributedStatements:
-                cloneRecords(
-                    attributedStatements,
-                ),
         },
     };
 }
@@ -440,9 +458,6 @@ export function buildNpcIdentityKnowledgeForObserver(
                 .map(claim =>
                     claim.subjectId),
             ...social.relationshipClaims
-                .map(claim =>
-                    claim.subjectId),
-            ...social.statements
                 .map(statement =>
                     statement.subjectId),
         ].filter(Boolean));
@@ -465,9 +480,6 @@ export function buildNpcIdentityKnowledgeForObserver(
                 .length ||
             projection.claims
                 .relationshipClaims
-                .length ||
-            projection.claims
-                .attributedStatements
                 .length);
 }
 

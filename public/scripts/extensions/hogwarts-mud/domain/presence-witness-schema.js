@@ -3,8 +3,19 @@ export const LOCAL_PRESENCE_SCHEMA_VERSION = 1;
 export const COHORT_SCHEMA_VERSION = 1;
 export const PERCEPTION_SCHEMA_VERSION = 1;
 export const WITNESS_RESOLUTION_SCHEMA_VERSION = 1;
-export const EVENT_KNOWLEDGE_SCHEMA_VERSION = 1;
-export const ACTOR_EVENT_KNOWLEDGE_SCHEMA_VERSION = 1;
+export const EVENT_KNOWLEDGE_SCHEMA_VERSION = 2;
+export const ACTOR_EVENT_KNOWLEDGE_SCHEMA_VERSION = 2;
+export const EVENT_KNOWLEDGE_KIND_VALUES =
+    Object.freeze([
+        'observed',
+        'reported',
+    ]);
+export const REPORTED_EVENT_STATEMENT_KIND_VALUES =
+    Object.freeze([
+        'claim',
+        'correction',
+        'retraction',
+    ]);
 export const ACTOR_EVENT_KNOWLEDGE_KIND_VALUES =
     Object.freeze([
         'direct',
@@ -61,6 +72,7 @@ export const PERCEPTION_SOURCE_VALUES =
     Object.freeze([
         'post_turn_observer',
         'deterministic_fallback',
+        'deterministic_repair',
         'structured_scene_opening',
         'migration',
     ]);
@@ -85,7 +97,9 @@ export const EVENT_KNOWLEDGE_SOURCE_VALUES =
     Object.freeze([
         'post_turn_observer',
         'deterministic_fallback',
+        'deterministic_repair',
         'structured_scene_opening',
+        'social_event_boundary',
         'migration',
     ]);
 export const WITNESS_BASIS_VALUES =
@@ -102,6 +116,7 @@ export const WITNESS_BASIS_VALUES =
         'room_visual_audible',
         'area_visual',
         'adjacent_audible',
+        'reported',
     ]);
 
 export const LOCAL_PRESENCE_CONTRACT_KEYS =
@@ -148,8 +163,10 @@ export const WITNESS_RESOLUTION_CONTRACT_KEYS =
 export const EVENT_KNOWLEDGE_CONTRACT_KEYS =
     Object.freeze([
         'version',
+        'eventKind',
         'eventId',
         'sceneId',
+        'clock',
         'sourceMessageIds',
         'summaryEn',
         'activationSchemaIds',
@@ -160,4 +177,56 @@ export const EVENT_KNOWLEDGE_CONTRACT_KEYS =
         'perception',
         'knownToPlayer',
         'source',
+        'report',
+    ]);
+export const EVENT_KNOWLEDGE_OBSERVED_KEYS =
+    Object.freeze([
+        'version',
+        'eventKind',
+        'eventId',
+        'sceneId',
+        'clock',
+        'sourceMessageIds',
+        'summaryEn',
+        'activationSchemaIds',
+        'participantActorIds',
+        'witnessActorIds',
+        'witnessCohortIds',
+        'witnessBasis',
+        'perception',
+        'knownToPlayer',
+        'source',
+    ]);
+export const EVENT_KNOWLEDGE_REPORTED_KEYS =
+    Object.freeze([
+        'version',
+        'eventKind',
+        'eventId',
+        'sceneId',
+        'clock',
+        'summaryEn',
+        'activationSchemaIds',
+        'participantActorIds',
+        'witnessActorIds',
+        'witnessCohortIds',
+        'witnessBasis',
+        'knownToPlayer',
+        'source',
+        'report',
+    ]);
+export const REPORTED_EVENT_CONTRACT_KEYS =
+    Object.freeze([
+        'statementKind',
+        'sourceSegmentRefs',
+        'speakerId',
+        'recipientIds',
+        'subjectIds',
+        'aboutEventId',
+        'parentReportedEventId',
+        'distortionLevel',
+    ]);
+export const SOURCE_SEGMENT_REF_CONTRACT_KEYS =
+    Object.freeze([
+        'messageId',
+        'segmentIndex',
     ]);

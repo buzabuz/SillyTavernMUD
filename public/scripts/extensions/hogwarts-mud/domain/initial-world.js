@@ -25,10 +25,6 @@ import {
 } from '../world-data.js';
 
 import {
-    getActorKnownRumors,
-} from './actor-knowledge.js';
-
-import {
     actorContextVersion,
     actorDossierProjectionVersion,
     memoryReferenceVersion,
@@ -121,12 +117,15 @@ import {
 import {
     buildBehavioralEnvironment,
 } from './time-environment.js';
+import {
+    createDefaultGlobalChronicle,
+    TIMELINE_CHRONICLE_VERSION,
+} from './timeline-chronicle.js';
 
 export const buildMandatorySceneState =
     createMandatorySceneStateProjector({
         buildBehavioralEnvironment,
         buildCurrentMaterialState,
-        getActorKnownRumors,
     });
 
 function actorIdentitySource(
@@ -310,32 +309,6 @@ function recordOpeningAppraisals(
             },
         );
     }
-    const currentImpression =
-        actor?.impressionOfPlayerEn ||
-        profile
-            ?.impressionOfPlayerEn ||
-        '';
-    if (
-        currentImpression &&
-        currentImpression !==
-            firstImpression
-    ) {
-        recordActorAppraisalV1(
-            state,
-            {
-                actorId: profile.id,
-                summaryEn:
-                    currentImpression,
-                kind:
-                    'opening_impression',
-                tier: 'recent',
-                clock: state.clock,
-                sceneId:
-                    state.scene?.id ||
-                    '',
-            },
-        );
-    }
 }
 
 function openingRelationshipEdge(
@@ -493,10 +466,10 @@ export function createInitialWorldState(character, modelSlots, campaign = create
         ),
         storyArcs: [],
         conflict: null,
-        timeline: [],
-        worldNews: [],
-        gossipPacks: [],
-        worldChangeLog: [],
+        timelineChronicleVersion:
+            TIMELINE_CHRONICLE_VERSION,
+        globalChronicle:
+            createDefaultGlobalChronicle(),
         turn: {
             count: 0,
             status: 'idle',
@@ -1070,10 +1043,6 @@ export function applyOpeningWorldPackage(worldState, opening) {
         incitingEvent: display.incitingEvent || opening.conflict.incitingEventEn,
     };
     next.clues = [];
-    next.timeline = [{
-        clock: opening.clock,
-        label: display.incitingEvent || opening.conflict.incitingEventEn,
-    }];
     next.items = [];
     next.map.customLocalMaps = [
         ...(next.map.customLocalMaps || []).filter(item => item.id !== customMap.id),
@@ -1261,12 +1230,6 @@ export function applyDirectorFoundation(worldState, foundation) {
             : [],
     }];
     next.clues = (next.clues || []).filter(clue => clue.discovered === true);
-    next.timeline = Array.isArray(next.timeline) && next.timeline.length
-        ? next.timeline
-        : [{
-            clock: next.clock,
-            label: next.scene?.summary || next.chapter || '故事开始',
-        }];
     next.directorFoundation = {
         status: 'ready',
         error: '',

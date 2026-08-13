@@ -1,8 +1,9 @@
 import {
     SOCIAL_GRAPH_EXTRACTOR_VERSION,
+    SOCIAL_GRAPH_VERSION,
 } from '../domain/social-schema.js';
 
-export function canOpenCurrentV2SaveReadOnly(
+export function canOpenCurrentSocialSaveReadOnly(
     save,
     {
         currentChatId = '',
@@ -24,7 +25,8 @@ export function canOpenCurrentV2SaveReadOnly(
             normalizedCurrentChatId &&
         String(save?.storageCharacterId) ===
             String(characterId) &&
-        Number(graph?.version) === 2 &&
+        Number(graph?.version) ===
+            SOCIAL_GRAPH_VERSION &&
         Number(graph?.extractorVersion) >=
             SOCIAL_GRAPH_EXTRACTOR_VERSION &&
         Number(graph?.lastProcessedMessageId) >=
@@ -52,7 +54,8 @@ export function shouldTranslateRenderedMessage(
         return false;
     }
     if (
-        Number(graph?.version) !== 2 ||
+        Number(graph?.version) !==
+            SOCIAL_GRAPH_VERSION ||
         Number(
             graph?.extractorVersion,
         ) <

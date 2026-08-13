@@ -310,9 +310,8 @@ Authority and boundaries:
 - When a newly activated actor has no established first impression, actorStates must include a 1-24 word firstImpressionOfPlayerEn based only on the player's visible features and conduct.
 - actorContinuityCapsules are sealed by actorId and contain only established social continuity. A capsule may guide only its matching actor. If hasMetPlayer is true, do not write a first-time self-introduction to the player. Treat knownActorIds as people that actor has already met. The supplied relationship stance, Schema expectations, and supporting Events override generic assumptions.
 - Do not transfer one actor's memory, impression, or relationship knowledge to another actor or to the narrator.
-- relationshipUpdates is optional and sparse. Emit it only for an actor whose view of the player materially changed because of one specific interaction in the closing scene.
-- sceneMemoryEn must be one complete 8-32 word actor-centered memory: what the player did to that actor or what that actor personally witnessed, plus the actor's specific interpretation when relevant.
-- Never use closureSummaryEn as a relationship memory. Do not emit routine attendance, a general scene recap, generic consequences, or the same memory for multiple actors. Omit unchanged actors and use an empty array when no distinct memory was formed.
+- globalChronicleSummaryEn must compress the closed Scene's committed timeline into 40-80 English words and at most 640 characters. Preserve durable causes, decisions, consequences and unresolved effects using only supplied facts.
+- globalChronicleSummaryEn is a semantic cross-Scene chronicle, not a copy of closureSummaryEn, an opening summary, or an actor-specific feeling.
 - behavioralEnvironment describes the closing clock. Compute the opening clock from currentClock plus transitionMinutes instead of carrying the closing period forward.
 - Choose transitionMinutes freely according to the time that naturally passes in the fiction. Sleep, travel, waiting, holidays, and deliberate time skips may advance as long as needed. If asleep characters wake in the next scene, allow a plausible rest unless an already established alarm, emergency, departure, or other observable cause wakes them early.
 - Materially embody the opening time's daylight, sleep pressure, curfew, weather, exposure, clothing, shelter, noise, and activity implications. Do not recite them as a checklist.
@@ -330,15 +329,9 @@ Schema:
 {
   "transitionMinutes": 0,
   "closureSummaryEn": "specific observable closure of the old scene",
+  "globalChronicleSummaryEn": "40-80 word semantic chronicle of the closed scene",
   "authorQuillEn": "180-280 word OOC comic review of the player's observed chapter performance",
   "unresolvedThreadsEn": ["public unresolved thread"],
-  "relationshipUpdates": [
-    {
-      "id": "existing_actor_id",
-      "impressionOfPlayerEn": "1-16 word concrete current opinion",
-      "sceneMemoryEn": "one complete 8-32 word actor-specific memory"
-    }
-  ],
   "nextScene": {
     "id": "unique_snake_case_id",
     "nameEn": "scene title",
@@ -586,11 +579,32 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     requireDestinationGrounding: Boolean(destinationAuthority),
                 });
                 if (!validation.valid) {
-                    throw new Error(validation.errors.join('；'));
+                    const error =
+                        new Error(
+                            validation.errors
+                                .join('；'),
+                        );
+                    if (
+                        validation.errors
+                            .some(message =>
+                                message.includes(
+                                    'globalChronicleSummaryEn',
+                                ))
+                    ) {
+                        error.code =
+                            'INVALID_GLOBAL_CHRONICLE';
+                    }
+                    throw error;
                 }
                 return payload;
             } catch (error) {
                 lastError = error;
+                if (
+                    error?.code ===
+                    'INVALID_GLOBAL_CHRONICLE'
+                ) {
+                    throw error;
+                }
                 if (
                     attempt >=
                     maximumAttempts - 1
@@ -600,7 +614,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 response = await sendRoleRequest(roleSlot, [
                     {
                         role: 'system',
-                        content: `Rewrite the invalid scene-transition JSON as one complete replacement object. Preserve only the observed closure facts, committed intent or explicit user override, existing actor IDs, and world facts. Include authorQuillEn as a 180-280 word OOC comic review with specific callbacks, affectionate roasting, mock awards or deadpan asides, and at least three jokes based only on observed player choices. It must not reveal hidden facts, private motives, locked clues, future events, or hidden roll details.
+                        content: `Rewrite the invalid scene-transition JSON as one complete replacement object. Preserve only the observed closure facts, committed intent or explicit user override, existing actor IDs, and world facts. Include globalChronicleSummaryEn as a 40-80 word, at most 640-character semantic chronicle of the closed Scene; it must use only supplied committed facts and must not copy closureSummaryEn. Include authorQuillEn as a 180-280 word OOC comic review with specific callbacks, affectionate roasting, mock awards or deadpan asides, and at least three jokes based only on observed player choices. It must not reveal hidden facts, private motives, locked clues, future events, or hidden roll details.
 
 The destination authority is binding. Rewrite nextScene.id, nameEn, summaryEn, actorStates.currentActivityEn, and followingSceneIntent so they form one coherent new scene at that destination. Do not retain state or physical details from the old room. If a supplied actor cannot plausibly be at the destination, mark that actor absent. nextScene.nameEn and nextScene.summaryEn must each literally contain destinationAuthority.roomNameEn.
 

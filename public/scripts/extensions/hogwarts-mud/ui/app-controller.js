@@ -331,7 +331,6 @@ Continue from this exact state. Perform present NPCs using the supplied personal
                     : {},
             storyArcs: Array.isArray(state.storyArcs) ? state.storyArcs : [],
             conflict: state.conflict || null,
-            timeline: Array.isArray(state.timeline) ? state.timeline : [],
             turn: state.turn || null,
             dailyDirector: state.dailyDirector || null,
             pacingDirector: state.pacingDirector || null,

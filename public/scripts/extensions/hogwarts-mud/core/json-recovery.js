@@ -361,6 +361,11 @@ export function recoverSceneTransitionPayload(
             raw,
             'closureSummaryEn',
         );
+    const globalChronicleSummaryEn =
+        extractStreamingJsonStringField(
+            raw,
+            'globalChronicleSummaryEn',
+        );
     const authorQuillEn =
         extractStreamingJsonStringField(
             raw,
@@ -370,16 +375,6 @@ export function recoverSceneTransitionPayload(
         extractStreamingJsonArrayField(
             raw,
             'unresolvedThreadsEn',
-        );
-    const worldChanges =
-        extractStreamingJsonObjectField(
-            raw,
-            'worldChanges',
-        );
-    const relationshipUpdates =
-        extractStreamingJsonArrayField(
-            raw,
-            'relationshipUpdates',
         );
     const nextScene =
         extractStreamingJsonObjectField(
@@ -392,13 +387,10 @@ export function recoverSceneTransitionPayload(
         ) ||
         !nextClock ||
         !closureSummaryEn ||
+        !globalChronicleSummaryEn ||
         !authorQuillEn ||
         !Array.isArray(
             unresolvedThreadsEn,
-        ) ||
-        !worldChanges ||
-        !Array.isArray(
-            relationshipUpdates,
         ) ||
         !nextScene
     ) {
@@ -408,10 +400,9 @@ export function recoverSceneTransitionPayload(
         transitionMinutes,
         nextClock,
         closureSummaryEn,
+        globalChronicleSummaryEn,
         authorQuillEn,
         unresolvedThreadsEn,
-        worldChanges,
-        relationshipUpdates,
         nextScene,
         socialStatements:
             extractStreamingJsonArrayField(

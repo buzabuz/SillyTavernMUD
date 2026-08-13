@@ -77,7 +77,7 @@ export function createSaveLibrary(ports) {
         applyNativeRoleSettings,
         applySystemPrompt,
         automaticWork,
-        canOpenCurrentV2SaveReadOnly,
+        canOpenCurrentSocialSaveReadOnly,
         createDefaultCharacterDraft,
         doNewChat,
         ensureSceneLifecycleState =
@@ -521,7 +521,7 @@ export function createSaveLibrary(ports) {
             const currentContext =
                 getContext();
             if (
-                canOpenCurrentV2SaveReadOnly(
+                canOpenCurrentSocialSaveReadOnly(
                     save,
                     {
                         currentChatId:

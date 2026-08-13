@@ -52,29 +52,76 @@ function actorRuntime(state, actorId) {
 
 function relationshipEvidenceView(
     evidence,
+    {
+        appraisals,
+        events,
+        viewerId,
+    },
 ) {
+    const appraisal =
+        appraisals.get(
+            evidence?.appraisalId,
+        );
+    const event =
+        events.get(
+            evidence?.eventId,
+        );
+    const appraisalVisible =
+        Boolean(
+            appraisal &&
+            (
+                viewerId ===
+                    'authority' ||
+                appraisal.observerId ===
+                    viewerId ||
+                appraisal.targetId ===
+                    viewerId
+            ),
+        );
+    const eventVisible =
+        eventVisibleToViewer(
+            event,
+            viewerId,
+        );
+    if (
+        !appraisalVisible &&
+        !eventVisible
+    ) {
+        return null;
+    }
     return {
         recordId:
             text(evidence?.id),
         summary:
             text(
-                evidence?.summary ||
-                evidence?.summaryEn,
+                appraisalVisible
+                    ? appraisal
+                        .summaryEn
+                    : event
+                        ?.summaryEn,
             ),
         clock:
             text(
-                evidence?.clock ||
-                evidence?.updatedClock,
+                appraisalVisible
+                    ? appraisal
+                        .committedClock
+                    : event?.clock ||
+                        evidence?.clock,
             ),
         sceneId:
-            text(evidence?.sceneId),
+            text(event?.sceneId),
         sourceMessageIds:
-            asArray(
-                evidence
-                    ?.sourceMessageIds,
-            )
-                .map(Number)
-                .filter(Number.isInteger),
+            event?.eventKind ===
+                'observed'
+                ? asArray(
+                    event
+                        .sourceMessageIds,
+                )
+                    .map(Number)
+                    .filter(
+                        Number.isInteger,
+                    )
+                : [],
     };
 }
 
@@ -116,6 +163,15 @@ export function buildRelationshipProjection(
             state,
             viewerId,
         );
+    const directories = {
+        appraisals:
+            appraisalDirectory(
+                state,
+            ),
+        events:
+            eventDirectory(state),
+        viewerId,
+    };
     const relationships =
         projection.relationships
             .map(edge => ({
@@ -151,8 +207,12 @@ export function buildRelationshipProjection(
                     asArray(
                         edge.evidence,
                     ).map(
-                        relationshipEvidenceView,
-                    ),
+                        evidence =>
+                            relationshipEvidenceView(
+                                evidence,
+                                directories,
+                            ),
+                    ).filter(Boolean),
                 structuralTags:
                     asArray(
                         edge
@@ -266,7 +326,11 @@ function hydrateMemoryRef(
                     event.clock ||
                     reference.addedClock,
                 ),
-            sourceBadge: '共同事件',
+            sourceBadge:
+                event.eventKind ===
+                    'reported'
+                    ? '听闻/转述'
+                    : '共同事件',
         };
     }
     if (

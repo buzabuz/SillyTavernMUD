@@ -6,6 +6,9 @@ import {
     NARRATIVE_PROMPT_ACCESS,
     projectNarrativePromptInput,
 } from '../domain/narrative-prompt-context.js';
+import {
+    getEventKnowledgeSourceMessageIds,
+} from '../presence-witness-contract.js';
 
 export function createSocialMemoryWorkflow(ports) {
     const {
@@ -110,8 +113,9 @@ export function createSocialMemoryWorkflow(ports) {
         ) {
             for (
                 const rawMessageId
-                of event.sourceMessageIds ||
-            []
+                of getEventKnowledgeSourceMessageIds(
+                    event,
+                )
             ) {
                 const messageId =
                 Number(rawMessageId);
@@ -196,6 +200,21 @@ export function createSocialMemoryWorkflow(ports) {
                             textEn:
                                 segment.textEn ||
                                 '',
+                            historicalClaims:
+                                (
+                                    segment
+                                        .historicalClaims ||
+                                    []
+                                ).map(claim => ({
+                                    claimTextEn:
+                                        claim
+                                            .claimTextEn ||
+                                        '',
+                                    sourceEventIds:
+                                        claim
+                                            .sourceEventIds ||
+                                        [],
+                                })),
                         }));
                 const witnessActorIds = [
                     ...new Set(
@@ -258,6 +277,20 @@ export function createSocialMemoryWorkflow(ports) {
             records.flatMap(record =>
                 record.eventIds),
         );
+        records
+            .flatMap(record =>
+                record.segments)
+            .flatMap(segment =>
+                segment
+                    .historicalClaims ||
+                [])
+            .flatMap(claim =>
+                claim.sourceEventIds ||
+                [])
+            .forEach(eventId =>
+                selectedEventIds.add(
+                    eventId,
+                ));
         records.forEach(record => {
             delete record.eventIds;
         });
@@ -360,7 +393,49 @@ export function createSocialMemoryWorkflow(ports) {
                             buildSocialAudienceProjection(
                                 state,
                                 actor.id,
-                            ).relationships,
+                            ).relationships
+                                .map(edge => ({
+                                    sourceActorId:
+                                        edge
+                                            .sourceActorId,
+                                    targetActorId:
+                                        edge
+                                            .targetActorId,
+                                    familiarity:
+                                        edge
+                                            .familiarity,
+                                    closeness:
+                                        edge
+                                            .closeness,
+                                    warmth:
+                                        edge.warmth,
+                                    trust:
+                                        edge.trust,
+                                    respect:
+                                        edge.respect,
+                                    influence:
+                                        edge
+                                            .influence,
+                                    tension:
+                                        edge
+                                            .tension,
+                                    resentment:
+                                        edge
+                                            .resentment,
+                                    fear:
+                                        edge.fear,
+                                    protectiveness:
+                                        edge
+                                            .protectiveness,
+                                    structuralTags:
+                                        edge
+                                            .structuralTags ||
+                                        [],
+                                    evidenceIds:
+                                        edge
+                                            .evidenceIds ||
+                                        [],
+                                })),
                     };
                 });
         const reviewableAppraisalIds =
@@ -392,34 +467,17 @@ export function createSocialMemoryWorkflow(ports) {
         const backfillRules =
         evidence.backfill
             ? `
-- This is a versioned catch-up scan. reviews and schemaOperations must both be exactly [] and scanComplete must be true only after every supplied sceneEvidence message has been scanned.
-- sceneEvidence may span multiple archived scenes. Every statement and relationship item must copy the exact sceneId supplied on its source message.
-- Output at most 12 statements and 24 relationshipEvidence items. Prioritize meaningful player-facing changes, then durable inter-NPC changes.
+- This is a versioned catch-up scan. reviews and schemaOperations must both be exactly []. Set processedThroughMessageId to the final fully scanned source-message prefix; scanComplete is true only when every supplied sceneEvidence message was scanned.
+- sceneEvidence may span multiple archived scenes. Every report must cite exact sourceSegmentRefs from one supplied message.
+- Output at most 24 reportedEvents and 24 relationshipEvidence items. Prioritize meaningful player-facing changes, then durable inter-NPC changes.
 - Include introductions, refusals, coercion, injury, help, promises, betrayal, repair, and structural relationships. Omit routine classroom facts, transient preferences, and evidence already represented by existingSocialGraph.`
             : `
-- This is an event-boundary update. reviews may consolidate supplied memories. scanComplete must be true after all supplied sceneEvidence messages have been scanned.`;
+- This is an event-boundary update. reviews may consolidate supplied memories. processedThroughMessageId must identify the final fully scanned source-message prefix.`;
         const existingGraph =
         normalizeSocialGraph(
             state.socialGraph,
         );
         const existingSocialGraph = {
-            statements:
-            existingGraph.statements
-                .map(statement => ({
-                    id: statement.id,
-                    subjectId:
-                        statement.subjectId,
-                    speakerId:
-                        statement.speakerId,
-                    category:
-                        statement.category,
-                    textEn:
-                        statement.textEn,
-                    sourceMessageIds:
-                        statement
-                            .sourceMessageIds ||
-                        [],
-                })),
             relationshipEvidence:
             existingGraph
                 .relationshipEvidence
@@ -429,6 +487,10 @@ export function createSocialMemoryWorkflow(ports) {
                         item.sourceActorId,
                     targetActorId:
                         item.targetActorId,
+                    eventId:
+                        item.eventId,
+                    appraisalId:
+                        item.appraisalId,
                     eventKind:
                         item.eventKind,
                     dimensionDeltas:
@@ -437,13 +499,9 @@ export function createSocialMemoryWorkflow(ports) {
                     structuralTags:
                         item.structuralTags ||
                         [],
-                    summaryEn:
-                        item.summaryEn,
-                    sceneId:
-                        item.sceneId,
-                    sourceMessageIds:
+                    emotionEffects:
                         item
-                            .sourceMessageIds ||
+                            .emotionEffects ||
                         [],
                 })),
             relationships:
@@ -484,24 +542,28 @@ export function createSocialMemoryWorkflow(ports) {
         return [
             {
                 role: 'system',
-                content: `You are the single mid-tier Social Director for a persistent Harry Potter RPG. Perform one source-grounded extraction for a deterministic LangGraph reducer. Consolidate player-visible relationship memory, attributed NPC statements, and directed social evidence. Do not write scene prose or invent events. Return one compact JSON object. Internal reasoning is permitted, but the final answer must contain one complete JSON object matching the schema.
+                content: `You are the single mid-tier Social Director for a persistent Harry Potter RPG. Perform one source-grounded extraction for a deterministic reducer. Consolidate Appraisal memory, attributed reported Events, and directed relationship effects. Do not write scene prose or invent events. Return one compact JSON object. Internal reasoning is permitted, but the final answer must contain one complete JSON object matching the schema.
 
 ${NARRATIVE_AUTHORITY_PROMPT_CONTRACT}
 
 Rules:
-- Use only supplied memory IDs and their observable summaries. Never use actor secrets, hidden clues, private goals, or facts the actor did not witness.
-- statements records what a supplied actor publicly claimed, not omniscient truth. Every statement needs subjectId, speakerId, sceneId, witnessedBy, and exact sourceMessageIds.
-- statements are evidence-grounded claim proposals and the only model output channel for identity or family claims. Keep self/other attribution and never convert a claim into objective truth.
-- Never write authority Identity, person reference resolution, or a formal family edge. Family claims remain attributed statements for an authorized Reducer to interpret later.
-- relationshipEvidence is directed and may connect a supplied actor to another supplied actor or to player. Every item needs sceneId, witnessedBy, and exact sourceMessageIds.
-- witnessedBy must be a subset of every cited message's witnessActorIds. Never grant knowledge to an absent actor.
-- Use only actorDirectory IDs and allowedMessageIds. Never assume player witnessed a message unless that message's witnessActorIds includes player.
-- existingSocialGraph is read-only calibration and duplicate context. Never emit migration, summaries, or score corrections for stored relationships; extract only new supplied sceneEvidence.
-- Emit one consolidated relationshipEvidence item per directed actor pair, eventKind, scene, and sourceMessageIds set. The reducer, not you, owns final scores.
+- Use only supplied memory IDs, committed Events and exact sceneEvidence text. Never use actor secrets, hidden clues, private goals, or facts the actor did not witness or receive.
+- reportedEvents records the hard fact that one speaker communicated an attributed claim to explicit recipients. The claim itself is not automatically true.
+- Every reported Event must cite exact sourceSegmentRefs from one supplied message. For an NPC, segmentIndex identifies that actor's dialogue segment. For player text, use segmentIndex -1 and speakerId "player".
+- sourceStatementText and audienceEvidenceText must be exact substrings of the cited source text. summaryEn is attributed English prose, at most 600 characters, and is the only persisted report text.
+- recipientIds must be direct/audible recipients of every cited committed Event. Never grant a report to a visual-only or absent actor. Without explicit target evidence, include the full eligible audience.
+- aboutEventId is optional authority linkage only. It does not make the allegation true and does not grant recipients access to the linked Event. Fabricated claims use an empty aboutEventId.
+- parentReportedEventId is optional and may cite only a report the speaker previously spoke or received. correction and retraction require it.
+- recipientAppraisals are subjective reactions to a local report. Each observer must be that report's explicit recipient; the reducer maps localReportId to the committed Event.
+- Generic statements are forbidden. Identity and relationship claims are structured records that cite localReportId; never copy quote text, speaker, witness, Scene, message or clock into a claim.
+- Never write authority Identity, resolve a person reference, or create a formal family edge. New personReferences remain unresolved.
+- relationshipEvidence is directed and references exactly one existing Event ID or localReportId through eventRef. appraisalRef is optional. It contains only relationship effects, never prose, Scene, messages, witnesses or visibility.
+- Use only actorDirectory IDs and allowedMessageIds. existingSocialGraph is read-only calibration and duplicate context. Extract only new supplied sceneEvidence.
+- Emit one relationshipEvidence item per directed pair, eventKind and Event reference. The reducer, not you, owns final scores and actual appliedDelta.
 - dimensionDeltas are proposals. Allowed dimensions are familiarity, closeness, warmth, trust, respect, influence, tension, resentment, fear, and protectiveness.
 - eventKind must be one of introduction, routine_interaction, shared_time, serious_conversation, vulnerability, support, help, gift, promise, praise, rescue, sacrifice, insult, humiliation, threat, harm, betrayal, unresolved_conflict, accepted_apology, accepted_compensation, forgiveness, reappraisal, or other.
 - structuralTags may contain only family, authority, classmate, rivalry, or mentor. Tags describe structure, never sentiment.
-- Include at most four emotionAppraisals from anger, fear, contempt, disgust, envy, shame, guilt, gratitude, admiration, hope, disappointment, relief, pity, joy, or distress. Intensity is 1-5 and every appraisal cites sourceMessageIds from its parent evidence.
+- Include at most four emotionEffects from anger, fear, contempt, disgust, envy, shame, guilt, gratitude, admiration, hope, disappointment, relief, pity, joy, or distress. Intensity is 1-5.
 - Do not repeat evidence already represented by existingSocialGraph. Repeated similar new events still need their own exact new message provenance.
 - familiarity is knowledge, not liking. Same class or forced co-presence primarily changes familiarity. Raise closeness only for voluntary shared time, serious conversation, vulnerability, support, mutual risk, or sustained shared experience.
 - resentment may rise only for a clear insult, humiliation, threat, harm, betrayal, or unresolved conflict. It may fall only for an explicitly accepted apology/compensation, forgiveness, or reappraisal. A gift, greeting, or unaccepted apology must not lower resentment.
@@ -516,22 +578,22 @@ Rules:
 - Core memories cannot be forgotten or downgraded. They may only be merged into another core memory.
 - A source memory ID may appear in only one operation.
 - Use targetTier "forget" for redundant everyday/recent memories; omit summaryEn for forget.
-- Update impressionOfPlayerEn only when the supplied memories support a sharper current opinion. It must be a concrete judgment, never "stranger" or a relationship label.
 - schemaOperations may promote or update a Person Schema only from the supplied accepted memorySynapse Appraisals. A stable Schema requires at least three accepted Appraisals across at least two scenes for the same observer-target pair.
 - Person Schemas are subjective expectations, not Identity or world-fact authority. Cite exact supportAppraisalIds and counterAppraisalIds; use [] when there is no legal operation.
-- Keep each impression and summary under 40 English words.
+- Keep each Appraisal and consolidation summary under 40 English words.
 - Set reviewAfterTurns to 10-20. Never schedule another review sooner than 10 committed turns.
-- Review only actors who need an operation or an impression refinement. Include 0-8 actor reviews.
+- Review only actors who need a consolidation operation. Include 0-8 actor reviews.
+- processedThroughMessageId is required. It advances only across a fully scanned prefix of sceneEvidence. If the 24-report cap prevents scanning the full batch, set scanComplete false and leave the suffix for catch-up.
 ${backfillRules}
 
 Schema:
 {
   "scanComplete": true,
+  "processedThroughMessageId": 123,
   "reviewAfterTurns": 10,
   "reviews": [
     {
       "id": "existing_actor_id",
-      "impressionOfPlayerEn": "optional refined current opinion",
       "operations": [
         {
           "sourceIds": ["existing_memory_id"],
@@ -541,33 +603,49 @@ Schema:
       ]
     }
   ],
-  "statements": [
+  "reportedEvents": [
     {
-      "subjectId": "existing_actor_id",
+      "localReportId": "response_local_id",
+      "statementKind": "claim|correction|retraction",
+      "sourceStatementText": "exact source substring",
+      "audienceEvidenceText": "exact target/audience substring or empty string",
+      "summaryEn": "attributed English report summary",
+      "sourceSegmentRefs": [{"messageId": 123, "segmentIndex": 0}],
       "speakerId": "existing_actor_id",
-      "sceneId": "exact_source_scene_id",
-      "category": "family|origin|education|wealth|occupation|identity|history|preference|other",
-      "textEn": "one source-grounded public claim",
-      "witnessedBy": ["player", "existing_actor_id"],
-      "sourceMessageIds": [123]
+      "recipientIds": ["different_existing_actor_id"],
+      "subjectIds": ["existing_actor_id"],
+      "aboutEventId": "",
+      "parentReportedEventId": "",
+      "distortionLevel": 0
     }
   ],
+  "recipientAppraisals": [
+    {
+      "localReportId": "response_local_id",
+      "observerId": "explicit_recipient_actor_id",
+      "targetId": "player|existing_actor_id",
+      "summaryEn": "recipient-specific subjective interpretation",
+      "contextTags": ["heard_claim"],
+      "confidence": 0.7
+    }
+  ],
+  "identityClaims": [],
+  "relationshipClaims": [],
+  "personReferences": [],
   "relationshipEvidence": [
     {
       "sourceActorId": "existing_actor_id",
       "targetActorId": "player|different_existing_actor_id",
-      "sceneId": "exact_source_scene_id",
+      "eventRef": "existing_event_id|response_local_id",
+      "appraisalRef": "",
       "eventKind": "support",
       "dimensionDeltas": [
         {"dimension": "trust", "delta": 4, "impact": "meaningful"}
       ],
       "structuralTags": ["classmate"],
-      "emotionAppraisals": [
-        {"emotion": "gratitude", "intensity": 3, "sourceMessageIds": [123]}
-      ],
-      "summaryEn": "one observable directed relationship event",
-      "witnessedBy": ["existing_actor_id"],
-      "sourceMessageIds": [123]
+      "emotionEffects": [
+        {"emotion": "gratitude", "intensity": 3}
+      ]
     }
   ],
   "schemaOperations": [
@@ -828,6 +906,218 @@ Schema:
         }],
     };
 
+    const SOURCE_SEGMENT_REF_SCHEMA = {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+            messageId: {
+                type: 'integer',
+            },
+            segmentIndex: {
+                type: 'integer',
+                minimum: -1,
+            },
+        },
+        required: [
+            'messageId',
+            'segmentIndex',
+        ],
+    };
+
+    const REPORTED_EVENT_PROPOSAL_SCHEMA = {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+            localReportId: {
+                type: 'string',
+            },
+            statementKind: {
+                type: 'string',
+                enum: [
+                    'claim',
+                    'correction',
+                    'retraction',
+                ],
+            },
+            sourceStatementText: {
+                type: 'string',
+            },
+            audienceEvidenceText: {
+                type: 'string',
+            },
+            summaryEn: {
+                type: 'string',
+            },
+            sourceSegmentRefs: {
+                type: 'array',
+                minItems: 1,
+                maxItems: 16,
+                items:
+                    SOURCE_SEGMENT_REF_SCHEMA,
+            },
+            speakerId: {
+                type: 'string',
+            },
+            recipientIds: {
+                type: 'array',
+                minItems: 1,
+                items: {
+                    type: 'string',
+                },
+            },
+            subjectIds: {
+                type: 'array',
+                items: {
+                    type: 'string',
+                },
+            },
+            aboutEventId: {
+                type: 'string',
+            },
+            parentReportedEventId: {
+                type: 'string',
+            },
+            distortionLevel: {
+                type: 'integer',
+                minimum: 0,
+                maximum: 3,
+            },
+        },
+        required: [
+            'localReportId',
+            'statementKind',
+            'sourceStatementText',
+            'audienceEvidenceText',
+            'summaryEn',
+            'sourceSegmentRefs',
+            'speakerId',
+            'recipientIds',
+            'subjectIds',
+            'aboutEventId',
+            'parentReportedEventId',
+            'distortionLevel',
+        ],
+    };
+
+    const RECIPIENT_APPRAISAL_SCHEMA = {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+            localReportId: {
+                type: 'string',
+            },
+            observerId: {
+                type: 'string',
+            },
+            targetId: {
+                type: 'string',
+            },
+            summaryEn: {
+                type: 'string',
+            },
+            contextTags: {
+                type: 'array',
+                items: {
+                    type: 'string',
+                },
+            },
+            confidence: {
+                type: 'number',
+                minimum: 0,
+                maximum: 1,
+            },
+        },
+        required: [
+            'localReportId',
+            'observerId',
+            'targetId',
+            'summaryEn',
+            'contextTags',
+            'confidence',
+        ],
+    };
+
+    const IDENTITY_CLAIM_SCHEMA = {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+            localReportId: {
+                type: 'string',
+            },
+            subjectId: {
+                type: 'string',
+            },
+            fieldPath: {
+                type: 'string',
+            },
+            value: {},
+            sourceKind: {
+                type: 'string',
+                enum: [
+                    'self',
+                    'other',
+                ],
+            },
+        },
+        required: [
+            'localReportId',
+            'subjectId',
+            'fieldPath',
+            'value',
+            'sourceKind',
+        ],
+    };
+
+    const RELATIONSHIP_CLAIM_SCHEMA = {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+            localReportId: {
+                type: 'string',
+            },
+            subjectId: {
+                type: 'string',
+            },
+            relationshipKind: {
+                type: 'string',
+            },
+            targetRefId: {
+                type: 'string',
+            },
+            sourceKind: {
+                type: 'string',
+                enum: [
+                    'self',
+                    'other',
+                ],
+            },
+        },
+        required: [
+            'localReportId',
+            'subjectId',
+            'relationshipKind',
+            'targetRefId',
+            'sourceKind',
+        ],
+    };
+
+    const PERSON_REFERENCE_SCHEMA = {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+            id: {
+                type: 'string',
+            },
+            label: {
+                type: 'string',
+            },
+        },
+        required: [
+            'id',
+            'label',
+        ],
+    };
+
     const SOCIAL_DIRECTOR_RESPONSE_SCHEMA = {
         name:
         'hogwarts_mud_social_director',
@@ -840,6 +1130,10 @@ Schema:
             properties: {
                 scanComplete: {
                     type: 'boolean',
+                },
+                processedThroughMessageId: {
+                    type: 'integer',
+                    minimum: 0,
                 },
                 reviewAfterTurns: {
                     type: 'integer',
@@ -855,9 +1149,6 @@ Schema:
                         false,
                         properties: {
                             id: {
-                                type: 'string',
-                            },
-                            impressionOfPlayerEn: {
                                 type: 'string',
                             },
                             operations: {
@@ -902,70 +1193,39 @@ Schema:
                         },
                         required: [
                             'id',
-                            'impressionOfPlayerEn',
                             'operations',
                         ],
                     },
                 },
-                statements: {
+                reportedEvents: {
                     type: 'array',
-                    maxItems: 12,
-                    items: {
-                        type: 'object',
-                        additionalProperties:
-                        false,
-                        properties: {
-                            subjectId: {
-                                type: 'string',
-                            },
-                            speakerId: {
-                                type: 'string',
-                            },
-                            sceneId: {
-                                type: 'string',
-                            },
-                            category: {
-                                type: 'string',
-                                enum: [
-                                    'family',
-                                    'origin',
-                                    'education',
-                                    'wealth',
-                                    'occupation',
-                                    'identity',
-                                    'history',
-                                    'preference',
-                                    'other',
-                                ],
-                            },
-                            textEn: {
-                                type: 'string',
-                            },
-                            witnessedBy: {
-                                type: 'array',
-                                items: {
-                                    type:
-                                    'string',
-                                },
-                            },
-                            sourceMessageIds: {
-                                type: 'array',
-                                items: {
-                                    type:
-                                    'integer',
-                                },
-                            },
-                        },
-                        required: [
-                            'subjectId',
-                            'speakerId',
-                            'sceneId',
-                            'category',
-                            'textEn',
-                            'witnessedBy',
-                            'sourceMessageIds',
-                        ],
-                    },
+                    maxItems: 24,
+                    items:
+                        REPORTED_EVENT_PROPOSAL_SCHEMA,
+                },
+                recipientAppraisals: {
+                    type: 'array',
+                    maxItems: 24,
+                    items:
+                        RECIPIENT_APPRAISAL_SCHEMA,
+                },
+                identityClaims: {
+                    type: 'array',
+                    maxItems: 24,
+                    items:
+                        IDENTITY_CLAIM_SCHEMA,
+                },
+                relationshipClaims: {
+                    type: 'array',
+                    maxItems: 24,
+                    items:
+                        RELATIONSHIP_CLAIM_SCHEMA,
+                },
+                personReferences: {
+                    type: 'array',
+                    maxItems: 24,
+                    items:
+                        PERSON_REFERENCE_SCHEMA,
                 },
                 relationshipEvidence: {
                     type: 'array',
@@ -981,7 +1241,10 @@ Schema:
                             targetActorId: {
                                 type: 'string',
                             },
-                            sceneId: {
+                            eventRef: {
+                                type: 'string',
+                            },
+                            appraisalRef: {
                                 type: 'string',
                             },
                             eventKind: {
@@ -1036,7 +1299,7 @@ Schema:
                                     SOCIAL_DIRECTOR_STRUCTURAL_TAGS,
                                 },
                             },
-                            emotionAppraisals: {
+                            emotionEffects: {
                                 type: 'array',
                                 maxItems: 4,
                                 items: {
@@ -1059,51 +1322,23 @@ Schema:
                                             maximum:
                                             5,
                                         },
-                                        sourceMessageIds: {
-                                            type:
-                                            'array',
-                                            items: {
-                                                type:
-                                                'integer',
-                                            },
-                                        },
                                     },
                                     required: [
                                         'emotion',
                                         'intensity',
-                                        'sourceMessageIds',
                                     ],
-                                },
-                            },
-                            summaryEn: {
-                                type: 'string',
-                            },
-                            witnessedBy: {
-                                type: 'array',
-                                items: {
-                                    type:
-                                    'string',
-                                },
-                            },
-                            sourceMessageIds: {
-                                type: 'array',
-                                items: {
-                                    type:
-                                    'integer',
                                 },
                             },
                         },
                         required: [
                             'sourceActorId',
                             'targetActorId',
-                            'sceneId',
+                            'eventRef',
+                            'appraisalRef',
                             'eventKind',
                             'dimensionDeltas',
                             'structuralTags',
-                            'emotionAppraisals',
-                            'summaryEn',
-                            'witnessedBy',
-                            'sourceMessageIds',
+                            'emotionEffects',
                         ],
                     },
                 },
@@ -1116,9 +1351,14 @@ Schema:
             },
             required: [
                 'scanComplete',
+                'processedThroughMessageId',
                 'reviewAfterTurns',
                 'reviews',
-                'statements',
+                'reportedEvents',
+                'recipientAppraisals',
+                'identityClaims',
+                'relationshipClaims',
+                'personReferences',
                 'relationshipEvidence',
                 'schemaOperations',
             ],
@@ -1156,32 +1396,26 @@ Schema:
             extracted,
             state,
         );
-        if (
-            payload.scanComplete !==
-            true
-        ) {
-            console.warn(
-                '[Hogwarts MUD] Social Director returned no complete JSON object',
-                {
-                    content:
-                    typeof response
-                        ?.content ===
-                        'string'
-                        ? response.content
-                            .slice(0, 500)
-                        : response?.content,
-                    reasoning:
-                    typeof response
-                        ?.reasoning ===
-                        'string'
-                        ? response.reasoning
-                            .slice(0, 500)
-                        : response
-                            ?.reasoning,
-                },
+        const allowedMessageIds =
+            evidence
+                .allowedMessageIds;
+        const processedIndex =
+            allowedMessageIds.indexOf(
+                payload
+                    .processedThroughMessageId,
             );
+        if (
+            processedIndex < 0 ||
+            (
+                payload.scanComplete ===
+                    true &&
+                processedIndex !==
+                    allowedMessageIds
+                        .length - 1
+            )
+        ) {
             throw new Error(
-                '社交导演没有返回完整 JSON 扫描结果。',
+                '社交导演 processedThroughMessageId 不是完整扫描前缀。',
             );
         }
         if (
@@ -1214,37 +1448,18 @@ Schema:
         if (!getSettings().translationEnabled) {
             return payload;
         }
-        const values = payload.reviews.flatMap(review => [
-            review.impressionOfPlayerEn || '',
-            ...(review.operations || []).map(
+        const values = payload.reviews.flatMap(review =>
+            (review.operations || []).map(
                 operation => operation.summaryEn || '',
-            ),
-        ]).concat(
-            (payload.statements || [])
-                .map(statement =>
-                    statement.textEn ||
-                ''),
-            (
-                payload
-                    .relationshipEvidence ||
-            []
-            ).map(evidence =>
-                evidence.summaryEn ||
-            ''),
-        );
+            ));
         const translated =
         await translateOpeningValues(values);
         let cursor = 0;
         const localized = {
             ...payload,
             reviews: payload.reviews.map(review => {
-                const impressionOfPlayer =
-                translated[cursor++];
                 return {
                     ...review,
-                    ...(review.impressionOfPlayerEn
-                        ? { impressionOfPlayer }
-                        : {}),
                     operations: (
                         review.operations || []
                     ).map(operation => {
@@ -1259,47 +1474,6 @@ Schema:
                 };
             }),
         };
-        localized.statements =
-        (
-            payload.statements ||
-            []
-        ).map(statement => {
-            const text =
-                translated[cursor++];
-            return {
-                ...statement,
-                text:
-                    text ||
-                    statement.textEn,
-            };
-        });
-        localized.relationshipEvidence =
-        (
-            payload
-                .relationshipEvidence ||
-            []
-        ).map(evidence => {
-            const summary =
-                translated[cursor++];
-            return {
-                ...evidence,
-                summary:
-                    summary ||
-                    evidence.summaryEn,
-                dimensionDeltas:
-                    evidence
-                        .dimensionDeltas ||
-                    [],
-                structuralTags:
-                    evidence
-                        .structuralTags ||
-                    [],
-                emotionAppraisals:
-                    evidence
-                        .emotionAppraisals ||
-                    [],
-            };
-        });
         return localized;
     }
 
@@ -1343,6 +1517,17 @@ Schema:
                     presentActorIds:
                     evidence
                         .presentActorIds,
+                    actorDirectory:
+                    (
+                        state.actorLibrary ||
+                        []
+                    ).map(actor => ({
+                        id: actor.id,
+                        nameEn:
+                            actor.nameEn,
+                    })),
+                    sceneEvidence:
+                    evidence.messages,
                     allowedMessageIds:
                     evidence
                         .allowedMessageIds,
@@ -1355,6 +1540,24 @@ Schema:
                     eventKnowledge:
                     evidence
                         .eventKnowledge,
+                    availableAppraisals:
+                    (
+                        state.memorySynapse
+                            ?.appraisals ||
+                        []
+                    ).map(appraisal => ({
+                        id: appraisal.id,
+                        observerId:
+                            appraisal
+                                .observerId,
+                        targetId:
+                            appraisal
+                                .targetId,
+                        sourceEventIds:
+                            appraisal
+                                .sourceEventIds ||
+                            [],
+                    })),
                     existingGraph:
                     normalizeSocialGraph(
                         state.socialGraph,
@@ -1548,33 +1751,44 @@ Schema:
                 next.socialGraph
                     .extractorVersion =
                 SOCIAL_GRAPH_EXTRACTOR_VERSION;
+                const hasUnprocessedSuffix =
+                    evidence.hasMore ||
+                    graphResult
+                        .scanComplete !==
+                        true;
                 next.socialGraph.status =
-                'ready';
+                    hasUnprocessedSuffix
+                        ? 'pending'
+                        : 'ready';
                 next.socialGraph.error =
                 '';
-                if (backfill) {
-                    next.socialGraph
-                        .backfilledSceneIds = [
-                            ...new Set([
-                                ...(
-                                    next
-                                        .socialGraph
-                                        .backfilledSceneIds ||
-                                []
-                                ),
-                                ...evidence
-                                    .sceneIds,
-                            ]),
-                        ].slice(-50);
-                    next.socialGraph
-                        .backfillPendingSceneId =
-                    evidence.hasMore
+                next.socialGraph
+                    .backfillPendingSceneId =
+                    hasUnprocessedSuffix
                         ? state
                             .socialGraph
                             ?.backfillPendingSceneId ||
                             state.scene?.id ||
                             ''
                         : '';
+                if (backfill) {
+                    if (
+                        !hasUnprocessedSuffix
+                    ) {
+                        next.socialGraph
+                            .backfilledSceneIds = [
+                                ...new Set([
+                                    ...(
+                                        next
+                                            .socialGraph
+                                            .backfilledSceneIds ||
+                                    []
+                                    ),
+                                    ...evidence
+                                        .sceneIds,
+                                ]),
+                            ].slice(-50);
+                    }
                 }
                 context.chatMetadata
                     .hogwartsMud =

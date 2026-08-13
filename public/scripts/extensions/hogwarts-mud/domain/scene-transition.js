@@ -1,11 +1,8 @@
 // Extracted from the helpers compatibility facade for Task 4.
 
 import {
-    countTextWords,
     FIRST_IMPRESSION_MAX_WORDS,
-    IMPRESSION_MAX_WORDS,
     isValidFirstImpression,
-    isValidImpressionShorthand,
 } from './actor-memory.js';
 
 import {
@@ -42,18 +39,9 @@ import {
 
 import {
     advanceWorldClock,
-    getWorldClockGapMinutes,
     WORLD_CLOCK_PATTERN,
     worldClockToEpochMinutes,
 } from './time-environment.js';
-
-import {
-    normalizeTransitionWorldChanges,
-    validateTransitionWorldChanges,
-} from './world-changes.js';
-
-const TRANSITION_MEMORY_BOILERPLATE_PATTERN =
-    /(?:^During the closed scene,|This experience materially shaped the actor['’]s view of the player\.$)/u;
 
 const SCENE_OPENING_UNCOMMITTED_FACT_RULES = [
     {
@@ -133,20 +121,6 @@ export function validateSceneOpeningExperienceSegments(
     };
 }
 
-export function isValidTransitionSceneMemory(
-    value,
-) {
-    const text = String(value || '').trim();
-    const wordCount = countTextWords(text);
-    return (
-        wordCount >= 8 &&
-        wordCount <= 32 &&
-        /[.!?]["'’)]?$/u.test(text) &&
-        !TRANSITION_MEMORY_BOILERPLATE_PATTERN
-            .test(text)
-    );
-}
-
 export function stripSyntheticSceneOpeningActorSegments(
     segments = [],
 ) {
@@ -199,32 +173,23 @@ export function normalizeSceneTransitionPackage(
                 worldState.clock,
                 normalized.transitionMinutes,
             );
-    normalized.worldChanges =
-        normalizeTransitionWorldChanges(
-            normalized.worldChanges,
-        );
-    const worldChangeGapMinutes =
-        getWorldClockGapMinutes(
-            worldState.clock,
-            normalized.nextClock,
-        );
-    if (
-        Number.isFinite(
-            worldChangeGapMinutes,
-        ) &&
-        worldChangeGapMinutes <
-            7 * 1440
-    ) {
-        normalized.worldChanges = {
-            prophetBriefs: [],
-            gossipUpdates: [],
-        };
-    }
     normalized.closureSummaryEn = String(
         normalized.closureSummaryEn ||
         worldState.scene?.summaryEn ||
         'The current scene reaches its committed conclusion.',
     ).trim();
+    normalized
+        .globalChronicleSummaryEn =
+        String(
+            normalized
+                .globalChronicleSummaryEn ||
+            '',
+        )
+            .replace(/\s+/gu, ' ')
+            .trim();
+    delete normalized
+        .relationshipUpdates;
+    delete normalized.worldChanges;
     normalized.unresolvedThreadsEn =
         Array.isArray(
             normalized.unresolvedThreadsEn,
@@ -236,80 +201,6 @@ export function normalizeSceneTransitionPackage(
                 .filter(Boolean)
                 .slice(0, 8)
             : [];
-    const profiles = new Map(
-        (worldState.actorLibrary || []).map(
-            profile => [
-                profile.id,
-                profile,
-            ],
-        ),
-    );
-    const suppliedRelationshipUpdates =
-        Array.isArray(
-            normalized.relationshipUpdates,
-        )
-            ? normalized.relationshipUpdates
-            : [];
-    const suppliedUpdatesById = new Map(
-        suppliedRelationshipUpdates
-            .filter(update =>
-                profiles.has(update?.id))
-            .map(update => [
-                update.id,
-                update,
-            ]),
-    );
-    const suppliedMemoryCounts = new Map();
-    suppliedUpdatesById.forEach(update => {
-        const fingerprint = String(
-            update.sceneMemoryEn || '',
-        )
-            .trim()
-            .toLocaleLowerCase();
-        if (!fingerprint) return;
-        suppliedMemoryCounts.set(
-            fingerprint,
-            (
-                suppliedMemoryCounts
-                    .get(fingerprint) ||
-                0
-            ) + 1,
-        );
-    });
-    normalized.relationshipUpdates =
-        [...suppliedUpdatesById]
-            .filter(([, supplied]) => {
-                const fingerprint = String(
-                    supplied.sceneMemoryEn || '',
-                )
-                    .trim()
-                    .toLocaleLowerCase();
-                return (
-                    isValidTransitionSceneMemory(
-                        supplied.sceneMemoryEn,
-                    ) &&
-                    suppliedMemoryCounts
-                        .get(fingerprint) === 1
-                );
-            })
-            .slice(0, 6)
-            .map(([id, supplied]) => {
-                const suppliedImpression = String(
-                    supplied
-                        .impressionOfPlayerEn ||
-                    '',
-                ).trim();
-                return {
-                    id,
-                    impressionOfPlayerEn:
-                        suppliedImpression,
-                    sceneMemoryEn:
-                        String(
-                            supplied
-                                .sceneMemoryEn,
-                        ).trim(),
-                };
-            });
     const nextScene = normalized?.nextScene;
     if (!nextScene || typeof nextScene !== 'object') {
         return normalized;
@@ -709,21 +600,28 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
             'nextClock 不得早于当前时间加转场耗时。',
         );
     }
-    errors.push(
-        ...validateTransitionWorldChanges(
-            payload.worldChanges,
-            worldState,
-            nextClock,
-            {
-                allowPending:
-                    options
-                        .deferWorldChanges ===
-                    true,
-            },
-        ),
-    );
     if (!String(payload.closureSummaryEn || '').trim()) {
         errors.push('场景切换包缺少具体的收束摘要。');
+    }
+    const chronicleSummaryEn =
+        String(
+            payload
+                .globalChronicleSummaryEn ||
+            '',
+        ).trim();
+    const chronicleWords =
+        chronicleSummaryEn
+            .split(/\s+/u)
+            .filter(Boolean)
+            .length;
+    if (
+        chronicleWords < 40 ||
+        chronicleWords > 80 ||
+        chronicleSummaryEn.length > 640
+    ) {
+        errors.push(
+            'globalChronicleSummaryEn 必须是 40–80 词且不超过 640 字符的英文语义史书摘要。',
+        );
     }
     const authorQuillEn = String(
         payload.authorQuillEn || '',
@@ -742,71 +640,6 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
         payload.unresolvedThreadsEn.some(item => !String(item || '').trim())) {
         errors.push('unresolvedThreadsEn 必须是至多 8 条非空文本。');
     }
-    const relationshipUpdates =
-        payload.relationshipUpdates;
-    const relationshipActorIds = new Set(
-        (worldState.actorLibrary || [])
-            .map(actor => actor.id),
-    );
-    const updatedRelationshipIds = new Set();
-    const relationshipMemoryTexts = new Set();
-    if (!Array.isArray(relationshipUpdates) ||
-        relationshipUpdates.length > 6) {
-        errors.push(
-            'relationshipUpdates 必须是至多 6 条人物关系结算。',
-        );
-    } else {
-        relationshipUpdates.forEach(update => {
-            if (
-                !relationshipActorIds.has(
-                    update?.id,
-                ) ||
-                updatedRelationshipIds.has(
-                    update?.id,
-                )
-            ) {
-                errors.push(
-                    `关系结算人物 ${update?.id || '?'} 不存在或重复。`,
-                );
-            }
-            updatedRelationshipIds.add(
-                update?.id,
-            );
-            if (!isValidImpressionShorthand(
-                update?.impressionOfPlayerEn,
-            )) {
-                errors.push(
-                    `关系结算人物 ${update?.id || '?'} 的印象必须是非占位的 1–${IMPRESSION_MAX_WORDS} 词主观 shorthand。`,
-                );
-            }
-            const memoryText = String(
-                update?.sceneMemoryEn || '',
-            ).trim();
-            const memoryFingerprint =
-                memoryText.toLocaleLowerCase();
-            if (!isValidTransitionSceneMemory(
-                memoryText,
-            )) {
-                errors.push(
-                    `关系结算人物 ${update?.id || '?'} 的章节记忆必须是完整、具体、非模板化的 8–32 词人物视角记忆。`,
-                );
-            }
-            if (
-                memoryFingerprint &&
-                relationshipMemoryTexts.has(
-                    memoryFingerprint,
-                )
-            ) {
-                errors.push(
-                    `关系结算人物 ${update?.id || '?'} 复用了其他人物的相同章节记忆。`,
-                );
-            }
-            relationshipMemoryTexts.add(
-                memoryFingerprint,
-            );
-        });
-    }
-
     const nextScene = payload.nextScene;
     if (!nextScene || typeof nextScene !== 'object' || Array.isArray(nextScene)) {
         return { valid: false, errors: [...errors, '场景切换包缺少 nextScene。'] };

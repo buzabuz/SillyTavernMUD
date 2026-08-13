@@ -12,6 +12,9 @@ import {
     actorDossierProjectionVersion,
     memoryReferenceVersion,
 } from '../domain/actor-context-schema.js';
+import {
+    migrateTimelineAppraisalLifecycleV4,
+} from '../domain/timeline-appraisal-cutover.js';
 
 export function createLifecycleRuntime(ports) {
     const {
@@ -69,15 +72,25 @@ export function createLifecycleRuntime(ports) {
         if (!state) return false;
         const originalState =
             state;
+        const lifecycleCutover =
+            migrateTimelineAppraisalLifecycleV4(
+                structuredClone(
+                    originalState,
+                ),
+                getContext().chat,
+            );
+        state =
+            lifecycleCutover.state;
         const actorContextMigration =
             migrateActorContextState(
                 structuredClone(
-                    originalState,
+                    state,
                 ),
             );
         state =
             actorContextMigration.state;
         let changed =
+            lifecycleCutover.changed ||
             actorContextMigration.changed;
         let saveOptions;
         const actorContextV1 =
@@ -569,25 +582,6 @@ export function createLifecycleRuntime(ports) {
             state.checks = [];
             changed = true;
         }
-        const timeline = Array.isArray(state.timeline)
-            ? state.timeline
-            : [];
-        state.sceneArchive.forEach(scene => {
-            if (Array.isArray(scene.timelineEntries)) {
-                return;
-            }
-            scene.timelineEntries = timeline.filter(entry =>
-                (!scene.startedClock || entry.clock >= scene.startedClock) &&
-            (!scene.endedClock || entry.clock <= scene.endedClock),
-            );
-            if (!scene.timelineEntries.length) {
-                scene.timelineEntries = [{
-                    clock: scene.endedClock || scene.startedClock || state.clock,
-                    label: scene.closureSummary || scene.summary || '场景已封存',
-                }];
-            }
-            changed = true;
-        });
         if (!state.sceneTransition || typeof state.sceneTransition !== 'object') {
             state.sceneTransition = {
                 status: 'idle',
@@ -709,7 +703,10 @@ export function createLifecycleRuntime(ports) {
             }
             if (!state.scene.startedClock) {
                 state.scene.startedClock = state.opening?.package?.clock ||
-                state.timeline?.[0]?.clock ||
+                state.scene
+                    .timelineEntries
+                    ?.[0]
+                    ?.clock ||
                 state.clock;
                 changed = true;
             }
@@ -718,19 +715,6 @@ export function createLifecycleRuntime(ports) {
                     message.extra?.hogwartsMud?.sceneId === state.scene.id,
                 );
                 state.scene.startedMessageId = Math.max(0, messageId);
-                changed = true;
-            }
-            if (!Array.isArray(state.scene.timelineEntries)) {
-                state.scene.timelineEntries = timeline.filter(entry =>
-                    !state.scene.startedClock ||
-                entry.clock >= state.scene.startedClock,
-                );
-                if (!state.scene.timelineEntries.length) {
-                    state.scene.timelineEntries = [{
-                        clock: state.scene.startedClock || state.clock,
-                        label: state.scene.summary || state.chapter || '当前场景',
-                    }];
-                }
                 changed = true;
             }
             const calendarEntryIds =

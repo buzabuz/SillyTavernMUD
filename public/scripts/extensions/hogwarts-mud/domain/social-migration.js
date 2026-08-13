@@ -2,7 +2,6 @@ import {
     finiteSocialNumber,
     inferSocialEventKind,
     normalizeEmotionAppraisals,
-    parseSocialGraphV1MigrationInput,
     normalizeSocialDimensionDeltas,
     normalizeSocialRelationshipEdge,
     normalizeSocialRelationshipEvidence,
@@ -10,10 +9,9 @@ import {
     normalizeSocialStructuralTags,
     SOCIAL_GRAPH_EXTRACTOR_VERSION,
     SOCIAL_GRAPH_VERSION,
+    validateSocialRelationshipEvidenceV3,
 } from './social-schema.js';
 import {
-    migrateLegacyFamilyEdges,
-    normalizeLegacySocialStatements,
     normalizeSocialClaimStores,
     reconcileSocialFamilyRelationships,
     sanitizeSocialFamilyEvidence,
@@ -165,39 +163,19 @@ export function normalizeSocialGraph(
         currentTurn = null,
     } = {},
 ) {
-    const sourceVersion =
-        Math.max(
-            1,
-            finiteSocialNumber(
-                value.version,
-                1,
-            ),
-        );
-    const versionedSource =
-        sourceVersion <
-            SOCIAL_GRAPH_VERSION
-            ? parseSocialGraphV1MigrationInput(
-                value,
-            )
-            : value;
     const source =
-        sourceVersion <
-            SOCIAL_GRAPH_VERSION
-            ? migrateLegacyFamilyEdges(
-                versionedSource,
-            )
-            : versionedSource;
-    const statements =
-        normalizeLegacySocialStatements(
-            source.statements,
-        );
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value)
+            ? value
+            : {};
     const {
         identityClaims,
         relationshipClaims,
         personReferences,
     } = normalizeSocialClaimStores(
         source,
-        statements,
+        [],
     );
     const relationshipEvidence =
         sanitizeSocialFamilyEvidence(
@@ -211,6 +189,7 @@ export function normalizeSocialGraph(
             )
                 .filter(evidence =>
                     evidence?.id &&
+                    evidence?.eventId &&
                     evidence
                         ?.sourceActorId &&
                     evidence
@@ -257,7 +236,6 @@ export function normalizeSocialGraph(
                 0,
             ),
         ),
-        statements,
         identityClaims,
         relationshipClaims,
         personReferences,
@@ -315,6 +293,163 @@ export function normalizeSocialGraph(
     };
 }
 
+const SOCIAL_GRAPH_V3_KEYS =
+    Object.freeze([
+        'version',
+        'extractorVersion',
+        'identityClaims',
+        'relationshipClaims',
+        'personReferences',
+        'relationshipEvidence',
+        'relationships',
+        'lastProcessedMessageId',
+        'lastRunSceneId',
+        'lastRunTurn',
+        'lastRunClock',
+        'backfilledSceneIds',
+        'backfillPendingSceneId',
+        'status',
+        'error',
+        'lastRunStats',
+    ]);
+
+export function validateSocialGraphV3(
+    value,
+    {
+        eventKnowledge = [],
+        appraisals = [],
+    } = {},
+) {
+    const normalized =
+        normalizeSocialGraph(value);
+    const errors = [];
+    const actualKeys =
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value)
+            ? Object.keys(value)
+            : [];
+    const allowed =
+        new Set(SOCIAL_GRAPH_V3_KEYS);
+    if (
+        value?.version !==
+            SOCIAL_GRAPH_VERSION ||
+        actualKeys.length !==
+            SOCIAL_GRAPH_V3_KEYS.length ||
+        actualKeys.some(key =>
+            !allowed.has(key)) ||
+        Object.hasOwn(
+            value || {},
+            'statements',
+        )
+    ) {
+        errors.push(
+            'Social Graph V3 contract is invalid.',
+        );
+    }
+    const eventById =
+        new Map(
+            eventKnowledge.map(event => [
+                event.eventId,
+                event,
+            ]),
+        );
+    for (
+        const evidence of Array.isArray(
+            value?.relationshipEvidence,
+        )
+            ? value.relationshipEvidence
+            : []
+    ) {
+        const validation =
+            validateSocialRelationshipEvidenceV3(
+                evidence,
+                {
+                    eventKnowledge,
+                    appraisals,
+                },
+            );
+        errors.push(...validation.errors);
+    }
+    const evidenceIds =
+        new Set(
+            normalized
+                .relationshipEvidence
+                .map(evidence =>
+                    evidence.id),
+        );
+    if (
+        evidenceIds.size !==
+        normalized
+            .relationshipEvidence
+            .length
+    ) {
+        errors.push(
+            'Social Graph V3 has duplicate Evidence IDs.',
+        );
+    }
+    for (
+        const edge of normalized
+            .relationships
+    ) {
+        if (
+            edge.evidenceIds
+                .some(id =>
+                    !evidenceIds.has(id))
+        ) {
+            errors.push(
+                `Relationship edge ${edge.id || '?'} cites unknown Evidence.`,
+            );
+        }
+    }
+    for (const claim of [
+        ...normalized.identityClaims,
+        ...normalized.relationshipClaims,
+    ]) {
+        if (
+            claim.sourceKind ===
+                'authority'
+        ) {
+            if (
+                !claim.authoritySourceRef ||
+                claim.reportedEventId
+            ) {
+                errors.push(
+                    `Authority claim ${claim.id || '?'} has invalid provenance.`,
+                );
+            }
+            continue;
+        }
+        const event =
+            eventById.get(
+                claim.reportedEventId,
+            );
+        const speakerId =
+            event?.report?.speakerId;
+        if (
+            event?.eventKind !==
+                'reported' ||
+            (
+                claim.sourceKind ===
+                    'self'
+                    ? speakerId !==
+                        claim.subjectId
+                    : speakerId ===
+                        claim.subjectId
+            )
+        ) {
+            errors.push(
+                `Social claim ${claim.id || '?'} has invalid reported Event provenance.`,
+            );
+        }
+    }
+    return {
+        valid: errors.length === 0,
+        errors,
+        value: normalized,
+    };
+}
+
 export function projectActorSocialRelationships(
     actorLibrary = [],
 ) {
@@ -365,24 +500,9 @@ export function migrateLoadedSocialGraph(
                 SOCIAL_GRAPH_EXTRACTOR_VERSION,
             ),
         );
-    const hasClaimsBoundary =
-        Object.hasOwn(
-            value,
-            'relationshipClaims',
-        ) ||
-        Object.hasOwn(
-            value,
-            'personReferences',
-        );
     const graph =
         normalizeSocialGraph(
-            sourceVersion >=
-                SOCIAL_GRAPH_VERSION &&
-                !hasClaimsBoundary
-                ? migrateLegacyFamilyEdges(
-                    value,
-                )
-                : value,
+            value,
         );
     const lastMessageId =
         Math.max(

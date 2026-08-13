@@ -20,7 +20,6 @@ function projectMandatorySceneState(
     {
         buildBehavioralEnvironment,
         buildCurrentMaterialState,
-        getActorKnownRumors,
     },
 ) {
     const presentActors = (worldState.actors || [])
@@ -100,11 +99,6 @@ function projectMandatorySceneState(
             currentActivityEn:
                 actor.currentActivityEn,
             currentIntentEn: actor.currentIntentEn,
-            knownRumors:
-                getActorKnownRumors(
-                    worldState,
-                    actor.id,
-                ),
             lifeStatus:
                 actor.lifeStatus || 'alive',
             lifeStatusPermanent:
@@ -223,18 +217,6 @@ function projectMandatorySceneState(
                             .pendingBeat
                 )
                 : null,
-        recentWorldNews:
-            (worldState.worldNews || [])
-                .slice(-4)
-                .map(brief => ({
-                    id: brief.id,
-                    headlineEn:
-                        brief.headlineEn,
-                    briefEn: brief.briefEn,
-                    category: brief.category,
-                    happenedClock:
-                        brief.happenedClock,
-                })),
         publicConflict: worldState.conflict
             ? {
                 title:

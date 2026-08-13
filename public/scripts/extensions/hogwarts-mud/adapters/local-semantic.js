@@ -1666,11 +1666,6 @@ export function createLocalSemanticAdapter(ports) {
             );
         if (
             !event?.eventId ||
-            !event?.sceneId ||
-            !Array.isArray(
-                event.sourceMessageIds,
-            ) ||
-            !event.sourceMessageIds.length ||
             !observerIds.length
         ) {
             return {
@@ -1749,12 +1744,6 @@ export function createLocalSemanticAdapter(ports) {
                                         eventId:
                                             event
                                                 .eventId,
-                                        sceneId:
-                                            event
-                                                .sceneId,
-                                        sourceMessageIds:
-                                            event
-                                                .sourceMessageIds,
                                         summaryEn:
                                             event
                                                 .summaryEn ||

@@ -259,37 +259,6 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
                 },
             );
         }
-        if (update.impressionOfPlayerEn) {
-            recordActorAppraisalV1(
-                next,
-                {
-                    actorId: update.id,
-                    summaryEn:
-                        update
-                            .impressionOfPlayerEn,
-                    kind:
-                        `turn_impression_${committedTurn}`,
-                    tier: 'recent',
-                },
-            );
-        }
-        if (
-            update.memoryUpdate
-                ?.summaryEn
-        ) {
-            recordActorAppraisalV1(
-                next,
-                {
-                    actorId: update.id,
-                    summaryEn:
-                        update.memoryUpdate
-                            .summaryEn,
-                    kind:
-                        `turn_memory_${committedTurn}`,
-                    tier: 'everyday',
-                },
-            );
-        }
     }
     next =
         applyWitnessedEventMemories(
@@ -455,10 +424,6 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
         clock: next.clock,
         label: transaction.publicEvent || transaction.publicEventEn,
     };
-    next.timeline = [
-        ...(next.timeline || []),
-        timelineEntry,
-    ].slice(-20);
     if (next.scene) {
         next.scene.timelineEntries = [
             ...(next.scene.timelineEntries || []),
@@ -474,20 +439,10 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
     const hasUnreviewedMemory =
         committedTurn >
             lastReviewedTurn &&
-        (
-            [...actorUpdates.values()]
-                .some(update =>
-                    Boolean(
-                        update.memoryUpdate
-                            ?.summaryEn ||
-                        update
-                            .impressionOfPlayerEn,
-                    )) ||
-            Boolean(
-                transaction
-                    .eventKnowledge
-                    ?.eventId,
-            )
+        Boolean(
+            transaction
+                .eventKnowledge
+                ?.eventId,
         );
     if (
         transaction.eventEnded ===

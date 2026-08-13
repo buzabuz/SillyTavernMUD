@@ -21,7 +21,7 @@ export {
 } from './domain/actor-identity.js';
 
 export {
-    buildActorContinuityCapsules, buildActorKnowledgeCapsules, filterKnowledgeForAudience, getActorKnownRumors,
+    buildActorContinuityCapsules, buildActorKnowledgeCapsules, filterKnowledgeForAudience,
     getActorVisibleSocialKnowledge, migrateActorKnowledgeBoundaries,
 } from './domain/actor-knowledge.js';
 
@@ -145,12 +145,12 @@ export {
 } from './domain/scene-destination.js';
 
 export {
-    filterCommittedSceneOpeningExperienceSegments, isValidTransitionSceneMemory, normalizeSceneTransitionPackage,
+    filterCommittedSceneOpeningExperienceSegments, normalizeSceneTransitionPackage,
     stripSyntheticSceneOpeningActorSegments, validateSceneOpeningExperienceSegments, validateSceneTransitionPackage,
 } from './domain/scene-transition.js';
 
 export {
-    migrateLoadedSocialGraph, normalizeSocialGraph, projectActorSocialRelationships,
+    migrateLoadedSocialGraph, normalizeSocialGraph, projectActorSocialRelationships, validateSocialGraphV3,
 } from './domain/social-migration.js';
 
 export {
@@ -159,7 +159,7 @@ export {
 
 export {
     applySocialDirectorResult, validateSocialDirectorResult,
-} from './domain/social-reducer.js';
+} from './domain/social-v3-reducer.js';
 
 export {
     SOCIAL_GRAPH_EXTRACTOR_VERSION, SOCIAL_GRAPH_VERSION, SOCIAL_RELATIONSHIP_CLOSENESS_ANCHORS, SOCIAL_RELATIONSHIP_DIMENSIONS,
@@ -191,8 +191,8 @@ export {
 } from './domain/spell-proposals.js';
 
 export {
-    BEHAVIORAL_ENVIRONMENT_VERSION, GOSSIP_CHANNEL_VALUES, TEMPORAL_STATE_VERSION, WORLD_CHANGE_MIN_DAYS,
-    WORLD_NEWS_CATEGORY_VALUES, advanceWorldClock, buildBehavioralEnvironment, getWorldClockGapMinutes,
+    BEHAVIORAL_ENVIRONMENT_VERSION, TEMPORAL_STATE_VERSION,
+    advanceWorldClock, buildBehavioralEnvironment, getWorldClockGapMinutes,
     getWorldDate, isDailyDirectorPlanCurrent, reconcileTemporalState,
 } from './domain/time-environment.js';
 
@@ -229,18 +229,26 @@ export {
 } from './domain/turn-validation.js';
 
 export {
-    applyTransitionWorldChanges, normalizeTransitionWorldChanges, validateTransitionWorldChanges,
-} from './domain/world-changes.js';
+    appendGlobalChronicleEntry, createDefaultGlobalChronicle, normalizeChronicleEntry,
+    normalizeGlobalChronicle, TIMELINE_CHRONICLE_VERSION, validateGlobalChronicle,
+} from './domain/timeline-chronicle.js';
+
+export {
+    migrateTimelineAppraisalLifecycleV4,
+} from './domain/timeline-appraisal-cutover.js';
 
 export {
     ACTOR_EVENT_KNOWLEDGE_KIND_VALUES, ACTOR_EVENT_KNOWLEDGE_SCHEMA_VERSION, ACTOR_PRESENT_COMPATIBILITY, ATTRIBUTION_VALUES,
     AUDIBLE_SCOPE_VALUES, COHORT_CONTRACT_KEYS, COHORT_SCHEMA_VERSION, COHORT_SOURCE_VALUES,
-    CONCEALMENT_VALUES, EVENT_KNOWLEDGE_CONTRACT_KEYS, EVENT_KNOWLEDGE_SCHEMA_VERSION, EVENT_KNOWLEDGE_SOURCE_VALUES,
+    CONCEALMENT_VALUES, EVENT_KNOWLEDGE_CONTRACT_KEYS, EVENT_KNOWLEDGE_KIND_VALUES, EVENT_KNOWLEDGE_OBSERVED_KEYS,
+    EVENT_KNOWLEDGE_REPORTED_KEYS, EVENT_KNOWLEDGE_SCHEMA_VERSION, EVENT_KNOWLEDGE_SOURCE_VALUES,
     LOCAL_PRESENCE_CONTRACT_KEYS, LOCAL_PRESENCE_SCHEMA_VERSION, LOCAL_PRESENCE_SOURCE_VALUES, PERCEPTION_CONTRACT_KEYS,
-    PERCEPTION_SCHEMA_VERSION, PERCEPTION_SOURCE_VALUES, PRESENCE_WITNESS_SCHEMA_VERSION, SALIENCE_VALUES,
-    VISUAL_SCOPE_VALUES, WITNESS_BASIS_VALUES, WITNESS_RESOLUTION_CONTRACT_KEYS, WITNESS_RESOLUTION_SCHEMA_VERSION,
+    PERCEPTION_SCHEMA_VERSION, PERCEPTION_SOURCE_VALUES, PRESENCE_WITNESS_SCHEMA_VERSION, REPORTED_EVENT_CONTRACT_KEYS,
+    REPORTED_EVENT_STATEMENT_KIND_VALUES, SALIENCE_VALUES, SOURCE_SEGMENT_REF_CONTRACT_KEYS, VISUAL_SCOPE_VALUES,
+    WITNESS_BASIS_VALUES, WITNESS_RESOLUTION_CONTRACT_KEYS, WITNESS_RESOLUTION_SCHEMA_VERSION,
     applyPresenceWitnessTransaction, createDefaultLocalPresence, createDefaultPresenceWitnessState, createDeterministicPerceptionFallback,
-    createEventKnowledgeId, createStableContractId, getActiveInteractionActorIds, normalizeActiveInteractionActorIds,
+    createEventKnowledgeId, createReportedEventKnowledgeId, createStableContractId, getActiveInteractionActorIds,
+    getEventKnowledgeSourceMessageIds, normalizeActiveInteractionActorIds,
     normalizeCohort, normalizeCohorts, normalizeEventKnowledge, normalizeLocalPresence,
     normalizePerception, normalizeWitnessResolution, projectActorEventKnowledge, projectSceneArchivePresence,
     reduceEventKnowledge, reduceLocalPresence, resolveEventWitnesses, validateCohortContract,
