@@ -132,6 +132,10 @@ test(
             );
 
         assert.equal(
+            report.version,
+            2,
+        );
+        assert.equal(
             report.archive
                 .shaAndMtimeUnchanged,
             true,
@@ -165,6 +169,50 @@ test(
         assert.equal(
             report.migration
                 .lifecycle
+                .failureStateBytesUnchanged,
+            true,
+        );
+        assert.deepEqual(
+            {
+                sourceVersion:
+                    report
+                        .memoryReferenceUpgrade
+                        .sourceVersion,
+                targetVersion:
+                    report
+                        .memoryReferenceUpgrade
+                        .targetVersion,
+                firstChanged:
+                    report
+                        .memoryReferenceUpgrade
+                        .firstChanged,
+                secondChanged:
+                    report
+                        .memoryReferenceUpgrade
+                        .secondChanged,
+                candidateAppraisalCount:
+                    report
+                        .memoryReferenceUpgrade
+                        .candidateAppraisalCount,
+                remainingCandidateCount:
+                    report
+                        .memoryReferenceUpgrade
+                        .remainingCandidateCount,
+            },
+            {
+                sourceVersion: 2,
+                targetVersion: 2,
+                firstChanged: false,
+                secondChanged: false,
+                candidateAppraisalCount:
+                    0,
+                remainingCandidateCount:
+                    0,
+            },
+        );
+        assert.equal(
+            report
+                .memoryReferenceUpgrade
                 .failureStateBytesUnchanged,
             true,
         );
@@ -248,9 +296,9 @@ test(
                 legacyMemoryCount: 60,
                 legacyCurrentOpinionCount:
                     22,
-                newRefCount: 84,
+                newRefCount: 62,
                 dossierHydrationCount:
-                    82,
+                    60,
                 factsEqual: true,
             },
         );
@@ -268,12 +316,13 @@ test(
             {
                 legacyCount: 22,
                 migratedAppraisalCount:
-                    22,
-                recentRefCount: 22,
+                    0,
+                recentRefCount: 0,
                 exactTextMatch: true,
                 historicalClaimAllowedFalse:
                     true,
                 excludedFromSchema: true,
+                discarded: true,
             },
         );
 
@@ -308,6 +357,11 @@ test(
             assert.equal(
                 prompt
                     .legacyTopLevelPayloadCount,
+                0,
+            );
+            assert.equal(
+                prompt
+                    .forbiddenCurrentImpressionCount,
                 0,
             );
             assert.equal(

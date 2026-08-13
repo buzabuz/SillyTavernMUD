@@ -279,6 +279,11 @@ function hydrateMemoryRef(
             );
         if (
             !appraisal ||
+            asArray(
+                appraisal.contextTags,
+            ).includes(
+                'migrated_current_impression',
+            ) ||
             (
                 viewerId !==
                     'authority' &&

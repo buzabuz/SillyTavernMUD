@@ -11,6 +11,9 @@ import {
     normalizeNpcIdentity,
 } from '../public/scripts/extensions/hogwarts-mud/domain/npc-identity-schema.js';
 import {
+    memoryReferenceVersion,
+} from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-schema.js';
+import {
     createLifecycleRuntime,
 } from '../public/scripts/extensions/hogwarts-mud/runtime/lifecycle.js';
 import {
@@ -198,12 +201,20 @@ test('cutover uses Event refs and denies historical claims for text-only memorie
                         tag.startsWith(
                             'migrated_',
                         )));
-    assert.ok(migrated.length >= 3);
+    assert.ok(migrated.length >= 2);
     assert.ok(migrated.every(appraisal =>
         appraisal.historicalClaimAllowed ===
             false &&
         appraisal.sourceEventIds.length ===
             0));
+    assert.equal(
+        migrated.some(appraisal =>
+            appraisal.contextTags
+                .includes(
+                    'migrated_current_impression',
+                )),
+        false,
+    );
     assert.equal(
         JSON.stringify(
             state.actorMemoryIndex,
@@ -232,6 +243,163 @@ test('cutover is idempotent for valid V1 state', () => {
     assert.notEqual(
         second.state,
         first.state,
+    );
+});
+
+function memoryReferenceV1Fixture() {
+    const state =
+        migrateActorContextV1(
+            legacyState(),
+        ).state;
+    const actorId =
+        'canon_harry_james_potter';
+    const appraisalId =
+        recordActorAppraisalV1(
+            state,
+            {
+                actorId,
+                summaryEn:
+                    'She can probably be trusted.',
+                kind:
+                    'current_impression_fixture',
+                tier: 'recent',
+            },
+        );
+    state.memorySynapse
+        .appraisals
+        .find(appraisal =>
+            appraisal.id ===
+                appraisalId)
+        .contextTags = [
+            'migrated_current_impression',
+        ];
+    state.memoryReferenceVersion = 1;
+    state.actorMemoryIndex.version = 1;
+    return {
+        state,
+        actorId,
+        appraisalId,
+    };
+}
+
+test('Memory Reference V2 atomically removes migrated current impressions', () => {
+    const {
+        state,
+        actorId,
+        appraisalId,
+    } = memoryReferenceV1Fixture();
+    const before =
+        structuredClone(state);
+    const first =
+        migrateActorContextV1(
+            state,
+        );
+
+    assert.deepEqual(state, before);
+    assert.equal(first.changed, true);
+    assert.equal(
+        first.state
+            .memoryReferenceVersion,
+        memoryReferenceVersion,
+    );
+    assert.equal(
+        first.state
+            .actorMemoryIndex.version,
+        memoryReferenceVersion,
+    );
+    assert.equal(
+        first.state.memorySynapse
+            .appraisals
+            .some(appraisal =>
+                appraisal.id ===
+                    appraisalId),
+        false,
+    );
+    assert.equal(
+        first.state.actorMemoryIndex
+            .byActorId[actorId]
+            .recent
+            .some(reference =>
+                reference.recordId ===
+                    appraisalId),
+        false,
+    );
+    assert.equal(
+        first.stats
+            .removedCurrentImpressionAppraisalCount,
+        1,
+    );
+    assert.equal(
+        first.stats
+            .removedCurrentImpressionRefCount,
+        1,
+    );
+    assert.equal(
+        validateActorContextStateV1(
+            first.state,
+        ).valid,
+        true,
+    );
+    assert.equal(
+        migrateActorContextV1(
+            first.state,
+        ).changed,
+        false,
+    );
+});
+
+test('Memory Reference V2 rejects current-impression tier refs and dependant removal', () => {
+    const invalid =
+        memoryReferenceV1Fixture();
+    invalid.state
+        .memoryReferenceVersion =
+        memoryReferenceVersion;
+    invalid.state.actorMemoryIndex
+        .version =
+        memoryReferenceVersion;
+    assert.match(
+        validateActorContextStateV1(
+            invalid.state,
+        ).errors.join(' '),
+        /cannot reference migrated current impression/u,
+    );
+    invalid.state.actorMemoryIndex
+        .byActorId[
+            invalid.actorId
+        ].recent = [];
+    invalid.state.actorMemoryIndex
+        .byActorId[
+            invalid.actorId
+        ].firstImpressionRef =
+        invalid.appraisalId;
+    assert.match(
+        validateActorContextStateV1(
+            invalid.state,
+        ).errors.join(' '),
+        /firstImpressionRef cannot reference migrated current impression/u,
+    );
+
+    const conflict =
+        memoryReferenceV1Fixture();
+    conflict.state.actorMemoryIndex
+        .byActorId[
+            conflict.actorId
+        ].firstImpressionRef =
+        conflict.appraisalId;
+    const before =
+        structuredClone(
+            conflict.state,
+        );
+    assert.throws(
+        () =>
+            migrateActorContextV1(
+                conflict.state,
+            ),
+        /canonical dependants/u,
+    );
+    assert.deepEqual(
+        conflict.state,
+        before,
     );
 });
 
@@ -524,6 +692,64 @@ test('lifecycle performs the Actor Context cutover once and only exposes V1 afte
             state,
         ).valid,
         true,
+    );
+    assert.equal(
+        lifecycle
+            .ensureSceneLifecycleState(
+                state,
+            ),
+        false,
+    );
+});
+
+test('lifecycle upgrades Memory Reference V1 exactly once', () => {
+    const {
+        state,
+        appraisalId,
+    } = memoryReferenceV1Fixture();
+    state.modelSlots = {};
+    state.socialGraph = {};
+    state.sceneArchive = [];
+    state.checks = [];
+    state.turn = {
+        count: 0,
+        status: 'idle',
+    };
+    state.sceneTransition = {
+        status: 'idle',
+    };
+    state.pacingDirector = {
+        status: 'idle',
+        reassessAfterTurns: 3,
+    };
+    state.memoryDirector = {
+        status: 'idle',
+        reviewAfterTurns: 10,
+    };
+    state.causalCollapse = {};
+    const lifecycle =
+        createLifecycleRuntime(
+            lifecyclePorts(state),
+        );
+
+    assert.equal(
+        lifecycle
+            .ensureSceneLifecycleState(
+                state,
+            ),
+        true,
+    );
+    assert.equal(
+        state.memoryReferenceVersion,
+        memoryReferenceVersion,
+    );
+    assert.equal(
+        state.memorySynapse
+            .appraisals
+            .some(appraisal =>
+                appraisal.id ===
+                    appraisalId),
+        false,
     );
     assert.equal(
         lifecycle

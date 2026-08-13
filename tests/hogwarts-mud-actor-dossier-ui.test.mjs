@@ -104,7 +104,7 @@ function fixture() {
         },
         items: [],
         actorMemoryIndex: {
-            version: 1,
+            version: 2,
             byActorId: {
                 [actorId]: {
                     firstImpressionRef:
@@ -116,7 +116,14 @@ function fixture() {
                         addedClock:
                             '1991-09-03 · 16:00',
                     }],
-                    recent: [],
+                    recent: [{
+                        recordType:
+                            'appraisal',
+                        recordId:
+                            'appraisal_current_cache',
+                        addedClock:
+                            '1991-09-03 · 17:00',
+                    }],
                     everyday: [],
                 },
             },
@@ -151,6 +158,30 @@ function fixture() {
                 status: 'accepted',
                 committedClock:
                     '1991-09-01 · 12:00',
+            }, {
+                id:
+                    'appraisal_current_cache',
+                observerId: actorId,
+                targetId: 'player',
+                summaryEn:
+                    'Current cache must not appear as memory.',
+                sourceEventIds: [],
+                sourceMessageIds: [],
+                sourceRumorIds: [],
+                activationSchemaIds: [],
+                derivedSchemaIds: [],
+                sceneId: '',
+                contextTags: [
+                    'migrated_current_impression',
+                ],
+                confidence: 0.5,
+                status: 'accepted',
+                knowledgeSource:
+                    'mixed',
+                committedClock:
+                    '1991-09-03 · 17:00',
+                historicalClaimAllowed:
+                    false,
             }],
             personSchemas: [{
                 id: 'schema_current',
@@ -190,6 +221,8 @@ function fixture() {
                 witnessedBy: ['player'],
                 summaryEn:
                     'Hermione trusted Ivy with the repair.',
+                summary:
+                    '赫敏把修复工作交给了艾薇。',
                 dimensionDeltas: [],
             }, {
                 id: 'evidence_private',
@@ -282,6 +315,16 @@ test('ActorDossierViewModelV1 has exactly eight business fields and player ACL',
             .evidenceRefs
             .map(item => item.recordId),
         ['evidence_visible'],
+    );
+    assert.equal(
+        dossier.relationship
+            .evidenceRefs[0]
+            .summary,
+        '赫敏把修复工作交给了艾薇。',
+    );
+    assert.deepEqual(
+        dossier.memories.recent,
+        [],
     );
     const gender =
         dossier.identity.groups
@@ -447,6 +490,19 @@ test('inspector and graph source enforce the six-section unified projection cuto
         assert.equal(
             actorBranch.includes(
                 `'${title}'`,
+            ),
+            true,
+        );
+    }
+    for (const subsection of [
+        '印象与预期',
+        '关系维度',
+        '当前情绪',
+        '关系证据',
+    ]) {
+        assert.equal(
+            inspector.includes(
+                `'${subsection}'`,
             ),
             true,
         );

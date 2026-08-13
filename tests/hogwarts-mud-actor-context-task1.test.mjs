@@ -33,7 +33,7 @@ import * as helpers from '../public/scripts/extensions/hogwarts-mud/helpers.js';
 
 const TINA_CHAT_URL =
     new URL(
-        '../data/default-user/chats/Hogwarts_World_Director/Hogwarts World Director - 2026-08-02@22h16m07s339ms.jsonl',
+        '../data/default-user/backups/chat_hogwarts_world_director_20260812-183453.jsonl',
         import.meta.url,
     );
 
@@ -549,7 +549,7 @@ test('Task 1 versions initialize new worlds and are exported by the facade', () 
     );
     assert.equal(
         memoryReferenceVersion,
-        1,
+        2,
     );
     assert.equal(
         actorDossierProjectionVersion,
@@ -611,7 +611,7 @@ test('Task 1 versions initialize new worlds and are exported by the facade', () 
         },
         {
             actorContextVersion: 1,
-            memoryReferenceVersion: 1,
+            memoryReferenceVersion: 2,
             actorDossierProjectionVersion: 1,
         },
     );

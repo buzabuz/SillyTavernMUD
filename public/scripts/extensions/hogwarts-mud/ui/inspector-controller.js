@@ -171,6 +171,27 @@ export function createInspectorController(ports) {
             document.createElement('div');
         panel.className =
             'hpmud-dossier-relationship';
+        const subsection = (
+            title,
+            content,
+        ) => {
+            const section =
+                document.createElement(
+                    'section',
+                );
+            section.className =
+                'hpmud-relationship-subsection';
+            const heading =
+                document.createElement(
+                    'h4',
+                );
+            heading.textContent = title;
+            section.append(
+                heading,
+                content,
+            );
+            return section;
+        };
         const labels =
             document.createElement('div');
         labels.className =
@@ -277,22 +298,37 @@ export function createInspectorController(ports) {
                 .evidenceRefs
                 .map(reference => ({
                     label:
-                        reference.clock ||
-                        '关系证据',
+                        [
+                            '关系证据',
+                            reference.clock,
+                        ].filter(Boolean)
+                            .join(' · '),
                     detail:
                         reference.summary,
                 }));
         panel.append(
             labels,
-            impressions,
-            metricList,
-            createList(
-                sentiments,
-                '当前没有活跃情绪。',
+            subsection(
+                '印象与预期',
+                impressions,
             ),
-            createList(
-                evidence,
-                '尚无玩家可见的关系证据。',
+            subsection(
+                '关系维度',
+                metricList,
+            ),
+            subsection(
+                '当前情绪',
+                createList(
+                    sentiments,
+                    '当前没有活跃情绪。',
+                ),
+            ),
+            subsection(
+                '关系证据',
+                createList(
+                    evidence,
+                    '尚无玩家可见的关系证据。',
+                ),
             ),
         );
         return panel;

@@ -4473,8 +4473,14 @@ test('actor continuity capsules override stale stranger labels without exposing 
                 memory.summaryEn),
         [
             'Shared a train compartment where Tina broke the window and scorched a textbook.',
-            'Boundary-free but impossible to forget.',
         ],
+    );
+    assert.equal(
+        JSON.stringify(capsule)
+            .includes(
+                'Boundary-free but impossible to forget.',
+            ),
+        false,
     );
     assert.equal(
         JSON.stringify(capsule)

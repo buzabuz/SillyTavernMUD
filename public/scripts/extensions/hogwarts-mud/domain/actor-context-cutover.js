@@ -27,6 +27,8 @@ const MEMORY_TIERS = Object.freeze([
     'recent',
     'everyday',
 ]);
+const MIGRATED_CURRENT_IMPRESSION_TAG =
+    'migrated_current_impression';
 
 function isRecord(value) {
     return Boolean(
@@ -1067,87 +1069,43 @@ function migrateMemories({
             );
         }
     }
-    for (const [
-        kind,
-        value,
-        clock,
-    ] of [
-            [
-                'first_impression',
-                firstText(
-                    profile
-                        ?.firstImpressionOfPlayerEn,
-                    runtime
-                        ?.firstImpressionOfPlayerEn,
-                    profile
-                        ?.firstImpressionOfPlayer,
-                    runtime
-                        ?.firstImpressionOfPlayer,
-                ),
-                firstText(
-                    profile?.firstImpressionClock,
-                    runtime?.firstImpressionClock,
-                    state.clock,
-                ),
-            ],
-            [
-                'current_impression',
-                firstText(
-                    profile
-                        ?.impressionOfPlayerEn,
-                    runtime
-                        ?.impressionOfPlayerEn,
-                    profile
-                        ?.impressionOfPlayer,
-                    runtime
-                        ?.impressionOfPlayer,
-                ),
-                firstText(
-                    profile
-                        ?.impressionUpdatedClock,
-                    runtime
-                        ?.impressionUpdatedClock,
-                    state.clock,
-                ),
-            ],
-        ]) {
-        if (!value) {
-            continue;
-        }
+    const firstImpression =
+        firstText(
+            profile
+                ?.firstImpressionOfPlayerEn,
+            runtime
+                ?.firstImpressionOfPlayerEn,
+            profile
+                ?.firstImpressionOfPlayer,
+            runtime
+                ?.firstImpressionOfPlayer,
+        );
+    if (firstImpression) {
         const appraisal =
             migratedAppraisal({
                 actorId,
-                kind,
-                sourceId: kind,
-                summaryEn: value,
-                clock,
+                kind:
+                    'first_impression',
+                sourceId:
+                    'first_impression',
+                summaryEn:
+                    firstImpression,
+                clock:
+                    firstText(
+                        profile
+                            ?.firstImpressionClock,
+                        runtime
+                            ?.firstImpressionClock,
+                        state.clock,
+                    ),
             });
         addAppraisal(
             appraisal,
             appraisalsById,
             stats,
         );
-        if (
-            kind ===
-            'first_impression'
-        ) {
-            entry.firstImpressionRef =
-                appraisal.id;
-        } else {
-            appendMemoryRef(
-                entry,
-                'recent',
-                {
-                    recordType:
-                        'appraisal',
-                    recordId:
-                        appraisal.id,
-                    addedClock:
-                        appraisal
-                            .committedClock,
-                },
-            );
-        }
+        entry.firstImpressionRef =
+            appraisal.id;
     }
     return entry;
 }
@@ -1320,6 +1278,15 @@ export function validateActorContextStateV1(
                 .map(appraisal =>
                     appraisal.id),
         );
+    const appraisalsById =
+        new Map(
+            synapseValidation.value
+                .appraisals
+                .map(appraisal => [
+                    appraisal.id,
+                    appraisal,
+                ]),
+        );
     const schemaIds =
         new Set(
             synapseValidation.value
@@ -1345,6 +1312,18 @@ export function validateActorContextStateV1(
             `${actorId}.firstImpressionRef`,
             errors,
         );
+        if (
+            isMigratedCurrentImpression(
+                appraisalsById.get(
+                    entry
+                        ?.firstImpressionRef,
+                ),
+            )
+        ) {
+            errors.push(
+                `${actorId}.firstImpressionRef cannot reference migrated current impression ${entry.firstImpressionRef}.`,
+            );
+        }
         for (const tier of MEMORY_TIERS) {
             for (const reference of (
                 entry?.[tier] || []
@@ -1358,6 +1337,20 @@ export function validateActorContextStateV1(
                     `${actorId}.${tier}`,
                     errors,
                 );
+                if (
+                    reference.recordType ===
+                        'appraisal' &&
+                    isMigratedCurrentImpression(
+                        appraisalsById.get(
+                            reference
+                                .recordId,
+                        ),
+                    )
+                ) {
+                    errors.push(
+                        `${actorId}.${tier} cannot reference migrated current impression ${reference.recordId}.`,
+                    );
+                }
             }
         }
     }
@@ -1436,6 +1429,231 @@ export function validateActorContextStateV1(
     };
 }
 
+function countMemoryRefs(
+    actorMemoryIndex,
+) {
+    return Object.values(
+        actorMemoryIndex
+            ?.byActorId ||
+        {},
+    ).reduce(
+        (total, entry) =>
+            total +
+            MEMORY_TIERS.reduce(
+                (count, tier) =>
+                    count +
+                    (
+                        entry?.[tier] ||
+                        []
+                    ).length,
+                0,
+            ),
+        0,
+    );
+}
+
+function isMigratedCurrentImpression(
+    appraisal,
+) {
+    return (
+        appraisal?.contextTags ||
+        []
+    ).includes(
+        MIGRATED_CURRENT_IMPRESSION_TAG,
+    );
+}
+
+function migrateMemoryReferenceV2(
+    source,
+) {
+    if (
+        source.actorContextVersion !==
+            actorContextVersion ||
+        source
+            .actorDossierProjectionVersion !==
+            actorDossierProjectionVersion ||
+        source.memoryReferenceVersion !==
+            1 ||
+        source.actorMemoryIndex
+            ?.version !== 1
+    ) {
+        throw new TypeError(
+            'Partial Actor Context state is not a valid Memory Reference V2 source.',
+        );
+    }
+    const synapseValidation =
+        validateMemorySynapse(
+            source.memorySynapse,
+        );
+    if (!synapseValidation.valid) {
+        throw new TypeError(
+            synapseValidation.errors
+                .join(' '),
+        );
+    }
+    const currentImpressionIds =
+        new Set(
+            synapseValidation.value
+                .appraisals
+                .filter(
+                    isMigratedCurrentImpression,
+                )
+                .map(appraisal =>
+                    appraisal.id),
+        );
+    const conflicts = [];
+    for (const [
+        actorId,
+        entry,
+    ] of Object.entries(
+            source.actorMemoryIndex
+                .byActorId ||
+        {},
+        )) {
+        if (
+            currentImpressionIds.has(
+                entry
+                    ?.firstImpressionRef,
+            )
+        ) {
+            conflicts.push(
+                `${actorId}.firstImpressionRef`,
+            );
+        }
+    }
+    for (const schema of (
+        synapseValidation.value
+            .personSchemas
+    )) {
+        for (const field of [
+            'supportAppraisalIds',
+            'counterAppraisalIds',
+        ]) {
+            if (
+                (
+                    schema[field] ||
+                    []
+                ).some(id =>
+                    currentImpressionIds
+                        .has(id))
+            ) {
+                conflicts.push(
+                    `${schema.id}.${field}`,
+                );
+            }
+        }
+    }
+    for (const appraisal of (
+        synapseValidation.value
+            .appraisals
+    )) {
+        if (
+            currentImpressionIds.has(
+                appraisal.id,
+            ) &&
+            (
+                appraisal
+                    .supersedesAppraisalId ||
+                appraisal.supersededById
+            )
+        ) {
+            conflicts.push(
+                `${appraisal.id}.supersede`,
+            );
+        }
+        if (
+            currentImpressionIds.has(
+                appraisal
+                    .supersedesAppraisalId,
+            ) ||
+            currentImpressionIds.has(
+                appraisal
+                    .supersededById,
+            )
+        ) {
+            conflicts.push(
+                `${appraisal.id}.supersede`,
+            );
+        }
+    }
+    if (conflicts.length) {
+        throw new TypeError(
+            `Migrated current impression has canonical dependants: ${
+                [...new Set(conflicts)]
+                    .join(', ')
+            }.`,
+        );
+    }
+    const next =
+        structuredClone(source);
+    let removedMemoryRefCount = 0;
+    for (const entry of Object.values(
+        next.actorMemoryIndex
+            .byActorId,
+    )) {
+        for (const tier of MEMORY_TIERS) {
+            const before =
+                entry[tier].length;
+            entry[tier] =
+                entry[tier].filter(
+                    reference =>
+                        !currentImpressionIds
+                            .has(
+                                reference
+                                    .recordId,
+                            ),
+                );
+            removedMemoryRefCount +=
+                before -
+                entry[tier].length;
+        }
+    }
+    next.memorySynapse = {
+        ...synapseValidation.value,
+        appraisals:
+            synapseValidation.value
+                .appraisals
+                .filter(appraisal =>
+                    !currentImpressionIds
+                        .has(
+                            appraisal.id,
+                        )),
+    };
+    next.memoryReferenceVersion =
+        memoryReferenceVersion;
+    next.actorMemoryIndex.version =
+        memoryReferenceVersion;
+    const validation =
+        validateActorContextStateV1(
+            next,
+        );
+    if (!validation.valid) {
+        throw new TypeError(
+            validation.errors.join(' '),
+        );
+    }
+    return {
+        state: next,
+        changed: true,
+        stats: {
+            actorCoreCount:
+                next.actorLibrary.length,
+            actorRuntimeCount:
+                next.actors.length,
+            memoryRefCount:
+                countMemoryRefs(
+                    next.actorMemoryIndex,
+                ),
+            migratedAppraisalCount: 0,
+            removedLegacyFieldCount: 0,
+            removedCurrentImpressionAppraisalCount:
+                currentImpressionIds.size,
+            removedCurrentImpressionRefCount:
+                removedMemoryRefCount,
+        },
+    };
+}
+
 /**
  * Atomically migrate the current Actor Context state to V1.
  *
@@ -1452,7 +1670,7 @@ export function migrateActorContextV1(
             'Actor Context source must be an object.',
         );
     }
-    const alreadyV1 =
+    const alreadyTarget =
         source.actorContextVersion ===
             actorContextVersion &&
         source.memoryReferenceVersion ===
@@ -1460,7 +1678,7 @@ export function migrateActorContextV1(
         source
             .actorDossierProjectionVersion ===
             actorDossierProjectionVersion;
-    if (alreadyV1) {
+    if (alreadyTarget) {
         const validation =
             validateActorContextStateV1(
                 source,
@@ -1479,30 +1697,34 @@ export function migrateActorContextV1(
                 actorRuntimeCount:
                     source.actors.length,
                 memoryRefCount:
-                    Object.values(
-                        source.actorMemoryIndex
-                            .byActorId,
-                    ).reduce(
-                        (total, entry) =>
-                            total +
-                            MEMORY_TIERS.reduce(
-                                (
-                                    count,
-                                    tier,
-                                ) =>
-                                    count +
-                                    entry[tier]
-                                        .length,
-                                0,
-                            ),
-                        0,
+                    countMemoryRefs(
+                        source.actorMemoryIndex,
                     ),
                 migratedAppraisalCount:
                     0,
                 removedLegacyFieldCount:
                     0,
+                removedCurrentImpressionAppraisalCount:
+                    0,
+                removedCurrentImpressionRefCount:
+                    0,
             },
         };
+    }
+    if (
+        source.actorContextVersion ===
+            actorContextVersion &&
+        source
+            .actorDossierProjectionVersion ===
+            actorDossierProjectionVersion &&
+        source.memoryReferenceVersion ===
+            1 &&
+        source.actorMemoryIndex
+            ?.version === 1
+    ) {
+        return migrateMemoryReferenceV2(
+            source,
+        );
     }
     if (
         source.actorMemoryIndex !==
@@ -1544,6 +1766,10 @@ export function migrateActorContextV1(
         actorRuntimeCount: 0,
         memoryRefCount: 0,
         migratedAppraisalCount: 0,
+        removedCurrentImpressionAppraisalCount:
+            0,
+        removedCurrentImpressionRefCount:
+            0,
         removedLegacyFieldCount:
             countLegacyFields(
                 [...profilesById.values()],
