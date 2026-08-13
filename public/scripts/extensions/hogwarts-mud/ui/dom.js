@@ -36,6 +36,10 @@ export function getUiDomRefs(root) {
             root.querySelector(
                 '#hpmud_scene_archive_dialog',
             ),
+        calendarDialog:
+            root.querySelector(
+                '#hpmud_calendar_dialog',
+            ),
         launcher: null,
         relationshipGraphController: null,
     };

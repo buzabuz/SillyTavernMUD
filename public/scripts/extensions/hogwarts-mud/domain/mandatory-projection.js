@@ -21,7 +21,6 @@ function projectMandatorySceneState(
         buildBehavioralEnvironment,
         buildCurrentMaterialState,
         getActorKnownRumors,
-        normalizeActorMemoryProfile,
     },
 ) {
     const presentActors = (worldState.actors || [])
@@ -88,12 +87,16 @@ function projectMandatorySceneState(
             ),
         presentActors: presentActors.map(actor => ({
             id: actor.id,
-            nameEn: actor.nameEn,
-            roleEn: actor.roleEn,
-            relationshipToPlayerEn:
-                actor.relationshipToPlayerEn,
-            impressionOfPlayerEn:
-                actor.impressionOfPlayerEn,
+            nameEn:
+                profiles.get(
+                    actor.id,
+                )?.nameEn ||
+                actor.id,
+            roleEn:
+                profiles.get(
+                    actor.id,
+                )?.roleEn ||
+                '',
             currentActivityEn:
                 actor.currentActivityEn,
             currentIntentEn: actor.currentIntentEn,
@@ -126,19 +129,38 @@ function projectMandatorySceneState(
         })),
         actorPerformance: presentActors.map(actor => {
             const profile = profiles.get(actor.id) || {};
-            const normalized =
-                normalizeActorMemoryProfile(
-                    profile,
-                    actor,
-                );
             return {
                 id: actor.id,
-                personalityEn: profile.personalityEn,
-                speechStyleEn: profile.speechStyleEn,
-                privateGoalEn: profile.privateGoalEn,
-                fearEn: profile.fearEn,
+                temperamentEn:
+                    profile
+                        .performanceCore
+                        ?.temperamentEn ||
+                    '',
+                speechStyleEn:
+                    profile
+                        .performanceCore
+                        ?.speechStyleEn ||
+                    '',
+                motivesEn:
+                    profile
+                        .performanceCore
+                        ?.motivesEn ||
+                    [],
+                boundariesEn:
+                    profile
+                        .performanceCore
+                        ?.boundariesEn ||
+                    [],
+                vulnerabilitiesEn:
+                    profile
+                        .performanceCore
+                        ?.vulnerabilitiesEn ||
+                    [],
                 knowledgeEn:
-                    normalized.knowledgeEn,
+                    profile
+                        .privateFacts
+                        ?.knowledgeEn ||
+                    [],
             };
         }),
         behavioralEnvironment:
@@ -227,7 +249,6 @@ function projectMandatorySceneState(
                     worldState.conflict.stakesEn,
             }
             : null,
-        agenda: (worldState.agenda || []).slice(-8),
         discoveredClues: (worldState.clues || [])
             .filter(clue => clue.discovered === true),
         items: worldState.items || [],

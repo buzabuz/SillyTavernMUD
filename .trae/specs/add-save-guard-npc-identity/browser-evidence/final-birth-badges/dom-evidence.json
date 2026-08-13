@@ -1,0 +1,46 @@
+{
+  "url": "http://127.0.0.1:8000/?hpmud_identity_birth=final",
+  "save": "Tina Zhang",
+  "inspector": "哈利·波特",
+  "overall": "FAIL",
+  "moduleHeadings": ["哈利·波特", "基本身份", "教育", "血统", "身体状态", "已知说法"],
+  "moduleHeadingsContainSourceBadges": false,
+  "birth": {
+    "visible": "1980-07-31",
+    "badge": "权威",
+    "bodyContainsForbiddenExactRange": false,
+    "domContainsForbiddenExactRange": false,
+    "birthLeafTextContaining至": []
+  },
+  "derived": [
+    {"label": "当前年龄", "value": "11 岁", "badge": "派生"},
+    {"label": "当前学籍", "value": "1 年级 · 在学", "badge": "派生"}
+  ],
+  "unknown": [
+    {"label": "伤势", "value": "未知", "source": null, "badges": []},
+    {"label": "其他身体特征", "value": "未知", "source": null, "badges": []}
+  ],
+  "bodyStatusContains": ["发型", "伤势"],
+  "presentation": [
+    {"label": "正式穿戴 Item", "value": "哈利·波特的圆框眼镜"},
+    {"label": "手持物", "value": "他的南瓜汁并将其举在自己面前"}
+  ],
+  "presentationContainsHairOrInjury": false,
+  "claims": {
+    "rowCount": 0,
+    "badgeCount": 0,
+    "emptyText": "暂无已知说法",
+    "verdict": "FAIL: 无 claims 行，无法满足逐行自称/他称"
+  },
+  "width390": {
+    "method": "将应用容器瞬时设为精确 390px，并应用现有 max-width:390px 媒体规则；测量后同步恢复",
+    "app": {"clientWidth": 390, "scrollWidth": 390},
+    "topbar": {"clientWidth": 390, "scrollWidth": 390},
+    "workspace": {"clientWidth": 390, "scrollWidth": 390},
+    "inspector": {"clientWidth": 370, "scrollWidth": 370},
+    "content": {"clientWidth": 370, "scrollWidth": 370},
+    "dossier": {"clientWidth": 348, "scrollWidth": 348},
+    "horizontalOverflow": false,
+    "restored": true
+  }
+}

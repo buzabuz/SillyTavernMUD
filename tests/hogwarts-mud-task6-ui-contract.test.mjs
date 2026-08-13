@@ -112,6 +112,22 @@ test('UI session state is instance-local and excludes world authority', () => {
         right.latestStoryMessageId,
         null,
     );
+    assert.deepEqual(
+        {
+            date: right.calendarSelectedDate,
+            month: right.calendarDisplayMonth,
+            entry: right.calendarSelectedEntryId,
+            scene: right.calendarSelectedSceneId,
+            timelineEpoch: right.calendarTimelineEpoch,
+        },
+        {
+            date: '',
+            month: '',
+            entry: '',
+            scene: '',
+            timelineEpoch: '',
+        },
+    );
     for (const authorityKey of [
         'character',
         'clock',
@@ -420,19 +436,30 @@ test('host event registration is idempotent, removable, and reusable', () => {
             });
         },
     };
+    const session = {
+        activeScreen: 'game',
+        calendarSelectedDate: '1991-09-02',
+        calendarDisplayMonth: '1991-09-01',
+        calendarSelectedEntryId: 'old_entry',
+        calendarSelectedSceneId: 'old_scene',
+    };
     const bindings = createHostEventBindings({
         refs: {
             root: {
                 hidden: false,
             },
         },
-        session: {
-            activeScreen: 'game',
-        },
+        session,
         eventSource,
         event_types: events,
         applySystemPrompt() {},
         getMudState: () => null,
+        resetCalendarSelection() {
+            session.calendarSelectedDate = '';
+            session.calendarDisplayMonth = '';
+            session.calendarSelectedEntryId = '';
+            session.calendarSelectedSceneId = '';
+        },
         renderSaveLibrary() {},
         scheduleRender() {},
         setUiVisible() {},
@@ -452,6 +479,23 @@ test('host event registration is idempotent, removable, and reusable', () => {
         registered.filter(entry =>
             entry.last).length,
         1,
+    );
+    registered.find(entry =>
+        entry.event === events.CHAT_CHANGED).listener();
+    assert.deepEqual(
+        {
+            date: session.calendarSelectedDate,
+            month: session.calendarDisplayMonth,
+            entry: session.calendarSelectedEntryId,
+            scene: session.calendarSelectedSceneId,
+        },
+        {
+            date: '',
+            month: '',
+            entry: '',
+            scene: '',
+        },
+        'CHAT_CHANGED clears every Calendar selection before rendering the next chat',
     );
 
     firstDispose();

@@ -1,3 +1,91 @@
+import {
+    reduceAppraisalProposals,
+} from '../domain/memory-synapse-reducer.js';
+import {
+    markCommittedMessageEventsKnownToPlayer,
+} from '../presence-witness-contract.js';
+
+function capturePostTurnAppraisalGuard(
+    state,
+) {
+    const boundary =
+        state?.memoryDirector
+            ?.pendingEventBoundary;
+    return {
+        timelineEpoch:
+            String(
+                state?.timelineEpoch ||
+                '',
+            ),
+        stateRevision:
+            Number(
+                state?.stateRevision ||
+                0,
+            ),
+        boundaryId:
+            String(
+                boundary?.boundaryId ||
+                boundary?.id ||
+                '',
+            ),
+    };
+}
+
+function isPostTurnAppraisalGuardCurrent(
+    state,
+    guard,
+) {
+    const current =
+        capturePostTurnAppraisalGuard(
+            state,
+        );
+    return (
+        current.timelineEpoch ===
+            guard.timelineEpoch &&
+        current.stateRevision ===
+            guard.stateRevision &&
+        current.boundaryId ===
+            guard.boundaryId
+    );
+}
+
+function collectActivationSchemaIds(
+    retrieval,
+    observerIds,
+) {
+    const capsules =
+        retrieval
+            ?.activationCapsules
+            ?.byActorId ||
+        {};
+    return [
+        ...new Set(
+            observerIds.flatMap(observerId => {
+                const capsule =
+                    capsules[observerId];
+                if (
+                    capsule?.sealed !== true ||
+                    capsule.scope !==
+                        'observer' ||
+                    capsule.observerId !==
+                        observerId
+                ) {
+                    return [];
+                }
+                return (
+                    capsule.expectations ||
+                    []
+                ).map(expectation =>
+                    String(
+                        expectation?.schemaId ||
+                        '',
+                    ).trim())
+                    .filter(Boolean);
+            }),
+        ),
+    ].sort().slice(0, 64);
+}
+
 export function createTurnWorkflow(ports) {
     const {
         TRANSLATION_FORMAT_VERSION,
@@ -28,6 +116,8 @@ export function createTurnWorkflow(ports) {
         ensureDailyDirectorPlan,
         ensureDirectorFoundation,
         ensureMemoryConsolidation,
+        runMediumCalendarDirectorSafely =
+        async () => null,
         ensurePacingDirectorAssessment,
         ensureSceneLifecycleState,
         ensureSocialDirectorCatchup,
@@ -67,6 +157,14 @@ export function createTurnWorkflow(ports) {
         renderAll,
         resetInspectorMapScope,
         requestLocalTurnAdjudication,
+        requestLocalTurnAppraisals =
+        async () => ({
+            appraisalProposals: [],
+            diagnostics: {
+                called: false,
+                fallback: false,
+            },
+        }),
         requestLocalTurnObservation,
         recordTurnDiagnostic =
         () => {},
@@ -400,24 +498,10 @@ export function createTurnWorkflow(ports) {
         const job = (async () => {
             jobRegistry.turnActive = true;
             let state = getMudState();
-            const itemDirectiveResult =
-            parseItemOperationDirectives(
-                playerAction,
-                (
-                    state.items ||
-                    []
-                ).filter(item =>
-                    item.visibility !==
-                        'hidden'),
-            );
+            const previousClock =
+                state.clock;
             beginTurnDiagnostics({
                 playerAction,
-                itemDirectives:
-                    itemDirectiveResult
-                        .directives,
-                itemDirectiveErrors:
-                    itemDirectiveResult
-                        .errors,
                 sceneId:
                     state.scene?.id,
                 turnCount:
@@ -425,34 +509,14 @@ export function createTurnWorkflow(ports) {
                 assistantMessageId,
             });
             let playerMessage = null;
-            let spellCasts =
-            parseSpellCastDirectives(
-                playerAction,
-                state,
-            );
-            let addressing =
-            resolvePlayerAddressing(
-                getActiveAddressingState(
-                    state,
-                ),
-                playerAction,
-            );
-            if (!addressing.valid) {
-                throw new Error(
-                    addressing.error,
-                );
-            }
-            const narrativePlayerAction =
-            removeSpellCastDirectives(
-                removeExplicitAddressDirective(
-                    playerAction,
-                ),
-            );
-            state.turn ??= {};
-            state.turn.status = 'resolving';
-            state.turn.error = '';
-            await context.saveMetadata();
-            renderAll();
+            let spellCasts = [];
+            let addressing = null;
+            let narrativePlayerAction =
+                playerAction;
+            let itemDirectiveResult = {
+                directives: [],
+                errors: [],
+            };
             try {
                 playerMessage = assistantMessageId === null
                     ? [...context.chat].reverse().find(message =>
@@ -462,6 +526,44 @@ export function createTurnWorkflow(ports) {
                         .slice(0, assistantMessageId)
                         .reverse()
                         .find(message => message.is_user);
+                itemDirectiveResult =
+                parseItemOperationDirectives(
+                    playerAction,
+                    (
+                        state.items ||
+                        []
+                    ).filter(item =>
+                        item.visibility !==
+                            'hidden'),
+                );
+                spellCasts =
+                parseSpellCastDirectives(
+                    playerAction,
+                    state,
+                );
+                addressing =
+                resolvePlayerAddressing(
+                    getActiveAddressingState(
+                        state,
+                    ),
+                    playerAction,
+                );
+                narrativePlayerAction =
+                removeSpellCastDirectives(
+                    removeExplicitAddressDirective(
+                        playerAction,
+                    ),
+                );
+                if (!addressing.valid) {
+                    throw new Error(
+                        addressing.error,
+                    );
+                }
+                state.turn ??= {};
+                state.turn.status = 'resolving';
+                state.turn.error = '';
+                await context.saveMetadata();
+                renderAll();
                 recordTurnDiagnostic(
                     'player_message',
                     {
@@ -715,12 +817,21 @@ export function createTurnWorkflow(ports) {
                     slots.low.maxResponseLength,
                 );
                 const knowledgeAudienceActorIds =
-                (state.actors || [])
-                    .filter(actor =>
-                        actor.present !==
-                            false)
-                    .map(actor =>
-                        actor.id);
+                [
+                    ...new Set([
+                        ...(state.actors || [])
+                            .filter(actor =>
+                                actor.present !==
+                                    false)
+                            .map(actor =>
+                                actor.id),
+                        ...(
+                            addressing
+                                ?.actorIds ||
+                            []
+                        ),
+                    ].filter(Boolean)),
+                ];
                 const entityIds = [
                     state.scene?.id,
                     state.map?.currentLocalNodeId,
@@ -729,13 +840,23 @@ export function createTurnWorkflow(ports) {
                     narrativePlayerAction,
                     entityIds,
                     {
+                        audienceActorIds:
+                            knowledgeAudienceActorIds,
                         limit:
                         contextPlan
                             .ragLimit *
                         3,
                     },
                 );
-                retrievedKnowledge =
+                const retrievalMetadata = {
+                    activationCapsules:
+                        retrievedKnowledge
+                            .activationCapsules,
+                    diagnostics:
+                        retrievedKnowledge
+                            .diagnostics,
+                };
+                const filteredKnowledge =
                 filterKnowledgeForAudience(
                     retrievedKnowledge,
                     {
@@ -746,6 +867,14 @@ export function createTurnWorkflow(ports) {
                     0,
                     contextPlan.ragLimit,
                 );
+                filteredKnowledge
+                    .activationCapsules =
+                retrievalMetadata
+                    .activationCapsules;
+                filteredKnowledge.diagnostics =
+                retrievalMetadata.diagnostics;
+                retrievedKnowledge =
+                filteredKnowledge;
                 const budget = createTurnPerformanceBudget(
                     narrativePlayerAction,
                     state.dailyDirector?.plan?.timePolicy,
@@ -859,6 +988,11 @@ export function createTurnWorkflow(ports) {
                 transaction.materialEvents =
                 localObservation
                     .materialEvents;
+                transaction
+                    .identityObservations =
+                localObservation
+                    .identityObservations ||
+                [];
                 const itemSourceEventId =
                     `${
                         state.scene?.id ||
@@ -1071,6 +1205,16 @@ export function createTurnWorkflow(ports) {
                         .test(rawSceneId)
                         ? rawSceneId
                         : 'scene_current';
+                    const activationSchemaIds =
+                        collectActivationSchemaIds(
+                            retrievedKnowledge,
+                            [
+                                ...witnessResolution
+                                    .participantActorIds,
+                                ...witnessResolution
+                                    .witnessActorIds,
+                            ],
+                        );
                     transaction
                         .eventKnowledge =
                     normalizeEventKnowledge({
@@ -1091,6 +1235,7 @@ export function createTurnWorkflow(ports) {
                         summaryEn:
                             transaction
                                 .publicEventEn,
+                        activationSchemaIds,
                         ...witnessResolution,
                         perception:
                             transaction
@@ -1162,6 +1307,119 @@ export function createTurnWorkflow(ports) {
                     transaction,
                 );
                 nextState = consumePacingBeat(nextState);
+                if (transaction.eventKnowledge) {
+                    const appraisalGuard =
+                        capturePostTurnAppraisalGuard(
+                            state,
+                        );
+                    let appraisalBatch;
+                    try {
+                        appraisalBatch =
+                            await requestLocalTurnAppraisals(
+                                nextState,
+                                transaction
+                                    .eventKnowledge,
+                            );
+                        if (
+                            appraisalBatch
+                                ?.diagnostics
+                                ?.called
+                        ) {
+                            recordTurnDiagnostic(
+                                'local_call',
+                                {
+                                    operation:
+                                        'appraisal_batch',
+                                },
+                            );
+                        }
+                    } catch (error) {
+                        recordTurnDiagnostic(
+                            'local_call',
+                            {
+                                operation:
+                                    'appraisal_batch',
+                            },
+                        );
+                        appraisalBatch = {
+                            appraisalProposals:
+                                [],
+                            diagnostics: {
+                                called: true,
+                                fallback: true,
+                                error:
+                                    String(
+                                        error
+                                            ?.message ||
+                                        error,
+                                    ).slice(
+                                        0,
+                                        500,
+                                    ),
+                            },
+                        };
+                    }
+                    if (
+                        !isPostTurnAppraisalGuardCurrent(
+                            getMudState(),
+                            appraisalGuard,
+                        )
+                    ) {
+                        recordTurnDiagnostic(
+                            'appraisal_proposal_validation',
+                            {
+                                proposed:
+                                    appraisalBatch
+                                        ?.appraisalProposals
+                                        ?.length ||
+                                    0,
+                                accepted: 0,
+                                rejected:
+                                    appraisalBatch
+                                        ?.appraisalProposals
+                                        ?.length ||
+                                    0,
+                                reasons: [{
+                                    code:
+                                        'stale_revision_or_boundary',
+                                    count:
+                                        appraisalBatch
+                                            ?.appraisalProposals
+                                            ?.length ||
+                                        1,
+                                }],
+                                stale: true,
+                            },
+                        );
+                        throw new Error(
+                            'Rejected stale post-turn Appraisal result.',
+                        );
+                    }
+                    const appraisalResult =
+                        reduceAppraisalProposals(
+                            nextState,
+                            appraisalBatch
+                                ?.appraisalProposals ||
+                            [],
+                        );
+                    nextState =
+                        appraisalResult.state;
+                    recordTurnDiagnostic(
+                        'appraisal_proposal_validation',
+                        {
+                            ...appraisalResult
+                                .summary,
+                            fallback:
+                                appraisalBatch
+                                    ?.diagnostics
+                                    ?.fallback ===
+                                true,
+                            outcomes:
+                                appraisalResult
+                                    .outcomes,
+                        },
+                    );
+                }
                 if (rollbackCheckpoint) {
                     nextState.turnRetry =
                     rollbackCheckpoint;
@@ -1219,6 +1477,42 @@ export function createTurnWorkflow(ports) {
                             [],
                     },
                 );
+                await context.saveMetadata();
+                await context.saveChat();
+                if (
+                    transaction
+                        .eventKnowledge
+                        ?.eventId
+                ) {
+                    context.chatMetadata
+                        .hogwartsMud =
+                        markCommittedMessageEventsKnownToPlayer(
+                            getMudState(),
+                            message,
+                            messageId,
+                            [
+                                transaction
+                                    .eventKnowledge
+                                    .eventId,
+                            ],
+                        );
+                    state = getMudState();
+                    await context.saveMetadata();
+                }
+                await syncLocalKnowledge();
+                applySystemPrompt();
+                updateNativeMessageBlock(messageId, message);
+                renderAll();
+                await ensureSocialDirectorCatchup();
+                await ensureMemoryConsolidation();
+                await runMediumCalendarDirectorSafely({
+                    previousClock,
+                    playerAction,
+                });
+                state = getMudState();
+                if (state.dailyDirector?.date !== getWorldDate(state.clock)) {
+                    await ensureDailyDirectorPlan();
+                }
                 const completedDiagnostics =
                     finalizeTurnDiagnostics(
                         'committed',
@@ -1234,18 +1528,7 @@ export function createTurnWorkflow(ports) {
                     message,
                     completedDiagnostics,
                 );
-                await context.saveMetadata();
                 await context.saveChat();
-                await syncLocalKnowledge();
-                applySystemPrompt();
-                updateNativeMessageBlock(messageId, message);
-                renderAll();
-                await ensureSocialDirectorCatchup();
-                await ensureMemoryConsolidation();
-                state = getMudState();
-                if (state.dailyDirector?.date !== getWorldDate(state.clock)) {
-                    await ensureDailyDirectorPlan();
-                }
             } catch (error) {
                 const errorText =
                     String(

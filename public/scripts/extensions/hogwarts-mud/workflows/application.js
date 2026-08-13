@@ -15,6 +15,74 @@ import { createSocialMemoryWorkflow } from './social-memory.js';
 import { createSceneTransitionWorkflow } from './scene-transition.js';
 import { createTurnPerformanceWorkflow } from './turn-performance.js';
 import { createTurnWorkflow } from './turn.js';
+import { createHighCalendarDirectorWorkflow } from './high-calendar-director.js';
+import { createMediumCalendarDirectorWorkflow } from './medium-calendar-director.js';
+import { createCalendarMomentWorkflow } from './calendar-moment.js';
+
+function highPlanningAllowsMedium(
+    result,
+) {
+    return result?.status !==
+        'failed';
+}
+
+export async function finalizeCalendarMomentPostCommit({
+    committedState,
+    previousClock,
+    getMudState,
+    getWorldDate,
+    runHighCalendarDirectorSafely,
+    runMediumCalendarDirectorSafely,
+    ensureDailyDirectorPlan,
+    warn = console.warn,
+}) {
+    try {
+        let highPlanningResult =
+            null;
+        if (
+            committedState
+                ?.sceneTransition
+                ?.tier ===
+            'high'
+        ) {
+            highPlanningResult =
+                await runHighCalendarDirectorSafely({
+                    trigger:
+                        'high_transition',
+                });
+        }
+        if (
+            highPlanningAllowsMedium(
+                highPlanningResult,
+            )
+        ) {
+            await runMediumCalendarDirectorSafely({
+                previousClock,
+                highPlanningResult,
+            });
+        }
+        const settledState =
+            getMudState() ||
+            committedState;
+        if (
+            settledState
+                ?.dailyDirector
+                ?.date !==
+            getWorldDate(
+                settledState.clock,
+            )
+        ) {
+            await ensureDailyDirectorPlan();
+        }
+    } catch (error) {
+        warn(
+            '[Hogwarts MUD] Calendar Moment committed; post-commit director refresh failed',
+            error,
+        );
+    }
+    return getMudState() ||
+        committedState;
+}
 
 export function createWorkflowApplication(ports) {
     const {
@@ -25,6 +93,7 @@ export function createWorkflowApplication(ports) {
         DEFAULT_MODEL_SLOTS,
         DEFAULT_SETTINGS,
         DEFAULT_WORLD_PROMPT,
+        NPC_IDENTITY_PROMPT_BOUNDARY,
         PRESET_WORLD_MAP,
         SOCIAL_GRAPH_EXTRACTOR_VERSION,
         TRANSLATION_FORMAT_VERSION,
@@ -55,8 +124,10 @@ export function createWorkflowApplication(ports) {
         buildCurrentMaterialState,
         buildLocalMapModel,
         buildMapAuthorityContext,
+        buildNpcIdentityPromptProjection,
         buildSceneCastRotationPolicy,
         buildSocialAudienceProjection,
+        captureMemoryBoundaryGuard,
         buildSpatialContext,
         buildStructuredPlayerTurnSequence,
         buildTemporaryActorPromotionPolicy,
@@ -90,14 +161,18 @@ export function createWorkflowApplication(ports) {
         getSceneDestinationAuthority,
         getWorldDate,
         isDailyDirectorPlanCurrent,
+        isMemoryBoundaryGuardCurrent,
         jobRegistry,
         limitMessagesToContext,
+        migrateActorContextState,
         migrateActorKnowledgeBoundaries,
         migrateActorMovementHistory,
         migrateActorPresentationState,
         migrateLoadedSocialGraph,
         migrateObservedInventoryState,
         migrateItemSystemState,
+        migrateNpcIdentityState,
+        migrateNpcIdentityObservations,
         migrateRelationshipMemoryState,
         migrateSpellbookState,
         normalizeActorMemoryProfile,
@@ -117,6 +192,7 @@ export function createWorkflowApplication(ports) {
         partitionItemProposals,
         projectActorSocialRelationships,
         projectObservedInventoryUpdates,
+        projectNpcRuntimeActorsForPrompt,
         projectSceneArchivePresence,
         projectSceneTransitionPresence,
         protectTranslationTerms,
@@ -133,6 +209,9 @@ export function createWorkflowApplication(ports) {
         removeSpellCastDirectives,
         renderAll,
         resetInspectorMapScope,
+        assertSaveRevisionWritable =
+        () => {},
+        guardedSaveTransaction,
         resolveActionCheck,
         resolveEventWitnesses,
         resolveItemCandidate,
@@ -148,6 +227,7 @@ export function createWorkflowApplication(ports) {
         settleNarrativeTurnPerformance,
         splitTranslationChunks,
         stripSyntheticSceneOpeningActorSegments,
+        synchronizeHeldItemLocations,
         syncKnowledgeBase,
         updateLiveSceneStream,
         updateNativeMessageBlock,
@@ -196,12 +276,15 @@ export function createWorkflowApplication(ports) {
         getMudState,
         getRoomName,
         jobRegistry,
+        migrateActorContextState,
         migrateActorKnowledgeBoundaries,
         migrateActorMovementHistory,
         migrateActorPresentationState,
         migrateLoadedSocialGraph,
         migrateObservedInventoryState,
         migrateItemSystemState,
+        migrateNpcIdentityState,
+        migrateNpcIdentityObservations,
         migrateRelationshipMemoryState,
         migrateSpellbookState,
         normalizeCausalCollapseState,
@@ -222,6 +305,8 @@ export function createWorkflowApplication(ports) {
     } = createModelAdapter({
         ConnectionManagerRequestService,
         applyRegexPresetById,
+        beforeRequest:
+            assertSaveRevisionWritable,
         createContextBudgetPlan,
         getConnectionProfiles,
         limitMessagesToContext,
@@ -236,6 +321,7 @@ export function createWorkflowApplication(ports) {
     } = createKnowledgeAdapter({
         getContext,
         getMudState,
+        recordTurnDiagnostic,
         retrieveKnowledge,
         syncKnowledgeBase,
     });
@@ -259,10 +345,44 @@ export function createWorkflowApplication(ports) {
     });
 
     const {
-        ensureDirectorFoundation,
+        runHighCalendarDirector,
+        runHighCalendarDirectorSafely,
+    } = createHighCalendarDirectorWorkflow({
+        buildMapAuthorityContext,
+        extractRoleResponseText,
+        getContext,
+        getMudState,
+        jobRegistry,
+        parseJsonObject,
+        renderAll,
+        resolveRoleSlots,
+        sendRoleRequest,
+    });
+
+    const {
+        runMediumCalendarDirector,
+        runMediumCalendarDirectorSafely,
+    } = createMediumCalendarDirectorWorkflow({
+        applySystemPrompt,
+        buildMapAuthorityContext,
+        extractRoleResponseText,
+        getContext,
+        getMudState,
+        guardedSaveTransaction,
+        jobRegistry,
+        parseJsonObject,
+        renderAll,
+        resolveRoleSlots,
+        sendRoleRequest,
+    });
+
+    const {
+        ensureDirectorFoundation:
+            ensureDirectorFoundationBase,
         composeSceneSegments,
         hasOpeningNarrative,
-        initializeOpeningWorld,
+        initializeOpeningWorld:
+            initializeOpeningWorldBase,
     } = createOpeningWorkflow({
         CANON_WIT_TONE_CONTRACT,
         PRESET_WORLD_MAP,
@@ -286,6 +406,62 @@ export function createWorkflowApplication(ports) {
         validateDirectorFoundation,
         validateOpeningWorldPackage,
     });
+
+    async function ensureDirectorFoundation() {
+        const result =
+            await ensureDirectorFoundationBase();
+        const state =
+            getMudState();
+        if (
+            state
+                ?.directorFoundation
+                ?.status === 'ready' &&
+            state.phase === 'playing'
+        ) {
+            const highPlanningResult =
+                await runHighCalendarDirectorSafely({
+                    trigger: 'foundation',
+                });
+            if (
+                highPlanningAllowsMedium(
+                    highPlanningResult,
+                )
+            ) {
+                await runMediumCalendarDirectorSafely({
+                    highPlanningResult,
+                });
+            }
+        }
+        return result;
+    }
+
+    async function initializeOpeningWorld() {
+        const result =
+            await initializeOpeningWorldBase();
+        const state =
+            getMudState();
+        if (
+            state
+                ?.directorFoundation
+                ?.status === 'ready' &&
+            state.phase === 'playing'
+        ) {
+            const highPlanningResult =
+                await runHighCalendarDirectorSafely({
+                    trigger: 'foundation',
+                });
+            if (
+                highPlanningAllowsMedium(
+                    highPlanningResult,
+                )
+            ) {
+                await runMediumCalendarDirectorSafely({
+                    highPlanningResult,
+                });
+            }
+        }
+        return result;
+    }
 
     const {
         ensureCurrentInteriorMap,
@@ -319,11 +495,13 @@ export function createWorkflowApplication(ports) {
         CANON_CAST_IDENTITY_CONTRACT,
         CONTEXT_SIZE_PRESETS,
         DEFAULT_MODEL_SLOTS,
+        NPC_IDENTITY_PROMPT_BOUNDARY,
         analyzePacingSignals,
         applyPacingAssessment,
         applySystemPrompt,
         buildActorSelectionPolicy,
         buildMapAuthorityContext,
+        buildNpcIdentityPromptProjection,
         createContextBudgetPlan,
         extractRoleResponseText,
         formatRetrievedKnowledge,
@@ -335,6 +513,7 @@ export function createWorkflowApplication(ports) {
         normalizeActorMemoryProfile,
         normalizePacingAssessmentPayload,
         parseJsonObject,
+        projectNpcRuntimeActorsForPrompt,
         renderAll,
         resolveRoleSlots,
         retrieveLocalKnowledge,
@@ -357,12 +536,14 @@ export function createWorkflowApplication(ports) {
         applySocialDirectorResult,
         applySystemPrompt,
         buildSocialAudienceProjection,
+        captureMemoryBoundaryGuard,
         createContextBudgetPlan,
         extractRoleResponseText,
         getContext,
         getMudState,
         getRequestHeaders,
         getSettings,
+        isMemoryBoundaryGuardCurrent,
         jobRegistry,
         normalizeActorMemoryProfile,
         normalizeMemoryConsolidationPayload,
@@ -378,12 +559,19 @@ export function createWorkflowApplication(ports) {
     });
 
     const {
-        runSceneTransition,
+        runSceneTransition:
+            runSceneTransitionBase,
+        buildSceneArchiveEntry,
+        buildSceneTransitionMessage,
+        generateSceneTransitionOpening,
+        generateSceneTransitionPackage,
+        localizeSceneTransitionPackage,
     } = createSceneTransitionWorkflow({
         CANON_CAST_IDENTITY_CONTRACT,
         CANON_WIT_TONE_CONTRACT,
         CONTEXT_SIZE_PRESETS,
         DEFAULT_MODEL_SLOTS,
+        NPC_IDENTITY_PROMPT_BOUNDARY,
         TRANSLATION_FORMAT_VERSION,
         admitCurrentLocationResidents,
         applySceneTransition,
@@ -396,7 +584,6 @@ export function createWorkflowApplication(ports) {
         composeSceneSegments,
         createContextBudgetPlan,
         ensureCurrentInteriorMap,
-        ensureDailyDirectorPlan,
         ensureSceneLifecycleState,
         ensureSocialDirectorCatchup,
         extractRoleResponseText,
@@ -407,21 +594,142 @@ export function createWorkflowApplication(ports) {
         getMudState,
         getSceneDestinationAuthority,
         getSettings,
-        getWorldDate,
         jobRegistry,
         normalizeSceneTransitionPackage,
         parseJsonObject,
         projectActorLibraryForContext,
+        projectNpcRuntimeActorsForPrompt,
         projectSceneArchivePresence,
         renderAll,
         resolveRoleSlots,
         retrieveLocalKnowledge,
         sendRoleRequest,
         stripSyntheticSceneOpeningActorSegments,
+        synchronizeHeldItemLocations,
         syncLocalKnowledge,
         translateOpeningValues,
         validateSceneTransitionPackage,
     });
+
+    const {
+        runCalendarMoment:
+            runCalendarMomentBase,
+        runTimelineMoment:
+            runTimelineMomentBase,
+    } = createCalendarMomentWorkflow({
+        CONTEXT_SIZE_PRESETS,
+        DEFAULT_MODEL_SLOTS,
+        applySceneTransition,
+        applySystemPrompt,
+        buildSceneArchiveEntry,
+        buildSceneTransitionMessage,
+        createContextBudgetPlan,
+        generateSceneTransitionOpening,
+        generateSceneTransitionPackage,
+        getContext,
+        getMudState,
+        guardedSaveTransaction,
+        jobRegistry,
+        localizeSceneTransitionPackage,
+        renderAll,
+        resolveRoleSlots,
+        retrieveLocalKnowledge,
+    });
+
+    async function runSceneTransition(
+        options = {},
+    ) {
+        const previousClock =
+            getMudState()?.clock ||
+            '';
+        const result =
+            await runSceneTransitionBase(
+                options,
+            );
+        let highPlanningResult =
+            null;
+        if (
+            options.tier ===
+            'high'
+        ) {
+            highPlanningResult =
+                await runHighCalendarDirectorSafely({
+                    trigger:
+                        'high_transition',
+                });
+        }
+        if (
+            highPlanningAllowsMedium(
+                highPlanningResult,
+            )
+        ) {
+            await runMediumCalendarDirectorSafely({
+                previousClock,
+                highPlanningResult,
+            });
+        }
+        const settledState =
+            getMudState() ||
+            result;
+        if (
+            settledState
+                ?.dailyDirector
+                ?.date !==
+            getWorldDate(
+                settledState.clock,
+            )
+        ) {
+            await ensureDailyDirectorPlan();
+        }
+        return getMudState() ||
+            settledState;
+    }
+
+    async function runCalendarMoment(
+        entryId,
+    ) {
+        const previousClock =
+            getMudState()?.clock ||
+            '';
+        const result =
+            await runCalendarMomentBase(
+                entryId,
+            );
+        const finalized =
+            await finalizeCalendarMomentPostCommit({
+                committedState:
+                    result,
+                previousClock,
+                getMudState,
+                getWorldDate,
+                runHighCalendarDirectorSafely,
+                runMediumCalendarDirectorSafely,
+                ensureDailyDirectorPlan,
+            });
+        return finalized;
+    }
+
+    async function runTimelineMoment(
+        options,
+    ) {
+        const previousClock =
+            getMudState()?.clock ||
+            '';
+        const result =
+            await runTimelineMomentBase(
+                options,
+            );
+        return finalizeCalendarMomentPostCommit({
+            committedState:
+                result,
+            previousClock,
+            getMudState,
+            getWorldDate,
+            runHighCalendarDirectorSafely,
+            runMediumCalendarDirectorSafely,
+            ensureDailyDirectorPlan,
+        });
+    }
 
     const {
         createSceneMomentumDirective,
@@ -433,11 +741,13 @@ export function createWorkflowApplication(ports) {
         CANON_WIT_TONE_CONTRACT,
         CONTEXT_SIZE_PRESETS,
         DEFAULT_MODEL_SLOTS,
+        NPC_IDENTITY_PROMPT_BOUNDARY,
         beginLiveSceneStream,
         buildActorContinuityCapsules,
         buildActorKnowledgeCapsules,
         buildBehavioralEnvironment,
         buildCurrentMaterialState,
+        buildNpcIdentityPromptProjection,
         buildSpatialContext,
         buildStructuredPlayerTurnSequence,
         buildTemporaryActorPromotionPolicy,
@@ -450,8 +760,9 @@ export function createWorkflowApplication(ports) {
         getSettings,
         parseItemOperationDirectives,
         parseJsonObject,
-        recoverScenePerformancePayload,
+        projectNpcRuntimeActorsForPrompt,
         recordTurnDiagnostic,
+        recoverScenePerformancePayload,
         removeExplicitAddressDirective,
         resolvePlayerAddressing,
         resolveTemporaryActorRevealedName,
@@ -466,6 +777,7 @@ export function createWorkflowApplication(ports) {
     const {
         buildLocalSemanticRoomContext,
         requestLocalTurnAdjudication,
+        requestLocalTurnAppraisals,
         isObservedEventBoundary,
         applyObservedActorUpdates,
         requestLocalTurnObservation,
@@ -508,6 +820,7 @@ export function createWorkflowApplication(ports) {
         ensureDailyDirectorPlan,
         ensureDirectorFoundation,
         ensureMemoryConsolidation,
+        runMediumCalendarDirectorSafely,
         ensurePacingDirectorAssessment,
         ensureSceneLifecycleState,
         ensureSocialDirectorCatchup,
@@ -541,6 +854,7 @@ export function createWorkflowApplication(ports) {
         renderAll,
         resetInspectorMapScope,
         requestLocalTurnAdjudication,
+        requestLocalTurnAppraisals,
         requestLocalTurnObservation,
         recordTurnDiagnostic,
         resolveActionCheck,
@@ -560,6 +874,7 @@ export function createWorkflowApplication(ports) {
         key,
         decision,
     ) {
+        assertSaveRevisionWritable();
         const context =
             getContext();
         const state =
@@ -601,6 +916,7 @@ export function createWorkflowApplication(ports) {
         key,
         decision,
     ) {
+        assertSaveRevisionWritable();
         const context =
             getContext();
         const result =
@@ -649,6 +965,10 @@ export function createWorkflowApplication(ports) {
         retrieveLocalKnowledge,
         translateOpeningValues,
         translateWithProvider,
+        runHighCalendarDirector,
+        runHighCalendarDirectorSafely,
+        runMediumCalendarDirector,
+        runMediumCalendarDirectorSafely,
         ensureDirectorFoundation,
         composeSceneSegments,
         hasOpeningNarrative,
@@ -662,6 +982,8 @@ export function createWorkflowApplication(ports) {
         ensureMemoryConsolidation,
         ensureSocialDirectorCatchup,
         runSceneTransition,
+        runCalendarMoment,
+        runTimelineMoment,
         createSceneMomentumDirective,
         generateScenePerformance,
         buildSceneTransaction,
@@ -678,5 +1000,6 @@ export function createWorkflowApplication(ports) {
         ignoreItemCandidate,
         acceptSpellCandidate,
         ignoreSpellCandidate,
+        assertSaveRevisionWritable,
     };
 }

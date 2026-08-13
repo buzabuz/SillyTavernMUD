@@ -1,3 +1,72 @@
+export function repairLoadedModelSlots({
+    loadedSlots,
+    configuredSlots,
+    profiles,
+    normalizeModelSlots,
+}) {
+    const repaired =
+        normalizeModelSlots(
+            loadedSlots,
+        );
+    const configured =
+        normalizeModelSlots(
+            configuredSlots,
+        );
+    configured.medium.profileId ||=
+        configured.low.profileId;
+    configured.high.profileId ||=
+        configured.medium.profileId;
+    const validIds =
+        new Set(
+            (profiles || [])
+                .map(profile =>
+                    String(
+                        profile?.id ||
+                        '',
+                    ))
+                .filter(id =>
+                    id &&
+                    !id.startsWith(
+                        'hpmud-runtime-',
+                    )),
+        );
+    const repairedRoles = [];
+    for (const role of [
+        'low',
+        'medium',
+        'high',
+    ]) {
+        const currentId =
+            repaired[role]
+                .profileId;
+        if (
+            !currentId ||
+            validIds.has(currentId)
+        ) {
+            continue;
+        }
+        const fallbackId =
+            configured[role]
+                .profileId;
+        if (
+            !fallbackId ||
+            !validIds.has(fallbackId)
+        ) {
+            continue;
+        }
+        repaired[role].profileId =
+            fallbackId;
+        repairedRoles.push(role);
+    }
+    return {
+        changed:
+            repairedRoles.length > 0,
+        modelSlots:
+            repaired,
+        repairedRoles,
+    };
+}
+
 export function createSaveLibrary(ports) {
     const {
         refs,
@@ -11,18 +80,30 @@ export function createSaveLibrary(ports) {
         canOpenCurrentV2SaveReadOnly,
         createDefaultCharacterDraft,
         doNewChat,
+        ensureSceneLifecycleState =
+        () => false,
+        flushPendingMetadataSave =
+        async () => {},
         getCharacters,
         getConnectionProfiles,
         getContext,
         getMudState,
         getRequestHeaders,
         getSettings,
+        guardedSaveMetadata =
+        async () => null,
         initials,
+        isSaveRevisionBlocked =
+        () => false,
         isGameStarted,
         migrateLoadedSocialGraph,
         normalizeCampaign,
         normalizeModelSlots,
         projectActorSocialRelationships,
+        registerSaveRevisionHead =
+        async () => null,
+        saveMetadataDebounced =
+        () => {},
         saveSettingsDebounced,
         selectCharacterById,
         setAppScreen,
@@ -31,6 +112,76 @@ export function createSaveLibrary(ports) {
     const {
         root,
     } = refs;
+
+    async function migrateLoadedWorld(
+        context,
+    ) {
+        const state =
+            context
+                ?.chatMetadata
+                ?.hogwartsMud;
+        if (
+            !state ||
+            !ensureSceneLifecycleState(
+                state,
+            )
+        ) {
+            return false;
+        }
+        saveMetadataDebounced({
+            source:
+                'lifecycle_migration',
+            changedDomains: [
+                'migration',
+            ],
+        });
+        await flushPendingMetadataSave();
+        return true;
+    }
+
+    async function repairLoadedModelConfiguration(
+        context,
+    ) {
+        const state =
+            context
+                ?.chatMetadata
+                ?.hogwartsMud;
+        if (!state) {
+            return {
+                changed: false,
+                repairedRoles: [],
+            };
+        }
+        const repair =
+            repairLoadedModelSlots({
+                loadedSlots:
+                    state.modelSlots,
+                configuredSlots:
+                    getSettings()
+                        .modelSlots,
+                profiles:
+                    getConnectionProfiles(),
+                normalizeModelSlots,
+            });
+        if (!repair.changed) {
+            return repair;
+        }
+        state.modelSlots =
+            structuredClone(
+                repair.modelSlots,
+            );
+        await guardedSaveMetadata({
+            source:
+                'model_profile_rebind',
+            changedDomains: [
+                'model_slots',
+            ],
+        });
+        toastr.info(
+            `存档中的 ${repair.repairedRoles.join(' / ')} 档 AI Profile 已失效，已改用当前 AI 配置。`,
+        );
+        return repair;
+    }
 
     function populateNarratorCharacterForm(formData, character = null) {
         formData.set('ch_name', 'Hogwarts World Director');
@@ -387,6 +538,19 @@ export function createSaveLibrary(ports) {
                     },
                 )
             ) {
+                await registerSaveRevisionHead(
+                    currentContext,
+                );
+                if (
+                    !isSaveRevisionBlocked()
+                ) {
+                    await migrateLoadedWorld(
+                        currentContext,
+                    );
+                    await repairLoadedModelConfiguration(
+                        currentContext,
+                    );
+                }
                 applySystemPrompt();
                 setAppScreen(
                     'game',
@@ -430,6 +594,28 @@ export function createSaveLibrary(ports) {
                     '该聊天不包含有效的 Hogwarts MUD 世界状态。',
                 );
             }
+            await registerSaveRevisionHead(
+                loadedContext,
+            );
+            if (
+                isSaveRevisionBlocked()
+            ) {
+                applySystemPrompt();
+                setAppScreen(
+                    'game',
+                    {
+                        allowAutomaticModelWork:
+                            false,
+                    },
+                );
+                return;
+            }
+            await migrateLoadedWorld(
+                loadedContext,
+            );
+            await repairLoadedModelConfiguration(
+                loadedContext,
+            );
             const socialGraphMigration =
                 migrateLoadedSocialGraph(
                     loadedState.socialGraph,
@@ -480,6 +666,7 @@ export function createSaveLibrary(ports) {
             const profileId = lowSlot.profileId;
             if (
                 !automaticWork.suppressed &&
+                !isSaveRevisionBlocked() &&
                 profileId &&
                 getConnectionProfiles().some(profile => profile.id === profileId)
             ) {
@@ -490,7 +677,7 @@ export function createSaveLibrary(ports) {
                 'game',
                 {
                     allowAutomaticModelWork:
-                        !automaticWork.suppressed,
+                        false,
                 },
             );
             toastr.success(`已读取 ${save.characterName} 的时间线。`);

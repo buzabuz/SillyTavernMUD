@@ -1,3 +1,7 @@
+import {
+    buildActorDossierViewModel,
+} from './domain/actor-dossier-projection.js';
+
 function uniqueIds(values) {
     const seen = new Set();
     return (Array.isArray(values) ? values : [])
@@ -11,11 +15,11 @@ function hasOwn(value, key) {
 }
 
 function hasKnownPlayerContact(actor, profile) {
-    return [actor, profile].some(item =>
-        item?.playerKnown === true ||
-        item?.knownToPlayer === true ||
-        Boolean(item?.introducedClock) ||
-        Boolean(item?.firstImpressionClock));
+    return Boolean(
+        profile?.cast
+            ?.introducedClock,
+    ) &&
+        actor?.temporary !== true;
 }
 
 function getPlayerRoom(state) {
@@ -38,17 +42,35 @@ function isAtPlayerRoom(actor, playerRoom) {
             actor.roomId === playerRoom.roomId);
 }
 
-function createPerson(actorId, actorById, profileById) {
+function createPerson(
+    state,
+    actorId,
+    actorById,
+    profileById,
+) {
     const actor = actorById.get(actorId) || null;
     const profile = profileById.get(actorId) || null;
     if (!actor && !profile) {
         return null;
     }
-    return {
+    const dossier =
+        buildActorDossierViewModel(
+            state,
+            actorId,
+            'player',
+        );
+    if (!dossier) {
+        return null;
+    }
+    return structuredClone({
         id: actorId,
-        actor,
-        profile,
-    };
+        actorId:
+            dossier.actorId,
+        header:
+            dossier.header,
+        current:
+            dossier.current,
+    });
 }
 
 function getActiveIds(state) {
@@ -104,6 +126,7 @@ export function projectPeoplePanel(
     const activePeople = getActiveIds(state)
         .map(actorId =>
             createPerson(
+                state,
                 actorId,
                 actorById,
                 profileById,
@@ -136,23 +159,30 @@ export function projectPeoplePanel(
         )
             .filter(actorId =>
                 !activeIds.has(actorId))
+            .filter(actorId =>
+                isAtPlayerRoom(
+                    actorById.get(
+                        actorId,
+                    ),
+                    playerRoom,
+                ))
+            .filter(actorId =>
+                hasKnownPlayerContact(
+                    actorById.get(
+                        actorId,
+                    ),
+                    profileById.get(
+                        actorId,
+                    ),
+                ))
             .map(actorId =>
                 createPerson(
+                    state,
                     actorId,
                     actorById,
                     profileById,
                 ))
             .filter(Boolean)
-            .filter(person =>
-                isAtPlayerRoom(
-                    person.actor,
-                    playerRoom,
-                ))
-            .filter(person =>
-                hasKnownPlayerContact(
-                    person.actor,
-                    person.profile,
-                ))
         : [];
     const cohortById = new Map(
         (

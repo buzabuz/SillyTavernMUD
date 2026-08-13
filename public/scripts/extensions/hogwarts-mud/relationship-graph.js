@@ -1,9 +1,7 @@
 import {
-    buildSocialAudienceProjection,
-} from './domain/social-projection.js';
-import {
-    findCanonCharacter,
-} from './canon-characters.js';
+    buildActorDossierDirectory,
+    buildRelationshipProjection,
+} from './domain/actor-dossier-projection.js';
 
 const CYTOSCAPE_CDN_URL =
     'https://cdn.jsdelivr.net/npm/cytoscape@3.34.0/dist/cytoscape.min.js';
@@ -183,7 +181,11 @@ function evidenceTimestamp(evidence, index) {
 
 function normalizeEvidence(evidence, index) {
     return {
-        id: firstText(evidence?.id, `evidence_${index}`),
+        id: firstText(
+            evidence?.recordId,
+            evidence?.id,
+            `evidence_${index}`,
+        ),
         summary: firstText(
             evidence?.summary,
             evidence?.summaryEn,
@@ -234,56 +236,6 @@ function deriveCloseness(edge, familiarity, warmth, trust, protectiveness) {
         0,
         100,
     );
-}
-
-function deriveRelationshipLabel(dimensions, tags) {
-    const {
-        familiarity,
-        closeness,
-        warmth,
-        trust,
-        respect,
-        tension,
-        resentment,
-        fear,
-        protectiveness,
-    } = dimensions;
-    const tagSet = new Set(tags);
-
-    if (
-        tagSet.has('family') &&
-        (resentment >= 35 || trust <= -20 || warmth <= -20)
-    ) {
-        return '疏远的亲人';
-    }
-    if (
-        (tagSet.has('rivalry') || tagSet.has('rival')) &&
-        (resentment >= 50 || tension >= 50)
-    ) {
-        return '宿敌';
-    }
-    if (fear >= 35 && respect >= 20) return '敬畏';
-    if (respect >= 20 && trust <= -20) return '尊敬但不信任';
-    if (protectiveness >= 50) return '保护者';
-    if (warmth <= -35 || resentment >= 50 || tension >= 70) return '敌对';
-    if (familiarity >= 20 && warmth <= -20) return '反感的熟人';
-    if (closeness >= 70 && resentment < 35) return '知己';
-    if (
-        closeness >= 50 &&
-        warmth >= 35 &&
-        trust >= 40 &&
-        resentment < 35
-    ) {
-        return '密友';
-    }
-    if (closeness >= 35 && resentment >= 35) return '疏远的朋友';
-    if (closeness >= 35) return '朋友';
-    if (closeness >= 20 || familiarity >= 35) return '熟人';
-    if (familiarity >= 10) return '初识';
-    if (tagSet.has('authority')) return '权威';
-    if (tagSet.has('mentor')) return '导师';
-    if (tagSet.has('classmate')) return '同学';
-    return '关系未定';
 }
 
 function classifySentiment(dimensions) {
@@ -345,22 +297,6 @@ function dominantColor(dimension) {
     return '#d8b65e';
 }
 
-function actorKnownToPlayer(actor) {
-    const memories = actor?.sharedMemories || {};
-    return actor?.id === 'player' ||
-        actor?.playerKnown === true ||
-        actor?.knownToPlayer === true ||
-        actor?.present === true ||
-        Boolean(
-            actor?.introducedClock ||
-            actor?.introducedTurn ||
-            actor?.lastSeenClock ||
-            asArray(memories?.core).length ||
-            asArray(memories?.recent).length ||
-            asArray(memories?.everyday).length,
-        );
-}
-
 function affiliationText(value) {
     if (Array.isArray(value)) {
         return value
@@ -385,12 +321,6 @@ function affiliationText(value) {
 }
 
 function getActorHouse(actor) {
-    const canonIdentity = findCanonCharacter(
-        firstText(
-            actor?.canonCatalogId,
-            actor?.id,
-        ),
-    );
     const explicitHouse = firstText(
         actor?.house,
         actor?.houseEn,
@@ -400,7 +330,6 @@ function getActorHouse(actor) {
         actor?.background?.houseEn,
         actor?.identity?.house,
         actor?.canonIdentity?.house,
-        canonIdentity?.house,
     );
     if (explicitHouse) return explicitHouse;
 
@@ -446,22 +375,27 @@ function actorCategories(actor, relatedTags) {
     return [...categories];
 }
 
-function mergeActorDirectory(state, graph) {
+function buildDossierDirectory(state) {
     const directory = new Map();
-    const add = actor => {
-        const id = firstText(actor?.id, actor?.actorId);
-        if (!id) return;
-        directory.set(id, {
-            ...(directory.get(id) || {}),
-            ...actor,
-            id,
+    buildActorDossierDirectory(
+        state,
+        'player',
+    ).forEach(dossier => {
+        directory.set(dossier.actorId, {
+            id: dossier.actorId,
+            name: dossier.header.name,
+            role: dossier.header.role,
+            present:
+                dossier.header
+                    .presenceLabel ===
+                '当前在场',
+            identity:
+                dossier.identity,
+            relationship:
+                dossier.relationship,
         });
-    };
-    asArray(graph?.nodes).forEach(add);
-    asArray(graph?.actors).forEach(add);
-    asArray(state?.actorLibrary).forEach(add);
-    asArray(state?.actors).forEach(add);
-    add({
+    });
+    directory.set('player', {
         id: 'player',
         name: firstText(
             state?.character?.identity?.name,
@@ -469,7 +403,6 @@ function mergeActorDirectory(state, graph) {
             '你',
         ),
         role: '玩家角色',
-        playerKnown: true,
     });
     return directory;
 }
@@ -503,7 +436,9 @@ function normalizeEdge(edge, index, evidenceById) {
         fear: clamp(getMetric(edge, 'fear'), 0, 100),
         protectiveness,
     };
-    const embeddedEvidence = asArray(edge?.evidence)
+    const embeddedEvidence = asArray(
+        edge?.evidenceRefs,
+    )
         .map((item, evidenceIndex) =>
             normalizeEvidence(item, index * 1000 + evidenceIndex));
     const evidence = [
@@ -513,15 +448,7 @@ function normalizeEdge(edge, index, evidenceById) {
         ...embeddedEvidence,
     ].filter((item, itemIndex, values) =>
         values.findIndex(candidate => candidate.id === item.id) === itemIndex);
-    const playerKnown =
-        edge?.audienceVisible === true ||
-        hasPlayerWitness(edge) ||
-        evidence.some(item => item.playerKnown);
-    if (!playerKnown) return null;
     const visibleEvidence = evidence
-        .filter(item =>
-            edge?.audienceVisible === true ||
-            item.playerKnown)
         .sort((left, right) => right.timestamp - left.timestamp);
     const tags = edgeStructuralTags(edge);
     const dominantDimension = getDominantDimension(dimensions);
@@ -529,14 +456,6 @@ function normalizeEdge(edge, index, evidenceById) {
         uniqueStrings([
             edge?.labels,
         ]);
-    if (!labels.length) {
-        labels.push(
-            deriveRelationshipLabel(
-                dimensions,
-                tags,
-            ),
-        );
-    }
     return {
         id: firstText(edge?.id, `relationship_${index}`),
         elementId: `hpmud_relationship_${index}`,
@@ -546,8 +465,10 @@ function normalizeEdge(edge, index, evidenceById) {
         tags,
         labels,
         label: labels.join(' · '),
-        activeEmotions:
-            asArray(edge?.activeEmotions),
+        activeSentiments:
+            asArray(
+                edge?.activeSentiments,
+            ),
         sentiment: classifySentiment(dimensions),
         dominantDimension,
         color: dominantColor(dominantDimension),
@@ -617,25 +538,22 @@ function addCurveDistances(edges) {
 }
 
 export function buildPlayerKnownRelationshipProjection(state = {}) {
-    const audienceProjection =
-        buildSocialAudienceProjection(
+    const relationshipProjection =
+        buildRelationshipProjection(
             state,
             'player',
         );
-    const graph = {
-        ...(state?.socialGraph || {}),
-        version:
-            audienceProjection.version,
-    };
     const evidence = asArray(
-        audienceProjection
-            .relationshipEvidence,
+        relationshipProjection
+            .relationships
+            .flatMap(edge =>
+                edge.evidenceRefs),
     ).map(normalizeEvidence);
     const evidenceById = new Map(
         evidence.map(item => [String(item.id), item]),
     );
     const rawEdges = asArray(
-        audienceProjection
+        relationshipProjection
             .relationships,
     );
     const edges = addCurveDistances(
@@ -644,15 +562,15 @@ export function buildPlayerKnownRelationshipProjection(state = {}) {
                 normalizeEdge(edge, index, evidenceById))
             .filter(Boolean),
     );
-    const directory = mergeActorDirectory(state, graph);
+    const directory =
+        buildDossierDirectory(state);
     const visibleActorIds = new Set(['player']);
     edges.forEach(edge => {
         visibleActorIds.add(edge.sourceId);
         visibleActorIds.add(edge.targetId);
     });
-    directory.forEach((actor, id) => {
-        if (actorKnownToPlayer(actor)) visibleActorIds.add(id);
-    });
+    directory.forEach((_actor, id) =>
+        visibleActorIds.add(id));
     const nodes = [...visibleActorIds]
         .map(id => {
             const actor = directory.get(id);
@@ -685,7 +603,9 @@ export function buildPlayerKnownRelationshipProjection(state = {}) {
         ]),
     );
     return {
-        version: asFiniteNumber(graph?.version, 1),
+        version:
+            relationshipProjection
+                .schemaVersion,
         nodes,
         edges: visibleEdges,
         nodeById,
@@ -1233,12 +1153,12 @@ export function createRelationshipGraphController({
                 createElement('p', 'hpmud-relationship-tags', tags),
             );
         }
-        if (edge.activeEmotions.length) {
+        if (edge.activeSentiments.length) {
             section.append(
                 createElement(
                     'p',
                     'hpmud-relationship-tags',
-                    `短期情绪：${edge.activeEmotions
+                    `短期情绪：${edge.activeSentiments
                         .map(emotion =>
                             `${emotion.emotion} ${emotion.intensity}`)
                         .join(' · ')}`,

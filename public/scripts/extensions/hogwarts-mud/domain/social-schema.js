@@ -149,7 +149,6 @@ const SOCIAL_RELATIONSHIP_IMPACTS =
         'major',
         'defining',
     ]);
-
 export function finiteSocialNumber(
     value,
     fallback = 0,
@@ -927,6 +926,23 @@ function deriveActiveSocialEmotions(
     );
 }
 
+function normalizeSocialRelationshipKind(
+    value,
+) {
+    return String(value || '')
+        .normalize('NFKC')
+        .trim()
+        .toLocaleLowerCase()
+        .replace(
+            /[\s-]+/gu,
+            '_',
+        )
+        .replace(
+            /[^a-z0-9_:]+/gu,
+            '',
+        );
+}
+
 export function normalizeSocialRelationshipEdge(
     edge = {},
     {
@@ -1081,5 +1097,35 @@ export function normalizeSocialRelationshipEdge(
         normalized.updatedClock =
             String(edge.updatedClock);
     }
+    normalized.relationshipClaimIds = [
+        ...new Set(
+            (
+                Array.isArray(
+                    edge.relationshipClaimIds,
+                )
+                    ? edge
+                        .relationshipClaimIds
+                    : []
+            )
+                .map(String)
+                .filter(Boolean),
+        ),
+    ];
+    normalized.relationshipKinds = [
+        ...new Set(
+            (
+                Array.isArray(
+                    edge.relationshipKinds,
+                )
+                    ? edge
+                        .relationshipKinds
+                    : []
+            )
+                .map(
+                    normalizeSocialRelationshipKind,
+                )
+                .filter(Boolean),
+        ),
+    ];
     return normalized;
 }

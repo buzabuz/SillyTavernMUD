@@ -2,12 +2,19 @@ import {
     IMPRESSION_MAX_WORDS,
     isValidImpressionShorthand,
     normalizeActorMemoryProfile,
-    normalizeSharedMemories,
     SHARED_MEMORY_TIERS,
 } from './actor-memory.js';
 import {
-    upsertSharedMemory,
-} from './actor-memory-migration.js';
+    addActorMemoryRefV1,
+    assertActorContextStateV1,
+    recordActorAppraisalV1,
+    removeActorMemoryRefsV1,
+} from './actor-context-runtime.js';
+
+import {
+    applyPersonSchemaOperations,
+    reduceMemorySynapse,
+} from './memory-synapse-reducer.js';
 
 export function getActorMemoryEntries(profile) {
     const normalized =
@@ -17,6 +24,91 @@ export function getActorMemoryEntries(profile) {
             ...memory,
             tier,
         })));
+}
+
+function getActorMemoryRefs(
+    worldState,
+    actorId,
+) {
+    const entry =
+        worldState
+            ?.actorMemoryIndex
+            ?.byActorId
+            ?.[actorId];
+    return [
+        'core',
+        'recent',
+        'everyday',
+    ].flatMap(tier =>
+        (entry?.[tier] || [])
+            .map(reference => ({
+                ...reference,
+                id:
+                    reference.recordId,
+                tier,
+            })));
+}
+
+function getBoundaryId(
+    boundary,
+) {
+    return String(
+        boundary?.boundaryId ||
+        boundary?.id ||
+        '',
+    ).trim();
+}
+
+export function captureMemoryBoundaryGuard(
+    worldState,
+) {
+    return {
+        timelineEpoch:
+            String(
+                worldState
+                    ?.timelineEpoch ||
+                '',
+            ),
+        stateRevision:
+            Math.max(
+                0,
+                Number(
+                    worldState
+                        ?.stateRevision,
+                ) || 0,
+            ),
+        boundaryId:
+            getBoundaryId(
+                worldState
+                    ?.memoryDirector
+                    ?.pendingEventBoundary,
+            ),
+    };
+}
+
+export function isMemoryBoundaryGuardCurrent(
+    worldState,
+    guard,
+) {
+    if (!guard) return true;
+    const current =
+        captureMemoryBoundaryGuard(
+            worldState,
+        );
+    return Boolean(
+        guard.boundaryId &&
+        current.timelineEpoch ===
+            guard.timelineEpoch &&
+        current.stateRevision ===
+            guard.stateRevision &&
+        current.boundaryId ===
+            guard.boundaryId &&
+        worldState
+            ?.memoryDirector
+            ?.pendingEventBoundary
+            ?.status ===
+            'pending',
+    );
 }
 
 export function analyzeMemoryConsolidation(
@@ -54,30 +146,37 @@ export function analyzeMemoryConsolidation(
     const boundaryTurnsSinceReview =
         boundaryTurn -
         lastReviewedTurn;
-    const actors = (worldState?.actorLibrary || [])
-        .map(profile => {
-            const normalized =
-                normalizeActorMemoryProfile(profile);
-            const everydayCount =
-                normalized.sharedMemories.everyday.length;
-            const recentCount =
-                normalized.sharedMemories.recent.length;
-            const changedCount = [
-                ...normalized.sharedMemories.everyday,
-                ...normalized.sharedMemories.recent,
-            ].filter(memory =>
-                Number(memory.updatedTurn || 0) >
-                lastReviewedTurn).length;
-            return {
-                id: profile.id,
-                everydayCount,
-                recentCount,
-                pendingCount:
+    const actors =
+        (worldState?.actorLibrary || [])
+            .map(profile => {
+                const entry =
+                worldState
+                    ?.actorMemoryIndex
+                    ?.byActorId
+                    ?.[profile.id] ||
+                {};
+                const everydayCount =
+                (entry.everyday || [])
+                    .length;
+                const recentCount =
+                (entry.recent || [])
+                    .length;
+                const changedCount =
+                boundaryTurn >
+                    lastReviewedTurn
+                    ? everydayCount +
+                        recentCount
+                    : 0;
+                return {
+                    id: profile.id,
+                    everydayCount,
+                    recentCount,
+                    pendingCount:
                     everydayCount + recentCount,
-                changedCount,
-            };
-        })
-        .filter(actor => actor.pendingCount > 0);
+                    changedCount,
+                };
+            })
+            .filter(actor => actor.pendingCount > 0);
     const pendingCount = actors.reduce(
         (sum, actor) => sum + actor.pendingCount,
         0,
@@ -93,6 +192,9 @@ export function analyzeMemoryConsolidation(
             (
                 !eventBoundary.sceneId ||
                 eventBoundary.sceneId ===
+                    worldState.scene?.id ||
+                eventBoundary
+                    .carriedToSceneId ===
                     worldState.scene?.id
             ) &&
             boundaryTurnsSinceReview >=
@@ -131,16 +233,17 @@ export function validateMemoryConsolidation(
     if (reviews.length > 8) {
         errors.push('共同记忆整理最多包含 8 个人物。');
     }
-    const profiles = new Map(
+    const profiles = new Set(
         (worldState?.actorLibrary || []).map(profile => [
             profile.id,
-            normalizeActorMemoryProfile(profile),
-        ]),
+        ]).flat(),
     );
     const reviewedIds = new Set();
     reviews.forEach(review => {
-        const profile = profiles.get(review.id);
-        if (!profile || reviewedIds.has(review.id)) {
+        if (
+            !profiles.has(review.id) ||
+            reviewedIds.has(review.id)
+        ) {
             errors.push(
                 `共同记忆整理人物 ${review.id || '?'} 不存在或重复。`,
             );
@@ -174,7 +277,10 @@ export function validateMemoryConsolidation(
             );
         }
         const entries = new Map(
-            getActorMemoryEntries(profile).map(memory => [
+            getActorMemoryRefs(
+                worldState,
+                review.id,
+            ).map(memory => [
                 memory.id,
                 memory,
             ]),
@@ -227,46 +333,6 @@ export function validateMemoryConsolidation(
                     `人物 ${review.id} 的深刻记忆不能降级为近期大事。`,
                 );
             }
-            if (
-                operation.targetTier ===
-                    'recent' &&
-                !(
-                    sources.some(source =>
-                        source.tier === 'recent' ||
-                        (
-                            source.significance ===
-                                'notable' &&
-                            String(
-                                source
-                                    .lastingImpactEn ||
-                                '',
-                            ).trim()
-                        )) ||
-                    (
-                        sources.filter(source =>
-                            source.tier ===
-                                'everyday')
-                            .length >= 2 &&
-                        new Set(
-                            sources
-                                .filter(source =>
-                                    source.tier ===
-                                        'everyday')
-                                .map(source =>
-                                    Number(
-                                        source.createdTurn ||
-                                        source.updatedTurn ||
-                                        0,
-                                    ))
-                                .filter(Boolean),
-                        ).size >= 2
-                    )
-                )
-            ) {
-                errors.push(
-                    `人物 ${review.id} 的近期大事必须来自已有近期记忆、带长期影响的 notable 候选，或至少两条跨回合日常记忆形成的重复模式。`,
-                );
-            }
             if (operation.targetTier === 'forget' &&
                 sources.some(source =>
                     source.tier === 'core')) {
@@ -309,6 +375,31 @@ export function validateMemoryConsolidation(
             }
         });
     });
+    const schemaOperations =
+        Array.isArray(
+            payload.schemaOperations,
+        )
+            ? payload.schemaOperations
+            : [];
+    if (schemaOperations.length > 32) {
+        errors.push(
+            '人物图式整理最多包含 32 条操作。',
+        );
+    } else if (schemaOperations.length) {
+        try {
+            applyPersonSchemaOperations(
+                worldState,
+                schemaOperations,
+            );
+        } catch (error) {
+            errors.push(
+                String(
+                    error?.message ||
+                    error,
+                ),
+            );
+        }
+    }
     return {
         valid: errors.length === 0,
         errors,
@@ -370,13 +461,35 @@ export function normalizeMemoryConsolidationPayload(
                 ? normalized
                     .socialRelationshipEvidence
                 : [];
+    normalized.schemaOperations =
+        Array.isArray(
+            normalized
+                .schemaOperations,
+        )
+            ? normalized
+                .schemaOperations
+            : [];
     return normalized;
 }
 
 export function applyMemoryConsolidation(
     worldState,
     payload,
+    {
+        boundaryGuard = null,
+    } = {},
 ) {
+    if (
+        boundaryGuard &&
+        !isMemoryBoundaryGuardCurrent(
+            worldState,
+            boundaryGuard,
+        )
+    ) {
+        throw new Error(
+            'Rejected stale memory boundary consolidation.',
+        );
+    }
     const validation = validateMemoryConsolidation(
         payload,
         worldState,
@@ -384,7 +497,7 @@ export function applyMemoryConsolidation(
     if (!validation.valid) {
         throw new Error(validation.errors.join('；'));
     }
-    const next = structuredClone(worldState);
+    let next = structuredClone(worldState);
     const reviews = new Map(
         payload.reviews.map(review => [
             review.id,
@@ -395,100 +508,81 @@ export function applyMemoryConsolidation(
         0,
         Number(next.turn?.count || 0),
     );
-    next.actorLibrary = (next.actorLibrary || []).map(
-        (profile, profileIndex) => {
-            const review = reviews.get(profile.id);
-            let normalized =
-                normalizeActorMemoryProfile(profile);
-            if (!review) return normalized;
-            if (review.impressionOfPlayerEn) {
-                normalized = {
-                    ...normalized,
-                    impressionOfPlayerEn:
-                        review.impressionOfPlayerEn,
-                    impressionOfPlayer:
-                        review.impressionOfPlayer ||
-                        review.impressionOfPlayerEn,
-                    impressionUpdatedClock: next.clock,
-                    impressionUpdatedTurn: currentTurn,
-                };
-            }
-            (review.operations || []).forEach(
-                (operation, operationIndex) => {
-                    const sourceIds = new Set(
-                        operation.sourceIds,
-                    );
-                    const sources =
-                        getActorMemoryEntries(normalized)
-                            .filter(memory =>
-                                sourceIds.has(memory.id));
-                    const memories =
-                        normalizeSharedMemories(
-                            normalized.sharedMemories,
-                        );
-                    SHARED_MEMORY_TIERS.forEach(tier => {
-                        memories[tier] = memories[tier]
-                            .filter(memory =>
-                                !sourceIds.has(memory.id));
-                    });
-                    normalized = {
-                        ...normalized,
-                        sharedMemories: memories,
-                    };
-                    if (operation.targetTier ===
-                        'forget') {
-                        return;
-                    }
-                    normalized = upsertSharedMemory(
-                        normalized,
-                        {
-                            id: `${profile.id}_m${currentTurn}_${profileIndex + 1}_${operationIndex + 1}`,
-                            summaryEn:
-                                operation.summaryEn,
-                            summary:
-                                operation.summary ||
-                                operation.summaryEn,
-                            firstClock:
-                                sources[0]?.firstClock ||
-                                next.clock,
-                            lastClock: next.clock,
-                            createdTurn: Math.min(
-                                ...sources.map(memory =>
-                                    Number(
-                                        memory.createdTurn ||
-                                        currentTurn,
-                                    )),
-                            ),
-                            updatedTurn: currentTurn,
-                            source: 'medium',
-                        },
-                        operation.targetTier,
-                    );
+    for (const review of reviews.values()) {
+        if (review.impressionOfPlayerEn) {
+            recordActorAppraisalV1(
+                next,
+                {
+                    actorId:
+                        review.id,
+                    summaryEn:
+                        review
+                            .impressionOfPlayerEn,
+                    kind:
+                        'memory_consolidation_impression',
+                    tier: 'recent',
                 },
             );
-            return normalized;
-        },
-    );
-    const profiles = new Map(
-        next.actorLibrary.map(profile => [
-            profile.id,
-            profile,
-        ]),
-    );
-    next.actors = (next.actors || []).map(actor => {
-        const profile = profiles.get(actor.id);
-        return profile ? {
-            ...actor,
-            impressionOfPlayerEn:
-                profile.impressionOfPlayerEn,
-            impressionOfPlayer:
-                profile.impressionOfPlayer,
-            impressionUpdatedClock:
-                profile.impressionUpdatedClock,
-            impressionUpdatedTurn:
-                profile.impressionUpdatedTurn,
-        } : actor;
-    });
+        }
+        for (const [
+            operationIndex,
+            operation,
+        ] of (
+                review.operations ||
+            []
+            ).entries()) {
+            removeActorMemoryRefsV1(
+                next,
+                review.id,
+                operation.sourceIds,
+            );
+            if (
+                operation.targetTier ===
+                'forget'
+            ) {
+                continue;
+            }
+            const appraisalId =
+                recordActorAppraisalV1(
+                    next,
+                    {
+                        actorId:
+                            review.id,
+                        summaryEn:
+                            operation
+                                .summaryEn,
+                        kind:
+                            `memory_consolidation_${currentTurn}_${operationIndex + 1}`,
+                        tier:
+                            operation
+                                .targetTier,
+                    },
+                );
+            addActorMemoryRefV1(
+                next,
+                review.id,
+                operation.targetTier,
+                {
+                    recordType:
+                        'appraisal',
+                    recordId:
+                        appraisalId,
+                    addedClock:
+                        next.clock,
+                },
+            );
+        }
+    }
+    next =
+        reduceMemorySynapse(
+            next,
+            {
+                schemaOperations:
+                    payload
+                        .schemaOperations ||
+                    [],
+            },
+        );
     const eventBoundary =
         next.memoryDirector
             ?.pendingEventBoundary;
@@ -513,7 +607,14 @@ export function applyMemoryConsolidation(
                 : null,
         reviewedActorIds:
             payload.reviews.map(review => review.id),
+        schemaOperationCount:
+            (
+                payload.schemaOperations ||
+                []
+            ).length,
         reviewedAt: new Date().toISOString(),
     };
-    return next;
+    return assertActorContextStateV1(
+        next,
+    );
 }

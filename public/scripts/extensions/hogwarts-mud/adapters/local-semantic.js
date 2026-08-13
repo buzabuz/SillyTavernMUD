@@ -1,3 +1,7 @@
+import {
+    getLegalAppraisalObserverIds,
+} from '../domain/memory-synapse-schema.js';
+
 export function createLocalSemanticAdapter(ports) {
     const {
         buildLocalMapModel,
@@ -17,6 +21,12 @@ export function createLocalSemanticAdapter(ports) {
     } = ports;
     const OBSERVED_ACTOR_DEPARTURE_PATTERN =
         /(?:\b(?:left|departed|exited|walked (?:out|away|through|into)|went (?:out|away|into)|moved into|crossed into)\b|离开|走出|退场|走进|进入了)/iu;
+    const INJURY_INSPECTION_PATTERN =
+        /(?:\b(?:inspect|check|examine|look(?:ed|ing)? (?:for|at)).{0,80}\b(?:injur|wound|bruise|burn|damage|hurt)\w*\b|(?:仔细观察|检查).{0,40}(?:伤痕|伤势|受伤|伤口))/iu;
+    const NO_VISIBLE_INJURY_PATTERN =
+        /(?:\b(?:no|without|nonexistent)\s+(?:visible\s+)?(?:spell\s+)?(?:injur|wound|bruise|burn|damage)\w*\b|\b(?:perfectly|visibly)\s+un(?:injured|hurt|harmed)\b|没有(?:发现|看到|观察到)?(?:明显|可见)?(?:伤痕|伤势|伤口|损伤)|未(?:发现|看到|观察到)(?:明显|可见)?(?:伤痕|伤势|伤口|损伤))/iu;
+    const VISIBLE_INJURY_PATTERN =
+        /(?:\b(?:injur|wound|bruise|cut|burn|fracture|sprain|bleed|swollen|gash)\w*\b|受伤|伤口|伤势|擦伤|割伤|烧伤|骨折|扭伤|淤青|流血|肿胀)/iu;
 
     function buildLocalSemanticActorContext(
         state,
@@ -355,6 +365,280 @@ export function createLocalSemanticAdapter(ports) {
             start +
             evidence.length,
         };
+    }
+
+    function findNarrationEvidence(
+        segments,
+        evidenceText,
+    ) {
+        const evidence =
+            String(
+                evidenceText || '',
+            ).trim();
+        if (!evidence) return null;
+        for (const segment of (
+            segments || []
+        )) {
+            if (
+                segment?.type !==
+                    'narration'
+            ) {
+                continue;
+            }
+            const match =
+                findObservationEvidence(
+                    segment.textEn,
+                    evidence,
+                );
+            if (match) {
+                return {
+                    ...match,
+                    segment,
+                };
+            }
+        }
+        return null;
+    }
+
+    function actorObservationIsGrounded(
+        actor,
+        evidenceText,
+        targetActorIds,
+    ) {
+        if (
+            (
+                targetActorIds ||
+                []
+            ).includes(
+                actor.id,
+            )
+        ) {
+            return true;
+        }
+        const normalizedEvidence =
+            String(
+                evidenceText || '',
+            ).toLocaleLowerCase();
+        return [
+            actor.name,
+            actor.nameEn,
+            ...(actor.aliases ||
+                []),
+        ]
+            .filter(Boolean)
+            .some(name =>
+                normalizedEvidence
+                    .includes(
+                        String(name)
+                            .toLocaleLowerCase(),
+                    ));
+    }
+
+    function findNegativeInjuryEvidence(
+        narrativeSegments,
+    ) {
+        for (const segment of (
+            narrativeSegments ||
+            []
+        )) {
+            if (
+                segment?.type !==
+                    'narration'
+            ) {
+                continue;
+            }
+            const sentences =
+                String(
+                    segment.textEn ||
+                    '',
+                ).match(
+                    /[^.!?\n]+(?:[.!?]+|$)/gu,
+                ) || [];
+            const sentence =
+                sentences.find(value =>
+                    NO_VISIBLE_INJURY_PATTERN
+                        .test(value));
+            if (sentence) {
+                return sentence.trim();
+            }
+        }
+        return '';
+    }
+
+    function projectObservedIdentityObservations(
+        observation,
+        state,
+        playerAction,
+        narrativeSegments,
+        targetActorIds,
+    ) {
+        const actorById =
+            new Map(
+                (
+                    state.actors ||
+                    []
+                ).map(actor => [
+                    actor.id,
+                    actor,
+                ]),
+            );
+        const localOccupantIds =
+            new Set(
+                state.localPresence
+                    ?.occupantActorIds ||
+                [],
+            );
+        const accepted = (
+            observation?.result
+                ?.identityObservations ||
+            []
+        )
+            .map(source => {
+                const actor =
+                    actorById.get(
+                        source.actorId,
+                    );
+                const evidence =
+                    findNarrationEvidence(
+                        narrativeSegments,
+                        source
+                            .evidenceText,
+                    );
+                const status =
+                    String(
+                        source.status ||
+                        '',
+                    );
+                const statusGrounded =
+                    status ===
+                        'no_visible_injury'
+                        ? NO_VISIBLE_INJURY_PATTERN
+                            .test(
+                                evidence
+                                    ?.text ||
+                                '',
+                            )
+                        : status ===
+                            'visible_injury'
+                            ? VISIBLE_INJURY_PATTERN
+                                .test(
+                                    evidence
+                                        ?.text ||
+                                    '',
+                                )
+                            : false;
+                if (
+                    !actor ||
+                    (
+                        actor.present ===
+                            false &&
+                        !localOccupantIds
+                            .has(
+                                actor.id,
+                            )
+                    ) ||
+                    Number(
+                        source.confidence ||
+                        0,
+                    ) < 0.7 ||
+                    !evidence ||
+                    !statusGrounded ||
+                    !actorObservationIsGrounded(
+                        actor,
+                        evidence.text,
+                        targetActorIds,
+                    )
+                ) {
+                    return null;
+                }
+                return {
+                    version: 1,
+                    actorId:
+                        actor.id,
+                    kind:
+                        'injury_assessment',
+                    status,
+                    injuryType:
+                        status ===
+                            'visible_injury'
+                            ? String(
+                                source
+                                    .injuryType ||
+                                'unknown',
+                            )
+                            : '',
+                    description:
+                        status ===
+                            'visible_injury'
+                            ? String(
+                                source
+                                    .description ||
+                                '',
+                            ).trim()
+                            : '',
+                    evidenceText:
+                        evidence.text,
+                    confidence:
+                        Number(
+                            source
+                                .confidence,
+                        ),
+                };
+            })
+            .filter(observation =>
+                observation &&
+                (
+                    observation.status !==
+                        'visible_injury' ||
+                    observation.description
+                ));
+        if (
+            accepted.length ||
+            !INJURY_INSPECTION_PATTERN
+                .test(
+                    String(
+                        playerAction ||
+                        '',
+                    ))
+        ) {
+            return accepted;
+        }
+        const uniqueTargetActorIds = [
+            ...new Set(
+                (
+                    targetActorIds ||
+                    []
+                ).filter(actorId =>
+                    actorById.has(
+                        actorId,
+                    )),
+            ),
+        ];
+        const evidence =
+            findNegativeInjuryEvidence(
+                narrativeSegments,
+            );
+        if (
+            uniqueTargetActorIds
+                .length !== 1 ||
+            !evidence
+        ) {
+            return accepted;
+        }
+        return [{
+            version: 1,
+            actorId:
+                uniqueTargetActorIds[0],
+            kind:
+                'injury_assessment',
+            status:
+                'no_visible_injury',
+            injuryType: '',
+            description: '',
+            evidenceText:
+                evidence,
+            confidence: 0.95,
+        }];
     }
 
     function resolveObservedMaterialActorId(
@@ -1288,6 +1572,14 @@ export function createLocalSemanticAdapter(ports) {
                 state,
                 narrativeText,
             );
+            const identityObservations =
+                projectObservedIdentityObservations(
+                    observation,
+                    state,
+                    playerAction,
+                    narrativeSegments,
+                    targetActorIds,
+                );
             return {
                 observation,
                 narrativeText,
@@ -1307,6 +1599,7 @@ export function createLocalSemanticAdapter(ports) {
                     playerAction,
                     narrativeText,
                 ),
+                identityObservations,
                 perception,
                 targetActorIds,
             };
@@ -1333,6 +1626,8 @@ export function createLocalSemanticAdapter(ports) {
                         },
                         actorUpdates:
                         [],
+                        identityObservations:
+                        [],
                         perception:
                         createFallbackPerception(),
                     },
@@ -1351,9 +1646,182 @@ export function createLocalSemanticAdapter(ports) {
                 narrativeText,
                 materialEvents: [],
                 itemUpdates: [],
+                identityObservations:
+                [],
                 perception:
                 createFallbackPerception(),
                 targetActorIds,
+            };
+        }
+    }
+
+    async function requestLocalTurnAppraisals(
+        state,
+        event,
+    ) {
+        const observerIds =
+            getLegalAppraisalObserverIds(
+                state,
+                event,
+            );
+        if (
+            !event?.eventId ||
+            !event?.sceneId ||
+            !Array.isArray(
+                event.sourceMessageIds,
+            ) ||
+            !event.sourceMessageIds.length ||
+            !observerIds.length
+        ) {
+            return {
+                appraisalProposals: [],
+                diagnostics: {
+                    called: false,
+                    fallback: false,
+                    observerCount:
+                        observerIds.length,
+                },
+            };
+        }
+        const profiles = new Map(
+            (
+                state.actorLibrary ||
+                []
+            ).map(actor => [
+                actor.id,
+                actor,
+            ]),
+        );
+        const runtime = new Map(
+            (
+                state.actors ||
+                []
+            ).map(actor => [
+                actor.id,
+                actor,
+            ]),
+        );
+        const observers =
+            observerIds.map(id => {
+                const profile =
+                    profiles.get(id) ||
+                    {};
+                const actor =
+                    runtime.get(id) ||
+                    {};
+                return {
+                    id,
+                    nameEn:
+                        profile.nameEn ||
+                        actor.nameEn ||
+                        id,
+                    roleEn:
+                        profile.roleEn ||
+                        actor.roleEn ||
+                        '',
+                };
+            });
+        const targetActorIds = [
+            'player',
+            ...new Set([
+                ...(event
+                    .participantActorIds ||
+                    []),
+                ...(event
+                    .witnessActorIds ||
+                    []),
+            ]),
+        ];
+        try {
+            const response =
+                await fetch(
+                    '/api/hogwarts-mud/local/appraise',
+                    {
+                        method: 'POST',
+                        headers:
+                            getRequestHeaders(),
+                        body:
+                            JSON.stringify({
+                                input: {
+                                    clock:
+                                        state.clock,
+                                    event: {
+                                        eventId:
+                                            event
+                                                .eventId,
+                                        sceneId:
+                                            event
+                                                .sceneId,
+                                        sourceMessageIds:
+                                            event
+                                                .sourceMessageIds,
+                                        summaryEn:
+                                            event
+                                                .summaryEn ||
+                                            '',
+                                    },
+                                    observers,
+                                    targetActorIds,
+                                },
+                            }),
+                    },
+                );
+            if (!response.ok) {
+                throw new Error(
+                    (
+                        await response.text()
+                    ).slice(0, 1_000) ||
+                    `HTTP ${response.status}`,
+                );
+            }
+            const payload =
+                await response.json();
+            const proposals =
+                Array.isArray(
+                    payload?.result
+                        ?.appraisalProposals,
+                )
+                    ? payload.result
+                        .appraisalProposals
+                    : [];
+            return {
+                appraisalProposals:
+                    proposals,
+                diagnostics: {
+                    called: true,
+                    fallback: false,
+                    observerCount:
+                        observerIds.length,
+                    proposalCount:
+                        proposals.length,
+                    model:
+                        String(
+                            payload
+                                ?.diagnostics
+                                ?.model ||
+                            '',
+                        ),
+                },
+            };
+        } catch (error) {
+            console.warn(
+                '[Hogwarts MUD] Local Appraisal proposal failed; continuing without subjective memory',
+                error,
+            );
+            return {
+                appraisalProposals: [],
+                diagnostics: {
+                    called: true,
+                    fallback: true,
+                    observerCount:
+                        observerIds.length,
+                    proposalCount: 0,
+                    error:
+                        String(
+                            error?.message ||
+                            error,
+                        ).slice(0, 500),
+                },
             };
         }
     }
@@ -1366,10 +1834,12 @@ export function createLocalSemanticAdapter(ports) {
         findObservationEvidence,
         resolveObservedMaterialActorId,
         projectObservedMaterialEvents,
+        projectObservedIdentityObservations,
         findActorObservationEvidence,
         recoverObservedActorMovements,
         isObservedEventBoundary,
         applyObservedActorUpdates,
         requestLocalTurnObservation,
+        requestLocalTurnAppraisals,
     };
 }

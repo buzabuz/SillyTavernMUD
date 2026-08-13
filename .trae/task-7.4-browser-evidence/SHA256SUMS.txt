@@ -1,0 +1,7 @@
+1d6ee0aadfcc6cb0f8f650abc42da9cd7eb27f49e64a63502c1979162c9c921c  .trae/task-7.4-browser-evidence/task-7.4-dom-evidence.json
+304f162ab3aa96940a7e5b51aee5772f65e72872924666a9f704b68ab5477534  .trae/task-7.4-browser-evidence/task-7.4-stale-conflict-warning.png
+8ff3fadf1ae72176ca2b9f87c5a4a38f531f2eff2f451ea52369346f6c3b0de6  .trae/task-7.4-browser-evidence/task-7.4-390px-emulated.png
+9f8fa118b1c6a85c2a9d512351ea9b769cf8182b43ab4009f92217cb5e3a597f  .trae/task-7.4-browser-evidence/task-7.4-report.md
+a318ba161a730982547a3686ea5a79459e01e682d5ee6ad0665a1f567ff6105f  .trae/task-7.4-browser-evidence/task-7.4-stale-conflict-disabled.png
+e01ada6e174742961ba32a0e4d7bd29627330af928262032cf612a82ea6a1345  .trae/task-7.4-browser-evidence/task-7.4-harry-dossier-desktop.png
+e01ada6e174742961ba32a0e4d7bd29627330af928262032cf612a82ea6a1345  .trae/task-7.4-browser-evidence/task-7.4-harry-dossier-region.png

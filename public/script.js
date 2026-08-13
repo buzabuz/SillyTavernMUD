@@ -7357,7 +7357,7 @@ export function saveChatDebounced() {
  * @param {boolean} [options.force] Force the saving despite the integrity check result
  * @param {ChatMessage[]} [options.chatData] Chat snapshot to save instead of the current in-memory chat
  *
- * @returns {Promise<void>}
+ * @returns {Promise<{durable: boolean, confirmedFailure?: boolean}>} Host persistence acknowledgement.
  */
 export async function saveChat({ chatName, withMetadata, mesId, force = false, chatData = undefined } = {}) {
     if (selected_group) {
@@ -7375,12 +7375,12 @@ export async function saveChat({ chatName, withMetadata, mesId, force = false, c
 
     if (!fileName && name2 === neutralCharacterName) {
         // TODO: Do something for a temporary chat with no character.
-        return;
+        return { durable: false, confirmedFailure: true };
     }
 
     if (!fileName) {
         console.warn('saveChat called without chat_name and no chat file found');
-        return;
+        return { durable: false, confirmedFailure: true };
     }
 
     characters[this_chid].date_last_chat = Date.now();
@@ -7414,7 +7414,7 @@ export async function saveChat({ chatName, withMetadata, mesId, force = false, c
         const result = await fetch('/api/chats/save', saveChatRequest);
 
         if (result.ok) {
-            return;
+            return { durable: true };
         }
 
         const errorData = await result.json();
@@ -7436,13 +7436,14 @@ export async function saveChat({ chatName, withMetadata, mesId, force = false, c
         if (!forceSaveConfirmed) {
             console.warn('Chat integrity check failed, and user did not confirm the overwrite. Reloading the page.');
             window.location.reload();
-            return;
+            return { durable: false, confirmedFailure: true };
         }
 
-        await saveChat({ chatName, withMetadata, mesId, force: true });
+        return await saveChat({ chatName, withMetadata, mesId, force: true });
     } catch (error) {
         console.error(error);
         toastr.error(t`Check the server connection and reload the page to prevent data loss.`, t`Chat could not be saved`);
+        return { durable: false, confirmedFailure: false };
     }
 }
 
@@ -9375,12 +9376,16 @@ export async function saveMetadata() {
     return await saveChatConditional();
 }
 
+/**
+ * Saves the active chat and reports whether the host confirmed persistence.
+ * @returns {Promise<{durable: boolean, confirmedFailure?: boolean}>} Host persistence acknowledgement.
+ */
 export async function saveChatConditional() {
     try {
         await waitUntilCondition(() => !isChatSaving, DEFAULT_SAVE_EDIT_TIMEOUT, 100);
     } catch {
         console.warn('Timeout waiting for chat to save');
-        return;
+        return { durable: false, confirmedFailure: false };
     }
 
     try {
@@ -9388,17 +9393,33 @@ export async function saveChatConditional() {
 
         isChatSaving = true;
 
-        if (selected_group) {
-            await saveGroupChat(selected_group, true);
-        } else {
-            await saveChat();
+        const acknowledgement = selected_group
+            ? await saveGroupChat(selected_group, true)
+            : await saveChat();
+        if (acknowledgement?.durable !== true) {
+            return {
+                durable: false,
+                confirmedFailure:
+                    acknowledgement?.confirmedFailure === true,
+            };
         }
 
         // Save token and prompts cache to IndexedDB storage
-        saveTokenCache();
-        saveItemizedPrompts(getCurrentChatId());
+        try {
+            saveTokenCache();
+            saveItemizedPrompts(getCurrentChatId());
+        } catch (error) {
+            console.error('Error saving chat caches', error);
+        }
+        return { durable: true };
     } catch (error) {
         console.error('Error saving chat', error);
+        return {
+            durable:
+                error?.durable === true,
+            confirmedFailure:
+                error?.confirmedFailure === true,
+        };
     } finally {
         isChatSaving = false;
     }

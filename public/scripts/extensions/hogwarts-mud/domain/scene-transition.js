@@ -6,7 +6,6 @@ import {
     IMPRESSION_MAX_WORDS,
     isValidFirstImpression,
     isValidImpressionShorthand,
-    normalizeActorMemoryProfile,
 } from './actor-memory.js';
 
 import {
@@ -21,6 +20,13 @@ import {
     getLocalMapDefinition,
     getMapRooms,
 } from './map-access.js';
+
+import {
+    validateNarrationConsistency,
+} from './narrative-authority.js';
+import {
+    validateHistoricalClaimProvenance,
+} from './narrative-memory-provenance.js';
 
 import {
     createFallbackNextSceneIntent,
@@ -48,6 +54,84 @@ import {
 
 const TRANSITION_MEMORY_BOILERPLATE_PATTERN =
     /(?:^During the closed scene,|This experience materially shaped the actor['’]s view of the player\.$)/u;
+
+const SCENE_OPENING_UNCOMMITTED_FACT_RULES = [
+    {
+        label: '未提交承诺',
+        pattern:
+            /(?:\bpromise(?:s|d)?\b|\b(?:swear|swears|swore|sworn|vow|vows|vowed|pledge|pledges|pledged)\b|\b(?:you\s+have|i\s+give\s+you)\s+my\s+word\b|承诺|发誓|保证)/iu,
+    },
+    {
+        label: '隐藏事实',
+        pattern:
+            /(?:\bsecrets?\b|\bsecretly\b|\b(?:hidden|lost|true)\s+(?:heir|identity|lineage|parentage|legacy|truth)\b|\bthe\s+truth\s+is\b|\b(?:is|are|was|were)\s+actually\b|隐藏(?:的)?继承人|秘密|隐藏事实)/iu,
+    },
+    {
+        label: '关系变更',
+        pattern:
+            /(?:\b(?:we|they|you(?:\s+two)?|you\s+and\s+i)\s+(?:are|become|became)\s+(?:now\s+)?(?:best\s+friends?|friends?|family|siblings?|sisters?|brothers?|partners?|allies|rivals?|enemies)(?:\s+now)?\b|\byou\s+are\s+my\s+(?:best\s+friend|friend|sister|brother|family|partner|ally|rival|enemy)\b|\bi\s+(?:love|trust|hate)\s+you\b|\b(?:our|their)\s+(?:friendship|relationship|alliance|rivalry)\s+(?:begins?|starts?|ends?|is\s+over)\b|(?:从现在起|从今以后).{0,24}(?:朋友|家人|姐妹|兄弟|伙伴|盟友|敌人|恋人)|(?:成为|不再是).{0,12}(?:朋友|家人|姐妹|兄弟|伙伴|盟友|敌人|恋人))/iu,
+    },
+    {
+        label: '物品转移',
+        pattern:
+            /(?:\b(?:gift|loan)\s+(?:for|to)\s+(?:you|him|her|them|the\s+player|tina)\b|\b(?:theft|item\s+transfer)\b|\b(?:i|we)\s+(?:give|lend|hand|pass|return|offer)\s+(?:you|him|her|them)\b|\b(?:give|lend|hand|pass|return|offer)(?:s|ed|ing)?\s+(?:you|him|her|them|the\s+player|tina)\s+(?:my|his|her|their|the|this|that|a|an)\b|\b(?:give|lend|hand|pass|return|offer)(?:s|ed|ing)?\s+(?:my|his|her|their|the|this|that|a|an)\s+[^.!?]{0,80}\s+to\s+(?:you|him|her|them|the\s+player|tina)\b|\b(?:it(?:'s| is)|this\s+is|that\s+is|they(?:'re| are))\s+yours(?:\s+now)?\b|\b(?:belongs?\s+to\s+you\s+now|for\s+you\s+to\s+keep)\b|\b(?:take|keep|accept)\s+(?:my|this|that)\s+(?:[a-z][a-z'-]*\s+){0,3}(?:book|ring|key|wand|quill|letter|note|parchment|journal|diary|map|token|necklace|amulet|bracelet|ribbon|pendant|brooch|badge|coin|pouch|bag|box|bottle|vial|artifact|heirloom|keepsake|cloak|robe|scarf|broom|compass|photograph|photo|item|object)\b|(?:赠予|赠送|送给|交给|借给|归还给|转交).{0,40})/iu,
+    },
+];
+
+function getSceneOpeningUncommittedFactRules(
+    value,
+) {
+    const text =
+        String(
+            typeof value === 'string'
+                ? value
+                : value?.textEn ||
+                    '',
+        ).trim();
+    if (!text) {
+        return [];
+    }
+    return SCENE_OPENING_UNCOMMITTED_FACT_RULES
+        .filter(rule =>
+            rule.pattern.test(text));
+}
+
+export function filterCommittedSceneOpeningExperienceSegments(
+    segments = [],
+) {
+    return (
+        Array.isArray(segments)
+            ? segments
+            : []
+    ).filter(segment =>
+        getSceneOpeningUncommittedFactRules(
+            segment,
+        ).length === 0);
+}
+
+export function validateSceneOpeningExperienceSegments(
+    segments = [],
+) {
+    const errors = [];
+    (
+        Array.isArray(segments)
+            ? segments
+            : []
+    ).forEach((segment, index) => {
+        getSceneOpeningUncommittedFactRules(
+            segment,
+        ).forEach(rule => {
+            errors.push(
+                `下一场景开场第 ${index + 1} 段包含${rule.label}；Scene Opening 只能描写已提交状态与安全可观察内容。`,
+            );
+        });
+    });
+    return {
+        valid:
+            errors.length === 0,
+        errors,
+    };
+}
 
 export function isValidTransitionSceneMemory(
     value,
@@ -156,9 +240,7 @@ export function normalizeSceneTransitionPackage(
         (worldState.actorLibrary || []).map(
             profile => [
                 profile.id,
-                normalizeActorMemoryProfile(
-                    profile,
-                ),
+                profile,
             ],
         ),
     );
@@ -212,30 +294,15 @@ export function normalizeSceneTransitionPackage(
             })
             .slice(0, 6)
             .map(([id, supplied]) => {
-                const profile = profiles.get(id);
                 const suppliedImpression = String(
                     supplied
                         .impressionOfPlayerEn ||
                     '',
                 ).trim();
-                const existingImpression = String(
-                    profile
-                        ?.impressionOfPlayerEn ||
-                    '',
-                ).trim();
-                const impressionOfPlayerEn =
-                    isValidImpressionShorthand(
-                        suppliedImpression,
-                    )
-                        ? suppliedImpression
-                        : isValidImpressionShorthand(
-                            existingImpression,
-                        )
-                            ? existingImpression
-                            : 'A demanding, unpredictable child who repeatedly tests firm boundaries.';
                 return {
                     id,
-                    impressionOfPlayerEn,
+                    impressionOfPlayerEn:
+                        suppliedImpression,
                     sceneMemoryEn:
                         String(
                             supplied
@@ -416,7 +483,7 @@ export function normalizeSceneTransitionPackage(
             ).find(item =>
                 item.id === actor.id);
             const normalizedActor = {
-                ...actor,
+                id: actor.id,
                 present:
                     actor.present === true,
                 currentActivityEn:
@@ -424,6 +491,12 @@ export function normalizeSceneTransitionPackage(
                         actor
                             .currentActivityEn ||
                         'Remaining nearby in the new scene.',
+                    ).trim(),
+                currentIntentEn:
+                    String(
+                        actor
+                            .currentIntentEn ??
+                        '',
                     ).trim(),
                 lifeStatus:
                     ACTOR_LIFE_STATUS_VALUES
@@ -461,6 +534,17 @@ export function normalizeSceneTransitionPackage(
                         ? candidate.roomId
                         : nextScene.roomId,
             };
+            const firstImpression =
+                String(
+                    actor
+                        .firstImpressionOfPlayerEn ||
+                    '',
+                ).trim();
+            if (firstImpression) {
+                normalizedActor
+                    .firstImpressionOfPlayerEn =
+                    firstImpression;
+            }
             const firstImpressionWords =
                 String(
                     normalizedActor
@@ -492,8 +576,11 @@ export function normalizeSceneTransitionPackage(
                         : `${clipped}.`;
             }
             if (
-                profiles.get(actor.id)
-                    ?.firstImpressionOfPlayerEn
+                worldState
+                    .actorMemoryIndex
+                    ?.byActorId
+                    ?.[actor.id]
+                    ?.firstImpressionRef
             ) {
                 delete normalizedActor
                     .firstImpressionOfPlayerEn;
@@ -803,26 +890,38 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
         if (typeof actor.present !== 'boolean' || !String(actor.currentActivityEn || '').trim()) {
             errors.push(`下一场景人物 ${actor.id || '?'} 缺少公开活动状态。`);
         }
+        if (
+            actor.present === true &&
+            (
+                !Object.hasOwn(
+                    actor,
+                    'currentIntentEn',
+                ) ||
+                typeof actor
+                    .currentIntentEn !==
+                    'string'
+            )
+        ) {
+            errors.push(
+                `下一场景人物 ${actor.id || '?'} 必须显式提交或清空 currentIntentEn。`,
+            );
+        }
         const currentActor =
             (worldState.actors || []).find(
                 item => item.id === actor.id,
             );
-        const profile =
-            (worldState.actorLibrary || [])
-                .find(item =>
-                    item.id === actor.id);
+        const firstImpressionRef =
+            worldState
+                .actorMemoryIndex
+                ?.byActorId
+                ?.[actor.id]
+                ?.firstImpressionRef ||
+            '';
         const needsFirstImpression =
             actor.present === true &&
             actor.roomId ===
                 nextScene.roomId &&
-            !profile
-                ?.firstImpressionOfPlayerEn &&
-            (
-                currentActor?.present !== true ||
-                profile
-                    ?.firstImpressionPending ===
-                    true
-            );
+            !firstImpressionRef;
         if (
             needsFirstImpression &&
             !isValidFirstImpression(
@@ -837,8 +936,7 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
         if (
             actor
                 .firstImpressionOfPlayerEn &&
-            profile
-                ?.firstImpressionOfPlayerEn
+            firstImpressionRef
         ) {
             errors.push(
                 `下一场景人物 ${actor.id || '?'} 已有初见印象，不得覆盖。`,
@@ -973,6 +1071,72 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
             errors.push(`下一场景对白引用了不在场人物 ${segment.actorId || '?'}。`);
         }
     });
+    const openingExperienceValidation =
+        validateSceneOpeningExperienceSegments(
+            segments,
+        );
+    errors.push(
+        ...openingExperienceValidation
+            .errors,
+    );
+    const actorActivitySegments =
+        actorStates
+            .filter(actor =>
+                actor.present ===
+                    true &&
+                String(
+                    actor
+                        .currentActivityEn ||
+                    '',
+                ).trim())
+            .map(actor => {
+                const primaryActivityEn =
+                    String(
+                        actor
+                            .currentActivityEn,
+                    )
+                        .split(
+                            /[;,]/u,
+                            1,
+                        )[0]
+                        .trim();
+                return {
+                    type: 'narration',
+                    textEn:
+                        `${actor.id} is ${primaryActivityEn}`,
+                };
+            });
+    const narrationConsistency =
+        validateNarrationConsistency(
+            [
+                ...segments,
+                ...actorActivitySegments,
+            ],
+            worldState,
+            {
+                actors: actorStates,
+                clock:
+                    payload.nextClock,
+                mapId:
+                    nextScene.mapId,
+                roomId:
+                    nextScene.roomId,
+            },
+        );
+    errors.push(
+        ...narrationConsistency
+            .errors,
+    );
+    const historicalClaimValidation =
+        validateHistoricalClaimProvenance(
+            segments,
+            options
+                .memoryActivationCapsules,
+        );
+    errors.push(
+        ...historicalClaimValidation
+            .errors,
+    );
     const followingIntent = validateNextSceneIntent(
         nextScene.followingSceneIntent,
         worldState,

@@ -19,6 +19,7 @@ export function createUiBindings(ports) {
         closeSpellPicker,
         collectModelSlots,
         createItemOperationDirective,
+        closeCalendar,
         deleteProfileEditor,
         getSelectedProfileForEditing,
         getSettings,
@@ -30,6 +31,7 @@ export function createUiBindings(ports) {
         insertAtCursor,
         isGameStarted,
         normalizeTranslationProvider,
+        openCalendar,
         openMovementPicker,
         openProfileEditor,
         openSceneTransitionDialog,
@@ -51,6 +53,7 @@ export function createUiBindings(ports) {
         saveSettingsDebounced,
         saveSetupDraft,
         selectCampaign,
+        setCalendarView,
         setAppScreen,
         setControlValue,
         setTranslationProvider,
@@ -63,6 +66,9 @@ export function createUiBindings(ports) {
         syncProfileEndpointVisibility,
         syncSettingsUi,
         testProfileConnection,
+        handleCalendarDialogClose,
+        handleCalendarKeyDown,
+        shiftCalendarMonth,
         updateAttributeTotal,
         updateCampaign,
         updateSceneDestinationStatus,
@@ -75,6 +81,7 @@ export function createUiBindings(ports) {
         profileEditorDialog,
         sceneTransitionDialog,
         sceneArchiveDialog,
+        calendarDialog,
         workspaceElement,
         setupForm,
     } = refs;
@@ -110,6 +117,37 @@ export function createUiBindings(ports) {
         listen(root.querySelector('#hpmud_open_settings'), 'click', () => {
             syncSettingsUi();
             settingsDialog.showModal();
+        });
+        listen(root.querySelector('#hpmud_calendar'), 'click',
+            () => openCalendar());
+        listen(root.querySelector('#hpmud_calendar_close'), 'click',
+            closeCalendar);
+        listen(root.querySelector('#hpmud_calendar_previous_month'), 'click',
+            () => shiftCalendarMonth(-1));
+        listen(root.querySelector('#hpmud_calendar_next_month'), 'click',
+            () => shiftCalendarMonth(1));
+        root.querySelectorAll('[data-calendar-view]').forEach(button => {
+            listen(button, 'click',
+                () => setCalendarView(button.dataset.calendarView, {
+                    focus: true,
+                }));
+        });
+        listen(calendarDialog, 'cancel', event => {
+            event.preventDefault();
+            closeCalendar();
+        });
+        listen(calendarDialog, 'close',
+            handleCalendarDialogClose);
+        listen(
+            calendarDialog,
+            'keydown',
+            handleCalendarKeyDown,
+            true,
+        );
+        listen(calendarDialog, 'click', event => {
+            if (event.target === calendarDialog) {
+                closeCalendar();
+            }
         });
         root.querySelectorAll(
             '[data-hpmud-translation-provider]',

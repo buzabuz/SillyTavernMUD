@@ -3,6 +3,13 @@ import {
     isItemOperationEvidenceGrounded,
     normalizeItem,
 } from './item-schema.js';
+import {
+    ACTOR_LIFE_STATUS_VALUES,
+} from './actor-context-schema.js';
+
+export {
+    ACTOR_LIFE_STATUS_VALUES,
+};
 
 export const ENTITY_STATE_VERSION = 2;
 export const OBSERVED_INVENTORY_VERSION = 1;
@@ -17,13 +24,6 @@ export const ITEM_CUSTODY_VALUES = Object.freeze([
     'stored',
     'consumed',
     'lost',
-]);
-export const ACTOR_LIFE_STATUS_VALUES = Object.freeze([
-    'alive',
-    'injured',
-    'incapacitated',
-    'missing',
-    'dead',
 ]);
 export const IMPORTANT_ITEM_PATTERN =
     /(?:\b(?:wand|key|letter|journal|diary|map|permit|token|ring|ribbon|glasses|spectacles|amulet|artifact|heirloom|keepsake|clue|autograph|signed parchment)\b|魔杖|钥匙|信件|日记|地图|许可证|信物|戒指|丝带|眼镜|护符|魔法物品|传家宝|纪念品|线索|签名|签名羊皮纸)/i;
@@ -712,41 +712,51 @@ export function createSceneItemStates(
         roomId = '',
     } = {},
 ) {
-    return (items || []).map((item, index) => {
-        const normalized =
+    return (items || [])
+        .map((item, index) =>
             normalizeInventoryItem(
                 item,
                 index,
                 { mapId, roomId },
-            );
-        const followsPlayer = [
-            'carried',
-            'equipped',
-        ].includes(normalized.custody) &&
-            normalized.holderId === 'player';
-        return {
-            id: normalized.id,
-            version:
-                normalized.version,
-            type:
-                normalized.type,
-            custody: normalized.custody,
-            ownerId: normalized.ownerId,
-            holderId:
-                normalized.holderId,
-            mapId: followsPlayer
-                ? mapId
-                : normalized.mapId,
-            roomId: followsPlayer
-                ? roomId
-                : normalized.roomId,
-            status: normalized.status,
-            state:
-                normalized.state,
-            isEquipped:
-                normalized.isEquipped,
-        };
-    });
+            ))
+        .filter(item =>
+            [
+                'whole',
+                'remains',
+            ].includes(
+                item.physicalForm,
+            ))
+        .map(normalized => {
+            const followsPlayer = [
+                'carried',
+                'equipped',
+            ].includes(normalized.custody) &&
+                normalized.holderId === 'player';
+            return {
+                id: normalized.id,
+                version:
+                    normalized.version,
+                type:
+                    normalized.type,
+                custody: normalized.custody,
+                ownerId: normalized.ownerId,
+                holderId:
+                    normalized.holderId,
+                mapId: followsPlayer
+                    ? mapId
+                    : normalized.mapId,
+                roomId: followsPlayer
+                    ? roomId
+                    : normalized.roomId,
+                status: normalized.status,
+                state:
+                    normalized.state,
+                physicalForm:
+                    normalized.physicalForm,
+                isEquipped:
+                    normalized.isEquipped,
+            };
+        });
 }
 
 export function normalizeActorLifeState(

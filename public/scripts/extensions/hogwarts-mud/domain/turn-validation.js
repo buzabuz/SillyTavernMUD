@@ -8,10 +8,8 @@ import {
     countTextWords,
     FIRST_IMPRESSION_MAX_WORDS,
     IMPRESSION_MAX_WORDS,
-    IMPRESSION_UPDATE_COOLDOWN_TURNS,
     isValidFirstImpression,
     isValidImpressionShorthand,
-    normalizeActorMemoryProfile,
 } from './actor-memory.js';
 
 import {
@@ -26,6 +24,13 @@ import {
 import {
     validateItemOperation,
 } from './item-reducer.js';
+import {
+    normalizeNpcIdentityObservation,
+} from './npc-identity-observation.js';
+import {
+    validateNarrationConsistency,
+} from './narrative-authority.js';
+
 import {
     normalizeSpellProposal,
 } from './spell-proposals.js';
@@ -43,10 +48,6 @@ import {
 } from './spatial-reconciliation.js';
 
 import {
-    memoryFingerprint,
-} from './stable-identity.js';
-
-import {
     validateActorPresenceResolution,
     validateItemUpdates,
     validateTemporaryActorEntrances,
@@ -59,6 +60,89 @@ import {
 import {
     validateSceneTemporalConsistency,
 } from './turn-time.js';
+
+function projectNarrativeActorAuthority(
+    payload,
+    worldState,
+) {
+    const actorsById =
+        new Map(
+            (
+                worldState.actors ||
+                []
+            ).map(actor => [
+                actor.id,
+                actor,
+            ]),
+        );
+    (
+        payload
+            .temporaryActorEntrances ||
+        []
+    ).forEach(actor =>
+        actorsById.set(
+            actor.id,
+            actor,
+        ));
+    (
+        payload.actorUpdates ||
+        []
+    ).forEach(update => {
+        actorsById.set(
+            update.id,
+            {
+                ...(
+                    actorsById.get(
+                        update.id,
+                    ) ||
+                    {}
+                ),
+                ...update,
+            },
+        );
+    });
+    const presentIds =
+        Array.isArray(
+            payload.actorPresence
+                ?.presentActorIdsAfterTurn,
+        )
+            ? new Set(
+                payload
+                    .actorPresence
+                    .presentActorIdsAfterTurn,
+            )
+            : null;
+    return [
+        ...actorsById.values(),
+    ].map(actor => ({
+        ...actor,
+        present:
+            presentIds
+                ? presentIds.has(
+                    actor.id,
+                )
+                : actor.present !==
+                    false,
+    }));
+}
+
+function getNarrativeMutableItemIds(
+    payload,
+) {
+    return [
+        ...(
+            payload.itemUpdates ||
+            []
+        ).map(update =>
+            update.id),
+        ...(
+            payload.itemOperations ||
+            []
+        ).map(operation =>
+            operation.itemId ||
+            operation.id),
+    ].filter(Boolean);
+}
 
 export function validateScenePerformance(
     payload,
@@ -115,16 +199,6 @@ export function validateScenePerformance(
                 ]),
         ],
     );
-    const actorProfiles = new Map(
-        (worldState.actorLibrary || [])
-            .map(actor => [
-                actor.id,
-                normalizeActorMemoryProfile(
-                    actor,
-                    presentActors.get(actor.id),
-                ),
-            ]),
-    );
     const publicEvent = String(payload.publicEventEn || '').trim();
     if (
         !narrativeFirst &&
@@ -160,8 +234,9 @@ export function validateScenePerformance(
     }
 
     const segments = Array.isArray(payload.segments) ? payload.segments : [];
-    if (segments.length < 1 || segments.length > 24) {
-        errors.push('现场表演必须包含 1–24 个分段。');
+    // 分段数量是 Prompt 质量目标，不是本地失败门槛；本地只拒绝空表演。
+    if (segments.length < 1) {
+        errors.push('现场表演至少要包含 1 个分段。');
     }
     segments.forEach(segment => {
         const text =
@@ -183,6 +258,29 @@ export function validateScenePerformance(
             errors.push(`现场对白引用了不存在的在场角色 ${segment.actorId || '?'}。`);
         }
     });
+    const narrationConsistency =
+        validateNarrationConsistency(
+            segments,
+            worldState,
+            {
+                actors:
+                    projectNarrativeActorAuthority(
+                        payload,
+                        worldState,
+                    ),
+                elapsedMinutes:
+                    budget
+                        ?.elapsedMinutes,
+                mutableItemIds:
+                    getNarrativeMutableItemIds(
+                        payload,
+                    ),
+            },
+        );
+    errors.push(
+        ...narrationConsistency
+            .errors,
+    );
     const temporalValidation =
         validateSceneTemporalConsistency(
             payload,
@@ -438,10 +536,11 @@ export function validateScenePerformance(
                     );
                 }
                 if (
-                    actorProfiles.get(
-                        update.id,
-                    )
-                        ?.firstImpressionOfPlayerEn
+                    worldState
+                        .actorMemoryIndex
+                        ?.byActorId
+                        ?.[update.id]
+                        ?.firstImpressionRef
                 ) {
                     errors.push(
                         `现场人物 ${update.id || '?'} 已有初见印象，不得覆盖。`,
@@ -509,46 +608,11 @@ export function validateScenePerformance(
                 const impression = String(
                     update.impressionOfPlayerEn || '',
                 ).trim();
-                const previous =
-                    actorProfiles.get(update.id);
-                const previousImpression =
-                    String(
-                        previous
-                            ?.impressionOfPlayerEn ||
-                        '',
-                    ).trim();
-                const turnsSinceUpdate =
-                    Math.max(
-                        0,
-                        Number(
-                            worldState.turn
-                                ?.count || 0,
-                        ) -
-                        Number(
-                            previous
-                                ?.impressionUpdatedTurn ||
-                            0,
-                        ),
-                    );
                 if (!isValidImpressionShorthand(
                     impression,
                 )) {
                     errors.push(
                         `现场人物 ${update.id || '?'} 的玩家印象必须是 1–${IMPRESSION_MAX_WORDS} 词的主观 shorthand，不能复述本轮动作。`,
-                    );
-                } else if (
-                    previousImpression &&
-                    memoryFingerprint(
-                        previousImpression,
-                    ) !==
-                        memoryFingerprint(
-                            impression,
-                        ) &&
-                    turnsSinceUpdate <
-                        IMPRESSION_UPDATE_COOLDOWN_TURNS
-                ) {
-                    errors.push(
-                        `现场人物 ${update.id || '?'} 的玩家印象过于频繁变化；普通证据至少间隔 ${IMPRESSION_UPDATE_COOLDOWN_TURNS} 回合。`,
                     );
                 }
             }
@@ -767,8 +831,9 @@ export function validateTurnTransaction(
         ...temporaryValidation.ids,
     ]);
     const segments = Array.isArray(transaction.segments) ? transaction.segments : [];
-    if (segments.length < 1 || segments.length > 24) {
-        errors.push('回合叙事必须包含 1–24 个分段。');
+    // 分段数量是 Prompt 质量目标，不是本地失败门槛；本地只拒绝空叙事。
+    if (segments.length < 1) {
+        errors.push('回合叙事至少要包含 1 个分段。');
     }
     segments.forEach(segment => {
         if (!['narration', 'dialogue'].includes(segment.type)) {
@@ -781,6 +846,105 @@ export function validateTurnTransaction(
             errors.push(`对白引用了不存在的角色 ${segment.actorId || '?'}。`);
         }
     });
+    const narrationConsistency =
+        validateNarrationConsistency(
+            segments,
+            worldState,
+            {
+                actors:
+                    projectNarrativeActorAuthority(
+                        transaction,
+                        worldState,
+                    ),
+                elapsedMinutes,
+                mutableItemIds:
+                    getNarrativeMutableItemIds(
+                        transaction,
+                    ),
+            },
+        );
+    errors.push(
+        ...narrationConsistency
+            .errors,
+    );
+    const narrationTexts =
+        segments
+            .filter(segment =>
+                segment.type ===
+                    'narration')
+            .map(segment =>
+                String(
+                    segment.textEn ||
+                    '',
+                ));
+    if (
+        transaction
+            .identityObservations !==
+            undefined &&
+        !Array.isArray(
+            transaction
+                .identityObservations,
+        )
+    ) {
+        errors.push(
+            'identityObservations 必须是数组。',
+        );
+    } else if (
+        (
+            transaction
+                .identityObservations ||
+            []
+        ).length > 16
+    ) {
+        errors.push(
+            'identityObservations 每回合最多 16 条。',
+        );
+    } else {
+        (
+            transaction
+                .identityObservations ||
+            []
+        ).forEach(
+            observation => {
+                const normalized =
+                    normalizeNpcIdentityObservation(
+                        observation,
+                    );
+                if (
+                    !normalized ||
+                    normalized.confidence <
+                        0.7
+                ) {
+                    errors.push(
+                        '人物身体观察无效或置信度不足。',
+                    );
+                    return;
+                }
+                if (
+                    !actorIds.has(
+                        normalized
+                            .actorId,
+                    )
+                ) {
+                    errors.push(
+                        `人物身体观察引用了不存在的角色 ${normalized.actorId}。`,
+                    );
+                }
+                if (
+                    !narrationTexts
+                        .some(text =>
+                            text.includes(
+                                normalized
+                                    .evidenceText,
+                            ))
+                ) {
+                    errors.push(
+                        `人物身体观察 ${normalized.actorId} 缺少叙事证据。`,
+                    );
+                }
+            },
+        );
+    }
     const inventoryNarrative = [
         transaction.publicEventEn,
         transaction.sceneProgression

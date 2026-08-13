@@ -1,0 +1,650 @@
+- role: document
+  name: SillyTavern
+  ref: root
+  children:
+    - role: generic
+      name: Hogwarts MUD
+      ref: e4
+    - role: button
+      name: 显示场景栏
+      ref: e5
+    - role: button
+      name: 日历
+      ref: e26
+    - role: button
+      name: 关系星图
+      ref: e6
+    - role: button
+      name: 专注
+      ref: e27
+    - role: button
+      name: 更多
+      ref: e7
+    - role: button
+      name: 打开角色状态
+      ref: e8
+      states: [collapsed]
+    - role: button
+      name: 收起场景栏
+      ref: e28
+    - role: button
+      name: 展开
+      ref: e29
+    - role: button
+      name: 展开世界地图
+      ref: e30
+    - role: button
+      name: 赫 赫敏·格兰杰 胖夫人肖像 · 她背着书包，朝肖像洞口走去，准备去吃晚饭。
+      ref: e31
+      states: [released]
+    - role: button
+      name: 罗 罗恩·韦斯莱 胖夫人肖像 · 从壁炉起身，向肖像洞口挪动以跟随赫敏去吃晚饭。
+      ref: e32
+      states: [released]
+    - role: button
+      name: 拉 拉文德·布朗 格兰芬多公共休息室 · 假装检查扶手椅的坐垫，以避开眼神接触。
+      ref: e33
+      states: [released]
+    - role: button
+      name: 哈 哈利·波特 格兰芬多公共休息室 · 和罗恩一起朝出口挪动，保持与蒂娜的安全距离。
+      ref: e34
+      states: [released]
+    - role: button
+      name: 当前地点人物 0
+      ref: e35
+    - role: generic
+      name: "当前场景现场记录：1991-09-02 · 13:05 课后，一年级新生们在格兰芬多公共休息室瘫倒在地，而蒂娜则在思考该如何修理哈利的羽毛笔。；1991-09-02 · 13:20 赫敏坚定地结束了关于被毁掉的羽毛笔的对话，随即启动了当晚的作业流程。；1991-09-02 · 13:35 赫敏强行关闭了修复消失物品的不可能请求，随即启程前往晚餐。"
+      ref: e36
+    - role: button
+      name: "变形术教室 12:45 · 变形术教室"
+      ref: e37
+    - role: button
+      name: "第一节魔咒课 11:20 · 魔咒课教室"
+      ref: e38
+    - role: button
+      name: "一年级新生宿舍的第一天早晨 10:05 · 魔咒课教室"
+      ref: e39
+    - role: button
+      name: "格兰芬多女生宿舍 — 安顿下来 02:50 · 格兰芬多女生宿舍 · 内部"
+      ref: e40
+    - role: button
+      name: "格兰芬多公共休息室 02:15 · 格兰芬多公共休息室"
+      ref: e41
+    - role: button
+      name: "入口大厅 01:16 · 礼堂"
+      ref: e42
+    - role: button
+      name: 加载更早场景 · 还剩 5
+      ref: e43
+    - role: button
+      name: EN
+      ref: e44
+    - role: button
+      name: 显示中文译文
+      ref: e45
+      states: [checked]
+    - role: button
+      name: 显示英文原文
+      ref: e46
+    - role: button
+      name: 重新翻译 · 本地 4B
+      ref: e47
+    - role: button
+      name: EN
+      ref: e48
+      nth: 1
+    - role: button
+      name: 显示中文译文
+      ref: e49
+      nth: 1
+      states: [checked]
+    - role: button
+      name: 显示英文原文
+      ref: e50
+      nth: 1
+    - role: button
+      name: 重新翻译 · 本地 4B
+      ref: e51
+      nth: 1
+    - role: button
+      name: EN
+      ref: e52
+      nth: 2
+    - role: button
+      name: 显示中文译文
+      ref: e53
+      nth: 2
+      states: [checked]
+    - role: button
+      name: 显示英文原文
+      ref: e54
+      nth: 2
+    - role: button
+      name: 重新翻译 · 本地 4B
+      ref: e55
+      nth: 2
+    - role: textbox
+      name: 写下你的行动、台词或想法
+      ref: e56
+      placeholder: 写下你的行动、台词或想法……
+    - role: button
+      name: 插入表达
+      ref: e57
+    - role: button
+      name: @ 对话
+      ref: e58
+    - role: button
+      name: → 移动
+      ref: e59
+      states: [collapsed]
+    - role: button
+      name: 咒语
+      ref: e60
+      states: [collapsed]
+    - role: button
+      name: ↶ 回滚上一轮
+      ref: e61
+    - role: button
+      name: ◆ 封存场景
+      ref: e62
+    - role: button
+      name: 主动判定
+      ref: e63
+    - role: button
+      name: 提交回合
+      ref: e64
+    - role: button
+      name: 关闭日历
+      ref: e96
+    - role: button
+      name: 上个月
+      ref: e97
+    - role: button
+      name: 下个月
+      ref: e98
+    - role: button
+      name: 1991 年 8 月 26 日 · 周一，0 项安排，0 个只读 Scene
+      ref: e169
+      states: [released]
+    - role: button
+      name: 1991 年 8 月 27 日 · 周二，0 项安排，0 个只读 Scene
+      ref: e170
+      states: [released]
+    - role: button
+      name: 1991 年 8 月 28 日 · 周三，0 项安排，0 个只读 Scene
+      ref: e171
+      states: [released]
+    - role: button
+      name: 1991 年 8 月 29 日 · 周四，0 项安排，0 个只读 Scene
+      ref: e172
+      states: [released]
+    - role: button
+      name: 1991 年 8 月 30 日 · 周五，0 项安排，0 个只读 Scene
+      ref: e173
+      states: [released]
+    - role: button
+      name: 1991 年 8 月 31 日 · 周六，0 项安排，0 个只读 Scene
+      ref: e174
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 1 日 · 周日，0 项安排，4 个只读 Scene
+      ref: e175
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 2 日 · 周一，2 项安排，5 个只读 Scene
+      ref: e176
+      states: [pressed, current]
+    - role: button
+      name: 1991 年 9 月 3 日 · 周二，1 项安排，0 个只读 Scene
+      ref: e177
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 4 日 · 周三，1 项安排，0 个只读 Scene
+      ref: e178
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 5 日 · 周四，1 项安排，0 个只读 Scene
+      ref: e179
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 6 日 · 周五，3 项安排，0 个只读 Scene
+      ref: e180
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 7 日 · 周六，1 项安排，0 个只读 Scene
+      ref: e181
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 8 日 · 周日，1 项安排，0 个只读 Scene
+      ref: e182
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 9 日 · 周一，2 项安排，0 个只读 Scene
+      ref: e183
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 10 日 · 周二，1 项安排，0 个只读 Scene
+      ref: e184
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 11 日 · 周三，1 项安排，0 个只读 Scene
+      ref: e185
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 12 日 · 周四，1 项安排，0 个只读 Scene
+      ref: e186
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 13 日 · 周五，1 项安排，0 个只读 Scene
+      ref: e187
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 14 日 · 周六，1 项安排，0 个只读 Scene
+      ref: e188
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 15 日 · 周日，1 项安排，0 个只读 Scene
+      ref: e189
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 16 日 · 周一，1 项安排，0 个只读 Scene
+      ref: e190
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 17 日 · 周二，1 项安排，0 个只读 Scene
+      ref: e191
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 18 日 · 周三，1 项安排，0 个只读 Scene
+      ref: e192
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 19 日 · 周四，1 项安排，0 个只读 Scene
+      ref: e193
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 20 日 · 周五，1 项安排，0 个只读 Scene
+      ref: e194
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 21 日 · 周六，1 项安排，0 个只读 Scene
+      ref: e195
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 22 日 · 周日，1 项安排，0 个只读 Scene
+      ref: e196
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 23 日 · 周一，1 项安排，0 个只读 Scene
+      ref: e197
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 24 日 · 周二，1 项安排，0 个只读 Scene
+      ref: e198
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 25 日 · 周三，1 项安排，0 个只读 Scene
+      ref: e199
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 26 日 · 周四，1 项安排，0 个只读 Scene
+      ref: e200
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 27 日 · 周五，1 项安排，0 个只读 Scene
+      ref: e201
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 28 日 · 周六，1 项安排，0 个只读 Scene
+      ref: e202
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 29 日 · 周日，1 项安排，0 个只读 Scene
+      ref: e203
+      states: [released]
+    - role: button
+      name: 1991 年 9 月 30 日 · 周一，1 项安排，0 个只读 Scene
+      ref: e204
+      states: [released]
+    - role: button
+      name: 1991 年 10 月 1 日 · 周二，1 项安排，0 个只读 Scene
+      ref: e205
+      states: [released]
+    - role: button
+      name: 1991 年 10 月 2 日 · 周三，1 项安排，0 个只读 Scene
+      ref: e206
+      states: [released]
+    - role: button
+      name: 1991 年 10 月 3 日 · 周四，1 项安排，0 个只读 Scene
+      ref: e207
+      states: [released]
+    - role: button
+      name: 1991 年 10 月 4 日 · 周五，1 项安排，0 个只读 Scene
+      ref: e208
+      states: [released]
+    - role: button
+      name: 1991 年 10 月 5 日 · 周六，1 项安排，0 个只读 Scene
+      ref: e209
+      states: [released]
+    - role: button
+      name: 1991 年 10 月 6 日 · 周日，1 项安排，0 个只读 Scene
+      ref: e210
+      states: [released]
+    - role: listbox
+      name: 1991 年 9 月 2 日 · 周一
+      ref: e141
+    - role: option
+      name: 蒂娜的魔法遗产与秘密 计划中 · 故事线
+      ref: e211
+    - role: option
+      name: 与赫敏的课后补习 计划中 · 事件
+      ref: e212
+    - role: option
+      name: "格兰芬多公共休息室 01:30 · 只读 Scene"
+      ref: e213
+    - role: option
+      name: "格兰芬多女生宿舍 — 安顿下来 02:20 · 只读 Scene"
+      ref: e214
+    - role: option
+      name: "一年级新生宿舍的第一天早晨 07:20 · 只读 Scene"
+      ref: e215
+    - role: option
+      name: "第一节魔咒课 10:20 · 只读 Scene"
+      ref: e216
+    - role: option
+      name: "变形术教室 11:30 · 只读 Scene"
+      ref: e217
+      states: [selected]
+    - role: button
+      name: ↑ 向上加载更早记录 · 还剩 3
+      ref: e218
+    - role: button
+      name: EN
+      ref: e219
+      nth: 3
+    - role: button
+      name: 显示中文译文
+      ref: e220
+      nth: 3
+      states: [checked]
+    - role: button
+      name: 显示英文原文
+      ref: e221
+      nth: 3
+    - role: button
+      name: 重新翻译 · 本地 4B
+      ref: e222
+      nth: 3
+    - role: button
+      name: 详情
+      ref: e223
+      states: [collapsed]
+    - role: button
+      name: EN
+      ref: e224
+      nth: 4
+    - role: button
+      name: 显示中文译文
+      ref: e225
+      nth: 4
+      states: [checked]
+    - role: button
+      name: 显示英文原文
+      ref: e226
+      nth: 4
+    - role: button
+      name: 重新翻译 · 本地 4B
+      ref: e227
+      nth: 4
+    - role: button
+      name: EN
+      ref: e228
+      nth: 5
+    - role: button
+      name: 显示中文译文
+      ref: e229
+      nth: 5
+      states: [checked]
+    - role: button
+      name: 显示英文原文
+      ref: e230
+      nth: 5
+    - role: button
+      name: 重新翻译 · 本地 4B
+      ref: e231
+      nth: 5
+    - role: button
+      name: 详情
+      ref: e232
+      nth: 1
+      states: [collapsed]
+    - role: button
+      name: EN
+      ref: e233
+      nth: 6
+    - role: button
+      name: 显示中文译文
+      ref: e234
+      nth: 6
+      states: [checked]
+    - role: button
+      name: 显示英文原文
+      ref: e235
+      nth: 6
+    - role: button
+      name: 重新翻译 · 本地 4B
+      ref: e236
+      nth: 6
+    - role: img
+      name: 霍格沃茨城堡 · 七楼 MUD 地图
+      ref: e65
+      name: 暂无其他已确认人物
+      ref: e66
+    - role: heading
+      name: 格兰芬多公共休息室
+      ref: e67
+      level: 2
+      name: 课后，一年级新生们在格兰芬多公共休息室瘫倒在地，而蒂娜则在思考该如何修理哈利的羽毛笔。
+      ref: e68
+      name: 不计入角色认知 · 不含剧透 · 编辑部拒绝承担玩家策略造成的家具损失
+      ref: e69
+      name: 亲爱的玩家，我们必须暂停一下，来欣赏你为第一次变形术课带来的绝对、无中生有之混乱。你甚至在坐下之前就因为误把副校长当成了宠物动物园，就损失了五个学院积分——这可是罕见的天赋。紧接着，你又用借来的钢笔，不顾赫敏·格兰杰——一个能精确到毫米地对齐羽毛笔的女孩——的尊严，还叫她‘Minmin’，这种行为简直就是在表达一种社会性死亡的渴望。不过，我们还是得把‘最创意的文具滥用’奖颁给你，因为你用的这个实验
+      ref: e70
+      name: 格兰芬多公共休息室为高耸的高地雾气压在塔楼窗户上时提供了一个温暖的避难所，不过此刻的住户看起来更像是第一次上课的幸存者，而非学生。拉文德·布朗坐在一个软塌塌的扶手椅上，用力地抓着袖子，试图驱散她早晨变形术课上残留的烧焦的黄铜痕迹。
+      ref: e71
+      name: 炉火旁，罗恩·韦斯莱正试图用一根弯折的别针给自己手上的小伤口做简单手术。他眯着眼盯着一根顽固的木刺，看起来对魔法教育的现实问题完全束手无策。他正对面，赫敏·格兰杰已经占用了最亮的台灯。她正疯狂地扩充笔记，翻动纸张时发出清脆的咔嗒声，显然完全无视蒂娜的存在。
+      ref: e72
+      name: 哈利·波特已经战略性地把自己摆放在离蒂娜最远的沙发位置上。他略微朝肖像洞口倾斜着坐，左手始终保持着一个防御姿态，靠近眼镜的位置。他手边明显没有任何书写工具；那支已销毁羽毛笔的残骸仍由蒂娜收着。他用警惕而疲惫的眼神看着蒂娜，仿佛一个在早餐前已经被要求签名的男孩。
+      ref: e73
+      name: 如果她真的那么渴望火柴，你大概会以为她不会给我们那些一盯着就劈裂的火柴。
+      ref: e74
+      name: 罗恩小声抱怨着，对着火堆说，最后从指节上抠出了一小片木屑。哈利没有回应这个抱怨；他只是把双臂抱得更紧，等着看蒂娜下一步会怎么做。
+      ref: e75
+      name: 那把软乎乎的扶手椅在赫敏·格兰杰身旁突然遭受猛烈撞击，蒂娜猛地扑向靠垫。赫敏瞬间僵住。她自己的钢笔在未完成的稿纸上停在半空，正上方是一段刚展开的纸张。她后退到远端扶手处，将肩膀抵在坐垫上，试图摆脱身体的紧贴。她那浓密的头发因静电愤怒而竖起，蒂娜急切地检查着她的脸和脖子，寻找不存在的魔法伤害。
+      ref: e76
+      name: 我完好无损。
+      ref: e77
+      name: 赫敏说话时语气过于精确且紧绷。她挥开蒂娜探询的手，随后锐利地盯着蒂娜此刻正试图修复的空无一物的空气。麦格教授在铃声响起前，已将烟熏的黄铜笔尖彻底消失，留下蒂娜手中只有残留的恐慌和一粒微小的煤烟。
+      ref: e78
+      name: 而我无法对不再占据现实层面的物体施放修复咒。你无法修复已被抹去的事物。
+      ref: e79
+      name: 在圆形房间的另一侧，罗恩·韦斯莱放弃了从掌心抠出那根顽固木刺的尝试。他发出一声干涩的笑声，勉强伪装成湿咳，然后靠在温暖的壁炉石上。而哈利·波特则坐在离壁炉最远的那张小桌旁，完全一动不动。他双手紧握着一杯南瓜汁，像盾牌一样护在胸前，同时刻意避开视线，生怕碰掉眼镜。
+      ref: e80
+      name: 如果你真的想把刚才炸掉的东西重新装回去，你得先给斯克里文斯霍特（Scrivenshaft）寄一只学校信鸽，才能安排邮局上门取件。
+      ref: e81
+      name: 赫敏继续冷酷地。她将厚重的《变形术入门指南》调整成一道小墙，隔开两人座位区域的两侧。她将钢笔重新浸入墨水瓶，姿态中透露出学术的专注。
+      ref: e82
+      name: 尽管我强烈建议你优先完成麦格教授布置的作业，而不是纠结于那些根本不存在的铜币。我打算在去大礼堂吃晚饭前先复习第二章。鉴于你今天在火柴比赛中的表现，你似乎需要补很多课。
+      ref: e83
+      name: 她手腕一抖，赫敏翻过一页。纸张的脆响，沉重的纸页发出的清脆声响，清晰地表明了道歉的时机已经结束，而晚自习作业的严格安排正式开始。
+      ref: e84
+      name: 赫敏手臂的持续颤抖让她钢笔在原本整洁的变形术作业上划出一道黑色的锯齿状沟壑。窗外，高地的雾气厚重而灰暗地压在玻璃上，但冷风却无法平息赫敏日益升高的怒气。她刚把墨水瓶完全移出溅水区域，蒂娜就开始在沙发垫子上扭动和蹦跳，导致古老的弹簧发出有节奏的抗议声。
+      ref: e85
+      name: 最后一次了，蒂娜，再没有能修补的东西了！
+      ref: e86
+      name: 她猛地一拽手臂，用力抚平皱巴巴的袖子，脸上因愤怒而泛红。
+      ref: e87
+      name: 修复咒语能修补破损的物件。它不会从虚无中创造物件。麦格教授抹去了哈利的羽毛笔残骸。它仅仅不再存在。你无法修复不存在的东西。
+      ref: e88
+      name: 在壁炉对面，拉文德接到了蒂娜夸张的眨眼。她从蒂娜那副恳求的表情，转向赫敏那浓密卷发中散发出的纯粹、噼啪作响的敌意。考虑到介入会带来可怕的社交风险，拉文德勉强地、抱歉地笑了笑，突然间对沙发的缝线产生了浓厚的兴趣。两把扶手椅之外，哈利始终稳稳地站在魔杖射程之外，一只手紧贴着他的眼镜。罗恩倚在温暖的壁炉石上，用着像期待下一次铜色爆炸般谨慎的兴趣，凝视着沙发。
+      ref: e89
+      name: 你绝对不可能背我的包。
+      ref: e90
+      name: 赫敏补充道，神情显得对这个提议完全惊恐。
+      ref: e91
+      name: 你大概能把它点着，或者不小心从窗户上掉下去。
+      ref: e92
+      name: 她猛地合上《初级变形术指南》。砰的一声巨响在圆形房间内回荡，瞬间绷紧的气氛被打破。
+      ref: e93
+      name: 如果你还在家具上滚来滚去像一只松散的布莱克球，我这就去礼堂吃晚饭。你可以来，也可以待在这里向地毯乞求魔法帮助。
+      ref: e94
+      name: 她将沉重的书包斜挎在肩上——确保完全避开蒂娜的范围——迈着坚定而正义的步伐朝肖像洞口走去。罗恩匆忙放下正在修理的木屑，站起身来，显然决定避开赫敏的怒火并确保一盘烤肉晚餐是优先事项。他推了推哈利，两个男孩开始朝门口挪动，留下那支被彻底毁坏的羽毛笔成为过去。
+      ref: e95
+    - role: heading
+      name: 日历
+      ref: e153
+      level: 2
+    - role: heading
+      name: 1991 年 9 月 2 日 · 周一
+      ref: e154
+      level: 3
+    - role: main
+      name: 安排或 Scene 预览
+      ref: e155
+    - role: heading
+      name: 变形术教室
+      ref: e237
+      level: 3
+      name: Transfiguration Classroom
+      ref: e238
+      name: 一年级新生格兰芬多们在混乱的课间后,冲进变形术教室,寻找座位,而一只虎斑猫正警觉地注视着教授的桌面。
+      ref: e239
+    - role: heading
+      name: 关联 Calendar 安排 · 0 项
+      ref: e240
+      level: 4
+      name: 这是旧档案派生历史，没有 Calendar 反向关系。
+      ref: e241
+      name: 只读预览直接从 sceneArchive 加载正文；不会写世界状态、调用模型或滚动主故事。
+      ref: e242
+      name: 变形术教室前方的黑板上，麦格教授的粉笔字迹密密麻麻。这是一行优雅而倾斜的草书，对视力不完美的人来说，几乎可以当作古代符文来解读。高耸的拱形窗户上，持续的雨声敲击声丝毫没有缓解教室的阴沉，粉笔字在一片模糊的灰雾中若隐若现。
+      ref: e243
+      name: 在第一根木头被施了魔法之前，格兰芬多就已损失了五分院分，他们正处在一种紧张而压抑的沉默中。周围只有铅笔的沙沙声、拉丁语咒语急促而低语的嗡嗡声，以及麦格的靴子在过道里有节奏地敲击声。
+      ref: e244
+      name: 蒂娜将脖子歪得像潜望镜一样，伸展过一排低垂的头颅，直到她看见哈利。他坐在书桌对面，紧握着自己的槲寄生魔杖，稳稳地横在未被搅动的火柴上，努力地想融入家具。
+      ref: e245
+      name: 当蒂娜低声请求他借来眼镜和文具时，哈利僵住了。
+      ref: e246
+      name: 他惊慌失措地回望着。左手指尖立刻飞到脸上，本能地碰了碰那副圆框眼镜的胶带缠绕的鼻梁，仿佛她会突然从过道另一侧扑过来，一把夺走眼镜。他绝对不敢让麦格副校长的注意力落到自己身上，尤其是在亲眼目睹那些把副校长当宠物动物园来对待的人所遭遇的后果之后。
+      ref: e247
+      name: 你想我的眼镜吗？
+      ref: e248
+      name: 他几乎默念出这些话，绿眸中满是惊慌。他猛地回头一瞥。麦格教授此刻正坐在第三排，严厉地纠正着一个 Ravenclaw 的手腕姿势，但那她转身的威胁感却异常强烈。
+      ref: e249
+      name: 从第一排，赫敏·格兰杰在座位上挪动了身子。她的长袍发出刺耳的声响，她微微侧头，用一记灼热而不满的视线直直地瞪着蒂娜。她自己的火柴棒精准地对准了桌面的纹理，显然并不欣赏这种不羁的社交行为。
+      ref: e250
+      name: 房间后方，罗恩·韦斯莱瘫坐得几乎与椅子平行，他警惕而着迷地注视着这场对峙，仿佛在计算蒂娜若直接用手抓走哈利眼睛后，爆炸的半径有多大。
+      ref: e251
+      name: 哈利在交叉火力中微微缩了缩身子。他将手指牢牢地按在眼镜框上。
+      ref: e252
+      name: 我同样无法在没有它们的情况下看到黑板。
+      ref: e253
+      name: 他几乎听不见地用一口气吐出回答。慌乱中寻找妥协，他将一支备用的黄铜笔推到桌边——这是他为避免被要求拿出眼镜而做的绝望和平提议。
+      ref: e254
+      name: 你可以用羽毛笔。不过……别喊。请。她就在那里。
+      ref: e255
+      name: 他将羽毛笔悬在木块边缘，险象环生，完全不愿伸出手臂跨越那道缝隙，以免招致麦格的怒火。他面前的火柴依然顽固地保持木质，哈利看起来仿佛恨不得把自己变成一根火柴，只为逃离这场对峙。
+      ref: e256
+      name: 一支装有黄铜笔尖的备用羽毛笔。
+      ref: e257
+      name: 主人 哈利·波特 · 持有人 Tina Zhang · 随 Tina Zhang · 完好
+      ref: e258
+      name: 哈利备用的粗钝黄铜笔尖抵在赫敏·格兰杰那身一丝不苟的礼服肩上。在教室里，所有人都已屏住呼吸以避免惹怒老师，这却是一次既个人又学术层面都令赫敏感到冒犯的物理侵入。
+      ref: e259
+      name: 赫敏以炸弹处置专家般急促精准的动作拨开钢笔。她的眼睛飞向教室前方，追踪着米勒娃·麦格在厚重橡木课桌间拐角时那令人毛骨悚然的翠绿格子裙的摆动。
+      ref: e260
+      name: 不要叫我‘Minmin’，别再晃来晃去那个东西了。你还没搞出最基本的变形术，就差点把某人的眼睛戳出来。
+      ref: e261
+      name: 她咬牙低语，浓密的头发似乎因愤怒而带电。她将教科书向左滑动一寸，以 barricade 自己的工作区，但蒂娜的恳求中透出的绝望，却触发了她纠正无知的强迫性冲动。她长叹一声，凑近了些，声音压得严严实实，确保麦格无法捕捉到。
+      ref: e262
+      name: 咒语是 Acufors，施法时需非常有意识地轻点魔杖，而非猛拍。木板上写着，施法前必须先在脑海中清晰想象针的金属特性。现在，请专注于你自己的那根针，让我集中注意力。
+      ref: e263
+      name: 接下来的十分钟里，教室里陷入了一种可悲的节奏：低语的咒语声和沮丧的叹息声此起彼伏。在第二排后面，罗恩·韦斯莱正用他的二手魔杖狠狠地戳着他的魔杖，却只在木头上留下了一根木刺。赫敏无视了她周围的日益增长的绝望。她挺直了肩膀，将藤蔓魔杖对准课桌上那根孤零零的木棍，眯起眼睛。她的手腕猛地向前一挥。
+      ref: e264
+      name: Acufors！
+      ref: e265
+      name: 赫敏的火柴木纹变得模糊。那根泛着红硫的火柴尖失去了颜色，硬成了暗淡的、划痕斑斑的银色。它还不是一把完美的缝衣针——缺少针眼，基部还残留着可疑的木质质地——但滚过桌面时发出清脆的金属声响。
+      ref: e266
+      name: 靴子清脆的咔嗒声停在他们身侧。麦格低头看着那根银色的拐杖。她脸上严肃的线条并未完全形成笑容，但先前对蒂娜那令人毛骨悚然的空洞眼神却依然存在。
+      ref: e267
+      name: 格兰杰小姐，开局非常有希望。格兰杰学院得一分。
+      ref: e268
+      name: 赫敏脸颊泛起一阵耀眼的胜利般的粉红，她正对着桌面的木纹微笑。麦格的目光则缓缓偏移，最终完全落在蒂娜身上。教授瞥了眼旁边那支完全未变形的木制火柴，以及借来的黄铜笔，挑起一道期待的眉毛，等待着。
+      ref: e269
+      name: 厚重的高地雾气压在变形术教室拱形窗户上，将一年级新生们排成的几排染成一片湿漉漉的灰蒙蒙的光。蒂娜第一次尝试作业时结果惨不忍睹。她将魔杖指向火柴，大声命令道。木头甚至没有颤动，静止在桌面上，带着一种顽固的惯性，仿佛它知道施法者根本无法正确读出黑板。
+      ref: e270
+      name: 经过仔细判断，火柴显然有错，蒂娜放弃了它。她的目光飘向那支黄铜笔——哈利曾如此慷慨地提供给她以保持安静的那支。此时，哈利正弯着腰伏在自己的书桌上，一只手紧握着眼镜，另一只手则急切地试图将火柴变成针，他迫切地想要保持隐形。
+      ref: e271
+      name: 蒂娜检查了房间。麦格教授在两排过道外，她翠绿的长袍扫过石板地，俯身监督纳威·隆巴顿。海岸一片平静。
+      ref: e272
+      name: 蒂娜将魔杖直接对准借来的黄铜笔，完全无视既定课程，测试一个理论。
+      ref: e273
+      name: 等等，别—
+      ref: e274
+      name: 哈利猛地转过头，圆框眼镜后的眼睛骤然睁大。他伸手去夺回自己的东西，但魔法已经撞上了。那个未登记的咒语正击中黄铜鹅毛笔，而变形术失败的残留能量正试图自行解决。
+      ref: e275
+      name: 伴随着一声尖锐、震耳欲聋的裂响，铜笔尖从中断开。羽毛中喷出一团浓密、膨胀的闪亮铜色烟雾，发出类似漏气蒸汽管的嘶嘶声。哈利猛地将椅子往后一推，椅子翻倒，重重地撞在地板上发出哗啦声。他向后退缩，拖着长袍，避开那迅速在桌面边缘镀上一层细密金属光泽的墨雾。
+      ref: e276
+      name: 两排往后，罗恩双手捂住嘴巴。他肩膀剧烈颤抖着，看着那闪烁的雾气飘过走廊，完全破坏了这堂课庄重的氛围。拉文德轻声尖叫着，躲到桌下，急切地挥动着手，把那 brass-coloured dust 从她粉红色的发带旁赶开。
+      ref: e277
+      name: 赫敏，她早已将魔杖尖端稳稳地转成银色，对逼近的雾气挥了挥手，神情十分不悦。
+      ref: e278
+      name: 这根本不是真正的拉丁词根！你随便把音节拼凑在一起就指望能行？
+      ref: e279
+      name: 麦格的靴子有节奏的敲击声戛然而止。那突然的寂静比爆炸本身更令人恐惧。
+      ref: e280
+      name: 房间外浓重的雾气此刻正与室内闪烁的黄铜雾气争锋。蒂娜的桌面上，那支破败的羽毛笔在微微震动，如同垂死的甲虫般喷吐着最后的魔法烟雾。雾气散开，露出麦格，她的神情危险地平静。
+      ref: e281
+      name: 张小姐，对这个实用练习的解读非常有趣。不过我得坦白，我漏掉了我们在课程大纲中放弃火柴、将同学们的文具转化为局部天气系统的那一页。
+      ref: e282
+      name: 哈利拿起椅子，擦掉额头上的一块黄铜烟灰。他看起来极其沮丧。
+      ref: e283
+      name: 教授，那支是备用的钢笔。
+      ref: e284
+      name: 我明白，波特先生。而且我毫不怀疑张小姐会接替它。
+      ref: e285
+      name: 麦格抬起魔杖。她懒洋洋地一甩，那支燃烧殆尽的羽毛笔的残骸瞬间消失，只在桌面上留下了一道焦痕。
+      ref: e286
+      name: 格兰芬多学院再扣五分，因为你鲁莽地施展了咒语。如果你连指定的咒语都驾驭不了，我建议你别再自创咒语了。
+      ref: e287
+      name: "Observed narrative evidence: Tina caused a magical backfire that destroyed Harry's quill and drew a harsh reprimand from McGonagall."
+      ref: e288
+      name: 蒂娜用手指刮过桌面上那道暗红色的灼烧痕迹——就在几秒钟前还放着黄铜笔的桌面。她只摸到了一撮细小的煤灰，小心翼翼地比划着将它藏进袍子里。哈利看着她这出虚张声势的清洁动作，眼神里满是深不见底的怀疑。他死死攥住左手指套，显然不愿让自己的唯一一副眼镜成为下一次实验的牺牲品。
+      ref: e289
+      name: 你无法修复它。它已经消失了。——请，别再朝我挥动魔杖了。
+      ref: e290
+      name: 他尽可能远离她，靠在沉重的木制长椅上，将自己那根倔强的木制火柴从她的直接爆炸半径外拖了出来。
+      ref: e291
+      name: 接下来的十分钟里，教室里陷入了一种焦躁的敲击声和低声咒语的节奏。窗外阴冷的高地雾气丝毫没有改善麦格教授粉笔板书的可见性，蒂娜徒劳地眯着眼睛试图看清。她放弃了对这堂课学术部分的专注，佝偻着身子翻开了教科书，将不满转嫁到书本上。
+      ref: e292
+      name: 她不是谁的奶奶，蒂娜。她是副校长。
+      ref: e293
+      name: 拉文德暂停了自己疯狂地戳着火柴的动作，一手护住嘴巴，凑近了。
+      ref: e294
+      name: 你不能随便摸老师，即使他们有毛。这肯定违反了规则。她只扣了五分，真让人惊讶。
+      ref: e295
+      name: 两排后面，罗恩·韦斯莱发出一声听起来颇为可疑的闷笑，随即急促地咳嗽起来，因为他的书桌上方突然投下了一道阴影。
+      ref: e296
+      name: 赫敏·格兰杰坐在蒂娜和拉文德正前方，微微侧身，投出了一道冰冷的视线。她自己的火柴棍此刻已泛出银光，尖端锐利无比。
+      ref: e297
+      name: 如果你俩花在练习魔杖动作上的时间，比你们现在说的还多，说不定真能在这铃声响起前完成一次变形术。
+      ref: e298
+      name: 一声清脆的咳嗽声划破潮湿的空气，瞬间打断了赫敏的训斥。麦格教授停下踱步，直直地盯着他们那堆书桌。教授自己看起来完全有能力一跃而下。
+      ref: e299
+      name: 不计入角色认知 · 不含剧透 · 编辑部拒绝承担玩家策略造成的家具损失
+      ref: e300
+      name: 亲爱的玩家，我们必须暂停一下，来欣赏你为第一次变形术课带来的绝对、无中生有之混乱。你甚至在坐下之前就因为误把副校长当成了宠物动物园，就损失了五个学院积分——这可是罕见的天赋。紧接着，你又用借来的钢笔，不顾赫敏·格兰杰——一个能精确到毫米地对齐羽毛笔的女孩——的尊严，还叫她‘Minmin’，这种行为简直就是在表达一种社会性死亡的渴望。不过，我们还是得把‘最创意的文具滥用’奖颁给你，因为你用的这个实验
+      ref: e301
+    - role: status
+      name: 1991 年 9 月 2 日 · 周一 已打开。
+      ref: e168

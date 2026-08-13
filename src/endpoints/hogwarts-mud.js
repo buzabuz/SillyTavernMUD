@@ -1,9 +1,15 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
 import express from 'express';
-import { sync as writeFileAtomicSync } from 'write-file-atomic';
 
+import {
+    KNOWLEDGE_CATEGORIES,
+    KNOWLEDGE_NODE_TYPES,
+} from '../../public/scripts/extensions/hogwarts-mud/domain/knowledge-projector-v2.js';
+import {
+    createConfiguredKnowledgeService,
+} from '../hogwarts-mud/knowledge-backend-factory.js';
+import {
+    StaleKnowledgeRevisionError,
+} from '../hogwarts-mud/knowledge-vector-backend.js';
 import {
     adjudicateTurn,
     getLocalSemanticStatus,
@@ -11,259 +17,778 @@ import {
     translateText,
 } from '../hogwarts-mud/local-semantic-adjudicator.js';
 import {
+    proposeTurnAppraisals,
+} from '../hogwarts-mud/local-appraisal-proposer.js';
+import {
     runSocialDirectorGraph,
     validateCommittedEventWitnessInput,
 } from '../hogwarts-mud/social-director-graph.js';
 import { runTurnSettlementGraph } from '../hogwarts-mud/turn-settlement-graph.js';
-import { clientRelativePath, isPathUnderParent } from '../util.js';
+import { clientRelativePath } from '../util.js';
 
 export const router = express.Router();
 
-const KNOWLEDGE_CATEGORIES = new Set(['actors', 'scenes', 'events', 'clues']);
-const MAX_RECORDS_PER_SYNC = 200;
-const MAX_TEXT_LENGTH = 100_000;
+const KNOWLEDGE_CATEGORY_SET =
+    new Set(KNOWLEDGE_CATEGORIES);
+const KNOWLEDGE_NODE_TYPE_SET =
+    new Set(KNOWLEDGE_NODE_TYPES);
+const MAX_RECORDS_PER_SYNC = 2_000;
+const MAX_KNOWLEDGE_BODY_LENGTH =
+    8_000_000;
 
-function normalizeId(value, fallback = 'unknown') {
-    const normalized = String(value || '')
-        .normalize('NFKD')
-        .replace(/[^\w.-]+/g, '_')
-        .replace(/^[_\-.]+|[_\-.]+$/g, '')
-        .slice(0, 96);
-    return normalized || fallback;
+function getKnowledgeService(request) {
+    return createConfiguredKnowledgeService({
+        filesRoot:
+            request.user
+                .directories.files,
+    });
 }
 
-function getTimelineRoot(request, timelineId) {
-    const knowledgeRoot = path.join(request.user.directories.files, 'hogwarts-mud');
-    const timelineRoot = path.join(knowledgeRoot, normalizeId(timelineId, 'timeline'));
-    if (!isPathUnderParent(knowledgeRoot, timelineRoot)) {
-        throw new Error('Invalid Hogwarts MUD timeline path.');
-    }
-    return timelineRoot;
+function isRevision(value) {
+    return Number.isSafeInteger(
+        Number(value),
+    ) &&
+        Number(value) >= 0;
 }
 
-function normalizeRecord(record) {
-    const category = String(record?.category || '');
-    if (!KNOWLEDGE_CATEGORIES.has(category)) {
-        throw new Error(`Invalid Hogwarts MUD knowledge category: ${category}`);
-    }
-    const id = normalizeId(record.id);
-    const text = String(record.text || '').slice(0, MAX_TEXT_LENGTH);
-    if (!text.trim()) {
-        throw new Error(`Knowledge record ${category}/${id} has no retrieval text.`);
-    }
+function validateKnowledgeEnvelope(
+    body,
+    {
+        requireRecords = false,
+    } = {},
+) {
+    const records =
+        Array.isArray(body?.records)
+            ? body.records
+            : [];
+    return Boolean(
+        body &&
+        typeof body === 'object' &&
+        !Array.isArray(body) &&
+        String(
+            body.timelineId ||
+            '',
+        ).trim() &&
+        String(
+            body.timelineEpoch ||
+            '',
+        ).trim() &&
+        isRevision(
+            body.stateRevision,
+        ) &&
+        (
+            !requireRecords ||
+            Array.isArray(body.records)
+        ) &&
+        records.length <=
+            MAX_RECORDS_PER_SYNC &&
+        JSON.stringify(body).length <=
+            MAX_KNOWLEDGE_BODY_LENGTH,
+    );
+}
+
+function buildKnowledgeFilters(body) {
+    const categories =
+        Array.isArray(body.categories)
+            ? body.categories
+                .filter(category =>
+                    KNOWLEDGE_CATEGORY_SET
+                        .has(category))
+            : [
+                ...KNOWLEDGE_CATEGORIES,
+            ];
+    const nodeTypes =
+        Array.isArray(body.nodeTypes)
+            ? body.nodeTypes
+                .filter(nodeType =>
+                    KNOWLEDGE_NODE_TYPE_SET
+                        .has(nodeType))
+            : [];
+    const actorIds =
+        Array.isArray(
+            body.audience?.actorIds,
+        )
+            ? body.audience
+                .actorIds
+                .slice(0, 64)
+                .map(actorId =>
+                    String(actorId))
+            : [];
+    const role =
+        ['player', 'actor', 'author']
+            .includes(
+                body.audience?.role,
+            )
+            ? body.audience.role
+            : 'player';
     return {
-        version: 1,
-        category,
-        id,
-        title: String(record.title || id).slice(0, 300),
-        text,
-        entityIds: Array.isArray(record.entityIds)
-            ? [...new Set(record.entityIds.map(value => normalizeId(value)).filter(Boolean))].slice(0, 64)
-            : [],
-        tags: Array.isArray(record.tags)
-            ? [...new Set(record.tags.map(value => normalizeId(value)).filter(Boolean))].slice(0, 64)
-            : [],
-        updatedAt: String(record.updatedAt || new Date().toISOString()),
-        data: record.data && typeof record.data === 'object' ? record.data : {},
+        timelineEpoch:
+            String(
+                body.timelineEpoch,
+            ),
+        stateRevision:
+            Number(
+                body.stateRevision,
+            ),
+        audience: {
+            actorIds,
+            role,
+            includeLocked:
+                Boolean(
+                    body.audience
+                        ?.includeLocked,
+                ),
+        },
+        clock:
+            String(
+                body.clock ||
+                '',
+            ).slice(0, 100),
+        nodeTypes,
+        categories,
+        supersededSourceRefs:
+            Array.isArray(
+                body
+                    .supersededSourceRefs,
+            )
+                ? body
+                    .supersededSourceRefs
+                    .slice(0, 500)
+                : [],
     };
 }
 
-function readIndex(timelineRoot) {
-    const indexPath = path.join(timelineRoot, 'index.json');
-    if (!fs.existsSync(indexPath)) return { version: 1, records: {} };
-    try {
-        const parsed = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
-        return parsed && typeof parsed === 'object'
-            ? { version: 1, records: parsed.records || {} }
-            : { version: 1, records: {} };
-    } catch {
-        return { version: 1, records: {} };
-    }
+function projectKnowledgeSourceRefs(
+    sourceRefs,
+) {
+    return (
+        Array.isArray(sourceRefs)
+            ? sourceRefs
+            : []
+    )
+        .slice(0, 32)
+        .map(sourceRef => ({
+            type:
+                String(
+                    sourceRef?.type ||
+                    '',
+                ).slice(0, 64),
+            id:
+                String(
+                    sourceRef?.id ||
+                    '',
+                ).slice(0, 128),
+        }))
+        .filter(sourceRef =>
+            sourceRef.type &&
+            sourceRef.id);
 }
 
-function readRecord(timelineRoot, entry) {
-    const recordPath = path.join(timelineRoot, entry.category, `${entry.id}.json`);
-    if (!isPathUnderParent(timelineRoot, recordPath) || !fs.existsSync(recordPath)) return null;
-    try {
-        return JSON.parse(fs.readFileSync(recordPath, 'utf8'));
-    } catch {
-        return null;
-    }
-}
-
-router.post('/knowledge/sync', (request, response) => {
-    try {
-        const records = Array.isArray(request.body.records) ? request.body.records : [];
-        if (!request.body.timelineId || records.length > MAX_RECORDS_PER_SYNC) {
-            return response.sendStatus(400);
-        }
-        const timelineRoot = getTimelineRoot(request, request.body.timelineId);
-        fs.mkdirSync(timelineRoot, { recursive: true });
-        const index = readIndex(timelineRoot);
-        const normalizedRecords =
-            records.map(
-                normalizeRecord,
-            );
-        const incomingKeys =
-            new Set(
-                normalizedRecords.map(
-                    record =>
-                        `${record.category}:${record.id}`,
-                ),
-            );
-        const saved = [];
-
-        for (const record of normalizedRecords) {
-            const categoryRoot = path.join(timelineRoot, record.category);
-            fs.mkdirSync(categoryRoot, { recursive: true });
-            const recordPath = path.join(categoryRoot, `${record.id}.json`);
-            if (!isPathUnderParent(categoryRoot, recordPath)) {
-                throw new Error('Invalid Hogwarts MUD record path.');
-            }
-            writeFileAtomicSync(recordPath, JSON.stringify(record, null, 2), 'utf8');
-            const key = `${record.category}:${record.id}`;
-            index.records[key] = {
-                category: record.category,
-                id: record.id,
-                title: record.title,
-                entityIds: record.entityIds,
-                tags: record.tags,
-                updatedAt: record.updatedAt,
-                path: clientRelativePath(request.user.directories.root, recordPath),
-            };
-            saved.push(index.records[key]);
-        }
-
-        const removed = [];
-        if (request.body.replace === true) {
-            for (const [key, entry] of Object.entries(index.records)) {
-                if (incomingKeys.has(key)) {
-                    continue;
-                }
-                const category =
+function projectKnowledgeSearchResult(
+    result,
+) {
+    const diagnostics =
+        result?.diagnostics || {};
+    const backendQueries =
+        (
+            diagnostics
+                .backendQueries ||
+            (
+                Array.isArray(
+                    diagnostics.backend,
+                )
+                    ? diagnostics.backend
+                    : []
+            )
+        )
+            .slice(0, 8)
+            .map(entry => ({
+                subqueryId:
                     String(
-                        entry?.category ||
+                        entry
+                            ?.subqueryId ||
                         '',
-                    );
-                const id =
-                    normalizeId(
-                        entry?.id,
-                    );
-                if (
-                    KNOWLEDGE_CATEGORIES
-                        .has(category)
-                ) {
-                    const categoryRoot =
-                        path.join(
-                            timelineRoot,
-                            category,
-                        );
-                    const recordPath =
-                        path.join(
-                            categoryRoot,
-                            `${id}.json`,
-                        );
-                    if (
-                        isPathUnderParent(
-                            categoryRoot,
-                            recordPath,
-                        )
-                    ) {
-                        fs.rmSync(
-                            recordPath,
-                            {
-                                force: true,
-                            },
-                        );
-                    }
-                    removed.push({
-                        category,
-                        id,
-                    });
-                }
-                delete index.records[key];
-            }
-        }
-
-        writeFileAtomicSync(
-            path.join(timelineRoot, 'index.json'),
-            JSON.stringify(index, null, 2),
-            'utf8',
+                    ),
+                backend:
+                    String(
+                        entry?.backend ||
+                        '',
+                    ),
+                preferredBackend:
+                    String(
+                        entry
+                            ?.preferredBackend ||
+                        '',
+                    ),
+                degraded:
+                    entry?.degraded ===
+                    true,
+                fallback:
+                    String(
+                        entry?.fallback ||
+                        '',
+                    ),
+            }));
+    const records =
+        (
+            diagnostics.records ||
+            diagnostics.sourcePaths ||
+            []
+        )
+            .slice(0, 64)
+            .map(entry => ({
+                recordId:
+                    String(
+                        entry?.recordId ||
+                        '',
+                    ),
+                hop:
+                    Math.min(
+                        2,
+                        Math.max(
+                            0,
+                            Number(
+                                entry?.hop,
+                            ) || 0,
+                        ),
+                    ),
+                sourceRefs:
+                    projectKnowledgeSourceRefs(
+                        entry?.sourceRefs,
+                    ),
+            }))
+            .filter(entry =>
+                entry.recordId);
+    const suppression =
+        (
+            diagnostics.suppression ||
+            diagnostics.suppressed ||
+            diagnostics
+                .hydrationSuppressed ||
+            []
+        )
+            .slice(0, 128)
+            .map(entry => ({
+                recordId:
+                    String(
+                        entry?.recordId ||
+                        '',
+                    ),
+                reason:
+                    String(
+                        entry?.reason ||
+                        '',
+                    ).slice(0, 128),
+            }))
+            .filter(entry =>
+                entry.recordId &&
+                entry.reason);
+    const plannerSubqueries =
+        (
+            diagnostics
+                .plannerSubqueries ||
+            []
+        )
+            .slice(0, 4)
+            .map(subquery => ({
+                id:
+                    String(
+                        subquery?.id ||
+                        '',
+                    ),
+                intent:
+                    String(
+                        subquery?.intent ||
+                        '',
+                    ),
+                nodeTypes:
+                    (
+                        subquery
+                            ?.nodeTypes ||
+                        []
+                    )
+                        .slice(0, 8)
+                        .map(String),
+            }));
+    const backend =
+        String(
+            Array.isArray(
+                diagnostics.backend,
+            )
+                ? backendQueries[0]
+                    ?.backend ||
+                    'unknown'
+                : diagnostics.backend ||
+                    'unknown',
         );
-        return response.json({
-            root: clientRelativePath(request.user.directories.root, timelineRoot),
-            records: saved,
-            removed,
-        });
-    } catch (error) {
-        console.error('[Hogwarts MUD] Knowledge sync failed', error);
-        return response.sendStatus(500);
-    }
-});
-
-router.post('/knowledge/list', (request, response) => {
-    try {
-        if (!request.body.timelineId) return response.sendStatus(400);
-        const timelineRoot = getTimelineRoot(request, request.body.timelineId);
-        const categories = new Set(
-            Array.isArray(request.body.categories)
-                ? request.body.categories.filter(category => KNOWLEDGE_CATEGORIES.has(category))
-                : KNOWLEDGE_CATEGORIES,
+    const preferredBackend =
+        String(
+            diagnostics
+                .preferredBackend ||
+            backendQueries.find(entry =>
+                entry.preferredBackend)
+                ?.preferredBackend ||
+            'none',
         );
-        const index = readIndex(timelineRoot);
-        const records = Object.values(index.records)
-            .filter(entry => categories.has(entry.category))
-            .map(entry => readRecord(timelineRoot, entry))
-            .filter(Boolean);
-        return response.json({ records });
-    } catch (error) {
-        console.error('[Hogwarts MUD] Knowledge list failed', error);
-        return response.sendStatus(500);
-    }
-});
-
-router.post('/knowledge/search', (request, response) => {
-    try {
-        if (!request.body.timelineId) return response.sendStatus(400);
-        const timelineRoot = getTimelineRoot(request, request.body.timelineId);
-        const index = readIndex(timelineRoot);
-        const query = String(request.body.query || '').trim().toLocaleLowerCase();
-        const queryTokens = new Set(query.split(/[^\p{L}\p{N}_-]+/u).filter(token => token.length > 1));
-        const entityIds = new Set(
-            Array.isArray(request.body.entityIds)
-                ? request.body.entityIds.map(value => normalizeId(value))
+    return {
+        records:
+            Array.isArray(
+                result?.records,
+            )
+                ? result.records
                 : [],
-        );
-        const categories = new Set(
-            Array.isArray(request.body.categories)
-                ? request.body.categories.filter(category => KNOWLEDGE_CATEGORIES.has(category))
-                : KNOWLEDGE_CATEGORIES,
-        );
-        const limit = Math.min(20, Math.max(1, Number(request.body.limit) || 8));
-        const records = Object.values(index.records)
-            .filter(entry => categories.has(entry.category))
-            .map(entry => readRecord(timelineRoot, entry))
-            .filter(Boolean)
-            .map(record => {
-                let score = 0;
-                if (entityIds.has(record.id)) score += 120;
-                score += record.entityIds.filter(id => entityIds.has(id)).length * 80;
-                const haystack = `${record.id} ${record.title} ${record.text}`.toLocaleLowerCase();
-                for (const token of queryTokens) {
-                    if (haystack.includes(token)) score += token === record.id ? 40 : 5;
-                }
-                return { record, score };
-            })
-            .filter(item => item.score > 0)
-            .sort((left, right) => right.score - left.score)
-            .slice(0, limit)
-            .map(item => item.record);
-        return response.json({ records });
-    } catch (error) {
-        console.error('[Hogwarts MUD] Knowledge search failed', error);
-        return response.sendStatus(500);
+        activationCapsules:
+            result
+                ?.activationCapsules,
+        diagnostics: {
+            planner: {
+                source:
+                    String(
+                        result?.plan
+                            ?.source ||
+                        diagnostics
+                            ?.planner
+                            ?.planner ||
+                        'deterministic',
+                    ),
+                fallback:
+                    String(
+                        diagnostics
+                            ?.planner
+                            ?.fallback ||
+                        '',
+                    ),
+            },
+            plannerSubqueries,
+            backend,
+            preferredBackend,
+            backendQueries,
+            degraded:
+                diagnostics.degraded ===
+                true,
+            records,
+            sourcePaths: records,
+            selectedRecordIds:
+                records.map(entry =>
+                    entry.recordId),
+            suppression,
+            suppressed: suppression,
+            hydrationSuppressed:
+                suppression,
+            graph: {
+                recordCount:
+                    Math.max(
+                        0,
+                        Number(
+                            diagnostics
+                                ?.graph
+                                ?.recordCount,
+                        ) || 0,
+                    ),
+                edgeCount:
+                    Math.max(
+                        0,
+                        Number(
+                            diagnostics
+                                ?.graph
+                                ?.edgeCount,
+                        ) || 0,
+                    ),
+                maximumHops: 2,
+                fallback:
+                    String(
+                        diagnostics
+                            ?.graph
+                            ?.fallback ||
+                        '',
+                    ),
+            },
+        },
+    };
+}
+
+function sendKnowledgeError(
+    response,
+    error,
+    operation,
+) {
+    if (
+        error instanceof
+            StaleKnowledgeRevisionError ||
+        error?.code ===
+            'STALE_KNOWLEDGE_REVISION'
+    ) {
+        return response
+            .status(409)
+            .json({
+                error:
+                    'stale_revision',
+                currentRevision:
+                    error.currentRevision,
+                receivedRevision:
+                    error.receivedRevision,
+            });
     }
-});
+    if (
+        error instanceof TypeError
+    ) {
+        return response
+            .status(400)
+            .json({
+                error:
+                    String(
+                        error.message,
+                    ).slice(0, 1_000),
+            });
+    }
+    console.error(
+        `[Hogwarts MUD] Knowledge ${operation} failed`,
+        error,
+    );
+    return response
+        .status(500)
+        .json({
+            error:
+                'knowledge_operation_failed',
+        });
+}
+
+router.post(
+    '/knowledge/health',
+    async (request, response) => {
+        try {
+            if (
+                !request.body
+                    ?.timelineId
+            ) {
+                return response
+                    .sendStatus(400);
+            }
+            const result =
+                await getKnowledgeService(
+                    request,
+                ).health({
+                    timelineId:
+                        String(
+                            request.body
+                                .timelineId,
+                        ),
+                });
+            return response.json(
+                result,
+            );
+        } catch (error) {
+            return sendKnowledgeError(
+                response,
+                error,
+                'health',
+            );
+        }
+    },
+);
+
+router.post(
+    '/knowledge/sync',
+    async (request, response) => {
+        if (
+            !validateKnowledgeEnvelope(
+                request.body,
+                {
+                    requireRecords:
+                        true,
+                },
+            )
+        ) {
+            return response
+                .sendStatus(400);
+        }
+        try {
+            const input = {
+                timelineId:
+                    String(
+                        request.body
+                            .timelineId,
+                    ),
+                timelineEpoch:
+                    String(
+                        request.body
+                            .timelineEpoch,
+                    ),
+                stateRevision:
+                    Number(
+                        request.body
+                            .stateRevision,
+                    ),
+                records:
+                    request.body
+                        .records,
+                replace:
+                    request.body
+                        .replace === true,
+            };
+            const result =
+                await getKnowledgeService(
+                    request,
+                ).sync(input);
+            return response.json({
+                root:
+                    clientRelativePath(
+                        request.user
+                            .directories
+                            .root,
+                        result.exact
+                            .root,
+                    ),
+                records:
+                    result.exact
+                        .records,
+                removed:
+                    result.exact
+                        .removed ||
+                    [],
+                diagnostics:
+                    result
+                        .diagnostics,
+            });
+        } catch (error) {
+            return sendKnowledgeError(
+                response,
+                error,
+                'sync',
+            );
+        }
+    },
+);
+
+router.post(
+    '/knowledge/rebuild',
+    async (request, response) => {
+        if (
+            !validateKnowledgeEnvelope(
+                request.body,
+                {
+                    requireRecords:
+                        true,
+                },
+            )
+        ) {
+            return response
+                .sendStatus(400);
+        }
+        try {
+            const result =
+                await getKnowledgeService(
+                    request,
+                ).rebuild({
+                    timelineId:
+                        String(
+                            request.body
+                                .timelineId,
+                        ),
+                    timelineEpoch:
+                        String(
+                            request.body
+                                .timelineEpoch,
+                        ),
+                    stateRevision:
+                        Number(
+                            request.body
+                                .stateRevision,
+                        ),
+                    records:
+                        request.body
+                            .records,
+                    replace: true,
+                });
+            return response.json({
+                rebuilt: true,
+                records:
+                    result.exact
+                        .records,
+                diagnostics:
+                    result
+                        .diagnostics,
+            });
+        } catch (error) {
+            return sendKnowledgeError(
+                response,
+                error,
+                'rebuild',
+            );
+        }
+    },
+);
+
+router.post(
+    '/knowledge/delete',
+    async (request, response) => {
+        if (
+            !validateKnowledgeEnvelope(
+                request.body,
+            ) ||
+            !Array.isArray(
+                request.body
+                    .recordIds,
+            ) ||
+            request.body.recordIds
+                .length > 2_000
+        ) {
+            return response
+                .sendStatus(400);
+        }
+        try {
+            const result =
+                await getKnowledgeService(
+                    request,
+                ).delete({
+                    timelineId:
+                        String(
+                            request.body
+                                .timelineId,
+                        ),
+                    timelineEpoch:
+                        String(
+                            request.body
+                                .timelineEpoch,
+                        ),
+                    stateRevision:
+                        Number(
+                            request.body
+                                .stateRevision,
+                        ),
+                    recordIds:
+                        request.body
+                            .recordIds,
+                });
+            return response.json(
+                result,
+            );
+        } catch (error) {
+            return sendKnowledgeError(
+                response,
+                error,
+                'delete',
+            );
+        }
+    },
+);
+
+async function searchKnowledge(
+    request,
+    response,
+    listOnly,
+) {
+    if (
+        !validateKnowledgeEnvelope(
+            request.body,
+        )
+    ) {
+        return response
+            .sendStatus(400);
+    }
+    try {
+        const service =
+            getKnowledgeService(
+                request,
+            );
+        const filters =
+            buildKnowledgeFilters(
+                request.body,
+            );
+        const input = {
+            timelineId:
+                String(
+                    request.body
+                        .timelineId,
+                ),
+            query: listOnly
+                ? ''
+                : String(
+                    request.body
+                        .query ||
+                    '',
+                ).slice(0, 12_000),
+            entityIds:
+                listOnly ||
+                !Array.isArray(
+                    request.body
+                        .entityIds,
+                )
+                    ? []
+                    : request.body
+                        .entityIds
+                        .slice(0, 64),
+            limit: Math.min(
+                listOnly
+                    ? 2_000
+                    : 50,
+                Math.max(
+                    1,
+                    Number(
+                        request.body
+                            .limit,
+                    ) ||
+                    (listOnly
+                        ? 2_000
+                        : 8),
+                ),
+            ),
+            filters,
+            ...(
+                listOnly
+                    ? {}
+                    : {
+                        ...filters,
+                        actorIds:
+                            filters
+                                .audience
+                                .actorIds,
+                    }
+            ),
+        };
+        const result = listOnly
+            ? await service
+                .exactBackend
+                .query(input)
+            : await service
+                .query(input);
+        return response.json(
+            listOnly
+                ? result
+                : projectKnowledgeSearchResult(
+                    result,
+                ),
+        );
+    } catch (error) {
+        return sendKnowledgeError(
+            response,
+            error,
+            listOnly
+                ? 'list'
+                : 'search',
+        );
+    }
+}
+
+router.post(
+    '/knowledge/list',
+    (request, response) =>
+        searchKnowledge(
+            request,
+            response,
+            true,
+        ),
+);
+
+router.post(
+    '/knowledge/search',
+    (request, response) =>
+        searchKnowledge(
+            request,
+            response,
+            false,
+        ),
+);
 
 router.post('/social/resolve', async (request, response) => {
     try {
@@ -405,6 +930,29 @@ router.post('/social/resolve', async (request, response) => {
             ) ||
             input.extraction
                 .reviews.length > 16 ||
+            (
+                input.extraction
+                    .schemaOperations !==
+                    undefined &&
+                (
+                    !Array.isArray(
+                        input.extraction
+                            .schemaOperations,
+                    ) ||
+                    input.extraction
+                        .schemaOperations
+                        .length > 32 ||
+                    input.extraction
+                        .schemaOperations
+                        .some(operation =>
+                            !operation ||
+                            typeof operation !==
+                                'object' ||
+                            Array.isArray(
+                                operation,
+                            ))
+                )
+            ) ||
             JSON.stringify(input)
                 .length > 500_000
         ) {
@@ -427,6 +975,15 @@ router.post('/social/resolve', async (request, response) => {
             .witnessActorIdsByMessageId =
             committedWitnessValidation
                 .witnessActorIdsByMessageId;
+        input.extraction
+            .schemaOperations =
+            Array.isArray(
+                input.extraction
+                    .schemaOperations,
+            )
+                ? input.extraction
+                    .schemaOperations
+                : [];
         const result = await runSocialDirectorGraph(input);
         return response.json(result);
     } catch (error) {
@@ -569,6 +1126,45 @@ router.post('/local/observe', async (request, response) => {
     } catch (error) {
         console.warn(
             '[Hogwarts MUD] Local post-turn observation unavailable',
+            error,
+        );
+        return response.status(503).json({
+            error:
+                String(
+                    error?.message ||
+                    error,
+                ).slice(0, 1_000),
+        });
+    }
+});
+
+router.post('/local/appraise', async (request, response) => {
+    try {
+        const input =
+            request.body?.input;
+        if (
+            !input ||
+            typeof input !== 'object' ||
+            Array.isArray(input) ||
+            !input.event ||
+            !Array.isArray(
+                input.observers,
+            ) ||
+            input.observers.length > 64 ||
+            JSON.stringify(input)
+                .length > 100_000
+        ) {
+            return response
+                .sendStatus(400);
+        }
+        return response.json(
+            await proposeTurnAppraisals(
+                input,
+            ),
+        );
+    } catch (error) {
+        console.warn(
+            '[Hogwarts MUD] Local Appraisal proposal unavailable',
             error,
         );
         return response.status(503).json({

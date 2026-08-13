@@ -9,8 +9,11 @@ import {
 } from './actor-identity.js';
 
 import {
-    normalizeActorMemoryProfile,
-} from './actor-memory.js';
+    assertActorContextStateV1,
+    markActorIntroducedV1,
+    updateActorRuntimeV1,
+    upsertActorV1,
+} from './actor-context-runtime.js';
 
 import {
     findLocalRoomPath,
@@ -28,6 +31,9 @@ export function admitCurrentLocationResidents(
         activate = true,
     } = {},
 ) {
+    assertActorContextStateV1(
+        worldState,
+    );
     const residents = Object.values(
         PRESET_LOCATION_ACTORS,
     ).filter(actor =>
@@ -41,187 +47,196 @@ export function admitCurrentLocationResidents(
     }
 
     const next = structuredClone(worldState);
-    next.actorLibrary ??= [];
-    next.actors ??= [];
     const admittedActorIds = [];
     let changed = false;
     residents.forEach(resident => {
         let profile = next.actorLibrary
             .find(actor =>
                 actor.id === resident.id);
-        if (!profile) {
-            profile = normalizeActorMemoryProfile(
-                structuredClone(resident),
-            );
-            next.actorLibrary.push(profile);
-            changed = true;
-        }
-        if (
-            profile.lifeStatus === 'dead' &&
-            profile.lifeStatusPermanent
-        ) {
-            return;
-        }
-        if (
-            !profile
-                .firstImpressionOfPlayerEn &&
-            !profile
-                .firstImpressionPending
-        ) {
-            profile =
-                normalizeActorMemoryProfile({
-                    ...profile,
-                    introducedClock:
-                        profile.introducedClock ||
-                        next.clock,
-                    introducedTurn:
-                        profile.introducedTurn ??
-                        Number(
-                            next.turn?.count ||
-                            0,
-                        ),
-                    firstImpressionPending:
-                        true,
-                }, {
-                    ...profile,
-                    present: true,
-                });
-            const profileIndex =
-                next.actorLibrary.findIndex(
-                    actor =>
-                        actor.id ===
-                        profile.id,
-                );
-            next.actorLibrary[
-                profileIndex
-            ] = profile;
-            changed = true;
-        }
-
-        const actorIndex = next.actors
-            .findIndex(actor =>
+        let runtime = next.actors
+            .find(actor =>
                 actor.id === resident.id);
-        if (actorIndex < 0) {
-            next.actors.push({
-                id: profile.id,
-                nameEn: profile.nameEn,
-                name:
-                    profile.name ||
-                    profile.nameEn,
-                roleEn: profile.roleEn,
-                role:
-                    profile.role ||
-                    profile.roleEn,
-                relationshipToPlayerEn:
-                    profile
-                        .relationshipToPlayerEn,
-                relationshipToPlayer:
-                    profile
-                        .relationshipToPlayer ||
-                    profile
-                        .relationshipToPlayerEn,
-                impressionOfPlayerEn:
-                    profile.impressionOfPlayerEn,
-                impressionOfPlayer:
-                    profile.impressionOfPlayer ||
-                    profile.impressionOfPlayerEn,
-                impressionUpdatedClock: '',
-                impressionUpdatedTurn: 0,
-                firstImpressionOfPlayerEn:
-                    profile
-                        .firstImpressionOfPlayerEn,
-                firstImpressionOfPlayer:
-                    profile
-                        .firstImpressionOfPlayer,
-                firstImpressionClock:
-                    profile
-                        .firstImpressionClock,
-                firstImpressionTurn:
-                    profile
-                        .firstImpressionTurn,
-                firstImpressionPending:
-                    profile
-                        .firstImpressionPending,
-                publicDescriptionEn:
-                    profile.publicDescriptionEn,
-                currentActivityEn:
-                    resident.currentActivityEn,
-                currentActivity:
-                    resident.currentActivity ||
-                    resident.currentActivityEn,
-                currentIntentEn:
-                    resident.currentIntentEn,
-                currentIntent:
-                    resident.currentIntent ||
-                    resident.currentIntentEn,
-                present:
-                    Boolean(
-                        activate,
-                    ),
-                lifeStatus: 'alive',
-                lifeStatusPermanent: false,
-                lifeStatusDetailEn: 'Alive.',
-                lifeStatusDetail: '存活。',
-                lifeStatusSinceClock: '',
-                mapId,
-                roomId,
-                source:
-                    'preset_location_resident',
-            });
+        if (!profile) {
+            const inserted =
+                upsertActorV1(
+                    next,
+                    {
+                        actorId:
+                            resident.id,
+                        coreSource:
+                            {
+                                ...structuredClone(
+                                    resident,
+                                ),
+                                cast: {
+                                    origin:
+                                        'preset_resident',
+                                    introducedClock:
+                                        activate
+                                            ? next.clock ||
+                                                'unknown'
+                                            : '',
+                                    introducedTurn:
+                                        activate
+                                            ? Number(
+                                                next.turn
+                                                    ?.count ||
+                                                0,
+                                            )
+                                            : null,
+                                },
+                            },
+                        runtimeSource: {
+                            mapId,
+                            roomId,
+                            present:
+                                Boolean(
+                                    activate,
+                                ),
+                            lifeStatus:
+                                'alive',
+                            lifeStatusPermanent:
+                                false,
+                            lifeStatusDetailEn:
+                                'Alive.',
+                            lifeStatusSinceClock:
+                                '',
+                            currentActivityEn:
+                                resident
+                                    .currentActivityEn ||
+                                '',
+                            currentIntentEn:
+                                resident
+                                    .currentIntentEn ||
+                                '',
+                            currentGoalEn:
+                                '',
+                            temporary:
+                                false,
+                        },
+                    },
+                );
+            profile = inserted.core;
+            runtime = inserted.runtime;
+            changed = true;
             admittedActorIds.push(
                 resident.id,
             );
-            changed = true;
+        }
+        if (
+            [
+                'dead',
+                'missing',
+            ].includes(
+                runtime?.lifeStatus,
+            )
+        ) {
             return;
         }
-
-        const actor =
-            next.actors[actorIndex];
+        if (!runtime) {
+            runtime =
+                upsertActorV1(
+                    next,
+                    {
+                        actorId:
+                            profile.id,
+                        coreSource:
+                            profile,
+                        runtimeSource: {
+                            mapId,
+                            roomId,
+                            present:
+                                Boolean(
+                                    activate,
+                                ),
+                            lifeStatus:
+                                'alive',
+                            lifeStatusPermanent:
+                                false,
+                            lifeStatusDetailEn:
+                                'Alive.',
+                            lifeStatusSinceClock:
+                                '',
+                            currentActivityEn:
+                                resident
+                                    .currentActivityEn ||
+                                '',
+                            currentIntentEn:
+                                resident
+                                    .currentIntentEn ||
+                                '',
+                            currentGoalEn:
+                                '',
+                            temporary:
+                                false,
+                        },
+                    },
+                ).runtime;
+            changed = true;
+            admittedActorIds.push(
+                resident.id,
+            );
+        }
         if (
             activate &&
-            actor.present === false &&
-            actor.lifeStatus !== 'dead' &&
-            (actor.mapId || mapId) === mapId &&
-            (actor.roomId || roomId) === roomId
+            runtime.present === false &&
+            ![
+                'dead',
+                'missing',
+            ].includes(
+                runtime.lifeStatus,
+            ) &&
+            (runtime.mapId || mapId) === mapId &&
+            (runtime.roomId || roomId) === roomId
         ) {
-            next.actors[actorIndex] = {
-                ...actor,
-                present: true,
-                currentActivityEn:
-                    resident.currentActivityEn,
-                currentActivity:
-                    resident.currentActivity ||
-                    resident.currentActivityEn,
-                currentIntentEn:
-                    resident.currentIntentEn,
-                currentIntent:
-                    resident.currentIntent ||
-                    resident.currentIntentEn,
-                firstImpressionOfPlayerEn:
-                    profile
-                        .firstImpressionOfPlayerEn,
-                firstImpressionOfPlayer:
-                    profile
-                        .firstImpressionOfPlayer,
-                firstImpressionClock:
-                    profile
-                        .firstImpressionClock,
-                firstImpressionTurn:
-                    profile
-                        .firstImpressionTurn,
-                firstImpressionPending:
-                    profile
-                        .firstImpressionPending,
-            };
-            admittedActorIds.push(
+            updateActorRuntimeV1(
+                next,
                 resident.id,
+                {
+                    present: true,
+                    mapId,
+                    roomId,
+                    currentActivityEn:
+                        resident
+                            .currentActivityEn ||
+                        runtime
+                            .currentActivityEn,
+                    currentIntentEn:
+                        resident
+                            .currentIntentEn ||
+                        runtime
+                            .currentIntentEn,
+                },
             );
             changed = true;
+            if (
+                !admittedActorIds
+                    .includes(
+                        resident.id,
+                    )
+            ) {
+                admittedActorIds.push(
+                    resident.id,
+                );
+            }
+        }
+        if (activate) {
+            changed ||=
+                !profile.cast
+                    .introducedClock;
+            markActorIntroducedV1(
+                next,
+                resident.id,
+            );
         }
     });
 
     return {
-        state: changed ? next : worldState,
+        state: changed
+            ? assertActorContextStateV1(
+                next,
+            )
+            : worldState,
         admittedActorIds,
     };
 }
@@ -230,6 +245,9 @@ export function admitMentionedKnownActors(
     worldState,
     playerAction,
 ) {
+    assertActorContextStateV1(
+        worldState,
+    );
     const action = String(
         playerAction || '',
     ).normalize('NFKC');
@@ -294,16 +312,9 @@ export function admitMentionedKnownActors(
                 {};
             const matchedAliases =
                 buildActorNameAliases(
-                    actor.nameEn ||
-                        profile.nameEn,
-                    actor.name ||
-                        profile.name,
-                    [
-                        ...(actor.aliases ||
-                            []),
-                        ...(profile.aliases ||
-                            []),
-                    ],
+                    profile.nameEn,
+                    '',
+                    profile.aliases,
                 ).filter(
                     containsAlias,
                 );
@@ -345,53 +356,42 @@ export function admitMentionedKnownActors(
     }
     const next =
         structuredClone(worldState);
-    const candidateById = new Map(
-        candidates.map(candidate => [
+    for (const candidate of candidates) {
+        updateActorRuntimeV1(
+            next,
             candidate.actor.id,
-            candidate,
-        ]),
-    );
-    next.actors = (
-        next.actors || []
-    ).map(actor => {
-        const candidate =
-            candidateById.get(actor.id);
-        if (!candidate) {
-            return actor;
-        }
-        return {
-            ...actor,
-            present: true,
-            mapId,
-            roomId,
-            currentActivityEn:
-                'Turning toward the player after being explicitly acknowledged in the current scene.',
-            currentActivity:
-                '在当前场景中被玩家明确点名后，转身回应玩家。',
-        };
-    });
+            {
+                present: true,
+                mapId,
+                roomId,
+                currentActivityEn:
+                    'Turning toward the player after being explicitly acknowledged in the current scene.',
+            },
+        );
+        markActorIntroducedV1(
+            next,
+            candidate.actor.id,
+        );
+    }
     return {
-        state: next,
+        state:
+            assertActorContextStateV1(
+                next,
+            ),
         admittedActors:
             candidates.map(
                 candidate => ({
                     id:
                         candidate.actor.id,
                     nameEn:
-                        candidate.actor
-                            .nameEn ||
                         profiles.get(
                             candidate.actor.id,
                         )?.nameEn ||
                         candidate.actor.id,
                     name:
-                        candidate.actor
-                            .name ||
                         profiles.get(
                             candidate.actor.id,
-                        )?.name ||
-                        candidate.actor
-                            .nameEn ||
+                        )?.nameEn ||
                         candidate.actor.id,
                     matchedAlias:
                         candidate

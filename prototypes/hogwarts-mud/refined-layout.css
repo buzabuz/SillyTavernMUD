@@ -1,0 +1,444 @@
+:root {
+    --depth-canvas: #090b0e;
+    --depth-panel: rgb(20 24 29 / 88%);
+    --depth-card: rgb(29 34 41 / 82%);
+    --depth-raised: rgb(35 40 48 / 94%);
+    --shadow-panel: 0 18px 50px rgb(0 0 0 / 28%);
+    --shadow-card: 0 8px 24px rgb(0 0 0 / 20%);
+    --shadow-raised: 0 18px 48px rgb(0 0 0 / 42%);
+}
+
+.app-shell {
+    height: 100vh;
+    grid-template-rows: 54px minmax(0, 1fr);
+}
+
+.world-bar {
+    z-index: 20;
+    grid-template-columns: minmax(220px, 270px) minmax(360px, 1fr) auto;
+    border: 0;
+    background:
+        linear-gradient(90deg, rgb(225 196 119 / 4%), transparent 28%),
+        rgb(16 20 25 / 96%);
+    box-shadow:
+        0 1px 0 rgb(225 196 119 / 16%),
+        0 12px 34px rgb(0 0 0 / 28%);
+    backdrop-filter: blur(18px);
+}
+
+.world-identity {
+    gap: 10px;
+    border: 0;
+    padding-inline: 18px;
+}
+
+.world-identity::after {
+    display: none;
+}
+
+.world-identity strong {
+    font-size: 14px;
+}
+
+.world-context {
+    gap: 12px;
+}
+
+.world-context .chapter-title {
+    color: var(--text);
+    font-family: Georgia, "Songti SC", serif;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+}
+
+.world-context > span:not(.scene-state) {
+    color: var(--text-3);
+    font-size: 10px;
+}
+
+.world-actions {
+    gap: 2px;
+    padding-right: 14px;
+}
+
+.panel-restore {
+    display: none;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border: 0;
+    border-radius: 8px;
+    background: rgb(225 196 119 / 8%);
+    color: var(--accent);
+    cursor: pointer;
+}
+
+body:has(.workspace.scene-collapsed) .panel-restore,
+body:has(.workspace.focus-mode) .panel-restore {
+    display: grid;
+}
+
+.workspace {
+    grid-template-columns: 216px minmax(620px, 1fr) 276px;
+    gap: 12px;
+    padding: 12px;
+    background:
+        linear-gradient(rgb(6 8 10 / 62%), rgb(6 8 10 / 74%)),
+        url("./assets/processed/archive-texture.jpg") center / cover fixed;
+}
+
+.workspace.scene-collapsed {
+    grid-template-columns: 0 minmax(620px, 1fr) 276px;
+}
+
+.workspace.focus-mode {
+    grid-template-columns: 0 minmax(720px, 1040px) 0;
+}
+
+.scene-panel,
+.inspector-panel,
+.story-column {
+    border: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow-panel);
+}
+
+.scene-panel {
+    position: relative;
+    grid-template-rows: minmax(0, 1fr);
+    background: rgb(14 18 23 / 76%);
+    backdrop-filter: blur(16px);
+}
+
+.scene-collapse {
+    position: absolute;
+    z-index: 5;
+    top: 10px;
+    right: 8px;
+    border-radius: 8px;
+    background: rgb(9 12 15 / 64%);
+    box-shadow: var(--shadow-card);
+}
+
+.scene-scroll {
+    padding: 10px;
+}
+
+.panel-section {
+    margin-bottom: 10px;
+    padding: 12px;
+    border: 0;
+    border-radius: 12px;
+    background:
+        linear-gradient(145deg, rgb(255 255 255 / 2.5%), transparent 48%),
+        var(--depth-card);
+    box-shadow:
+        inset 0 1px rgb(255 255 255 / 3%),
+        var(--shadow-card);
+}
+
+.panel-section::after,
+.inspector-card::after {
+    display: none;
+}
+
+.section-title {
+    margin-bottom: 8px;
+}
+
+.mini-map {
+    height: 104px;
+    border: 0;
+    border-radius: 10px;
+    box-shadow:
+        inset 0 0 0 1px rgb(225 196 119 / 15%),
+        inset 0 16px 36px rgb(0 0 0 / 28%);
+}
+
+.person-row {
+    border: 0;
+    border-radius: 9px;
+}
+
+.person-row:hover,
+.person-row.active {
+    border: 0;
+    background:
+        linear-gradient(90deg, rgb(225 196 119 / 10%), transparent),
+        rgb(255 255 255 / 3%);
+    box-shadow: inset 0 0 0 1px rgb(225 196 119 / 14%);
+}
+
+.story-column {
+    grid-template-rows: minmax(0, 1fr) auto;
+    background:
+        linear-gradient(rgb(11 14 18 / 88%), rgb(9 12 15 / 94%)),
+        url("./assets/processed/archive-texture.jpg") center / cover;
+    box-shadow:
+        0 24px 70px rgb(0 0 0 / 38%),
+        inset 0 1px rgb(255 255 255 / 3%);
+}
+
+.story-column::before {
+    inset: 0 0 118px;
+}
+
+.story-scroll {
+    grid-row: 1;
+    padding: 18px clamp(20px, 3vw, 46px) 34px;
+}
+
+.turn-document {
+    max-width: 860px;
+    border: 0;
+    border-radius: 14px;
+    box-shadow:
+        0 26px 64px rgb(0 0 0 / 34%),
+        inset 0 1px rgb(255 255 255 / 4%);
+    clip-path: none;
+}
+
+.turn-document::before {
+    display: none;
+}
+
+.turn-header,
+.turn-footer {
+    border: 0;
+    background: rgb(18 22 27 / 88%);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+.turn-header {
+    top: -18px;
+    padding-inline: 18px;
+}
+
+.turn-footer {
+    box-shadow: 0 -10px 30px rgb(0 0 0 / 14%);
+}
+
+.turn-prose {
+    padding: 26px clamp(28px, 5vw, 62px) 32px;
+}
+
+.system-memory {
+    border: 0;
+    border-radius: 10px;
+    background:
+        linear-gradient(90deg, rgb(225 196 119 / 10%), transparent 72%),
+        rgb(31 27 19 / 86%);
+    box-shadow: var(--shadow-card);
+    clip-path: none;
+}
+
+.player-body,
+.dialogue-body {
+    border: 0;
+    border-radius: 12px;
+    box-shadow: var(--shadow-card);
+    clip-path: none;
+}
+
+.player-body::after,
+.dialogue-body::after {
+    display: none;
+}
+
+.check-card,
+.pending-check {
+    border: 0;
+    border-radius: 12px;
+    background:
+        linear-gradient(115deg, rgb(225 196 119 / 8%), transparent 46%),
+        var(--depth-raised);
+    box-shadow: var(--shadow-raised);
+    clip-path: none;
+}
+
+.check-result {
+    border: 0;
+}
+
+.pending-check {
+    background:
+        linear-gradient(115deg, rgb(225 196 119 / 11%), transparent 48%),
+        rgb(27 30 35 / 96%);
+}
+
+.composer {
+    z-index: 5;
+    margin: 0 12px 12px;
+    padding: 8px;
+    border: 0;
+    border-radius: 14px;
+    background:
+        linear-gradient(145deg, rgb(255 255 255 / 3%), transparent 42%),
+        rgb(22 27 33 / 97%);
+    box-shadow:
+        0 -10px 40px rgb(0 0 0 / 24%),
+        0 18px 54px rgb(0 0 0 / 42%),
+        inset 0 1px rgb(255 255 255 / 4%);
+}
+
+.input-row textarea {
+    min-height: 58px;
+    max-height: 150px;
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: rgb(6 9 12 / 66%);
+    box-shadow:
+        inset 0 2px 12px rgb(0 0 0 / 34%),
+        inset 0 0 0 1px rgb(225 196 119 / 10%);
+}
+
+.input-row textarea:focus {
+    border: 0;
+    box-shadow:
+        inset 0 2px 12px rgb(0 0 0 / 34%),
+        inset 0 0 0 1px rgb(225 196 119 / 42%),
+        0 0 22px rgb(225 196 119 / 8%);
+}
+
+.composer-toolbar {
+    margin-top: 6px;
+}
+
+.tool-button,
+.theme-academy wa-button::part(base) {
+    min-height: 34px;
+    border: 0;
+    border-radius: 9px;
+    background: rgb(255 255 255 / 4%);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 4%);
+}
+
+.check-action-button,
+.send-button {
+    min-width: auto;
+    min-height: 38px;
+    border: 0;
+    border-radius: 10px;
+    padding: 5px 14px;
+    clip-path: none;
+}
+
+.check-action-button {
+    grid-template-columns: 26px auto;
+    background:
+        linear-gradient(135deg, rgb(225 196 119 / 14%), transparent),
+        rgb(36 31 21 / 94%);
+    box-shadow:
+        inset 0 0 0 1px rgb(225 196 119 / 28%),
+        var(--shadow-card);
+}
+
+.check-action-button img {
+    width: 26px;
+    height: 26px;
+}
+
+.send-button {
+    background: linear-gradient(145deg, #e3c778, #ae873c);
+    box-shadow:
+        inset 0 1px rgb(255 255 255 / 25%),
+        0 8px 22px rgb(0 0 0 / 26%);
+}
+
+.inspector-panel {
+    grid-template-rows: 46px minmax(0, 1fr);
+    background: rgb(14 18 23 / 78%);
+    backdrop-filter: blur(16px);
+}
+
+.inspector-tabs {
+    gap: 4px;
+    padding: 7px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.inspector-tabs button {
+    border-radius: 9px;
+}
+
+.inspector-tabs button.active {
+    background: rgb(225 196 119 / 12%);
+    box-shadow: inset 0 0 0 1px rgb(225 196 119 / 18%);
+}
+
+.inspector-tabs button.active::after {
+    display: none;
+}
+
+.inspector-content {
+    padding: 0 8px 8px;
+}
+
+.inspector-card {
+    margin-top: 8px;
+    padding: 12px;
+    border: 0;
+    border-radius: 12px;
+    background:
+        linear-gradient(145deg, rgb(255 255 255 / 2.5%), transparent 52%),
+        var(--depth-card);
+    box-shadow: var(--shadow-card);
+}
+
+.fact-list li,
+.item-list li {
+    border: 0;
+    border-radius: 9px;
+    background: rgb(7 10 13 / 34%);
+    box-shadow:
+        inset 0 0 0 1px rgb(255 255 255 / 3%),
+        0 5px 14px rgb(0 0 0 / 12%);
+}
+
+.fact-list li::before,
+.item-list li::before {
+    display: none;
+}
+
+@media (max-width: 1280px) {
+    .workspace {
+        grid-template-columns: 196px minmax(520px, 1fr) 250px;
+        gap: 9px;
+        padding: 9px;
+    }
+
+    .workspace.scene-collapsed {
+        grid-template-columns: 0 minmax(520px, 1fr) 250px;
+    }
+
+    .composer-hint {
+        display: none;
+    }
+}
+
+@media (max-width: 1080px) {
+    .workspace {
+        grid-template-columns: 0 minmax(0, 1fr) 250px;
+    }
+
+    .workspace.scene-open .scene-panel {
+        top: 9px;
+        bottom: 9px;
+        left: 9px;
+        width: 216px;
+        border-radius: 16px;
+        box-shadow: var(--shadow-raised);
+    }
+
+    .panel-restore {
+        display: grid;
+    }
+
+    .world-context .scene-state {
+        display: none;
+    }
+}

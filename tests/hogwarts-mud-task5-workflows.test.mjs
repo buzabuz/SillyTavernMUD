@@ -1,7 +1,11 @@
 /* eslint-disable playwright/expect-expect */
+/* global globalThis */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import {
+    createLocalSemanticAdapter,
+} from '../public/scripts/extensions/hogwarts-mud/adapters/local-semantic.js';
 import { createModelAdapter } from '../public/scripts/extensions/hogwarts-mud/adapters/model.js';
 import { createAutomaticWorkGate } from '../public/scripts/extensions/hogwarts-mud/runtime/automatic-work.js';
 import { createJobRegistry } from '../public/scripts/extensions/hogwarts-mud/runtime/job-registry.js';
@@ -24,6 +28,9 @@ import {
     resolveItemCandidate,
 } from '../public/scripts/extensions/hogwarts-mud/domain/item-reducer.js';
 import {
+    synchronizeHeldItemLocations,
+} from '../public/scripts/extensions/hogwarts-mud/domain/inventory.js';
+import {
     normalizeSpellProposal,
     resolveSpellCandidate,
 } from '../public/scripts/extensions/hogwarts-mud/domain/spell-proposals.js';
@@ -31,6 +38,10 @@ import {
     createWorkflowApplication,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/application.js';
 import { createOpeningWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/opening.js';
+import {
+    createSceneTransitionWorkflow,
+    projectAuthoritativeSceneItems,
+} from '../public/scripts/extensions/hogwarts-mud/workflows/scene-transition.js';
 import { createTurnPerformanceWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/turn-performance.js';
 import { createTurnWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/turn.js';
 
@@ -72,6 +83,178 @@ function createOpeningHarness(responses) {
         workflow,
     };
 }
+
+test('[defect-probing] local semantic adapter submits one Appraisal batch for every legal observer and falls back locally', async () => {
+    const originalFetch =
+        globalThis.fetch;
+    const requests = [];
+    const adapter =
+        createLocalSemanticAdapter({
+            getRequestHeaders:
+                () => ({
+                    'Content-Type':
+                        'application/json',
+                }),
+        });
+    const event = {
+        eventId:
+            'event_appraisal_batch',
+        sceneId:
+            'scene_appraisal_batch',
+        sourceMessageIds: [10, 11],
+        summaryEn:
+            'The player waits while Hermione asks a direct question.',
+        participantActorIds: [
+            'hermione',
+        ],
+        witnessActorIds: [
+            'ron',
+        ],
+    };
+    const state = {
+        clock:
+            '1991-09-04 · 09:45',
+        actorLibrary: [
+            {
+                id: 'hermione',
+                nameEn:
+                    'Hermione Granger',
+            },
+            {
+                id: 'ron',
+                nameEn:
+                    'Ron Weasley',
+            },
+            {
+                id: 'luna',
+                nameEn:
+                    'Luna Lovegood',
+            },
+            {
+                id: 'draco',
+                nameEn:
+                    'Draco Malfoy',
+            },
+        ],
+        actors: [],
+        eventKnowledge: [
+            event,
+        ],
+        gossipPacks: [{
+            id: 'rumor_batch',
+            status: 'active',
+            sourceEventIds: [
+                event.eventId,
+            ],
+            sourceMessageIds:
+                event.sourceMessageIds,
+            versions: [{
+                id:
+                    'rumor_batch_v1',
+                sourceEventIds: [
+                    event.eventId,
+                ],
+                sourceMessageIds:
+                    event
+                        .sourceMessageIds,
+                audienceActorIds: [
+                    'luna',
+                ],
+                sourceActorIds: [],
+            }],
+        }],
+    };
+
+    try {
+        assert.equal(
+            typeof adapter
+                .requestLocalTurnAppraisals,
+            'function',
+        );
+        globalThis.fetch =
+            async (
+                url,
+                options,
+            ) => {
+                requests.push({
+                    url,
+                    body:
+                        JSON.parse(
+                            options.body,
+                        ),
+                });
+                return {
+                    ok: true,
+                    json:
+                        async () => ({
+                            result: {
+                                appraisalProposals:
+                                    [],
+                            },
+                            diagnostics: {
+                                model:
+                                    'local-test',
+                            },
+                        }),
+                };
+            };
+        const result =
+            await adapter
+                .requestLocalTurnAppraisals(
+                    state,
+                    event,
+                );
+        assert.equal(
+            requests.length,
+            1,
+        );
+        assert.equal(
+            requests[0].url,
+            '/api/hogwarts-mud/local/appraise',
+        );
+        assert.deepEqual(
+            requests[0].body.input
+                .observers
+                .map(observer =>
+                    observer.id),
+            [
+                'hermione',
+                'luna',
+                'ron',
+            ],
+        );
+        assert.equal(
+            result.diagnostics.called,
+            true,
+        );
+
+        globalThis.fetch =
+            async () => {
+                throw new Error(
+                    'Ollama offline',
+                );
+            };
+        const fallback =
+            await adapter
+                .requestLocalTurnAppraisals(
+                    state,
+                    event,
+                );
+        assert.deepEqual(
+            fallback
+                .appraisalProposals,
+            [],
+        );
+        assert.equal(
+            fallback
+                .diagnostics.fallback,
+            true,
+        );
+    } finally {
+        globalThis.fetch =
+            originalFetch;
+    }
+});
 
 function createTurnPerformancePromptHarness() {
     return createTurnPerformanceWorkflow({
@@ -146,13 +329,24 @@ function createTurnPerformancePromptHarness() {
 
 function createTurnHarness({
     existingAssistant = false,
+    invalidAddressing = false,
+    legacyDiagnostics = null,
 } = {}) {
     const playerAction = 'Wait by the door.';
     const playerMessage = {
         is_user: true,
         mes: playerAction,
         extra: {
-            hogwartsMud: {},
+            hogwartsMud: {
+                ...(legacyDiagnostics
+                    ? {
+                        turnDiagnostics:
+                            structuredClone(
+                                legacyDiagnostics,
+                            ),
+                    }
+                    : {}),
+            },
         },
     };
     const assistantMessage = {
@@ -363,7 +557,12 @@ function createTurnHarness({
         resolveActionCheck: () => null,
         resolveEventWitnesses: () => null,
         resolvePlayerAddressing: () => ({
-            valid: true,
+            valid:
+                !invalidAddressing,
+            error:
+                invalidAddressing
+                    ? 'Unknown addressed actor.'
+                    : '',
             attempted: false,
             actorIds: [],
         }),
@@ -385,6 +584,7 @@ function createTurnHarness({
     });
     return {
         context,
+        jobRegistry,
         get streamClears() {
             return streamClears;
         },
@@ -443,7 +643,7 @@ test('initial scene performer prompt forbids replaying player speech as output d
 
     assert.match(
         systemPrompt,
-        /playerTurnSequence is input context, not output material/u,
+        /playerTurn is input context, not output material/u,
     );
     assert.match(
         systemPrompt,
@@ -453,14 +653,27 @@ test('initial scene performer prompt forbids replaying player speech as output d
         systemPrompt,
         /Every output dialogue segment must be new NPC speech/u,
     );
+    assert.deepEqual(
+        Object.keys(userPayload),
+        [
+            'playerTurn',
+            'sceneFacts',
+            'actorCards',
+            'actionOpportunities',
+            'memoryActivations',
+            'prohibitions',
+        ],
+    );
     assert.equal(
         userPayload
+            .playerTurn
             .playerTurnSequence[0]
             .speechText,
         'Please teach me.',
     );
     assert.equal(
         userPayload
+            .sceneFacts
             .authoritativeSceneSpells[0]
             .incantation,
         'Acufors',
@@ -503,17 +716,19 @@ test('scene performer drops a stale opening form after the timeline advances', (
         actors: [{
             id:
                 'minerva_mcgonagall',
-            nameEn:
-                'Minerva McGonagall',
-            roleEn:
-                'Professor',
-            publicDescriptionEn:
-                'A tall, stern witch.',
             currentActivityEn:
                 'Pacing the aisles in human form.',
             present: true,
         }],
-        actorLibrary: [],
+        actorLibrary: [{
+            id:
+                'minerva_mcgonagall',
+            nameEn:
+                'Minerva McGonagall',
+            roleEn:
+                'Professor',
+            performanceCore: {},
+        }],
         items: [],
     };
     const prompt =
@@ -549,22 +764,39 @@ test('scene performer drops a stale opening form after the timeline advances', (
             prompt[1].content,
         );
 
+    assert.deepEqual(
+        Object.keys(userPayload),
+        [
+            'playerTurn',
+            'sceneFacts',
+            'actorCards',
+            'actionOpportunities',
+            'memoryActivations',
+            'prohibitions',
+        ],
+    );
     assert.equal(
         Object.hasOwn(
-            userPayload.currentScene,
+            userPayload
+                .sceneFacts
+                .currentScene,
             'summaryEn',
         ),
         false,
     );
     assert.equal(
-        userPayload.currentScene
+        userPayload
+            .sceneFacts
+            .currentScene
             .timelineEntries
             .length,
         2,
     );
     assert.equal(
-        userPayload.presentActors[0]
-            .currentActivityEn,
+        userPayload
+            .actorCards[0]
+            .runtime
+            .activityEn,
         'Pacing the aisles in human form.',
     );
     assert.match(
@@ -604,10 +836,364 @@ test('scene performer drops a stale opening form after the timeline advances', (
                 )[1]
                 .content,
         );
+    assert.deepEqual(
+        Object.keys(openingPayload),
+        [
+            'playerTurn',
+            'sceneFacts',
+            'actorCards',
+            'actionOpportunities',
+            'memoryActivations',
+            'prohibitions',
+        ],
+    );
     assert.equal(
-        openingPayload.currentScene
+        openingPayload
+            .sceneFacts
+            .currentScene
             .summaryEn,
         'A tabby cat rests on the professor\'s desk.',
+    );
+});
+
+test('[defect-probing] scene transition projects only physical items and preserves remains by holder for both directors', async () => {
+    const state = {
+        clock:
+            '1991-09-02 · 12:45',
+        scene: {
+            id:
+                'transfiguration_after_break',
+            mapId:
+                'hogwarts_castle',
+            roomId:
+                'transfiguration_classroom',
+        },
+        map: {
+            activeMapId:
+                'hogwarts_castle',
+            currentLocalNodeId:
+                'transfiguration_classroom',
+        },
+        items: [{
+            version: 2,
+            id:
+                'harry_spare_brass_quill',
+            type: 'tool',
+            labelEn:
+                'Harry\'s Spare Brass Quill',
+            ownerId:
+                'canon_harry_james_potter',
+            holderId: 'player',
+            location: {
+                mapId:
+                    'hogwarts_castle',
+                roomId:
+                    'transfiguration_classroom',
+                placement:
+                    'with_holder',
+            },
+            state: 'destroyed',
+            physicalForm: 'remains',
+            visibility: 'public',
+            transferMode: 'loan',
+        }, {
+            version: 3,
+            id: 'vanished_quill',
+            type: 'tool',
+            labelEn: 'Vanished Quill',
+            ownerId: 'player',
+            holderId: '',
+            location: {
+                mapId: '',
+                roomId: '',
+                placement: '',
+            },
+            state: 'destroyed',
+            physicalForm: 'absent',
+            visibility: 'public',
+        }, {
+            version: 3,
+            id: 'lost_quill',
+            type: 'tool',
+            labelEn: 'Lost Quill',
+            ownerId: 'player',
+            holderId: '',
+            location: {
+                mapId: '',
+                roomId: '',
+                placement: '',
+            },
+            state: 'lost',
+            physicalForm: 'unknown',
+            visibility: 'public',
+        }, {
+            version: 2,
+            id: 'hidden_note',
+            type: 'document',
+            labelEn: 'Hidden Note',
+            ownerId:
+                'canon_harry_james_potter',
+            holderId:
+                'canon_harry_james_potter',
+            location: {
+                mapId:
+                    'hogwarts_castle',
+                roomId:
+                    'transfiguration_classroom',
+                placement:
+                    'with_holder',
+            },
+            state: 'intact',
+            visibility: 'hidden',
+        }],
+        actors: [{
+            id:
+                'canon_harry_james_potter',
+            mapId:
+                'hogwarts_castle',
+            roomId:
+                'transfiguration_classroom',
+            present: true,
+        }],
+        actorLibrary: [],
+    };
+    const projectedState =
+        structuredClone(state);
+    projectedState.clock =
+        '1991-09-02 · 13:05';
+    projectedState.map
+        .currentLocalNodeId =
+        'gryffindor_common_room';
+    projectedState.scene.roomId =
+        'gryffindor_common_room';
+    projectedState.actors[0].roomId =
+        'gryffindor_common_room';
+
+    const projected =
+        projectAuthoritativeSceneItems(
+            projectedState,
+            synchronizeHeldItemLocations,
+        );
+    assert.deepEqual(
+        projected,
+        [{
+            id:
+                'harry_spare_brass_quill',
+            labelEn:
+                'Harry\'s Spare Brass Quill',
+            ownerId:
+                'canon_harry_james_potter',
+            holderId: 'player',
+            location: {
+                mapId:
+                    'hogwarts_castle',
+                roomId:
+                    'gryffindor_common_room',
+                placement:
+                    'with_holder',
+            },
+            state: 'destroyed',
+            physicalForm: 'remains',
+            isEquipped: false,
+            transferMode: 'loan',
+        }],
+    );
+
+    let openingPrompt = null;
+    const workflow =
+        createSceneTransitionWorkflow({
+            CANON_CAST_IDENTITY_CONTRACT:
+                '',
+            CANON_WIT_TONE_CONTRACT: '',
+            buildActorContinuityCapsules:
+                () => [],
+            buildBehavioralEnvironment:
+                () => ({}),
+            buildCurrentMaterialState:
+                () => ({}),
+            buildMapAuthorityContext:
+                () => ({}),
+            buildSceneCastRotationPolicy:
+                () => ({}),
+            extractRoleResponseText:
+                response =>
+                    response.content,
+            formatRetrievedKnowledge:
+                () => '',
+            getContext: () => ({
+                chat: [],
+            }),
+            getSceneDestinationAuthority:
+                () => ({
+                    roomNameEn:
+                        'Gryffindor Common Room',
+                }),
+            parseJsonObject: value =>
+                JSON.parse(value),
+            projectActorLibraryForContext:
+                () => [],
+            sendRoleRequest:
+                async (
+                    roleSlot,
+                    prompt,
+                ) => {
+                    openingPrompt =
+                        prompt;
+                    return {
+                        content:
+                            JSON.stringify({
+                                segments: [{
+                                    type:
+                                        'narration',
+                                    textEn:
+                                        'The Gryffindor Common Room is quiet.',
+                                }, {
+                                    type:
+                                        'narration',
+                                    textEn:
+                                        'The fire waits for a response.',
+                                }],
+                            }),
+                    };
+                },
+            stripSyntheticSceneOpeningActorSegments:
+                segments =>
+                    segments,
+            synchronizeHeldItemLocations,
+            validateSceneTransitionPackage:
+                () => ({
+                    valid: true,
+                    errors: [],
+                }),
+        });
+    const directorPrompt =
+        workflow
+            .createSceneTransitionPrompt(
+                state,
+                'medium',
+                '',
+                null,
+                {
+                    changed: false,
+                },
+                [],
+                {
+                    chapterMessageLimit:
+                        20,
+                },
+            );
+    const directorPayload =
+        JSON.parse(
+            directorPrompt[1]
+                .content,
+        );
+    assert.equal(
+        directorPayload
+            .authoritativeItems[0]
+            .holderId,
+        'player',
+    );
+    assert.equal(
+        directorPayload
+            .authoritativeItems[0]
+            .state,
+        'destroyed',
+    );
+    assert.equal(
+        directorPayload
+            .authoritativeItems[0]
+            .physicalForm,
+        'remains',
+    );
+    assert.deepEqual(
+        directorPayload
+            .authoritativeItems
+            .map(item =>
+                item.id),
+        [
+            'harry_spare_brass_quill',
+        ],
+    );
+    assert.match(
+        directorPrompt[0].content,
+        /holderId alone controls physical possession/u,
+    );
+    const payload = {
+        nextClock:
+            '1991-09-02 · 13:05',
+        nextScene: {
+            id:
+                'gryffindor_common_room_quill_repair',
+            nameEn:
+                'Gryffindor Common Room',
+            summaryEn:
+                'Tina considers repairing the destroyed quill.',
+            mapId:
+                'hogwarts_castle',
+            roomId:
+                'gryffindor_common_room',
+            actorStates: [{
+                id:
+                    'canon_harry_james_potter',
+                present: true,
+                mapId:
+                    'hogwarts_castle',
+                roomId:
+                    'gryffindor_common_room',
+                currentActivityEn:
+                    'Sitting away from Tina.',
+            }],
+        },
+    };
+    await workflow
+        .generateSceneTransitionOpening(
+            {},
+            state,
+            payload,
+            {
+                mapId:
+                    'hogwarts_castle',
+                roomId:
+                    'gryffindor_common_room',
+            },
+            {},
+        );
+    const openingSystemPrompt =
+        openingPrompt[0].content;
+    const openingPayload =
+        JSON.parse(
+            openingPrompt[1].content,
+        );
+    const quill =
+        openingPayload
+            .authoritativeItems[0];
+    assert.equal(
+        quill.ownerId,
+        'canon_harry_james_potter',
+    );
+    assert.equal(
+        quill.holderId,
+        'player',
+    );
+    assert.equal(
+        quill.state,
+        'destroyed',
+    );
+    assert.equal(
+        quill.physicalForm,
+        'remains',
+    );
+    assert.equal(
+        quill.location.roomId,
+        'gryffindor_common_room',
+    );
+    assert.match(
+        openingSystemPrompt,
+        /holderId, not ownerId, controls who physically possesses/u,
+    );
+    assert.match(
+        openingSystemPrompt,
+        /destroyed Item may appear only as remains/u,
     );
 });
 
@@ -1526,7 +2112,7 @@ test('model adapter rethrows common streaming rate-limit errors without one-shot
     }
 });
 
-test('model adapter records whether context limiting preserves the authoritative player prompt', async () => {
+test('model adapter records context limiting and the resulting model call', async () => {
     const events = [];
     const prompt = [
         {
@@ -1611,9 +2197,13 @@ test('model adapter records whether context limiting preserves the authoritative
         },
     );
 
-    assert.equal(
-        events.length,
-        1,
+    assert.deepEqual(
+        events.map(event =>
+            event.stage),
+        [
+            'model_request',
+            'model_call',
+        ],
     );
     assert.equal(
         events[0].stage,
@@ -1645,10 +2235,26 @@ test('model adapter records whether context limiting preserves the authoritative
             .limitedDuration,
         true,
     );
+    assert.deepEqual(
+        events[1].data,
+        {
+            tier: 'unknown',
+            stream: false,
+        },
+    );
 });
 
 test('failed-turn retry appends one assistant response without duplicating player input', async () => {
-    const harness = createTurnHarness();
+    const legacyDiagnostics = {
+        version: 1,
+        traceId: 'legacy-v1',
+        events: [{
+            stage: 'legacy',
+        }],
+    };
+    const harness = createTurnHarness({
+        legacyDiagnostics,
+    });
 
     await harness.workflow.retryFailedPlayerTurn();
 
@@ -1669,6 +2275,21 @@ test('failed-turn retry appends one assistant response without duplicating playe
             .extra
             .hogwartsMud
             .turnDiagnostics
+            .version,
+        2,
+    );
+    assert.deepEqual(
+        harness.context.chat[0]
+            .extra
+            .hogwartsMud
+            .turnDiagnostics,
+        legacyDiagnostics,
+    );
+    assert.equal(
+        harness.context.chat[1]
+            .extra
+            .hogwartsMud
+            .turnDiagnostics
             .status,
         'committed',
     );
@@ -1681,6 +2302,54 @@ test('failed-turn retry appends one assistant response without duplicating playe
             .some(event =>
                 event.stage ===
                     'workflow_input'),
+    );
+});
+
+test('[defect-probing] production addressing failure persists bounded V2 diagnostics for the new turn', async () => {
+    const legacyDiagnostics = {
+        version: 1,
+        traceId: 'legacy-v1',
+    };
+    const harness =
+        createTurnHarness({
+            invalidAddressing: true,
+            legacyDiagnostics,
+        });
+
+    await assert.rejects(
+        harness.workflow
+            .runStructuredTurn(
+                'Wait by the door.',
+            ),
+        /Unknown addressed actor/u,
+    );
+
+    const diagnostics =
+        harness.context.chat[0]
+            .extra
+            .hogwartsMud
+            .turnDiagnostics;
+    assert.equal(
+        diagnostics.version,
+        2,
+    );
+    assert.equal(
+        diagnostics.status,
+        'failed',
+    );
+    assert.ok(
+        diagnostics.events.length <=
+            TURN_DIAGNOSTIC_EVENT_LIMIT,
+    );
+    assert.equal(
+        harness.jobRegistry
+            .turnSettlement.size,
+        0,
+    );
+    assert.equal(
+        harness.jobRegistry
+            .turnActive,
+        false,
     );
 });
 

@@ -4,10 +4,12 @@ import {
 
 import {
     ITEM_OPERATION_VALUES,
+    ITEM_PHYSICAL_FORM_VALUES,
     ITEM_PROPOSAL_SOURCE_VALUES,
     ITEM_PROPOSAL_VERSION,
     ITEM_STATE_VALUES,
     ITEM_TRANSFER_MODE_VALUES,
+    inferDestroyedPhysicalForm,
     isItemOperationEvidenceGrounded,
     normalizeCurrentPresentation,
     normalizeItem,
@@ -228,7 +230,6 @@ function applyPresentationOperation(
             'lend',
             'consume',
             'lose',
-            'destroy',
         ].includes(
             operation.operation,
         )
@@ -272,10 +273,11 @@ function applyPresentationOperation(
         operation.held === true &&
         after.holderId &&
         ![
-            'consumed',
-            'lost',
-            'destroyed',
-        ].includes(after.state)
+            'absent',
+            'unknown',
+        ].includes(
+            after.physicalForm,
+        )
     ) {
         next =
             addItemToPresentation(
@@ -411,6 +413,24 @@ export function normalizeItemProposal(
                 )
                 ? source.state
                 : '',
+        physicalForm:
+            ITEM_PHYSICAL_FORM_VALUES
+                .includes(
+                    source
+                        .physicalForm ||
+                    itemSource
+                        .physicalForm,
+                )
+                ? source
+                    .physicalForm ||
+                    itemSource
+                        .physicalForm
+                : operation ===
+                    'destroy'
+                    ? inferDestroyedPhysicalForm(
+                        evidenceText,
+                    ) || 'remains'
+                    : '',
         item:
             normalizeItem(
                 {
@@ -668,15 +688,41 @@ export function validateItemOperation(
             `物品 ${proposal.id} 尚未进入正式物品库。`,
         );
     }
+    const normalizedExisting =
+        existing
+            ? normalizeItem(existing)
+            : null;
     if (
-        existing &&
-        [
-            'consumed',
-            'destroyed',
-        ].includes(
-            existing.state,
-        ) &&
+        normalizedExisting
+            ?.physicalForm ===
+            'absent'
+    ) {
+        const replayOperation =
+            normalizedExisting
+                .state ===
+                'consumed'
+                ? 'consume'
+                : 'destroy';
+        if (
+            proposal.operation !==
+                replayOperation
+        ) {
+            errors.push(
+                `物品 ${proposal.id} 已不存在，不能执行 ${proposal.operation}。`,
+            );
+        }
+    }
+    if (
+        normalizedExisting
+            ?.physicalForm ===
+            'remains' &&
         ![
+            'carry',
+            'place',
+            'give',
+            'lend',
+            'lose',
+            'destroy',
             'damage',
             'clean',
         ].includes(
@@ -684,7 +730,24 @@ export function validateItemOperation(
         )
     ) {
         errors.push(
-            `物品 ${proposal.id} 已${existing.state === 'destroyed' ? '销毁' : '消耗'}，不能执行 ${proposal.operation}。`,
+            `物品 ${proposal.id} 只剩残骸，不能执行 ${proposal.operation}。`,
+        );
+    }
+    if (
+        normalizedExisting
+            ?.physicalForm ===
+            'unknown' &&
+        ![
+            'acquire',
+            'carry',
+            'equip',
+            'lose',
+        ].includes(
+            proposal.operation,
+        )
+    ) {
+        errors.push(
+            `物品 ${proposal.id} 下落未知，必须先恢复其物理存在。`,
         );
     }
     if (
@@ -785,6 +848,13 @@ function applyOneOperation(
                     ? 'intact'
                     : next.state
             );
+        if (
+            next.state !==
+                'destroyed'
+        ) {
+            next.physicalForm =
+                'whole';
+        }
         next.isEquipped =
             operation ===
                 'acquire' &&
@@ -851,6 +921,8 @@ function applyOneOperation(
         ) {
             next.state =
                 'intact';
+            next.physicalForm =
+                'whole';
         }
     } else if (
         operation === 'unequip'
@@ -893,6 +965,8 @@ function applyOneOperation(
     ) {
         next.state =
             'consumed';
+        next.physicalForm =
+            'absent';
         next.holderId = '';
         next.isEquipped =
             false;
@@ -909,6 +983,8 @@ function applyOneOperation(
         ) {
             next.state =
                 'damaged';
+            next.physicalForm =
+                'whole';
         }
     } else if (
         operation === 'clean'
@@ -919,11 +995,15 @@ function applyOneOperation(
         ) {
             next.state =
                 'intact';
+            next.physicalForm =
+                'whole';
         }
     } else if (
         operation === 'lose'
     ) {
         next.state = 'lost';
+        next.physicalForm =
+            'unknown';
         next.holderId = '';
         next.isEquipped =
             false;
@@ -932,6 +1012,28 @@ function applyOneOperation(
     ) {
         next.state =
             'destroyed';
+        next.physicalForm =
+            next.physicalForm ===
+                'absent'
+                ? 'absent'
+                : ITEM_PHYSICAL_FORM_VALUES
+                    .includes(
+                        proposal
+                            .physicalForm,
+                    )
+                    ? proposal
+                        .physicalForm
+                    : inferDestroyedPhysicalForm(
+                        proposal
+                            .evidenceText,
+                    ) ||
+                    (
+                        next
+                            .physicalForm ===
+                            'absent'
+                            ? 'absent'
+                            : 'remains'
+                    );
         next.isEquipped =
             false;
     }

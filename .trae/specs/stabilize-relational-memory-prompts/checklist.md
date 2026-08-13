@@ -1,0 +1,54 @@
+# Verification Checklist
+
+- [x] `Narrative Authority Snapshot` 对同一 State 输出确定、稳定并包含 timeline epoch、revision、Scene、Actor、Item、Material 与 Room 权威。
+- [x] Prompt 权威顺序固定为当前 State > 当前事件 > 历史事件 > 主观图式 > raw transcript。
+- [x] context trimming 始终保留玩家动作、Authority Snapshot、item directives、actor knowledge 和 active expectations。
+- [x] Item `physicalForm` 完整支持 `whole|remains|absent|unknown`。
+- [x] `vanished entirely` 产生 `destroyed + absent`，并清空 holder、equipped 和物理 placement。
+- [x] 明确保留的损毁残骸产生 `destroyed + remains`，可携带/放置但不可正常使用或修复复活。
+- [x] absent Item 不出现在当前物理场景投影，也不能通过 carry/place/equip/give/lend directive 改变。
+- [x] 旧 Item 确定性迁移不调用模型、重复运行幂等且不误删含糊的已存残骸。
+- [x] Knowledge V2 记录拥有稳定 ID、revision、projectorVersion、sourceRefs、visibility、effectiveClock 和 checksum。
+- [x] 长 Scene/Event 被稳定 chunk，不再只嵌入前 512 tokens。
+- [x] JSON、Vectra 和 Qdrant 均被视为可重建投影，不成为 Reducer 权威。
+- [x] stale revision 的 knowledge sync 被拒绝，索引删除后可从 State + chat 强制全量重建。
+- [x] Qdrant collection generation 随 embedding 模型或维度变化而更新。
+- [x] Qdrant 不可用时 exact/fallback retrieval 可用，且不阻断回合或 Scene 提交。
+- [x] Planner 只生成 1–4 个受限子查询，不调用高/中/低档模型且不写 State。
+- [x] Relational Synapse 每条边均有权威 sourceRefs，扩散最多两跳并应用 decay 与 fan penalty。
+- [x] exact、vector、Planner 和 Synapse 四条路径都执行 audience 与 actor-knowledge 过滤。
+- [x] 未见证事件、其他人物私有 Appraisal、锁定线索、secret 和 private goal 不会泄漏给低/中档或错误 NPC。
+- [x] Appraisal 必须绑定合法 observer、target、Event、message、Scene 和知识来源。
+- [x] 同一事实可以为不同 observer 产生不同 Appraisal，且不会升级为世界事实。
+- [x] 单一事件不能创建稳定 Person Schema。
+- [x] 稳定 Person Schema 至少需要三条 accepted Appraisal 且跨至少两幕。
+- [x] Schema 保存 support、counterevidence、confidence、context 和 expectation，并可 contested/superseded。
+- [x] Schema 或其生成文本不能作为自身的新证据。
+- [x] `impressionOfPlayerEn` 从 active Schema 投影，旧档无 Schema 时保持兼容 fallback。
+- [x] 本地观察器一次批量处理合法 witnesses，不按 NPC 逐个调用高/中/低档模型。
+- [x] 中档 `schemaOperations` 复用现有 event-boundary 调用，不新增第二次中档调用。
+- [x] Scene close 不会静默丢弃 `pendingEventBoundary`，陈旧 epoch/revision/boundaryId 提交被拒绝。
+- [x] Scene Opening 形成可检索 experience，但不能从开场 prose 创建未提交 Item、关系、承诺或隐藏事实。
+- [x] 新 Scene 的 active actor intent 被显式提交或清空，不继承无关旧场景意图。
+- [x] 初级 Prompt 使用 expectation 驱动预判、默契和边界，不机械朗读 Schema 标签。
+- [x] NPC 只有在 activation capsule 包含具体 Event 时才能声称具体旧事细节。
+- [x] supporting Event 只供合法 actor 使用，不能由其他 NPC 或 narrator 代为知道。
+- [x] 当前 State 与历史/RAG 冲突时，冲突记录被抑制或标记 historical，并留下 diagnostics。
+- [x] 低档正文和 Scene Opening validator 拒绝与 Item 物质状态、holder、Actor presence/room/life、Scene destination/clock 或 Spell authority 直接冲突的输出。
+- [x] repair 请求完整携带原 Authority Snapshot、activation capsules 和 validation conflict。
+- [x] diagnostics 记录 backend、Planner、record/source path、suppressed conflict、activation、Schema proposal 和模型调用数，但不泄漏秘密 Prompt。
+- [x] 普通成功回合仍只有既有一次低档调用，零新增中档/高档调用。
+- [x] 事件边界仍只有既有一次中档调用，高档不参与日常突触维护。
+- [x] Tina dry-run 能复现 message 212–214 的羽毛笔冲突且不修改文件。
+- [x] Tina apply 前创建备份并校验 checksum、epoch、revision 和目标消息 fingerprint。
+- [x] Tina 修复后羽毛笔为 `destroyed + absent`，错误开场子句被精确修正，message 214 与当前 State 连贯。
+- [x] Tina 修复不改变非目标消息、Social Graph、Calendar、Identity、其他记忆和其他 Items。
+- [x] Tina 重复迁移 byte-stable，Knowledge V2 重建后旧矛盾 transcript 不覆盖当前事实。
+- [x] 目标测试、全量 Hogwarts Node tests、ESLint、`node --check` 与 `git diff --check` 全部通过。
+- [x] README、runtime spec、state-fields 与相关 Item/Memory/Knowledge 契约同步更新。
+- [x] Qdrant 使用 `v1.19.0` macOS arm64 官方原生二进制，解包/执行前 SHA-256 为 `4e279a80cc1ebe73e859318ff86375af54c123887dd7ae46605c0eb6cb7c44e8`，且运行时版本匹配。
+- [x] 用户级 LaunchAgent 可自启动和异常恢复，Qdrant 仅监听 `127.0.0.1`，`storage` 与 `snapshots` 使用显式持久化路径。
+- [x] 项目真实 embedding 路径已探测 model 与 dimension，并据此写入 Qdrant/collection generation 配置，未猜测维度或提交凭据。
+- [x] Tina Knowledge V2 已从权威 State + chat 全量 rebuild，并通过真实 Qdrant upsert/query 核对 generation、点数、失败数和已知 sourceRefs，权威档案保持不变。
+- [x] 真实 Qdrant 服务端 payload filter 阻止 actor-private、locked 和 unauthorized 记录泄漏；LaunchAgent 重启后 health、环回绑定、points、snapshot 与授权查询保持有效。
+- [x] Qdrant 真实同步与 exact/fallback 回归通过，部署、配置、备份恢复及“Qdrant 非权威投影”文档已更新。

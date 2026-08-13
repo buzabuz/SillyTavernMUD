@@ -6,6 +6,16 @@ import test from 'node:test';
 import {
     projectPeoplePanel,
 } from '../public/scripts/extensions/hogwarts-mud/people-projection.js';
+import {
+    normalizeActorCore,
+    normalizeActorRuntime,
+} from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-schema.js';
+import {
+    createDefaultMemorySynapse,
+} from '../public/scripts/extensions/hogwarts-mud/domain/memory-synapse-schema.js';
+import {
+    normalizeNpcIdentity,
+} from '../public/scripts/extensions/hogwarts-mud/domain/npc-identity-schema.js';
 
 const actors = [
     {
@@ -19,7 +29,8 @@ const actors = [
         present: false,
         mapId: 'hogwarts_castle',
         roomId: 'charms_classroom',
-        introducedClock: '1991 · 09:00',
+        introducedClock:
+            '1991 · 09:00',
     },
     {
         id: 'secret_student',
@@ -38,13 +49,94 @@ const actors = [
 
 function createState(overrides = {}) {
     return {
-        actors,
-        actorLibrary: actors.map(actor => ({
-            id: actor.id,
-            nameEn: actor.id,
-            introducedClock:
-                actor.introducedClock || '',
-        })),
+        actors:
+            actors.map(actor =>
+                normalizeActorRuntime({
+                    ...actor,
+                    lifeStatus: 'alive',
+                    lifeStatusPermanent:
+                        false,
+                    lifeStatusDetailEn:
+                        'Alive.',
+                    lifeStatusSinceClock:
+                        '',
+                    currentActivityEn:
+                        '',
+                    currentIntentEn:
+                        '',
+                    currentGoalEn:
+                        '',
+                    temporary: false,
+                })),
+        actorLibrary:
+            actors.map(actor =>
+                normalizeActorCore({
+                    id: actor.id,
+                    canonCatalogId: '',
+                    nameEn: actor.id,
+                    aliases: [],
+                    roleEn: 'Student',
+                    cast: {
+                        origin:
+                            'foundation',
+                        introducedClock:
+                            actor
+                                .introducedClock ||
+                            '',
+                        introducedTurn:
+                            actor
+                                .introducedClock
+                                ? 1
+                                : null,
+                    },
+                    publicProfile: {
+                        descriptionEn:
+                            '',
+                        backgroundEn:
+                            '',
+                    },
+                    performanceCore: {
+                        temperamentEn:
+                            '',
+                        speechStyleEn:
+                            '',
+                        motivesEn: [],
+                        socialStrategiesEn:
+                            [],
+                        boundariesEn: [],
+                        vulnerabilitiesEn:
+                            [],
+                    },
+                    identity:
+                        normalizeNpcIdentity(
+                            {},
+                        ),
+                    privateFacts: {
+                        secretEn: '',
+                        knowledgeEn: [],
+                    },
+                })),
+        actorMemoryIndex: {
+            version: 1,
+            byActorId:
+                Object.fromEntries(
+                    actors.map(actor => [
+                        actor.id,
+                        {
+                            firstImpressionRef:
+                                '',
+                            core: [],
+                            recent: [],
+                            everyday: [],
+                        },
+                    ]),
+                ),
+        },
+        memorySynapse:
+            createDefaultMemorySynapse(),
+        socialGraph: {
+            relationships: [],
+        },
         map: {
             activeMapId: 'hogwarts_castle',
             currentLocalNodeId:

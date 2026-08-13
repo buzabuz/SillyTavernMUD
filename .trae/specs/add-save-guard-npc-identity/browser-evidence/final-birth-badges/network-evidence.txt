@@ -1,0 +1,8 @@
+Browser network monitor: 100 captured requests.
+Story model generation requests: NONE.
+Observed model-adjacent non-generation endpoints:
+- POST /api/backends/chat-completions/status (connection/status probe)
+- POST /api/tokenizers/openai/count?model=gpt-3.5-turbo (token count)
+No /generate or chat-completion generation request appeared during acceptance.
+Operator did not click 提交回合, metadata, chat, translate, or any generation action.
+Background app-load traffic included /api/chats/save and /api/settings/save; these were automatic page-load/save initialization requests, not operator submissions.

@@ -10,6 +10,10 @@ import {
 import {
     normalizeSocialGraph,
 } from './social-migration.js';
+import {
+    buildSocialClaimsAudienceProjection,
+    isSocialFamilyEdgeVisible,
+} from './social-claims-projection.js';
 
 function getSocialClosenessLabel(
     closeness,
@@ -356,10 +360,19 @@ export function buildSocialAudienceProjection(
             version: graph.version,
             audienceActorId: '',
             statements: [],
+            identityClaims: [],
+            relationshipClaims: [],
+            personReferences: [],
             relationshipEvidence: [],
             relationships: [],
         };
     }
+    const claimsProjection =
+        buildSocialClaimsAudienceProjection(
+            graph,
+            audienceId,
+            isSocialEntryVisibleToAudience,
+        );
     const directionEvidence =
         new Map();
     graph.relationshipEvidence
@@ -420,7 +433,23 @@ export function buildSocialAudienceProjection(
                         edge,
                         audienceId,
                     );
+                const visibleFamilyClaim =
+                    isSocialFamilyEdgeVisible(
+                        edge,
+                        claimsProjection
+                            .visibleRelationshipClaimIds,
+                    );
+                const hiddenGeneratedFamily =
+                    edge.id.startsWith(
+                        'social-family:',
+                    ) &&
+                    edge.structuralTags
+                        .includes(
+                            'family',
+                        ) &&
+                    !visibleFamilyClaim;
                 if (
+                    hiddenGeneratedFamily ||
                     !sourceSelf &&
                     !edgeAuthorized &&
                     !visible.length
@@ -436,14 +465,26 @@ export function buildSocialAudienceProjection(
                 const structuralTags =
                     sourceSelf
                         ? edge.structuralTags
+                            .filter(tag =>
+                                tag !==
+                                    'family' ||
+                                visibleFamilyClaim)
                         : normalizeSocialStructuralTags(
                             visible.flatMap(item =>
                                 item.structuralTags ||
                                 []),
+                            visibleFamilyClaim
+                                ? ['family']
+                                : [],
                             !evidence.length &&
                                 edgeAuthorized
                                 ? edge
                                     .structuralTags
+                                    .filter(
+                                        tag =>
+                                            tag !==
+                                                    'family',
+                                    )
                                 : [],
                         );
                 const projected = {
@@ -495,6 +536,15 @@ export function buildSocialAudienceProjection(
                         statement,
                         audienceId,
                     )),
+        identityClaims:
+            claimsProjection
+                .identityClaims,
+        relationshipClaims:
+            claimsProjection
+                .relationshipClaims,
+        personReferences:
+            claimsProjection
+                .personReferences,
         relationshipEvidence:
             visibleEvidence,
         relationships,

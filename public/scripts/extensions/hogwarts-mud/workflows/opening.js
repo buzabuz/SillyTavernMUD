@@ -1,3 +1,7 @@
+import {
+    applyCommittedSceneOpeningExperience,
+} from '../domain/archive-projection.js';
+
 export function createOpeningWorkflow(ports) {
     const {
         CANON_WIT_TONE_CONTRACT,
@@ -47,7 +51,6 @@ export function createOpeningWorkflow(ports) {
             opening.conflict.immediatePressureEn,
             opening.conflict.stakesEn,
             opening.conflict.incitingEventEn,
-            ...opening.agenda.flatMap(item => [item.timeLabelEn, item.labelEn]),
             ...(opening.clues || []).flatMap(item => [item.labelEn, item.detailEn]),
             ...(opening.items || []).flatMap(item => [item.labelEn, item.detailEn]),
             ...(opening.nextSceneIntent ? [
@@ -83,12 +86,6 @@ export function createOpeningWorkflow(ports) {
         display.conflictPressure = translated[cursor++];
         display.conflictStakes = translated[cursor++];
         display.incitingEvent = translated[cursor++];
-        display.agendaTimes = [];
-        display.agendaLabels = [];
-        opening.agenda.forEach(() => {
-            display.agendaTimes.push(translated[cursor++]);
-            display.agendaLabels.push(translated[cursor++]);
-        });
         display.clueLabels = [];
         display.clueDetails = [];
         (opening.clues || []).forEach(() => {
@@ -398,7 +395,6 @@ Schema:
     }]
   },
   "conflict": {"titleEn":"string","premiseEn":"string","immediatePressureEn":"string","stakesEn":"string","incitingEventEn":"string"},
-  "agenda": [{"timeLabelEn":"string","labelEn":"string"}],
   "clues": [{"id":"snake_case","labelEn":"string","detailEn":"string"}],
   "items": [],
   "nextSceneIntent": {
@@ -611,8 +607,21 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 ...(translatedZh !== sourceEn ? { display_text: translatedZh } : {}),
             },
         };
+        const messageId =
+            context.chat.length;
         context.chat.push(message);
         await context.saveChat();
+        const openingExperience =
+            applyCommittedSceneOpeningExperience(
+                state,
+                message,
+                messageId,
+            );
+        context.chatMetadata.hogwartsMud =
+            openingExperience.state;
+        if (openingExperience.event) {
+            await context.saveMetadata();
+        }
         scheduleRender();
     }
 

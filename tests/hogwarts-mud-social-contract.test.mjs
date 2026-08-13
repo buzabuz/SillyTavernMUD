@@ -205,6 +205,7 @@ function createModelPayload() {
         reviewAfterTurns: 10,
         reviews: [],
         statements: [],
+        schemaOperations: [],
         relationshipEvidence: [{
             sourceActorId: 'ron',
             targetActorId: 'player',

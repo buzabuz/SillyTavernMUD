@@ -160,6 +160,15 @@ export function migrateActorPresentationState(
             changed: false,
         };
     }
+    if (
+        worldState.actorContextVersion ===
+        1
+    ) {
+        return {
+            state: worldState,
+            changed: false,
+        };
+    }
     const records = [
         ...(worldState.actors || []),
         ...(worldState.actorLibrary || []),
@@ -334,17 +343,10 @@ export function buildActorAppearanceView(
                 []
             )
                 .filter(entry =>
-                    entry.playerKnown ===
-                        true ||
-                    entry.knownToPlayer ===
-                        true ||
                     Boolean(
                         entry
-                            .introducedClock,
-                    ) ||
-                    Boolean(
-                        entry
-                            .firstImpressionClock,
+                            .cast
+                            ?.introducedClock,
                     ))
                 .map(entry =>
                     entry.id),

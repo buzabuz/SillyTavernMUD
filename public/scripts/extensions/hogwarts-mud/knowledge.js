@@ -1,29 +1,32 @@
 import { getRequestHeaders } from '/script.js';
 import { getStringHash } from '/scripts/utils.js';
 import {
-    buildActorAppearanceView,
-} from './domain/appearance.js';
-import {
-    normalizeActorMemoryProfile,
-} from './domain/actor-memory.js';
-import {
-    buildSocialAudienceProjection,
-} from './domain/social-projection.js';
-import {
     getActiveInteractionActorIds,
 } from './presence-witness-contract.js';
+import {
+    projectActorCore,
+} from './domain/actor-context-schema.js';
+import {
+    KNOWLEDGE_CATEGORIES as V2_KNOWLEDGE_CATEGORIES,
+    createChunkedKnowledgeRecords,
+    createKnowledgeRecordV2,
+    hydrateKnowledgeRecords,
+    isKnowledgeRecordVisible,
+    normalizeKnowledgeId,
+} from './domain/knowledge-projector-v2.js';
+import {
+    getLegalAppraisalObserverIds,
+} from './domain/memory-synapse-schema.js';
 
-export const KNOWLEDGE_CATEGORIES = Object.freeze(['actors', 'scenes', 'events', 'clues']);
+export const KNOWLEDGE_CATEGORIES = V2_KNOWLEDGE_CATEGORIES;
 const VECTOR_SOURCE = 'transformers';
 const VECTOR_PREFIX = 'HPMUD_KB_RECORD ';
 
 function normalizeId(value, fallback = 'unknown') {
-    const normalized = String(value || '')
-        .normalize('NFKD')
-        .replace(/[^\w.-]+/g, '_')
-        .replace(/^[_\-.]+|[_\-.]+$/g, '')
-        .slice(0, 96);
-    return normalized || fallback;
+    return normalizeKnowledgeId(
+        value,
+        fallback,
+    );
 }
 
 function makeRecord(category, id, title, text, data, entityIds = [], tags = []) {
@@ -35,43 +38,328 @@ function makeRecord(category, id, title, text, data, entityIds = [], tags = []) 
         data,
         entityIds: [...new Set(entityIds.map(value => normalizeId(value)).filter(Boolean))],
         tags: [...new Set(tags.map(value => normalizeId(value)).filter(Boolean))],
-        updatedAt: new Date().toISOString(),
     };
 }
 
-function formatSocialRelationship(edge) {
-    const dimensions = [
-        'familiarity',
-        'closeness',
-        'warmth',
-        'trust',
-        'respect',
-        'influence',
-        'tension',
-        'resentment',
-        'fear',
-        'protectiveness',
-    ].map(dimension =>
-        `${dimension} ${Number(edge[dimension] || 0)}`);
-    const labels =
-        (edge.labels || []).join(', ');
-    const emotions =
-        (edge.activeEmotions || [])
-            .map(emotion =>
-                `${emotion.emotion} ${emotion.intensity}`)
-            .join(', ');
-    const latestEvidence =
-        edge.latestEvidence?.summaryEn ||
-        edge.latestEvidence?.summary ||
-        '';
-    return [
-        `${edge.sourceActorId}->${edge.targetActorId}`,
-        labels && `labels ${labels}`,
-        dimensions.join(', '),
-        emotions && `active emotions ${emotions}`,
-        latestEvidence &&
-            `latest evidence ${latestEvidence}`,
-    ].filter(Boolean).join(': ');
+function getLegacyRecordSourceRefs(record) {
+    const sourceRefs = [];
+    const add = (type, values) => {
+        for (const value of values || []) {
+            if (
+                value !== undefined &&
+                value !== null &&
+                String(value).trim()
+            ) {
+                sourceRefs.push({
+                    type,
+                    id: String(value),
+                });
+            }
+        }
+    };
+    add(
+        'state',
+        [record.id],
+    );
+    add(
+        'message',
+        record.data?.messageIds ||
+        record.data?.sourceMessageIds ||
+        record.data?.eventKnowledge
+            ?.sourceMessageIds ||
+        [],
+    );
+    add(
+        'event',
+        record.data?.events
+            ?.map(event =>
+                event.eventId) ||
+        record.data?.sourceEventIds ||
+        [],
+    );
+    if (
+        record.data?.eventKnowledge
+            ?.eventId
+    ) {
+        add(
+            'event',
+            [
+                record.data
+                    .eventKnowledge
+                    .eventId,
+            ],
+        );
+    }
+    return sourceRefs;
+}
+
+function getLegacyRecordVisibility(
+    record,
+    state = {},
+) {
+    if (record.category === 'clues') {
+        return {
+            scope:
+                record.tags.includes(
+                    'discovered',
+                )
+                    ? 'public'
+                    : 'locked',
+            actorIds:
+                record.tags.includes(
+                    'discovered',
+                )
+                    ? ['player']
+                    : [],
+        };
+    }
+    if (
+        record.category ===
+        'appraisals'
+    ) {
+        return {
+            scope: 'actor',
+            actorIds: [
+                record.data
+                    ?.appraisal
+                    ?.observerId,
+            ].filter(Boolean),
+        };
+    }
+    if (
+        record.category ===
+        'schemas'
+    ) {
+        return {
+            scope: 'actor',
+            actorIds: [
+                record.data
+                    ?.schema
+                    ?.observerId,
+            ].filter(Boolean),
+        };
+    }
+    if (
+        record.category ===
+        'social_evidence'
+    ) {
+        return {
+            scope: 'witnesses',
+            actorIds: [
+                'player',
+                ...(
+                    record.data
+                        ?.socialEvidence
+                        ?.witnessedBy ||
+                    []
+                ),
+                record.data
+                    ?.socialEvidence
+                    ?.sourceActorId,
+                record.data
+                    ?.socialEvidence
+                    ?.targetActorId,
+            ].filter(Boolean),
+        };
+    }
+    if (
+        record.category === 'scenes'
+    ) {
+        return {
+            scope: 'witnesses',
+            actorIds: [
+                'player',
+                ...(
+                    record.data
+                        ?.activeInteractionActorIds ||
+                    []
+                ),
+                ...(
+                    record.data
+                        ?.participantActorIds ||
+                    []
+                ),
+                ...(
+                    record.data
+                        ?.witnessActorIds ||
+                    []
+                ),
+            ],
+        };
+    }
+    if (
+        record.category === 'events'
+    ) {
+        const event =
+            record.data
+                ?.eventKnowledge ||
+            record.data
+                ?.causalCollapse ||
+            {};
+        const explicitPublic =
+            event.visibility ===
+                'public' ||
+            event.visibility?.scope ===
+                'public';
+        if (explicitPublic) {
+            return {
+                scope: 'public',
+                actorIds: [],
+            };
+        }
+        const actorIds = [
+            ...new Set([
+                ...(
+                    event
+                        .participantActorIds ||
+                    []
+                ),
+                ...(
+                    event
+                        .witnessActorIds ||
+                    []
+                ),
+                ...(
+                    event
+                        .knownByActorIds ||
+                    []
+                ),
+                ...getLegalAppraisalObserverIds(
+                    state,
+                    event,
+                ),
+            ]),
+        ];
+        return actorIds.length
+            ? {
+                scope: 'witnesses',
+                actorIds,
+            }
+            : {
+                scope: 'locked',
+                actorIds: [],
+            };
+    }
+    return {
+        scope: 'public',
+        actorIds: [],
+    };
+}
+
+function getSafeRecordData(record) {
+    return record.data;
+}
+
+function projectLegacyRecordsV2(
+    records,
+    state,
+) {
+    const timelineEpoch =
+        String(
+            state.timelineEpoch ||
+            state.knowledgeBase
+                ?.timelineId ||
+            'legacy_epoch',
+        );
+    const stateRevision =
+        Math.max(
+            0,
+            Number(
+                state.stateRevision,
+            ) || 0,
+        );
+    const nodeTypeByCategory = {
+        actors: 'actor',
+        scenes: 'scene',
+        events: 'fact',
+        clues: 'clue',
+        appraisals: 'appraisal',
+        schemas: 'schema',
+        social_evidence: 'fact',
+    };
+    return records
+        .filter(record =>
+            record.text)
+        .flatMap(record => {
+            const sceneId =
+                record.data
+                    ?.eventKnowledge
+                    ?.sceneId ||
+                record.data
+                    ?.causalCollapse
+                    ?.sceneId ||
+                record.data
+                    ?.appraisal
+                    ?.sceneId ||
+                (
+                    record.category ===
+                    'scenes'
+                        ? record.id
+                        : ''
+                );
+            const effectiveClock =
+                record.data
+                    ?.transaction
+                    ?.committedClock ||
+                record.data
+                    ?.causalCollapse
+                    ?.effectiveSinceClock ||
+                record.data
+                    ?.appraisal
+                    ?.committedClock ||
+                record.data
+                    ?.schema
+                    ?.updatedClock ||
+                record.data
+                    ?.archive
+                    ?.startedClock ||
+                state.clock ||
+                '';
+            const input = {
+                ...record,
+                recordId:
+                    `${record.category}_${record.id}`,
+                nodeType:
+                    nodeTypeByCategory[
+                        record.category
+                    ],
+                timelineEpoch,
+                stateRevision,
+                sourceRefs:
+                    getLegacyRecordSourceRefs(
+                        record,
+                    ),
+                visibility:
+                    getLegacyRecordVisibility(
+                        record,
+                        state,
+                    ),
+                effectiveClock,
+                sceneId,
+                data:
+                    getSafeRecordData(
+                        record,
+                    ),
+            };
+            return (
+                record.category ===
+                    'scenes' ||
+                record.category ===
+                    'events'
+            )
+                ? createChunkedKnowledgeRecords(
+                    input,
+                )
+                : [
+                    createKnowledgeRecordV2(
+                        input,
+                    ),
+                ];
+        })
+        .sort((left, right) =>
+            left.recordId.localeCompare(
+                right.recordId,
+            ));
 }
 
 export function ensureKnowledgeBaseIdentity(context, state) {
@@ -88,151 +376,74 @@ export function ensureKnowledgeBaseIdentity(context, state) {
     return state.knowledgeBase.timelineId;
 }
 
+function resolveKnowledgeBaseIdentity(
+    context,
+    state,
+) {
+    const chatId =
+        context.getCurrentChatId?.() ||
+        context.chatId ||
+        '';
+    const fallback = [
+        state.campaign?.startYear,
+        state.character?.identity?.name,
+        state.campaign?.presetId,
+        state.timelineEpoch,
+    ].filter(Boolean).join('-');
+    return normalizeId(
+        state.knowledgeBase?.timelineId ||
+        chatId ||
+        fallback ||
+        'timeline',
+    );
+}
+
 export function buildKnowledgeRecords(state, chat = []) {
     const records = [];
-    const playerSocialProjection =
-        buildSocialAudienceProjection(
-            state,
-            'player',
-        );
     const activeActorIds =
         getActiveInteractionActorIds(
             state,
         );
-    const activeActorIdSet =
-        new Set(activeActorIds);
     for (const actor of state.actorLibrary || []) {
-        const current = (state.actors || []).find(item => item.id === actor.id);
-        const normalizedActor =
-            normalizeActorMemoryProfile(
-                actor,
-                current,
-            );
-        const memories =
-            normalizedActor.sharedMemories;
-        const memoryLine = tier => (memories[tier] || [])
-            .map(memory =>
-                memory.summaryEn || memory.summary)
-            .filter(Boolean)
-            .join(' | ');
-        const socialStatements =
-            playerSocialProjection
-                .statements
-                .filter(statement =>
-                    statement.subjectId ===
-                    actor.id)
-                .map(statement =>
-                    `${
-                        statement.category ||
-                        'statement'
-                    }: ${
-                        statement.textEn ||
-                        statement.text
-                    }`)
-                .filter(Boolean)
-                .join(' | ');
-        const actorSocialRelationships =
-            playerSocialProjection
-                .relationships
-                .filter(edge =>
-                    edge.sourceActorId ===
-                        actor.id ||
-                    edge.targetActorId ===
-                        actor.id);
-        const socialRelationships =
-            actorSocialRelationships
-                .map(formatSocialRelationship)
-                .join(' | ');
-        const appearance =
-            buildActorAppearanceView(
-                state,
-                actor.id,
-            );
-        const currentPresentation = [
-            appearance.presentation.outfit
-                ? `outfit: ${appearance.presentation.outfit}`
-                : '',
-            appearance.presentation
-                .accessories.length
-                ? `accessories: ${appearance.presentation.accessories.join(', ')}`
-                : '',
-            appearance.presentation.hair
-                ? `hair: ${appearance.presentation.hair}`
-                : '',
-            appearance.presentation
-                .visibleConditions.length
-                ? `visible conditions: ${appearance.presentation.visibleConditions.join(', ')}`
-                : '',
-            appearance.presentation
-                .heldItems.length
-                ? `held items: ${appearance.presentation.heldItems
-                    .map(entry =>
-                        `${entry.hand}: ${entry.item}`)
-                    .join(', ')}`
-                : '',
-        ].filter(Boolean).join(' | ');
+        const core =
+            projectActorCore(actor);
+        const indexedCore = {
+            id: core.id,
+            canonCatalogId:
+                core.canonCatalogId,
+            nameEn: core.nameEn,
+            aliases: core.aliases,
+            roleEn: core.roleEn,
+            publicProfile:
+                core.publicProfile,
+            performanceCore:
+                core.performanceCore,
+        };
         records.push(makeRecord(
             'actors',
-            actor.id,
-            actor.nameEn || actor.name,
+            core.id,
+            core.nameEn,
             [
-                `Actor: ${actor.nameEn || actor.name}`,
-                `Role: ${actor.roleEn || actor.role}`,
-                `Relationship to player: ${actor.relationshipToPlayerEn || actor.relationshipToPlayer}`,
-                `Current impression of player: ${actor.impressionOfPlayerEn || actor.impressionOfPlayer || ''}`,
-                `Core shared memories: ${memoryLine('core')}`,
-                `Recent shared events: ${memoryLine('recent')}`,
-                `Everyday shared moments: ${memoryLine('everyday')}`,
-                `Source-grounded background statements: ${socialStatements}`,
-                `Known social relationships: ${socialRelationships}`,
-                `Physical description: ${appearance.physicalDescriptionEn || appearance.physicalDescription}`,
-                `Current presentation: ${currentPresentation}`,
-                `Public background: ${actor.publicBackgroundEn || actor.publicBackground}`,
-                `Personality: ${actor.personalityEn || actor.personality}`,
-                `Speech style: ${actor.speechStyleEn || actor.speechStyle}`,
-                `Private goal: ${actor.privateGoalEn || ''}`,
-                `Fear: ${actor.fearEn || ''}`,
-                `Secret: ${actor.secretEn || ''}`,
-                `Knowledge boundary: ${(normalizedActor.knowledgeEn || []).join(' | ')}`,
-                `Current map: ${current?.mapId || ''}`,
-                `Current room: ${current?.roomId || ''}`,
-                `Current activity: ${current?.currentActivityEn || current?.currentActivity || ''}`,
-                `Current intent: ${current?.currentIntentEn || current?.currentIntent || ''}`,
+                `Actor: ${core.nameEn}`,
+                `Role: ${core.roleEn}`,
+                `Public description: ${core.publicProfile.descriptionEn}`,
+                `Public background: ${core.publicProfile.backgroundEn}`,
+                `Temperament: ${core.performanceCore.temperamentEn}`,
+                `Speech style: ${core.performanceCore.speechStyleEn}`,
+                `Motives: ${core.performanceCore.motivesEn.join(' | ')}`,
+                `Social strategies: ${core.performanceCore.socialStrategiesEn.join(' | ')}`,
+                `Boundaries: ${core.performanceCore.boundariesEn.join(' | ')}`,
+                `Vulnerabilities: ${core.performanceCore.vulnerabilitiesEn.join(' | ')}`,
             ].join('\n'),
             {
-                profile: {
-                    ...normalizedActor,
-                    socialStatements:
-                        playerSocialProjection
-                            .statements
-                            .filter(statement =>
-                                statement.subjectId ===
-                                actor.id),
-                    socialRelationships:
-                        actorSocialRelationships,
-                },
-                currentState:
-                    current || null,
-                currentPresentation:
-                    appearance.presentation,
+                actorCore:
+                    indexedCore,
             },
             [
-                actor.id,
-                current?.roomId,
-                ...(
-                    activeActorIdSet
-                        .has(actor.id)
-                        ? [state.scene?.id]
-                        : []
-                ),
+                core.id,
+                core.canonCatalogId,
             ],
-            [
-                'actor',
-                activeActorIdSet
-                    .has(actor.id)
-                    ? 'active'
-                    : 'offstage',
-            ],
+            ['actor_core'],
         ));
     }
 
@@ -294,8 +505,7 @@ export function buildKnowledgeRecords(state, chat = []) {
                     segment.type === 'dialogue'
                         ? `${segment.actorId}: ${segment.textEn}`
                         : segment.textEn))
-            .join('\n\n')
-            .slice(-24_000);
+            .join('\n\n');
         const location = isCurrentScene
             ? state.location
             : archivedScene?.location || '';
@@ -568,7 +778,192 @@ export function buildKnowledgeRecords(state, chat = []) {
         }
     }
 
-    return records.filter(record => record.text);
+    const appraisals =
+        state.memorySynapse
+            ?.appraisals ||
+        state.appraisals ||
+        [];
+    for (const appraisal of appraisals) {
+        records.push(makeRecord(
+            'appraisals',
+            appraisal.id,
+            appraisal.summaryEn ||
+                appraisal.id,
+            [
+                `Observer: ${appraisal.observerId || ''}`,
+                `Target: ${appraisal.targetId || ''}`,
+                `Interpretation: ${appraisal.summaryEn || ''}`,
+                `Confidence: ${Number(appraisal.confidence) || 0}`,
+                `Status: ${appraisal.status || 'provisional'}`,
+                `Context: ${(appraisal.contextTags || []).join(', ')}`,
+            ].join('\n'),
+            {
+                appraisal,
+                sourceMessageIds:
+                    appraisal
+                        .sourceMessageIds ||
+                    [],
+                sourceEventIds:
+                    appraisal
+                        .sourceEventIds ||
+                    [],
+            },
+            [
+                appraisal.observerId,
+                appraisal.targetId,
+                appraisal.sceneId,
+            ].filter(Boolean),
+            [
+                'appraisal',
+                appraisal.status,
+                ...(appraisal.contextTags || []),
+            ].filter(Boolean),
+        ));
+    }
+
+    const schemas =
+        state.memorySynapse
+            ?.personSchemas ||
+        state.personSchemas ||
+        [];
+    for (const schema of schemas) {
+        records.push(makeRecord(
+            'schemas',
+            schema.id,
+            schema.labelEn ||
+                schema.id,
+            [
+                `Observer: ${schema.observerId || ''}`,
+                `Target: ${schema.targetId || ''}`,
+                `Pattern: ${schema.labelEn || ''}`,
+                `Expectation: ${schema.expectationEn || ''}`,
+                `Confidence: ${Number(schema.confidence) || 0}`,
+                `Status: ${schema.status || 'active'}`,
+                `Context: ${(schema.contextTags || []).join(', ')}`,
+            ].join('\n'),
+            {
+                schema,
+                sourceEventIds:
+                    schema
+                        .supportEventIds ||
+                    [],
+            },
+            [
+                schema.observerId,
+                schema.targetId,
+            ].filter(Boolean),
+            [
+                'schema',
+                schema.status,
+                ...(schema.contextTags || []),
+            ].filter(Boolean),
+        ));
+    }
+
+    const socialRecordGroups = [
+        [
+            'relationship_evidence',
+            state.socialGraph
+                ?.relationshipEvidence ||
+                [],
+        ],
+        [
+            'statement',
+            state.socialGraph
+                ?.statements ||
+                [],
+        ],
+        [
+            'identity_claim',
+            state.socialGraph
+                ?.identityClaims ||
+                [],
+        ],
+        [
+            'relationship_claim',
+            state.socialGraph
+                ?.relationshipClaims ||
+                [],
+        ],
+    ];
+    for (const [
+        kind,
+        entries,
+    ] of socialRecordGroups) {
+        entries.forEach(
+            (
+                entry,
+                index,
+            ) => {
+                const stableId =
+                    entry.id ||
+                    entry.evidenceId ||
+                    entry.statementId ||
+                    entry.claimId ||
+                    [
+                        kind,
+                        entry.sourceActorId,
+                        entry.targetActorId,
+                        entry.subjectId,
+                        (
+                            entry
+                                .sourceMessageIds ||
+                            []
+                        ).join('_'),
+                        index,
+                    ]
+                        .filter(value =>
+                            value !==
+                            undefined)
+                        .join('_');
+                records.push(
+                    makeRecord(
+                        'social_evidence',
+                        stableId,
+                        entry.summaryEn ||
+                            entry.textEn ||
+                            stableId,
+                        [
+                            `Kind: ${kind}`,
+                            `Source actor: ${entry.sourceActorId || ''}`,
+                            `Target actor: ${entry.targetActorId || entry.subjectId || ''}`,
+                            `Evidence: ${entry.summaryEn || entry.textEn || ''}`,
+                            `Scene: ${entry.sceneId || ''}`,
+                        ].join('\n'),
+                        {
+                            socialEvidence: {
+                                ...entry,
+                                kind,
+                            },
+                            sourceMessageIds:
+                                entry
+                                    .sourceMessageIds ||
+                                [],
+                            sourceEventIds:
+                                entry
+                                    .sourceEventIds ||
+                                [],
+                        },
+                        [
+                            entry.sourceActorId,
+                            entry.targetActorId,
+                            entry.subjectId,
+                            entry.sceneId,
+                        ].filter(Boolean),
+                        [
+                            'social_evidence',
+                            kind,
+                        ],
+                    ),
+                );
+            },
+        );
+    }
+
+    return projectLegacyRecordsV2(
+        records,
+        state,
+    );
 }
 
 function getCollectionId(timelineId, category) {
@@ -576,14 +971,8 @@ function getCollectionId(timelineId, category) {
 }
 
 function getVectorText(record) {
-    return VECTOR_PREFIX + JSON.stringify({
-        category: record.category,
-        id: record.id,
-        title: record.title,
-        entityIds: record.entityIds,
-        tags: record.tags,
-        text: record.text,
-    });
+    return VECTOR_PREFIX +
+        JSON.stringify(record);
 }
 
 function parseVectorRecord(text) {
@@ -613,9 +1002,45 @@ async function syncVectorRecords(
     timelineId,
     records,
     removedEntries = [],
+    allRecords = records,
 ) {
     for (const category of KNOWLEDGE_CATEGORIES) {
-        const categoryRecords = records.filter(record => record.category === category);
+        let categoryRecords = records.filter(record => record.category === category);
+        const allCategoryRecords =
+            allRecords.filter(record =>
+                record.category ===
+                category);
+        const collectionId = getCollectionId(timelineId, category);
+        if (allCategoryRecords.length) {
+            const savedHashes =
+                await vectorRequest(
+                    'list',
+                    {
+                        collectionId,
+                    },
+                ) || [];
+            const expectedHashes =
+                allCategoryRecords.map(
+                    record =>
+                        getStringHash(
+                            `${
+                                category
+                            }:${
+                                record.recordId
+                            }`,
+                        ),
+                );
+            if (
+                expectedHashes.some(
+                    hash =>
+                        !savedHashes
+                            .includes(hash),
+                )
+            ) {
+                categoryRecords =
+                    allCategoryRecords;
+            }
+        }
         const removedIds =
             removedEntries
                 .filter(entry =>
@@ -623,17 +1048,18 @@ async function syncVectorRecords(
                     category)
                 .map(entry =>
                     normalizeId(
+                        entry.recordId ||
                         entry.id,
                     ));
         const recordIds =
             [...new Set([
                 ...categoryRecords.map(
-                    record => record.id,
+                    record =>
+                        record.recordId,
                 ),
                 ...removedIds,
             ])];
         if (!recordIds.length) continue;
-        const collectionId = getCollectionId(timelineId, category);
         const hashes = recordIds.map(
             id =>
                 getStringHash(
@@ -645,7 +1071,14 @@ async function syncVectorRecords(
         await vectorRequest('insert', {
             collectionId,
             items: categoryRecords.map((record, index) => ({
-                hash: hashes[index],
+                hash:
+                    getStringHash(
+                        `${
+                            category
+                        }:${
+                            record.recordId
+                        }`,
+                    ),
                 index,
                 text: getVectorText(record),
             })),
@@ -658,18 +1091,35 @@ export async function syncKnowledgeBase(context, state) {
     const records = buildKnowledgeRecords(state, context.chat);
     const previousHashes = state.knowledgeBase.recordHashes || {};
     const nextHashes = Object.fromEntries(records.map(record => [
-        `${record.category}:${record.id}`,
-        getStringHash(getVectorText(record)),
+        record.recordId,
+        record.contentChecksum,
     ]));
     const changedRecords = records.filter(record => {
-        const key = `${record.category}:${record.id}`;
-        return previousHashes[key] !== nextHashes[key];
+        return previousHashes[
+            record.recordId
+        ] !==
+            nextHashes[
+                record.recordId
+            ];
     });
     const response = await fetch('/api/hogwarts-mud/knowledge/sync', {
         method: 'POST',
         headers: getRequestHeaders(),
         body: JSON.stringify({
             timelineId,
+            timelineEpoch:
+                String(
+                    state.timelineEpoch ||
+                    state.knowledgeBase
+                        .timelineId,
+                ),
+            stateRevision:
+                Math.max(
+                    0,
+                    Number(
+                        state.stateRevision,
+                    ) || 0,
+                ),
             records,
             replace: true,
         }),
@@ -679,6 +1129,8 @@ export async function syncKnowledgeBase(context, state) {
     }
     const result = await response.json();
     state.knowledgeBase.rootPath = result.root;
+    state.knowledgeBase.diagnostics =
+        result.diagnostics || {};
     state.knowledgeBase.lastSyncedAt = new Date().toISOString();
     state.knowledgeBase.categories = Object.fromEntries(
         KNOWLEDGE_CATEGORIES.map(category => [
@@ -687,11 +1139,21 @@ export async function syncKnowledgeBase(context, state) {
         ]),
     );
     try {
-        await syncVectorRecords(
-            timelineId,
-            changedRecords,
-            result.removed,
-        );
+        if (
+            result.diagnostics
+                ?.backend !==
+                'qdrant' &&
+            result.diagnostics
+                ?.preferredBackend !==
+                'qdrant'
+        ) {
+            await syncVectorRecords(
+                timelineId,
+                changedRecords,
+                result.removed,
+                records,
+            );
+        }
         state.knowledgeBase.vectorStatus = 'ready';
         state.knowledgeBase.vectorError = '';
         state.knowledgeBase.recordHashes = nextHashes;
@@ -730,49 +1192,226 @@ export async function retrieveKnowledge(
     query,
     entityIds = [],
     limit = 6,
-    { includeLockedClues = false } = {},
+    {
+        includeLockedClues = false,
+        audienceActorIds = ['player'],
+        nodeTypes = [],
+    } = {},
 ) {
-    const timelineId = ensureKnowledgeBaseIdentity(context, state);
+    const timelineId =
+        resolveKnowledgeBaseIdentity(
+            context,
+            state,
+        );
+    const timelineEpoch =
+        String(
+            state.timelineEpoch ||
+            timelineId,
+        );
+    const stateRevision =
+        Math.max(
+            0,
+            Number(
+                state.stateRevision,
+            ) || 0,
+        );
+    const audience = {
+        actorIds:
+            audienceActorIds,
+        includeLocked:
+            includeLockedClues,
+        role:
+            includeLockedClues
+                ? 'author'
+                : 'player',
+    };
+    const filters = {
+        timelineEpoch,
+        stateRevision,
+        audience,
+        clock: state.clock || '',
+        nodeTypes,
+        supersededSourceRefs:
+            state.authoritySnapshot
+                ?.supersededSourceRefs ||
+            state.supersededSourceRefs ||
+            [],
+    };
     const exactResponse = await fetch('/api/hogwarts-mud/knowledge/search', {
         method: 'POST',
         headers: getRequestHeaders(),
         body: JSON.stringify({
             timelineId,
+            timelineEpoch,
+            stateRevision,
             query,
             entityIds,
             categories: KNOWLEDGE_CATEGORIES,
             limit,
+            audience,
+            clock: filters.clock,
+            nodeTypes,
+            supersededSourceRefs:
+                filters
+                    .supersededSourceRefs,
         }),
     });
-    const canExpose = record => includeLockedClues ||
-        record.category !== 'clues' ||
-        record.tags?.includes('discovered');
-    const exactRecords = exactResponse.ok
-        ? (await exactResponse.json()).records || []
-        : [];
+    const exactResult =
+        exactResponse.ok
+            ? await exactResponse.json()
+            : {
+                records: [],
+                diagnostics: {
+                    backend: 'json',
+                    degraded: true,
+                },
+            };
+    const canExpose = record =>
+        record &&
+        record.timelineEpoch ===
+            timelineEpoch &&
+        record.stateRevision ===
+            stateRevision &&
+        isKnowledgeRecordVisible(
+            record,
+            audience,
+        ) &&
+        (
+            includeLockedClues ||
+            record.category !==
+                'clues' ||
+            record.tags?.includes(
+                'discovered',
+            )
+        );
+    const exactRecords =
+        exactResult.records || [];
     let semanticRecords = [];
-    try {
-        const results = await vectorRequest('query-multi', {
-            collectionIds: KNOWLEDGE_CATEGORIES.map(category => getCollectionId(timelineId, category)),
-            searchText: query,
-            topK: limit,
-            threshold: 0.2,
-        }) || {};
-        semanticRecords = Object.values(results)
-            .flatMap(result => result.metadata || [])
-            .map(metadata => parseVectorRecord(metadata.text))
-            .filter(record => record && canExpose(record));
-    } catch (error) {
-        console.warn('[Hogwarts MUD] Semantic retrieval failed; using exact local retrieval', error);
+    if (
+        exactResult.diagnostics
+            ?.backend !== 'qdrant' &&
+        exactResult.diagnostics
+            ?.preferredBackend !==
+            'qdrant'
+    ) {
+        try {
+            const results = await vectorRequest('query-multi', {
+                collectionIds: KNOWLEDGE_CATEGORIES.map(category => getCollectionId(timelineId, category)),
+                searchText: query,
+                topK: limit,
+                threshold: 0.2,
+            }) || {};
+            semanticRecords = Object.values(results)
+                .flatMap(result => result.metadata || [])
+                .map(metadata => parseVectorRecord(metadata.text))
+                .filter(canExpose);
+        } catch (error) {
+            console.warn('[Hogwarts MUD] Semantic retrieval failed; using exact local retrieval', error);
+        }
     }
     const merged = new Map();
     [...exactRecords.filter(canExpose), ...semanticRecords].forEach(record => {
-        const key = `${record.category}:${record.id}`;
+        const key =
+            record.recordId;
         if (!merged.has(key)) {
             merged.set(key, createSceneSafeRecord(record, includeLockedClues));
         }
     });
-    return [...merged.values()].slice(0, limit);
+    const canonicalById =
+        new Map(
+            buildKnowledgeRecords(
+                state,
+                context.chat || [],
+            ).map(record => [
+                record.recordId,
+                record,
+            ]),
+        );
+    const canonicalCandidates = [];
+    const canonicalSuppressed = [];
+    for (const hit of merged.values()) {
+        const canonical =
+            canonicalById.get(
+                hit.recordId,
+            );
+        const hitRefs =
+            JSON.stringify(
+                hit.sourceRefs ||
+                [],
+            );
+        const canonicalRefs =
+            JSON.stringify(
+                canonical
+                    ?.sourceRefs ||
+                [],
+            );
+        if (
+            !canonical ||
+            hitRefs !== canonicalRefs
+        ) {
+            canonicalSuppressed.push({
+                recordId:
+                    hit.recordId,
+                reason:
+                    canonical
+                        ? 'source_refs_mismatch'
+                        : 'canonical_missing',
+            });
+            continue;
+        }
+        canonicalCandidates.push(
+            canonical,
+        );
+    }
+    const hydration =
+        hydrateKnowledgeRecords(
+            canonicalCandidates,
+            filters,
+        );
+    const records =
+        hydration.records
+            .slice(0, limit)
+            .map(record => {
+                const superseded =
+                    record.tags?.includes(
+                        'superseded',
+                    );
+                return {
+                    ...record,
+                    evidenceType:
+                        'HISTORICAL_EVIDENCE',
+                    evidenceStatus:
+                        superseded
+                            ? 'SUPERSEDED'
+                            : 'HISTORICAL',
+                };
+            });
+    records.activationCapsules =
+        exactResult
+            .activationCapsules;
+    records.diagnostics = {
+        ...(
+            exactResult
+                .diagnostics ||
+            {}
+        ),
+        hydrationSuppressed: [
+            ...(
+                exactResult
+                    .diagnostics
+                    ?.hydrationSuppressed ||
+                []
+            ),
+            ...(
+                hydration
+                    .diagnostics
+                    ?.suppressed ||
+                []
+            ),
+            ...canonicalSuppressed,
+        ],
+    };
+    return records;
 }
 
 export function formatRetrievedKnowledge(
@@ -783,8 +1422,48 @@ export function formatRetrievedKnowledge(
     const sections = [];
     let remaining = Math.max(1_000, Number(maxCharacters) || 8_000);
     for (const record of records) {
+        const superseded =
+            record.evidenceStatus ===
+                'SUPERSEDED' ||
+            record.tags?.includes(
+                'superseded',
+            );
+        const sourceRefs =
+            (record.sourceRefs || [])
+                .map(reference => {
+                    const type =
+                        String(
+                            reference?.type ||
+                            '',
+                        ).trim();
+                    const id =
+                        String(
+                            reference?.id ||
+                            '',
+                        ).trim();
+                    return type && id
+                        ? `${type}:${id}`
+                        : '';
+                })
+                .filter(Boolean)
+                .join(',');
+        const evidenceStatus =
+            superseded
+                ? 'status=superseded'
+                : 'status=historical';
         const header =
-            `[${record.category}/${record.id}] ${record.title}\n`;
+            `[HISTORICAL_EVIDENCE${
+                superseded
+                    ? ' SUPERSEDED'
+                    : ''
+            } ${evidenceStatus} recordId=${
+                record.recordId ||
+                record.id ||
+                'unknown'
+            } sourceRefs=${
+                sourceRefs ||
+                'none'
+            }] ${record.title}\n`;
         const allowance = Math.min(3_000, remaining - header.length);
         if (allowance < 200) break;
         const text = String(record.text || '');

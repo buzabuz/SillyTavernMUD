@@ -15,10 +15,11 @@
 | Ordinary turn settlement | Tested | player-speech replay diagnostics、首次 Prompt 契约、narrative-first、repair、retry、presence/witness tests | 用下一次自然回合验证首次响应不再因 `actorId=player` 进入 repair |
 | Spatial / movement / maps | Tested | movement、reachability、sightline、migration tests | 建结构化房间权威页 |
 | Item V2 / material / appearance / spell | Verified | Item 证据门禁、spell observation 三路径、296/296 全量、真实 JSONL/浏览器验证 | 后续只接 medium/high authorized hidden proposal 入口 |
-| Social / memory / event knowledge | Verified | social contract、witness whitelist、关系筛选 5% 背景边、transition sparse memory、旧 filler 幂等迁移 | 建 directional evidence 页 |
+| Actor / Identity / Cast / Memory | Verified | Tina 21 个稳定 profile / 23 个 runtime actor 的只读 Identity V1 dry-run、Canon registry、clock projection、memory preservation tests | 后续补 authority body update Reducer |
+| Social / claims / event knowledge | Verified（claims 为 Tested） | social contract、witness whitelist、Identity/relationship claims 权限测试、关系筛选 5% 背景边、transition sparse memory | 用自然剧情声明采集 claims 真实证据 |
 | Opening / directors / world change | Indexed | 现有 opening/pacing/transition tests | 补调用预算与状态机页 |
 | Knowledge / translation | Indexed | 现有 glossary、batch、knowledge tests | 补事实/显示边界页 |
-| Save / read-only / UI session | Tested | readonly E2E、Task 5/6 tests | 建 host persistence 页 |
+| Save / read-only / UI session | Tested | revision guard 竞争/rollback/chat-only tests、Tina revision dry-run、readonly E2E | 浏览器验收 stale conflict 提示 |
 
 ## 2026-08-09 Presence 审计
 
@@ -229,3 +230,92 @@
 - 当前 JSONL 已独立备份并修复 message 205 的正文、译文、segments、swipe 与 diagnostics；错误英文/中文片段计数均为 0。
 - 浏览器验证：错误双实体句不存在，修正后的“教授自己看起来完全有能力一跃而下”存在，麦格人物卡仅 1 张。
 - 全量 Hogwarts Node `311/311`、项目级 ESLint、完整语法、diff 和模块尺寸门禁通过。
+
+## 2026-08-09 Transition Item Authority 审计
+
+- 用户观察到转场后 Harry 重新持有一支“受损羽毛笔”，但正式 Item 原本已销毁且由 Tina 收着。
+- 备份时间线排除 transition reducer：
+  - `14:56–15:03` 为 `owner=Harry / holder=player / destroyed / carried`；
+  - `15:04` 旧浏览器运行态把 206 行档案回滚成 204 行，并恢复 `holder=""`；
+  - 实际转场到公共休息室发生在 `16:11`，输入 holder 已经为空。
+- pre-fix 日志证明 `synchronizeHeldItemLocations()` 不会清空合法 holder，也不会按 owner 移动物品；空 holder 是作为既有损坏输入进入转场。
+- 第二个根因在 Opening Prompt：系统声称 Item 不可改变，却没有提供正式 Item 数据，低档因此把 destroyed 残骸写成 Harry 膝上的 damaged quill。
+- 修复后：
+  - 中档读取转场前可见正式 Item；
+  - 低档读取按下一幕 holder 位置同步后的 `authoritativeItems`；
+  - owner/holder、destroyed terminal state 与隐含普通物品边界写入 Prompt；
+  - opening message diagnostics 保存同一精简 Item 投影。
+- 当前 JSONL 以 SHA `9c600746...7919c9a` 为门禁创建独立备份并原子修复；浏览器自动保存后仍保持 `owner=Harry / holder=player / destroyed / gryffindor_common_room`。
+- message 206 的正文、译文、segments 与 swipe 副本均不再把羽毛笔放在 Harry 膝上，改为“已销毁残骸仍由 Tina 收着”。
+- post-fix 日志第 4 行显示低档实际收到 `holder=player / state=destroyed / room=gryffindor_common_room`；第 8 行显示 transition 前后 holder/state 不变、位置随 player 更新。
+- 浏览器 Item 卡显示“已销毁 / 主人 Harry / 持有人 Tina / 随 Tina / 借出”。
+- 全量 Hogwarts Node `312/312`、项目级 ESLint、完整扩展语法、diff 与模块尺寸门禁通过。
+
+## 2026-08-09 Item / NPC Identity / Calendar 准入审计
+
+- Item V2 在既定“叙事重要物品权威状态机”范围内评定为 8/10：
+  - 12 操作、owner/holder/location、terminal state、候选、迁移、Canon、presentation、UI 和转场均已闭环；
+  - 当前真实档案 10 个 Item、10 个唯一 ID、0 pending、0 dangling presentation、0 scene snapshot mismatch；
+  - 数量、余额、容器、repair/replace、hidden director proposal 属于后续扩展，不阻止进入下一阶段。
+- 在线持久化没有 revision/CAS；本日已有旧浏览器运行态覆盖修复存档的真实证据。Save Revision Guard 是 Calendar 快进、后台 NPC 和蒙太奇前的跨系统 P0。
+- NPC 基础已覆盖稳定 ID/alias、Canon、本地化、临时人物、presence、知识、记忆、关系、life status 和 presentation；但 21 个 actorLibrary profile 尚无版本化 Identity Schema，role/house/year/affiliation/provenance 与当日 intent 边界不清。
+- Calendar 只有约 8/10 的时间发动机和约 3/10 的产品事件层：
+  - clock、turn time、跨日、curfew/weather、任意跨度 transition 和 long-world-change 已可复用；
+  - `agenda` 只在 opening 写一次，当前 9 月档案仍显示 7 月家庭日程；
+  - daily plan 内容仍是分院宴会，在场 Harry 无 directive，三名离场人物仍有 directive；
+  - 不存在 event ID、recurrence、participants、location、status、conflict、date picker 或 montage protocol。
+- 准入结论：
+  - Item V2 进入维护模式；
+  - NPC Identity V1 可立即开始；
+  - Calendar V1 有条件开始，必须新建事件权威并先完成 Save Revision Guard；
+  - 推荐纵向切片为一个完整霍格沃茨上课日，再进入蒙太奇/周结算/运势。
+- 详细报告：`item-npc-calendar-readiness.md`。
+
+## 2026-08-09 Save Revision / NPC Identity V1 dry-run
+
+- `timelineEpoch + stateRevision` 已接入 guarded metadata/chat ports；新时间线在首次保存前生成独立 epoch，load 注册最新 head，lifecycle migration 通过同一 guarded port 持久化。
+- 修复了 legacy revision 在“先 observe、后 force register”时丢失 `migrationPending` 的接线缺口；回归测试证明首次注册仍写入 revision schema，history 保持空。
+- Identity migration 已接入 initial world、opening/foundation、resident/pacing actor 创建和统一 lifecycle；稳定权威在 `actorLibrary[].identity`，runtime actor 仅保留同步副本。
+- `identity.body` 保存发型、染发、伤势、疤痕和当前形态；`actorPresentations` 只保存衣服、帽子、首饰、穿戴 Item 与手持 Item。
+- 家庭、亲属、监护和婚姻只进入 Social Graph；self/other 进入 claims，正式 family edge 只来自 resolved person reference + authority claim；不存在统一为 `nonexistent`。
+- Tina JSONL 只读 dry-run：
+  - 输入 SHA-256 `34f418f887cc15f425a2145acfe02cd0c0a8a55c54fee783f814ac47e5a14aeb`，`7,342,706` bytes，mtime 和文件 SHA 均未变化；
+  - 206 条消息字节不变，10 个 Item、34 条关系既有字段、人物记忆/知识、位置、actor ID/name/aliases 全部不变；
+  - 21/21 个稳定 profile 与 23/23 个 runtime actor 获得 Identity V1；
+  - 120 个差异全部是 revision/identity/social schema 新字段，`added=120 / removed=0 / changed=0`；
+  - 第二次迁移 byte-stable，网络与模型调用 `0`。
+- dry-run 命令：`node scripts/dry-run-hogwarts-save-revision-identity.mjs --dry-run --file <chat.jsonl>`；脚本只使用文件读取和 stat，并在进程内阻断 fetch/HTTP(S)/TCP/TLS。
+- 离线门禁：全量 Hogwarts Node `358/358`、生产与测试 ESLint、完整扩展 `node --check`、`git diff --check`、模块尺寸与依赖边界全部通过；浏览器验收由独立线程执行。
+
+## 2026-08-09 Save Revision / NPC Identity V1 最终复验
+
+- 全量 Hogwarts Node `370/370`、Identity 专项 `32/32`、生产/测试 ESLint、125 个扩展模块语法、diff、模块尺寸与依赖边界通过。
+- Tina JSONL dry-run 为既有 V1 状态，迁移 diff 为 0；SHA-256 `52e2471c...f277116`、mtimeNs `1786279053946479245`、206 条消息及所有跨领域不变量前后不变。
+- Chrome 390px 与真实 Harry dossier 复验通过：来源 badge 只跟随字段或 claim，unknown 无权威，Birth 无区间文本，year-only 不显示年龄。
+- 本轮 Playwright 临时结果已清理；既有用户 debug、prototype 与 evidence 目录未改动。
+
+## 2026-08-09 Calendar V1 Task 7 代码与文档验收
+
+- 新增 Calendar 专用只读 dry-run，同时验证真实 Tina 现存 V1 与移除 Calendar 后的真实 legacy 克隆；脚本阻断 fetch/HTTP(S)/TCP/TLS，不接收模型 port。
+- 最终复验输入 SHA-256 `3d5eafaf4e4bc007ddb1a257b0ada7c044d494a7e69d115b995db3c423aeb1c1`、`7,741,568` bytes、mtimeNs `1786290082699905040`；210 条消息及消息区 SHA 均不变。
+- 现存 5 条 Calendar 迁移 no-op，Calendar SHA-256 `39272d92c3b74a8d87d50c3992abf4bfd136a48fef328820cc116f9974def930`；legacy 克隆初始化空 entries、horizon `1991-09-02 · 13:35`，两条路径重复迁移均 byte-stable。
+- clock、scene、sceneArchive、actors、Item、Identity、Social、Memory、location 及全部非 Calendar 字段不变；legacy `agenda` 不迁移，sceneArchive 正文不复制，网络/模型调用均为 `0`。
+- 强制集成验收覆盖考试/约会任一预览入口、同 Scene 双关联、同时 active、不同 endClock 独立 completed、无自动取消；low、Daily、medium/high Transition prompt 均深比较完整两项。
+- Calendar 专项 `47/47`、workflow/save/identity/social/item 回归 `102/102`、模块边界 `58/58`、全量 Hogwarts Node `422/422` 通过。
+- 生产/测试 ESLint、138 个生产模块、32 个测试模块和 dry-run 脚本语法、`git diff --check`、模块体积与依赖边界通过。
+- runtime spec、字段表、维护 checklist、Hogwarts README、Calendar tasks/checklist/unit report 与项目记忆已同步；Calendar `progress.md` 的最终 Round 2 摘要保留给根 agent。
+- 桌面/390px Calendar、同刻逐项预览、进入时间点、相关 Scene 与历史只读仍等待 browser agent 证据。
+
+## 2026-08-10 Calendar V2 Task 39 文档与回归同步
+
+- README、runtime spec/state fields 与维护 checklist 已改为 `storyline -> storyBeat -> schedule -> scene` 四层权威，并登记 High/Medium、Daily/Performer/Transition、自由开场和 V1 迁移边界。
+- dry-run 对真实 revision 26 V1 备份完成 `V1 -> V2`：保留 1 个 storyline、4 个 grandfathered schedule 的稳定 ID 和公开字段，不创建虚假 storyBeat/beatSlot；重复迁移 byte-stable。
+- V1 输入 SHA-256 `3d5eafaf4e4bc007ddb1a257b0ada7c044d494a7e69d115b995db3c423aeb1c1`、mtimeNs `1786290082720102528`；当前 V2 主档 SHA-256 `1dfd672001cde2bed8ad28611077ceaafae29a2f3e247ab00d98bc21012ca290`、mtimeNs `1786360173518604107`。两者 210 条消息、原文件与全部非 Calendar 领域前后不变，模型/网络调用均为 `0`。
+- 标准 E2E fixture 升级为 V2 typed collections，覆盖会议式排序、剧情线视图、进入教职员会议只认领所选 schedule、15:00 黑湖自由开场不认领 schedule、历史只读和既有保存竞争门禁；最终 `12/12`。
+- Calendar V2 相关 Node `69/69` 通过；生产脚本与 E2E ESLint、相关 `node --check`、`git diff --check` 均通过。未发现生产实现缺陷；仅修复标准 E2E fixture 缺少剧情线 tab action port 接线的问题。
+
+## 2026-08-13 Actor Lifecycle Authority Audit
+
+- 真实 Tina 与生产 reader 审计确认，半成品 Actor Context V1 会丢失 Cast 来源/首次认识和完整生命状态。
+- living contract 已登记待批准目标：Core `cast` 单写、Runtime 四字段 life 单写、Dossier 8 字段、LowTier 6 字段。
+- 标记为 Pending 的字段尚未实施；旧 Actor lifecycle revision 批准失效，业务代码暂停等待新 PRD 明确批准。

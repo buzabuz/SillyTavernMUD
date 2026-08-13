@@ -1,11 +1,170 @@
+import {
+    projectCalendarSceneContext,
+} from '../domain/calendar-projection.js';
+import {
+    applyCommittedSceneOpeningExperience as applyCommittedSceneOpeningExperienceDeterministically,
+} from '../domain/archive-projection.js';
+import {
+    NARRATIVE_AUTHORITY_PROMPT_CONTRACT,
+    NARRATIVE_PROMPT_ACCESS,
+    buildNarrativePromptContext,
+    getHistoricalKnowledgeRecords,
+    projectNarrativePromptInput,
+} from '../domain/narrative-prompt-context.js';
+import {
+    validateHistoricalClaimProvenance,
+} from '../domain/narrative-memory-provenance.js';
+
+function isFixedMomentContext(
+    transitionContext,
+) {
+    return [
+        'calendar_moment',
+        'timeline_moment',
+    ].includes(
+        transitionContext?.kind,
+    );
+}
+
+function getTransitionCalendarContext(
+    state,
+    transitionContext,
+    {
+        opening = false,
+    } = {},
+) {
+    if (
+        isFixedMomentContext(
+            transitionContext,
+        )
+    ) {
+        return {
+            entries:
+                structuredClone(
+                    transitionContext
+                        .calendarEntries ||
+                    [],
+                ),
+            storySources:
+                structuredClone(
+                    transitionContext
+                        .calendarStorySources ||
+                    [],
+                ),
+        };
+    }
+    if (opening) {
+        return {
+            entries: [],
+            storySources: [],
+        };
+    }
+    if (
+        !Array.isArray(
+            state?.calendar
+                ?.entries,
+        )
+    ) {
+        return {
+            entries: [],
+            storySources: [],
+        };
+    }
+    return projectCalendarSceneContext(
+        state,
+    );
+}
+
+export function projectAuthoritativeSceneItems(
+    worldState = {},
+    synchronizeHeldItemLocations = items =>
+        items,
+) {
+    const mapId =
+        worldState.map?.activeMapId ||
+        worldState.scene?.mapId ||
+        '';
+    const roomId =
+        worldState.map
+            ?.currentLocalNodeId ||
+        worldState.scene?.roomId ||
+        '';
+    return synchronizeHeldItemLocations(
+        worldState.items || [],
+        {
+            playerMapId: mapId,
+            playerRoomId: roomId,
+            actors:
+                worldState.actors ||
+                [],
+            clock:
+                worldState.clock ||
+                '',
+        },
+    )
+        .filter(item =>
+            item.visibility !==
+                'hidden' &&
+            [
+                'whole',
+                'remains',
+            ].includes(
+                item.physicalForm,
+            ))
+        .map(item => ({
+            id: item.id,
+            labelEn:
+                item.labelEn ||
+                item.label ||
+                item.id,
+            ownerId: item.ownerId,
+            holderId: item.holderId,
+            location:
+                structuredClone(
+                    item.location || {
+                        mapId: item.mapId,
+                        roomId: item.roomId,
+                        placement:
+                            item.holderId
+                                ? 'with_holder'
+                                : 'in_room',
+                    },
+                ),
+            state: item.state,
+            physicalForm:
+                item.physicalForm,
+            isEquipped:
+                item.isEquipped ===
+                true,
+            transferMode:
+                item.transferMode ||
+                'none',
+        }));
+}
+
+export function getSceneTransitionRetrievalOptions(
+    tier,
+    limit,
+) {
+    return {
+        includeLockedClues:
+            tier === 'high',
+        limit,
+    };
+}
+
 export function createSceneTransitionWorkflow(ports) {
     const {
         CANON_CAST_IDENTITY_CONTRACT,
         CANON_WIT_TONE_CONTRACT,
         CONTEXT_SIZE_PRESETS,
         DEFAULT_MODEL_SLOTS,
+        NPC_IDENTITY_PROMPT_BOUNDARY =
+        '',
         TRANSLATION_FORMAT_VERSION,
         admitCurrentLocationResidents,
+        applyCommittedSceneOpeningExperience =
+        applyCommittedSceneOpeningExperienceDeterministically,
         applySceneTransition,
         applySystemPrompt,
         buildActorContinuityCapsules,
@@ -16,9 +175,7 @@ export function createSceneTransitionWorkflow(ports) {
         composeSceneSegments,
         createContextBudgetPlan,
         ensureCurrentInteriorMap,
-        ensureDailyDirectorPlan,
         ensureSceneLifecycleState,
-        ensureSocialDirectorCatchup,
         extractRoleResponseText,
         findSceneDestination,
         formatNextSceneIntent,
@@ -27,17 +184,29 @@ export function createSceneTransitionWorkflow(ports) {
         getMudState,
         getSceneDestinationAuthority,
         getSettings,
-        getWorldDate,
         jobRegistry,
         normalizeSceneTransitionPackage,
         parseJsonObject,
         projectActorLibraryForContext,
         projectSceneArchivePresence,
+        projectNpcRuntimeActorsForPrompt =
+        current => (
+            current?.actors ||
+            []
+        ).map(actor =>
+            Object.fromEntries(
+                Object.entries(actor)
+                    .filter(([key]) =>
+                        key !== 'identity'),
+            )),
+        recordTurnDiagnostic =
+        () => {},
         renderAll,
         resolveRoleSlots,
         retrieveLocalKnowledge,
         sendRoleRequest,
         stripSyntheticSceneOpeningActorSegments,
+        synchronizeHeldItemLocations,
         syncLocalKnowledge,
         translateOpeningValues,
         validateSceneTransitionPackage,
@@ -54,15 +223,73 @@ export function createSceneTransitionWorkflow(ports) {
             CONTEXT_SIZE_PRESETS.rich,
             DEFAULT_MODEL_SLOTS.medium.maxResponseLength,
         ),
+        transitionContext = {},
     ) {
         const isHighTier = tier === 'high';
         const destinationAuthority = expectedDestination
             ? getSceneDestinationAuthority(state, expectedDestination)
             : null;
+        const fixedMoment =
+            isFixedMomentContext(
+                transitionContext,
+            );
+        const calendarClock =
+            fixedMoment
+                ? transitionContext
+                    .fixedClock
+                : state.clock;
+        const calendarContext =
+            getTransitionCalendarContext(
+                state,
+                transitionContext,
+            );
+        const calendarEntries =
+            calendarContext.entries;
+        const calendarStorySources =
+            calendarContext.storySources;
+        const calendarMomentGuidance =
+            transitionContext.kind ===
+                'calendar_moment'
+                ? `- This is a Calendar Moment. nextClock must be exactly ${transitionContext.fixedClock}; do not choose another time.
+- calendarMoment.suggestedDestination is context, not a binding destination. Choose the final valid room under normal Scene Transition authority.
+- calendarMoment.calendarEntries contains only the schedule explicitly selected by the player. Do not infer attendance from other schedules at the same clock.`
+                : transitionContext.kind ===
+                    'timeline_moment'
+                    ? `- This is a free Timeline Moment. nextClock must be exactly ${transitionContext.fixedClock}; do not choose another time.
+- explicitDestination is the player's authoritative location choice.
+- calendarEntries must remain empty. Do not infer attendance from schedules overlapping this clock.`
+                    : '';
+        const presentActorIds =
+            (
+                state.actors ||
+                []
+            )
+                .filter(actor =>
+                    actor.present !==
+                    false)
+                .map(actor =>
+                    actor.id);
+        const narrativeContext =
+            buildNarrativePromptContext(
+                state,
+                retrievedKnowledge,
+                {
+                    actorIds:
+                        presentActorIds,
+                },
+            );
+        const actorKnowledge =
+            buildActorContinuityCapsules(
+                state,
+                presentActorIds,
+                contextPlan,
+            );
         return [
             {
                 role: 'system',
                 content: `You are the ${isHighTier ? 'high-tier World Director' : 'mid-tier Scene Transition Director'} for a persistent Harry Potter RPG. The player has explicitly chosen to close the current scene. Settle the observed scene and choose the next committed structured state as one JSON object with no Markdown. A separate low-tier performer writes the public opening after your state is accepted.
+
+${NARRATIVE_AUTHORITY_PROMPT_CONTRACT}
 
 Authority and boundaries:
 - Archive only events that already occurred in the supplied messages. Do not rewrite the player action.
@@ -77,10 +304,11 @@ Authority and boundaries:
         ? 'You may settle a major causal turn using only already committed hidden-story facts, but may not reveal a locked clue without its prewritten condition.'
         : 'Handle an ordinary scene close and location transition. Do not create hidden facts, clues, relationships, items, spells, or permanent consequences.'}
 - actorStates is private structured state, not prose. It may reference only the supplied actorLibrary. Record each actor's exact existing mapId and roomId; actors may remain visible from another room when a sightline exists. Omitted actors leave the visible scene.
+- Every active actor in actorStates must explicitly submit currentIntentEn or explicitly clear currentIntentEn with an empty string.
 - Follow sceneCastPolicy. In crowded scenes prefer 2-4 active named actors, prioritize the actor who drives the scene procedure plus the player's immediate relationship focus, and rotate overexposed actors out. Other students are anonymous crowd texture.
 - Any named actor required to speak or drive the next scene must be present in actorStates. Do not use actorStates to enumerate everyone who could plausibly occupy a classroom or hall.
 - When a newly activated actor has no established first impression, actorStates must include a 1-24 word firstImpressionOfPlayerEn based only on the player's visible features and conduct.
-- actorContinuityCapsules are sealed by actorId and contain only established social continuity. A capsule may guide only its matching actor. If hasMetPlayer is true, do not write a first-time self-introduction to the player. Treat knownActorIds as people that actor has already met. relationshipToPlayer.stageEn and sharedMemories override generic or stale relationship labels.
+- actorContinuityCapsules are sealed by actorId and contain only established social continuity. A capsule may guide only its matching actor. If hasMetPlayer is true, do not write a first-time self-introduction to the player. Treat knownActorIds as people that actor has already met. The supplied relationship stance, Schema expectations, and supporting Events override generic assumptions.
 - Do not transfer one actor's memory, impression, or relationship knowledge to another actor or to the narrator.
 - relationshipUpdates is optional and sparse. Emit it only for an actor whose view of the player materially changed because of one specific interaction in the closing scene.
 - sceneMemoryEn must be one complete 8-32 word actor-centered memory: what the player did to that actor or what that actor personally witnessed, plus the actor's specific interpretation when relevant.
@@ -88,10 +316,15 @@ Authority and boundaries:
 - behavioralEnvironment describes the closing clock. Compute the opening clock from currentClock plus transitionMinutes instead of carrying the closing period forward.
 - Choose transitionMinutes freely according to the time that naturally passes in the fiction. Sleep, travel, waiting, holidays, and deliberate time skips may advance as long as needed. If asleep characters wake in the next scene, allow a plausible rest unless an already established alarm, emergency, departure, or other observable cause wakes them early.
 - Materially embody the opening time's daylight, sleep pressure, curfew, weather, exposure, clothing, shelter, noise, and activity implications. Do not recite them as a checklist.
+- authoritativeItems is the binding visible tracked-Item state before transition. ownerId is social ownership, while holderId alone controls physical possession. Do not transfer, restore, repair, damage, destroy, relocate, or otherwise change an Item in nextScene prose or actor activities.
 - Do not output openingSegments or any public opening prose. The low-tier performer will render actorStates, summaryEn, explorationHookEn, crowdDirectionEn, and the environment into a concrete opening that requires the player's response.
+- calendarEntries contains only schedules explicitly claimed by the current Scene, or by the selected schedule for a Calendar Moment. calendarStorySources contains their public beat/storyline sources. Never infer attendance from time overlap, and never write, cancel, reschedule or settle Calendar state.
 - While creating nextScene, also prewrite followingSceneIntent for the scene after it. Keep that intent player-facing and free of spoilers.
 - transitionMinutes must be a non-negative integer with no maximum span. Do not compress an overnight rest into the old three-hour ceiling, and do not repeat time already consumed by the last player turn.
 - Use original English prose and the supplied canon-compatible voice contract.
+${calendarMomentGuidance}
+
+${NPC_IDENTITY_PROMPT_BOUNDARY}
 
 Schema:
 {
@@ -118,6 +351,10 @@ Schema:
         "id": "actor_id",
         "present": true,
         "currentActivityEn": "observable activity in the new scene",
+        "currentIntentEn": "explicit next-scene intent, or empty string to clear it",
+        "lifeStatus": "alive|injured|incapacitated|missing|dead",
+        "lifeStatusPermanent": false,
+        "lifeStatusDetailEn": "public current life-state explanation",
         "firstImpressionOfPlayerEn": "short visible first impression when required",
         "mapId": "same_existing_map_id",
         "roomId": "existing_room_id"
@@ -138,65 +375,137 @@ ${CANON_WIT_TONE_CONTRACT}`,
             },
             {
                 role: 'user',
-                content: JSON.stringify({
-                    tier,
-                    destinationHint,
-                    explicitDestination: destinationAuthority,
-                    committedNextSceneIntent:
+                content: JSON.stringify(
+                    projectNarrativePromptInput({
+                        tier,
+                        authoritySnapshot:
+                    narrativeContext
+                        .authoritySnapshot,
+                        destinationHint,
+                        explicitDestination: destinationAuthority,
+                        committedNextSceneIntent:
                     state.scene?.nextSceneIntent,
-                    userOverride: intentOverride,
-                    currentClock: state.clock,
-                    currentChapter: state.chapter,
-                    currentScene: state.scene,
-                    currentLocation: state.location,
-                    currentActors: state.actors,
-                    actorLibrary:
+                        userOverride: intentOverride,
+                        currentClock: state.clock,
+                        calendarClock,
+                        calendarEntries,
+                        calendarStorySources,
+                        currentChapter: state.chapter,
+                        currentScene: state.scene,
+                        currentLocation: state.location,
+                        calendarMoment:
+                    transitionContext.kind ===
+                        'calendar_moment'
+                        ? {
+                            targetClock:
+                                transitionContext
+                                    .fixedClock,
+                            suggestedDestination:
+                                transitionContext
+                                    .suggestedDestination,
+                            targetEntry:
+                                transitionContext
+                                    .targetEntry,
+                            calendarEntries:
+                                calendarEntries,
+                            calendarStorySources,
+                        }
+                        : null,
+                        timelineMoment:
+                    transitionContext.kind ===
+                        'timeline_moment'
+                        ? {
+                            targetClock:
+                                transitionContext
+                                    .fixedClock,
+                            destination:
+                                transitionContext
+                                    .suggestedDestination,
+                            calendarEntries:
+                                calendarEntries,
+                            calendarStorySources,
+                        }
+                        : null,
+                        currentActors:
+                    projectNpcRuntimeActorsForPrompt(
+                        state,
+                    ),
+                        actorLibrary:
                     projectActorLibraryForContext(
                         state.actorLibrary,
                         contextPlan,
                         {
                             includePrivate: isHighTier,
                             includeMemories: isHighTier,
+                            identityObserver:
+                                'self',
+                            worldState:
+                                state,
                         },
                     ),
-                    actorContinuityCapsules:
-                    buildActorContinuityCapsules(
-                        state,
-                        (
-                            state.actorLibrary ||
-                            []
-                        ).map(actor =>
-                            actor.id),
-                        contextPlan,
-                    ),
-                    sceneCastPolicy:
+                        actorContinuityCapsules:
+                    actorKnowledge,
+                        memoryActivationCapsules:
+                    narrativeContext
+                        .memoryActivationCapsules,
+                        sceneCastPolicy:
                     buildSceneCastRotationPolicy(
                         state,
                         expectedDestination ||
                         {},
                     ),
-                    behavioralEnvironment:
+                        behavioralEnvironment:
                     buildBehavioralEnvironment(
                         state,
                     ),
-                    currentConflict: state.conflict,
-                    discoveredClues: state.clues,
-                    hiddenStoryArcs: isHighTier
-                        ? state.storyArcs
-                        : [],
-                    mapAuthority: buildMapAuthorityContext(state),
-                    recentMessages: getContext().chat
-                        .slice(Math.max(0, Number(state.scene?.startedMessageId || 0)))
-                        .slice(
-                            -contextPlan.chapterMessageLimit,
-                        )
-                        .map(message => ({
-                            isUser: Boolean(message.is_user),
-                            text: message.mes,
-                            segments: message.extra?.hogwartsMud?.segments,
-                        })),
-                    retrievedLocalKnowledge: formatRetrievedKnowledge(retrievedKnowledge),
-                }),
+                        authoritativeItems:
+                    projectAuthoritativeSceneItems(
+                        state,
+                        synchronizeHeldItemLocations,
+                    ),
+                        currentConflict: state.conflict,
+                        discoveredClues:
+                    (state.clues || [])
+                        .filter(clue =>
+                            clue
+                                .discovered ===
+                            true),
+                        ...(isHighTier
+                            ? {
+                                hiddenStoryArcs:
+                                state.storyArcs,
+                            }
+                            : {}),
+                        mapAuthority: buildMapAuthorityContext(state),
+                        recentMessages: getContext().chat
+                            .slice(Math.max(0, Number(state.scene?.startedMessageId || 0)))
+                            .slice(
+                                -contextPlan.chapterMessageLimit,
+                            )
+                            .map(message => ({
+                                isUser: Boolean(message.is_user),
+                                text: message.mes,
+                                segments: message.extra?.hogwartsMud?.segments,
+                            })),
+                        historicalKnowledgeEvidence:
+                    formatRetrievedKnowledge(
+                        getHistoricalKnowledgeRecords(
+                            retrievedKnowledge,
+                            {
+                                includeLocked:
+                                    isHighTier,
+                            },
+                        ),
+                    ),
+                    }, {
+                        access:
+                            isHighTier
+                                ? NARRATIVE_PROMPT_ACCESS
+                                    .DEDICATED_HIGH
+                                : NARRATIVE_PROMPT_ACCESS
+                                    .MEDIUM,
+                    }),
+                ),
             },
         ];
     }
@@ -210,6 +519,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
         intentOverride,
         retrievedKnowledge,
         contextPlan,
+        transitionContext = {},
     ) {
         const prompt = createSceneTransitionPrompt(
             state,
@@ -219,6 +529,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
             intentOverride,
             retrievedKnowledge,
             contextPlan,
+            transitionContext,
         );
         let response = await sendRoleRequest(roleSlot, prompt, { json: true });
         let raw = extractRoleResponseText(response);
@@ -226,7 +537,17 @@ ${CANON_WIT_TONE_CONTRACT}`,
         const destinationAuthority = expectedDestination
             ? getSceneDestinationAuthority(state, expectedDestination)
             : null;
-        for (let attempt = 0; attempt < 3; attempt++) {
+        const maximumAttempts =
+            transitionContext
+                .noModelRetry
+                ? 1
+                : 3;
+        for (
+            let attempt = 0;
+            attempt <
+                maximumAttempts;
+            attempt++
+        ) {
             try {
                 const parsed =
                 parseJsonObject(raw);
@@ -247,6 +568,18 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         tier,
                     },
                 );
+                if (
+                    isFixedMomentContext(
+                        transitionContext,
+                    )
+                ) {
+                    payload.nextClock =
+                        transitionContext
+                            .fixedClock;
+                    payload.transitionMinutes =
+                        transitionContext
+                            .fixedTransitionMinutes;
+                }
                 const validation = validateSceneTransitionPackage(payload, state, {
                     expectedMapId: expectedDestination?.mapId,
                     expectedRoomId: expectedDestination?.roomId,
@@ -258,7 +591,12 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 return payload;
             } catch (error) {
                 lastError = error;
-                if (attempt >= 2) break;
+                if (
+                    attempt >=
+                    maximumAttempts - 1
+                ) {
+                    break;
+                }
                 response = await sendRoleRequest(roleSlot, [
                     {
                         role: 'system',
@@ -284,7 +622,9 @@ Do not output openingSegments or public opening prose. Return only valid structu
                 raw = extractRoleResponseText(response);
             }
         }
-        throw new Error(`场景结算连续三次无效：${String(lastError?.message || lastError)}`);
+        throw new Error(
+            `场景结算连续${maximumAttempts}次无效：${String(lastError?.message || lastError)}`,
+        );
     }
 
     async function generateSceneTransitionOpening(
@@ -293,6 +633,8 @@ Do not output openingSegments or public opening prose. Return only valid structu
         payload,
         expectedDestination,
         contextPlan,
+        transitionContext = {},
+        retrievedKnowledge = [],
     ) {
         const nextScene =
         payload.nextScene;
@@ -364,6 +706,41 @@ Do not output openingSegments or public opening prose. Return only valid structu
             ),
             ...actor,
         }));
+        const authoritativeItems =
+        projectAuthoritativeSceneItems(
+            projectedState,
+            synchronizeHeldItemLocations,
+        );
+        const calendarContext =
+            getTransitionCalendarContext(
+                projectedState,
+                transitionContext,
+                {
+                    opening: true,
+                },
+            );
+        const calendarEntries =
+            calendarContext.entries;
+        const calendarStorySources =
+            calendarContext.storySources;
+        const actorKnowledge =
+            buildActorContinuityCapsules(
+                state,
+                [
+                    ...presentActorIds,
+                ],
+                contextPlan,
+            );
+        const narrativeContext =
+            buildNarrativePromptContext(
+                projectedState,
+                retrievedKnowledge,
+                {
+                    actorIds: [
+                        ...presentActorIds,
+                    ],
+                },
+            );
         const destinationAuthority =
         getSceneDestinationAuthority(
             state,
@@ -379,6 +756,8 @@ Do not output openingSegments or public opening prose. Return only valid structu
                 role: 'system',
                 content: `You are the low-tier Scene Opening Performer for a persistent Harry Potter RPG. A higher-tier director has already committed the next scene's state. Render that state as vivid player-facing English prose and NPC dialogue. Return exactly one JSON object with a segments array and no Markdown.
 
+${NARRATIVE_AUTHORITY_PROMPT_CONTRACT}
+
 Boundaries:
 - Do not change the committed clock, map, room, cast, activities, life states, items, facts, hooks, or following intent.
 - The player is already at destinationAuthority. Begin inside the committed destination, not travelling toward it.
@@ -390,9 +769,14 @@ Boundaries:
 - Use currentActivityEn as blocking guidance, then dramatize only the actions needed for this opening. Do not mechanically restate it.
 - Use explorationHookEn as an optional concrete detail, not an instruction label. Use crowdDirectionEn as background motion, not an attendance list.
 - Preserve actor-specific continuity. One actor cannot use another actor's memories or private knowledge.
+- Scene Opening may depict only already committed Actor/Scene observable state and safe opening prose. Do not create or reveal a promise, secret, hidden truth, relationship declaration or mutation, or any gift, loan, return, theft, or other Item transfer.
+- authoritativeItems is the exhaustive visible tracked-Item projection for this opening. holderId, not ownerId, controls who physically possesses an Item. A destroyed Item may appear only as remains and must never become damaged, intact, usable, repaired, or replaced. Do not give an actor an implicit generic prop that could be mistaken for a tracked Item whose state, holder, or location contradicts it.
+- calendarEntries contains only schedules explicitly claimed by this new Scene. calendarStorySources contains their public beat/storyline sources. Never infer another schedule from the clock, participant, location, tag, or director tier.
 - The first narration segment should identify destinationAuthority.roomNameEn naturally.
 - Write 2-6 ordered segments, including at least one narration segment, totalling roughly 180-420 English words.
 - Follow the supplied canon-compatible wit contract without copying published prose.
+
+${NPC_IDENTITY_PROMPT_BOUNDARY}
 
 Schema:
 {
@@ -404,7 +788,13 @@ Schema:
     {
       "type": "dialogue",
       "actorId": "supplied_present_actor_id",
-      "textEn": "spoken words only"
+      "textEn": "spoken words only",
+      "historicalClaims": [
+        {
+          "claimTextEn": "exact concrete historical claim substring from textEn",
+          "sourceEventIds": ["event ID from this actor's supportingEvents sourceRefs"]
+        }
+      ]
     }
   ]
 }
@@ -420,6 +810,47 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     openingClock:
                         payload
                             .nextClock,
+                    authoritySnapshot:
+                        narrativeContext
+                            .authoritySnapshot,
+                    calendarClock:
+                        payload
+                            .nextClock,
+                    calendarEntries,
+                    calendarStorySources,
+                    calendarMoment:
+                    transitionContext.kind ===
+                        'calendar_moment'
+                        ? {
+                            targetClock:
+                                transitionContext
+                                    .fixedClock,
+                            suggestedDestination:
+                                transitionContext
+                                    .suggestedDestination,
+                            targetEntry:
+                                transitionContext
+                                    .targetEntry,
+                            calendarEntries:
+                                calendarEntries,
+                            calendarStorySources,
+                        }
+                        : null,
+                    timelineMoment:
+                    transitionContext.kind ===
+                        'timeline_moment'
+                        ? {
+                            targetClock:
+                                transitionContext
+                                    .fixedClock,
+                            destination:
+                                transitionContext
+                                    .suggestedDestination,
+                            calendarEntries:
+                                calendarEntries,
+                            calendarStorySources,
+                        }
+                        : null,
                     destinationAuthority,
                     nextScene: {
                         ...nextScene,
@@ -451,16 +882,17 @@ ${CANON_WIT_TONE_CONTRACT}`,
                                     false,
                                 includeMemories:
                                     false,
+                                identityObserver:
+                                    'player',
+                                worldState:
+                                    projectedState,
                             },
                         ),
                     actorContinuityCapsules:
-                        buildActorContinuityCapsules(
-                            state,
-                            [
-                                ...presentActorIds,
-                            ],
-                            contextPlan,
-                        ),
+                        actorKnowledge,
+                    memoryActivationCapsules:
+                        narrativeContext
+                            .memoryActivationCapsules,
                     behavioralEnvironment:
                         buildBehavioralEnvironment(
                             projectedState,
@@ -469,14 +901,75 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         buildCurrentMaterialState(
                             projectedState,
                         ),
+                    authoritativeItems,
+                    historicalKnowledgeEvidence:
+                        formatRetrievedKnowledge(
+                            getHistoricalKnowledgeRecords(
+                                retrievedKnowledge,
+                            ),
+                        ),
                 }),
             },
         ];
+        const originalRequest =
+            JSON.parse(
+                prompt[1].content,
+            );
+        recordTurnDiagnostic(
+            'narrative_context',
+            {
+                authority: {
+                    version:
+                        originalRequest
+                            .authoritySnapshot
+                            ?.version ??
+                        null,
+                    stateRevision:
+                        originalRequest
+                            .authoritySnapshot
+                            ?.stateRevision ??
+                        null,
+                },
+                activationCapsuleIds: {
+                    common:
+                        originalRequest
+                            .memoryActivationCapsules
+                            ?.common
+                            ?.capsuleId ||
+                        '',
+                    byActorId:
+                        Object.fromEntries(
+                            Object.entries(
+                                originalRequest
+                                    .memoryActivationCapsules
+                                    ?.byActorId ||
+                                {},
+                            ).map(
+                                ([
+                                    actorId,
+                                    capsule,
+                                ]) => [
+                                    actorId,
+                                    capsule
+                                        ?.capsuleId ||
+                                    '',
+                                ],
+                            ),
+                        ),
+                },
+            },
+        );
         let raw = '';
         let lastError = null;
+        const maximumAttempts =
+            transitionContext
+                .noModelRetry
+                ? 1
+                : 2;
         for (
             let attempt = 0;
-            attempt < 2;
+            attempt <
+                maximumAttempts;
             attempt++
         ) {
             try {
@@ -490,12 +983,34 @@ ${CANON_WIT_TONE_CONTRACT}`,
                                 role:
                                     'system',
                                 content:
-                                    'Repair the scene-opening performance. Return only a JSON object with 2-6 ordered segments. Keep all committed state unchanged. Use only supplied present actor IDs for dialogue. Do not enumerate the cast, restate actorStates, use "remains visible in the scene", or act for the player.',
+                                    'Repair the scene-opening performance. Return only a JSON object with 2-6 ordered segments. Keep all committed state unchanged. Use only supplied present actor IDs for dialogue. Do not enumerate the cast, restate actorStates, use "remains visible in the scene", or act for the player. For a concrete prior time, place, action, or quotation, retain it only in the matching actor dialogue and add historicalClaims with an exact claimTextEn substring plus sourceEventIds from that actor supportingEvents; otherwise remove the unsupported detail. The narrator and other actors cannot consume that Event. Depict only committed Actor/Scene observable state and safe opening prose; do not create or reveal promises, secrets, hidden truths, relationship declarations or mutations, gifts, loans, returns, thefts, or other Item transfers.',
                             },
                             {
                                 role: 'user',
                                 content:
                                     JSON.stringify({
+                                        authoritySnapshot:
+                                            originalRequest
+                                                .authoritySnapshot,
+                                        memoryActivationCapsules:
+                                            originalRequest
+                                                .memoryActivationCapsules,
+                                        validationConflict: {
+                                            stage:
+                                                'scene_opening_validation',
+                                            errors:
+                                                String(
+                                                    lastError
+                                                        ?.message ||
+                                                    lastError ||
+                                                    '',
+                                                )
+                                                    .split('；')
+                                                    .map(value =>
+                                                        value.trim())
+                                                    .filter(Boolean)
+                                                    .slice(0, 16),
+                                        },
                                         validationError:
                                             String(
                                                 lastError
@@ -506,10 +1021,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
                                         invalidOutput:
                                             raw,
                                         originalRequest:
-                                            JSON.parse(
-                                                prompt[1]
-                                                    .content,
-                                            ),
+                                            originalRequest,
                                     }),
                             },
                         ],
@@ -549,6 +1061,20 @@ ${CANON_WIT_TONE_CONTRACT}`,
                             ),
                     },
                 );
+                const historicalClaimValidation =
+                    validateHistoricalClaimProvenance(
+                        segments,
+                        originalRequest
+                            .memoryActivationCapsules,
+                    );
+                validation.errors.push(
+                    ...historicalClaimValidation
+                        .errors,
+                );
+                validation.valid =
+                    validation
+                        .errors
+                        .length === 0;
                 if (!validation.valid) {
                     throw new Error(
                         validation.errors
@@ -559,6 +1085,14 @@ ${CANON_WIT_TONE_CONTRACT}`,
             } catch (error) {
                 lastError = error;
             }
+        }
+        if (
+            transitionContext
+                .noModelRetry
+        ) {
+            throw new Error(
+                `低档场景开场生成失败：${String(lastError?.message || lastError)}`,
+            );
         }
         console.warn(
             '[Hogwarts MUD] Low-tier scene opening failed; using the deterministic short opening',
@@ -699,6 +1233,15 @@ ${CANON_WIT_TONE_CONTRACT}`,
             timelineEntries: structuredClone(
                 state.scene.timelineEntries || [],
             ),
+            calendarEntryIds: [
+                ...new Set(
+                    (
+                        state.scene
+                            .calendarEntryIds ||
+                        []
+                    ).filter(Boolean),
+                ),
+            ],
             tier,
             translationProvider:
             payload
@@ -800,6 +1343,11 @@ ${CANON_WIT_TONE_CONTRACT}`,
                                             ),
                                     }
                                     : null,
+                            authoritativeItems:
+                            projectAuthoritativeSceneItems(
+                                state,
+                                synchronizeHeldItemLocations,
+                            ),
                         },
                     },
                     authorQuill:
@@ -818,6 +1366,13 @@ ${CANON_WIT_TONE_CONTRACT}`,
         tier = 'medium',
         destinationHint = '',
     } = {}) {
+        if (
+            jobRegistry.calendarMoment
+        ) {
+            throw new Error(
+                'Calendar Moment 正在结算，暂时不能发起普通场景转场。',
+            );
+        }
         if (jobRegistry.sceneTransition) {
             return jobRegistry.sceneTransition;
         }
@@ -901,8 +1456,18 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 `Next destination: ${destinationHint || 'director choice'}.`,
                     entityIds,
                     {
-                        includeLockedClues: true,
-                        limit: contextPlan.ragLimit,
+                        ...getSceneTransitionRetrievalOptions(
+                            tier,
+                            contextPlan.ragLimit,
+                        ),
+                        relational: true,
+                        audienceActorIds:
+                            (
+                                state
+                                    .actorLibrary ||
+                                []
+                            ).map(actor =>
+                                actor.id),
                     },
                 );
                 let payload = await generateSceneTransitionPackage(
@@ -936,6 +1501,8 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     payload,
                     expectedDestination,
                     openingContextPlan,
+                    {},
+                    retrievedKnowledge,
                 );
                 try {
                     payload = await localizeSceneTransitionPackage(payload);
@@ -960,6 +1527,17 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 context.chat.push(message);
                 await context.saveMetadata();
                 await context.saveChat();
+                const openingExperience =
+                    applyCommittedSceneOpeningExperience(
+                        nextState,
+                        message,
+                        startedMessageId,
+                    );
+                context.chatMetadata.hogwartsMud =
+                    openingExperience.state;
+                if (openingExperience.event) {
+                    await context.saveMetadata();
+                }
                 const interiorState =
                 await ensureCurrentInteriorMap();
                 const settledState =
@@ -968,17 +1546,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 await syncLocalKnowledge();
                 applySystemPrompt();
                 renderAll();
-                if (settledState.dailyDirector?.date !== getWorldDate(settledState.clock)) {
-                    await ensureDailyDirectorPlan();
-                }
-                setTimeout(
-                    () => {
-                        void ensureSocialDirectorCatchup({
-                            force: true,
-                        });
-                    },
-                    0,
-                );
                 toastr.success(`旧场景已封存，当前场景切换到${settledState.location}。`);
                 return settledState;
             } catch (error) {

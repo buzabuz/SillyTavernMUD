@@ -19,6 +19,7 @@ export function createModelAdapter(ports) {
     const {
         ConnectionManagerRequestService,
         applyRegexPresetById,
+        beforeRequest = () => {},
         createContextBudgetPlan =
         () => null,
         getConnectionProfiles,
@@ -302,6 +303,15 @@ export function createModelAdapter(ports) {
                 },
             );
         }
+        if (requestExceedsContext) {
+            const error =
+                new Error(
+                    `职责请求上下文仍超过预算：${requestCharacters}/${requestContextPlan.maxPromptCharacters} 字符。`,
+                );
+            error.name =
+                'ContextBudgetExceededError';
+            throw error;
+        }
         const overridePayload = {
             max_tokens: slot.maxResponseLength,
             ...(json ? {
@@ -322,8 +332,21 @@ export function createModelAdapter(ports) {
                 ),
             } : {}),
         };
-        const execute = requestStream =>
-            ConnectionManagerRequestService.sendRequest(
+        const execute = requestStream => {
+            beforeRequest();
+            recordTurnDiagnostic(
+                'model_call',
+                {
+                    tier:
+                        slot
+                            .diagnosticTier ||
+                        slot.tier ||
+                        'unknown',
+                    stream:
+                        requestStream,
+                },
+            );
+            return ConnectionManagerRequestService.sendRequest(
                 effectiveProfile.id,
                 requestPrompt,
                 slot.maxResponseLength,
@@ -334,6 +357,7 @@ export function createModelAdapter(ports) {
                 },
                 overridePayload,
             );
+        };
         try {
             if (stream) {
                 try {

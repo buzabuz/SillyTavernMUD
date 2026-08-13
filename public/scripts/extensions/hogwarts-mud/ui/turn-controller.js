@@ -156,6 +156,8 @@ export function createTurnController(ports) {
         composerInput.style.height = '';
         renderComposerAddressing();
         const context = getContext();
+        const playerMessageId =
+            context.chat.length;
         context.chat.push({
             name: context.name1 || 'User',
             is_user: true,
@@ -181,7 +183,29 @@ export function createTurnController(ports) {
                 },
             },
         });
-        await context.saveChat();
+        try {
+            await context.saveChat({
+                source: 'turn_input',
+            });
+        } catch (error) {
+            if (
+                error?.name !==
+                'SaveRevisionConflictError'
+            ) {
+                throw error;
+            }
+            context.chat.splice(
+                playerMessageId,
+                1,
+            );
+            composerInput.value =
+                text;
+            composerInput.dispatchEvent(
+                new Event('input'),
+            );
+            renderAll();
+            return;
+        }
         renderAll();
         try {
             await runStructuredTurn(

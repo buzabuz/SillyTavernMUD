@@ -26,6 +26,13 @@ export {
 } from './domain/actor-knowledge.js';
 
 export {
+    actorContextVersion, actorDossierProjectionVersion, memoryReferenceVersion,
+    normalizeActorCore, normalizeActorMemoryIndex, normalizeActorRuntime, normalizeMemoryRef,
+    projectActorCore, projectActorMemoryIndex, projectActorRuntime, projectMemoryRef,
+    validateActorCore, validateActorMemoryIndex, validateActorRuntime, validateMemoryRef,
+} from './domain/actor-context-schema.js';
+
+export {
     isLegacyTransitionFillerMemory, migrateRelationshipMemoryState,
 } from './domain/actor-memory-migration.js';
 
@@ -44,7 +51,7 @@ export {
 } from './domain/appearance.js';
 
 export {
-    applySceneTransition,
+    applyCommittedSceneOpeningExperience, applySceneTransition, settleSceneCloseMemoryBoundary,
 } from './domain/archive-projection.js';
 
 export {
@@ -138,8 +145,8 @@ export {
 } from './domain/scene-destination.js';
 
 export {
-    isValidTransitionSceneMemory, normalizeSceneTransitionPackage, stripSyntheticSceneOpeningActorSegments,
-    validateSceneTransitionPackage,
+    filterCommittedSceneOpeningExperienceSegments, isValidTransitionSceneMemory, normalizeSceneTransitionPackage,
+    stripSyntheticSceneOpeningActorSegments, validateSceneOpeningExperienceSegments, validateSceneTransitionPackage,
 } from './domain/scene-transition.js';
 
 export {
@@ -205,7 +212,7 @@ export {
 } from './domain/turn-protocol.js';
 
 export {
-    applyTurnTransaction,
+    applyTurnTransaction, createPendingEventBoundary,
 } from './domain/turn-reducer.js';
 
 export {

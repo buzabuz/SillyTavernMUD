@@ -1,13 +1,32 @@
 // Extracted from the helpers compatibility facade for Task 4.
 
 import {
-    upsertSharedMemory,
-} from './actor-memory-migration.js';
+    applyWitnessedEventMemories,
+} from './event-memory.js';
 
 import {
-    hasGenericImpression,
-    normalizeActorMemoryProfile,
-} from './actor-memory.js';
+    markCommittedMessageEventsKnownToPlayer,
+    normalizeEventKnowledge,
+    reduceEventKnowledge,
+} from '../presence-witness-contract.js';
+
+import {
+    assertActorContextStateV1,
+    markActorIntroducedV1,
+    recordActorAppraisalV1,
+    updateActorLifeStateV1,
+    updateActorRuntimeV1,
+    upsertActorV1,
+} from './actor-context-runtime.js';
+
+import {
+    archiveSceneWithCalendarLinks,
+    normalizeCalendarEntryIds,
+} from './calendar-scene.js';
+
+import {
+    settleCalendarAtClock,
+} from './calendar-reducer.js';
 
 import {
     createSceneItemStates,
@@ -41,12 +60,280 @@ import {
     normalizeTransitionWorldChanges,
 } from './world-changes.js';
 
+export function settleSceneCloseMemoryBoundary(
+    memoryDirector = {},
+    nextSceneId = '',
+) {
+    const boundary =
+        memoryDirector
+            ?.pendingEventBoundary;
+    const pending =
+        boundary?.status ===
+            'pending'
+            ? {
+                ...structuredClone(
+                    boundary,
+                ),
+                boundaryId:
+                    boundary.boundaryId ||
+                    boundary.id,
+                carriedToSceneId:
+                    nextSceneId,
+            }
+            : null;
+    return {
+        ...(memoryDirector || {}),
+        pendingEventBoundary:
+            pending,
+    };
+}
+
+export function applyCommittedSceneOpeningExperience(
+    worldState,
+    message,
+    messageId,
+) {
+    const mud =
+        message?.extra
+            ?.hogwartsMud;
+    const sceneId =
+        String(
+            mud?.sceneId ||
+            worldState?.scene?.id ||
+            '',
+        );
+    if (
+        ![
+            'opening_narrative',
+            'scene_opening',
+        ].includes(
+            mud?.role,
+        ) ||
+        !sceneId ||
+        !Number.isInteger(messageId) ||
+        messageId < 0
+    ) {
+        return {
+            state: worldState,
+            event: null,
+        };
+    }
+    const localActors =
+        (
+            worldState.actors ||
+            []
+        )
+            .filter(actor =>
+                actor.present === true &&
+                actor.mapId ===
+                    worldState.scene
+                        ?.mapId &&
+                actor.roomId ===
+                    worldState.scene
+                        ?.roomId)
+            .map(actor => actor.id)
+            .sort();
+    const localSet =
+        new Set(localActors);
+    const activeActorIds =
+        Array.isArray(
+            worldState
+                .activeInteractionActorIds,
+        )
+            ? worldState
+                .activeInteractionActorIds
+            : [];
+    const participantActorIds =
+        [
+            ...new Set(
+                activeActorIds
+                    .filter(actorId =>
+                        localSet.has(
+                            actorId,
+                        )),
+            ),
+        ].sort();
+    const actorNames =
+        new Map(
+            (
+                worldState
+                    .actorLibrary ||
+                []
+            ).map(actor => [
+                actor.id,
+                String(
+                    actor.nameEn ||
+                    actor.name ||
+                    actor.id,
+                ).trim(),
+            ]),
+        );
+    const locationEn =
+        String(
+            worldState.scene
+                ?.nameEn ||
+            worldState.location ||
+            worldState.scene
+                ?.roomId ||
+            sceneId,
+        ).trim();
+    const clock =
+        String(
+            worldState.clock ||
+            worldState.scene
+                ?.startedClock ||
+            '',
+        ).trim();
+    const summaryParts = [
+        `${
+            clock
+                ? `At ${clock}, the`
+                : 'The'
+        } scene opens in ${locationEn}.`,
+    ];
+    if (localActors.length) {
+        summaryParts.push(
+            `Present actors: ${
+                localActors
+                    .map(actorId =>
+                        actorNames.get(
+                            actorId,
+                        ) ||
+                        actorId)
+                    .join(', ')
+            }.`,
+        );
+    }
+    const summaryEn =
+        summaryParts.join(' ');
+    const eventId =
+        `opening_${
+            sceneId
+                .replace(
+                    /[^a-z0-9_]+/giu,
+                    '_',
+                )
+        }_${messageId}`;
+    const event =
+        normalizeEventKnowledge({
+            version: 1,
+            eventId,
+            sceneId,
+            sourceMessageIds: [
+                messageId,
+            ],
+            summaryEn,
+            participantActorIds,
+            witnessActorIds:
+            localActors,
+            witnessCohortIds: [],
+            witnessBasis:
+            Object.fromEntries(
+                localActors.map(actorId => [
+                    actorId,
+                    participantActorIds
+                        .includes(actorId)
+                        ? 'direct'
+                        : 'room_visual_audible',
+                ]),
+            ),
+            perception: {
+                version: 1,
+                visualScope: 'room',
+                audibleScope: 'room',
+                salience: 'notable',
+                attribution: 'clear',
+                concealment: 'none',
+                directParticipantActorIds:
+                participantActorIds,
+                evidenceText:
+                summaryEn,
+                confidence: 1,
+                source:
+                'structured_scene_opening',
+            },
+            source:
+            'structured_scene_opening',
+        }, {
+            actors:
+            worldState.actors ||
+            [],
+            knownActorIds: (
+                worldState
+                    .actorLibrary ||
+            []
+            ).map(actor =>
+                actor.id),
+            cohortIds: (
+                worldState.cohorts ||
+            []
+            ).map(cohort =>
+                cohort.id),
+            sourceTexts: [
+                summaryEn,
+            ],
+        });
+    if (!event) {
+        throw new TypeError(
+            'Committed scene opening Event is invalid.',
+        );
+    }
+    let next =
+        structuredClone(
+            worldState,
+        );
+    next.eventKnowledge =
+        reduceEventKnowledge(
+            next,
+            event,
+        );
+    next =
+        applyWitnessedEventMemories(
+            next,
+            {
+                eventKnowledge:
+                    event,
+                publicEvent:
+                    summaryEn,
+            },
+            {
+                clock:
+                    next.clock,
+                turn:
+                    next.turn?.count ||
+                    0,
+            },
+        );
+    next =
+        markCommittedMessageEventsKnownToPlayer(
+            next,
+            message,
+            messageId,
+            [
+                event.eventId,
+            ],
+        );
+    const committedEvent =
+        next.eventKnowledge
+            .find(candidate =>
+                candidate.eventId ===
+                    event.eventId) ||
+        event;
+    return {
+        state: next,
+        event: committedEvent,
+    };
+}
+
 export function applySceneTransition(worldState, payload, archiveEntry = {}, options = {}) {
+    assertActorContextStateV1(
+        worldState,
+    );
     const validation = validateSceneTransitionPackage(payload, worldState, options);
     if (!validation.valid) {
         throw new Error(validation.errors.join('；'));
     }
-    const next = structuredClone(worldState);
+    let next = structuredClone(worldState);
     const nextScene = payload.nextScene;
     const map = getLocalMapDefinition(nextScene.mapId, next.map);
     const rooms = [
@@ -73,14 +360,30 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
     }
     const committedArchiveEntry = {
         ...structuredClone(archiveEntry),
+        id:
+            archiveEntry.id ||
+            worldState.scene?.id,
         timelineEntries: archivedTimelineEntries,
     };
-
-    next.sceneArchive = [
-        ...(next.sceneArchive || []).filter(scene => scene.id !== archiveEntry.id),
-        committedArchiveEntry,
-    ];
+    const archivedState =
+        archiveSceneWithCalendarLinks(
+            next,
+            committedArchiveEntry,
+        );
+    next.sceneArchive =
+        archivedState.sceneArchive;
+    if (archivedState.calendar) {
+        next.calendar =
+            archivedState.calendar;
+    }
     next.clock = nextClock;
+    if (next.calendar) {
+        next =
+            settleCalendarAtClock(
+                next,
+                nextClock,
+            );
+    }
     const normalizedWorldChanges =
         normalizeTransitionWorldChanges(
             payload.worldChanges,
@@ -112,60 +415,42 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
         0,
         Number(next.turn?.count || 0),
     );
-    const relationshipUpdates = new Map(
-        (payload.relationshipUpdates || [])
-            .map(update => [
-                update.id,
-                update,
-            ]),
-    );
-    next.actorLibrary = (
-        next.actorLibrary || []
-    ).map(profile => {
-        const update =
-            relationshipUpdates.get(
-                profile.id,
-            );
-        let normalized =
-            normalizeActorMemoryProfile(profile);
-        if (!update) return normalized;
-        normalized = {
-            ...normalized,
-            impressionOfPlayerEn:
-                update.impressionOfPlayerEn,
-            impressionOfPlayer:
-                update.impressionOfPlayer ||
-                update.impressionOfPlayerEn,
-            impressionUpdatedClock:
-                nextClock,
-            impressionUpdatedTurn:
-                currentTurn,
-        };
-        return upsertSharedMemory(
-            normalized,
+    for (const update of (
+        payload.relationshipUpdates ||
+        []
+    )) {
+        recordActorAppraisalV1(
+            next,
             {
-                id: `${profile.id}_${archiveEntry.id || worldState.scene?.id || 'scene'}_recent_${currentTurn}`,
+                actorId: update.id,
+                summaryEn:
+                    update
+                        .impressionOfPlayerEn,
+                kind:
+                    `transition_impression_${currentTurn}`,
+                tier: 'recent',
+                clock: nextClock,
+                sceneId:
+                    worldState.scene?.id ||
+                    '',
+            },
+        );
+        recordActorAppraisalV1(
+            next,
+            {
+                actorId: update.id,
                 summaryEn:
                     update.sceneMemoryEn,
-                summary:
-                    update.sceneMemory ||
-                    update.sceneMemoryEn,
-                firstClock:
-                    archiveEntry.startedClock ||
-                    worldState.scene
-                        ?.startedClock ||
-                    worldState.clock,
-                lastClock:
-                    archiveEntry.endedClock ||
-                    worldState.clock,
-                createdTurn: currentTurn,
-                updatedTurn: currentTurn,
-                source: 'medium_transition',
-                significance: 'notable',
+                kind:
+                    `transition_memory_${currentTurn}`,
+                tier: 'recent',
+                clock: nextClock,
+                sceneId:
+                    worldState.scene?.id ||
+                    '',
             },
-            'recent',
         );
-    });
+    }
     next.chapter = nextScene.chapter || nextScene.chapterEn;
     next.location = room.name || nextScene.name || nextScene.nameEn;
     next.scene = {
@@ -201,6 +486,11 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
         }],
         mapId: nextScene.mapId,
         roomId: nextScene.roomId,
+        calendarEntryIds:
+            normalizeCalendarEntryIds(
+                options
+                    .calendarEntryIds,
+            ),
         itemStates:
             createSceneItemStates(
                 next.items,
@@ -227,235 +517,168 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
         nextScene.actorStates.map(actor => [actor.id, actor]),
     );
     const existingActors = new Map((next.actors || []).map(actor => [actor.id, actor]));
-    next.actorLibrary = (
+    for (const profile of (
         next.actorLibrary || []
-    ).map(profile => {
-        const current =
-            existingActors.get(profile.id);
-        const update =
-            actorStateMap.get(profile.id);
+    )) {
+        let current =
+            existingActors.get(
+                profile.id,
+            );
+        const update = actorStateMap.get(profile.id);
+        if (!current) {
+            current = upsertActorV1(
+                next,
+                {
+                    actorId:
+                        profile.id,
+                    coreSource:
+                        profile,
+                    runtimeSource: {
+                        mapId:
+                            update
+                                ?.mapId ||
+                            '',
+                        roomId:
+                            update
+                                ?.roomId ||
+                            '',
+                        present: false,
+                        lifeStatus:
+                            update
+                                ?.lifeStatus ||
+                            'alive',
+                        lifeStatusPermanent:
+                            update
+                                ?.lifeStatusPermanent ===
+                            true,
+                        lifeStatusDetailEn:
+                            update
+                                ?.lifeStatusDetailEn ||
+                            'Alive.',
+                        lifeStatusSinceClock:
+                            update?.lifeStatus &&
+                            update.lifeStatus !==
+                                'alive'
+                                ? nextClock
+                                : '',
+                        currentActivityEn:
+                            '',
+                        currentIntentEn:
+                            '',
+                        currentGoalEn:
+                            '',
+                        temporary:
+                            false,
+                    },
+                },
+            ).runtime;
+        }
         if (
             update
-                ?.firstImpressionOfPlayerEn &&
-            !profile
-                .firstImpressionOfPlayerEn
+                ?.firstImpressionOfPlayerEn
         ) {
-            const currentImpression =
-                normalizeActorMemoryProfile(
-                    profile,
-                    current,
-                );
-            const seedCurrent =
-                hasGenericImpression(
-                    currentImpression
-                        .impressionOfPlayerEn,
-                );
-            return normalizeActorMemoryProfile({
-                ...currentImpression,
-                firstImpressionOfPlayerEn:
-                    update
-                        .firstImpressionOfPlayerEn,
-                firstImpressionOfPlayer:
-                    update
-                        .firstImpressionOfPlayer ||
-                    update
-                        .firstImpressionOfPlayerEn,
-                firstImpressionClock:
-                    nextClock,
-                firstImpressionTurn:
-                    currentTurn,
-                firstImpressionPending:
-                    false,
-                ...(seedCurrent
-                    ? {
-                        impressionOfPlayerEn:
-                            update
-                                .firstImpressionOfPlayerEn,
-                        impressionOfPlayer:
-                            update
-                                .firstImpressionOfPlayer ||
-                            update
-                                .firstImpressionOfPlayerEn,
-                        impressionUpdatedClock:
-                            nextClock,
-                        impressionUpdatedTurn:
-                            currentTurn,
-                    }
-                    : {}),
-                introducedClock:
-                    profile.introducedClock ||
-                    nextClock,
-                introducedTurn:
-                    profile.introducedTurn ??
-                    currentTurn,
-            }, {
-                ...current,
-                present: true,
-            });
+            recordActorAppraisalV1(
+                next,
+                {
+                    actorId:
+                        profile.id,
+                    summaryEn:
+                        update
+                            .firstImpressionOfPlayerEn,
+                    kind:
+                        'first_impression',
+                    tier: 'recent',
+                    clock: nextClock,
+                    sceneId:
+                        nextScene.id,
+                    firstImpression:
+                        true,
+                },
+            );
         }
-        if (
-            update?.present === true &&
-            current?.present !== true &&
-            !profile
-                .firstImpressionOfPlayerEn
-        ) {
-            return normalizeActorMemoryProfile({
-                ...profile,
-                introducedClock:
-                    profile.introducedClock ||
-                    nextClock,
-                introducedTurn:
-                    profile.introducedTurn ??
-                    currentTurn,
-                firstImpressionPending:
-                    true,
-            }, {
-                ...current,
-                present: true,
-            });
-        }
-        return normalizeActorMemoryProfile(
-            profile,
-            current,
-        );
-    });
-    next.actors = (next.actorLibrary || []).map(profile => {
-        const current = existingActors.get(profile.id) || {};
-        const update = actorStateMap.get(profile.id);
         const lifeStatus =
             update?.lifeStatus ||
             current.lifeStatus ||
-            profile.lifeStatus ||
             'alive';
-        const lifeStatusPermanent =
-            lifeStatus === 'dead'
-                ? update
-                    ?.lifeStatusPermanent !==
-                    false
-                : Boolean(
+        updateActorRuntimeV1(
+            next,
+            profile.id,
+            {
+                mapId:
+                    update?.mapId ||
+                    current.mapId,
+                roomId:
+                    update?.roomId ||
+                    current.roomId,
+                present:
+                    ![
+                        'dead',
+                        'missing',
+                    ].includes(
+                        lifeStatus,
+                    ) &&
+                    update?.present ===
+                        true,
+                currentActivityEn:
+                    update
+                        ?.currentActivityEn ??
+                    current
+                        .currentActivityEn,
+                currentIntentEn:
+                    update
+                        ?.currentIntentEn ??
+                    '',
+                currentGoalEn:
+                    current
+                        .currentGoalEn,
+                temporary:
+                    current.temporary,
+            },
+        );
+        updateActorLifeStateV1(
+            next,
+            profile.id,
+            {
+                lifeStatus,
+                lifeStatusPermanent:
                     update
                         ?.lifeStatusPermanent ??
                     current
-                        .lifeStatusPermanent ??
-                    profile
                         .lifeStatusPermanent,
-                );
-        return {
-            ...current,
-            id: profile.id,
-            nameEn: current.nameEn || profile.nameEn,
-            name: current.name || profile.name || profile.nameEn,
-            roleEn: current.roleEn || profile.roleEn,
-            role: current.role || profile.role || profile.roleEn,
-            relationshipToPlayerEn: current.relationshipToPlayerEn || profile.relationshipToPlayerEn,
-            relationshipToPlayer: current.relationshipToPlayer || profile.relationshipToPlayer,
-            firstImpressionOfPlayerEn:
-                profile
-                    .firstImpressionOfPlayerEn ||
-                current
-                    .firstImpressionOfPlayerEn,
-            firstImpressionOfPlayer:
-                profile
-                    .firstImpressionOfPlayer ||
-                current
-                    .firstImpressionOfPlayer,
-            firstImpressionClock:
-                profile.firstImpressionClock ||
-                current.firstImpressionClock,
-            firstImpressionTurn:
-                profile.firstImpressionTurn ||
-                current.firstImpressionTurn,
-            firstImpressionPending:
-                profile.firstImpressionPending,
-            impressionOfPlayerEn:
-                profile.impressionOfPlayerEn ||
-                current.impressionOfPlayerEn,
-            impressionOfPlayer:
-                profile.impressionOfPlayer ||
-                current.impressionOfPlayer ||
-                profile.impressionOfPlayerEn,
-            impressionUpdatedClock:
-                profile.impressionUpdatedClock ||
-                current.impressionUpdatedClock,
-            impressionUpdatedTurn:
-                profile.impressionUpdatedTurn ||
-                current.impressionUpdatedTurn,
-            publicDescriptionEn: current.publicDescriptionEn || profile.publicDescriptionEn,
-            present:
-                lifeStatus === 'dead'
-                    ? false
-                    : update?.present === true,
-            lifeStatus,
-            lifeStatusPermanent,
-            lifeStatusDetailEn:
-                update
-                    ?.lifeStatusDetailEn ||
-                current
-                    .lifeStatusDetailEn ||
-                profile
-                    .lifeStatusDetailEn ||
-                (
-                    lifeStatus === 'alive'
-                        ? 'Alive.'
-                        : ''
-                ),
-            lifeStatusDetail:
-                update
-                    ?.lifeStatusDetail ||
-                update
-                    ?.lifeStatusDetailEn ||
-                current
-                    .lifeStatusDetail ||
-                profile
-                    .lifeStatusDetail ||
-                (
-                    lifeStatus === 'alive'
-                        ? '存活。'
-                        : ''
-                ),
-            lifeStatusSinceClock:
-                lifeStatus !==
-                    (
-                        current.lifeStatus ||
-                        profile.lifeStatus ||
-                        'alive'
-                    )
-                    ? nextClock
-                    : current
-                        .lifeStatusSinceClock ||
-                        profile
-                            .lifeStatusSinceClock ||
-                        '',
-            mapId:
-                update?.mapId ||
-                current.mapId ||
-                profile.mapId ||
-                '',
-            roomId:
-                update?.roomId ||
-                current.roomId ||
-                profile.roomId ||
-                '',
-            currentActivityEn: update?.currentActivityEn || current.currentActivityEn || '',
-            currentActivity: update?.currentActivity || update?.currentActivityEn ||
-                current.currentActivity || '',
-        };
-    }).concat(
-        (worldState.actors || [])
-            .filter(actor =>
-                actor.temporary)
-            .map(actor => ({
-                ...structuredClone(actor),
-                present: false,
-                currentActivityEn:
-                    actor.currentActivityEn ||
-                    'No longer in the active scene.',
-                currentActivity:
-                    actor.currentActivity ||
-                    actor.currentActivityEn ||
-                    '已离开当前场景。',
-            })),
-    );
+                lifeStatusDetailEn:
+                    update
+                        ?.lifeStatusDetailEn ||
+                    current
+                        .lifeStatusDetailEn,
+                present:
+                    update?.present ===
+                    true,
+            },
+            {
+                tier:
+                    options.tier ||
+                    'medium',
+                clock:
+                    nextClock,
+            },
+        );
+        if (
+            update?.present === true ||
+            update
+                ?.firstImpressionOfPlayerEn
+        ) {
+            markActorIntroducedV1(
+                next,
+                profile.id,
+                {
+                    clock:
+                        nextClock,
+                    turn:
+                        currentTurn,
+                },
+            );
+        }
+    }
     const presence =
         projectSceneTransitionPresence(
             worldState,
@@ -497,33 +720,6 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
                     nextScene.roomId,
             },
         );
-    const lifeStates = new Map(
-        next.actors.map(actor => [
-            actor.id,
-            actor,
-        ]),
-    );
-    next.actorLibrary =
-        next.actorLibrary.map(profile => {
-            const actor =
-                lifeStates.get(profile.id);
-            return actor ? {
-                ...profile,
-                lifeStatus:
-                    actor.lifeStatus,
-                lifeStatusPermanent:
-                    actor
-                        .lifeStatusPermanent,
-                lifeStatusDetailEn:
-                    actor
-                        .lifeStatusDetailEn,
-                lifeStatusDetail:
-                    actor.lifeStatusDetail,
-                lifeStatusSinceClock:
-                    actor
-                        .lifeStatusSinceClock,
-            } : profile;
-        });
     next.timeline = [
         ...(next.timeline || []),
         closureTimelineEntry,
@@ -568,7 +764,10 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
         pendingBeat: null,
     };
     next.memoryDirector = {
-        ...(next.memoryDirector || {}),
+        ...settleSceneCloseMemoryBoundary(
+            next.memoryDirector,
+            nextScene.id,
+        ),
         status: 'ready',
         error: '',
         triggerMode:
@@ -577,14 +776,17 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
         lastReviewedTurn:
             options
                 .deferSocialConsolidation ===
-                true
+                true ||
+            next.memoryDirector
+                ?.pendingEventBoundary
+                ?.status ===
+                'pending'
                 ? Number(
                     next.memoryDirector
                         ?.lastReviewedTurn ||
                     0,
                 )
                 : currentTurn,
-        pendingEventBoundary: null,
     };
     delete next.memoryDirector
         .reviewAfterTurns;
@@ -601,5 +803,7 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
         },
         lastMovement: null,
     };
-    return next;
+    return assertActorContextStateV1(
+        next,
+    );
 }

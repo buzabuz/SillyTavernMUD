@@ -91,7 +91,12 @@ export function getCanonActorDisplayMetadata(
 export function reconcileCanonActorDisplayNames(
     worldState,
 ) {
-    if (!worldState) {
+    if (
+        !worldState ||
+        worldState
+            .actorContextVersion ===
+            1
+    ) {
         return {
             state: worldState,
             changed: false,
@@ -225,7 +230,12 @@ export function reconcileTemporaryActorDisplayNames(
     worldState,
     chat = [],
 ) {
-    if (!worldState) {
+    if (
+        !worldState ||
+        worldState
+            .actorContextVersion ===
+            1
+    ) {
         return {
             state: worldState,
             changed: false,

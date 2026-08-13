@@ -3,9 +3,14 @@ export function createJobRegistry() {
         opening: null,
         foundation: null,
         daily: null,
+        mediumCalendarDirector:
+            null,
         pacing: null,
         memory: null,
         sceneTransition: null,
+        calendarMoment: null,
+        calendarMomentPhase:
+            'idle',
         interiorMap: null,
         turnActive: false,
         sceneTransitionActive: false,

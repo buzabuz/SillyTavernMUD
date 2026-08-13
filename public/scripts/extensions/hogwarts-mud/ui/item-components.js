@@ -355,6 +355,8 @@ export function createItemCandidateCard(
     item,
     {
         decision = 'pending',
+        disabled = false,
+        readOnly = false,
         onAccept,
         onIgnore,
     } = {},
@@ -515,7 +517,8 @@ export function createItemCandidateCard(
 
     if (
         decision ===
-            'pending'
+            'pending' &&
+        !readOnly
     ) {
         const accept =
             document.createElement(
@@ -526,6 +529,8 @@ export function createItemCandidateCard(
             'is-primary';
         accept.textContent =
             '收录';
+        accept.disabled =
+            disabled;
         const ignore =
             document.createElement(
                 'button',
@@ -533,6 +538,8 @@ export function createItemCandidateCard(
         ignore.type = 'button';
         ignore.textContent =
             '忽略';
+        ignore.disabled =
+            disabled;
         const resolve =
             async (
                 button,

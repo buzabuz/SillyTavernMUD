@@ -2,6 +2,12 @@ import {
     createItemCard,
     createItemLedger,
 } from './item-components.js';
+import {
+    IDENTITY_SOURCE_LABELS,
+} from './npc-identity-dossier.js';
+import {
+    buildActorDossierViewModel,
+} from '../domain/actor-dossier-projection.js';
 
 export function createInspectorController(ports) {
     const {
@@ -11,8 +17,6 @@ export function createInspectorController(ports) {
 
     const {
         SPELL_LEARNING_SOURCE_LABELS,
-        buildActorAppearanceView,
-        buildSocialAudienceProjection,
         createItemReferenceDirective,
         getKnownSpellMap,
         getRoomName,
@@ -21,12 +25,8 @@ export function createInspectorController(ports) {
         getWorldState,
         initials,
         insertAtCursor,
-        normalizeActorMemoryProfile,
-        projectActorItems,
         projectItemLedger,
-        projectPeoplePanel,
         renderInspectorMap,
-        setComposerAddressTarget,
         setComposerSpell,
     } = ports;
 
@@ -61,7 +61,32 @@ export function createInspectorController(ports) {
             if (typeof entry === 'string') {
                 item.textContent = entry;
             } else {
-                item.textContent = entry.label || entry.name || '';
+                const label =
+                    document.createElement(
+                        'span',
+                    );
+                label.className =
+                    'hpmud-inspector-entry-label';
+                label.textContent =
+                    entry.label ||
+                    entry.name ||
+                    '';
+                item.append(label);
+                const sourceLabel =
+                    IDENTITY_SOURCE_LABELS[
+                        entry.sourceKind
+                    ];
+                if (sourceLabel) {
+                    const source =
+                        document.createElement(
+                            'span',
+                        );
+                    source.className =
+                        `hpmud-identity-source is-${entry.sourceKind}`;
+                    source.textContent =
+                        sourceLabel;
+                    item.append(source);
+                }
                 if (entry.detail) {
                     const detail = document.createElement('small');
                     detail.textContent = entry.detail;
@@ -73,35 +98,7 @@ export function createInspectorController(ports) {
         return list;
     }
 
-    function renderActorImpression(profile, actor) {
-        const dynamic = normalizeActorMemoryProfile(
-            profile || {},
-            actor || {},
-        );
-        const panel = document.createElement('div');
-        panel.className = 'hpmud-impression';
-        const quote = document.createElement('p');
-        quote.textContent =
-            dynamic.impressionOfPlayer ||
-            dynamic.impressionOfPlayerEn ||
-            '对方还没有形成清晰看法。';
-        const meta = document.createElement('small');
-        const updatedClock =
-            dynamic.impressionUpdatedClock ||
-            '等待新的共同经历';
-        meta.textContent =
-            dynamic.impressionUpdatedTurn
-                ? `TURN ${dynamic.impressionUpdatedTurn} · ${updatedClock}`
-                : updatedClock;
-        panel.append(quote, meta);
-        return panel;
-    }
-
-    function renderSharedMemoryLedger(profile, actor) {
-        const dynamic = normalizeActorMemoryProfile(
-            profile || {},
-            actor || {},
-        );
+    function renderMemoryLedger(memories) {
         const ledger = document.createElement('div');
         ledger.className = 'hpmud-memory-ledger';
         const tiers = [
@@ -122,8 +119,8 @@ export function createInspectorController(ports) {
             },
         ];
         tiers.forEach(tier => {
-            const memories =
-                dynamic.sharedMemories[tier.id] || [];
+            const entriesForTier =
+                memories[tier.id] || [];
             const section = document.createElement('section');
             section.className =
                 `hpmud-memory-tier tier-${tier.id}`;
@@ -132,12 +129,12 @@ export function createInspectorController(ports) {
             const count = document.createElement('span');
             const hint = document.createElement('small');
             title.textContent = tier.label;
-            count.textContent = String(memories.length);
+            count.textContent = String(entriesForTier.length);
             hint.textContent = tier.hint;
             header.append(title, count, hint);
             const entries = document.createElement('div');
             entries.className = 'hpmud-memory-entries';
-            if (!memories.length) {
+            if (!entriesForTier.length) {
                 const empty = document.createElement('p');
                 empty.className = 'hpmud-memory-empty';
                 empty.textContent =
@@ -146,16 +143,18 @@ export function createInspectorController(ports) {
                         : '这一层暂时没有记录。';
                 entries.append(empty);
             } else {
-                [...memories].reverse().forEach(memory => {
+                [...entriesForTier].reverse().forEach(memory => {
                     const entry = document.createElement('article');
                     const summary = document.createElement('p');
                     const time = document.createElement('time');
                     summary.textContent =
-                        memory.summary ||
-                        memory.summaryEn;
+                        memory.summary;
                     time.textContent =
-                        memory.lastClock ||
-                        memory.firstClock ||
+                        [
+                            memory.sourceBadge,
+                            memory.clock,
+                        ].filter(Boolean)
+                            .join(' · ') ||
                         '时间未记';
                     entry.append(summary, time);
                     entries.append(entry);
@@ -167,89 +166,24 @@ export function createInspectorController(ports) {
         return ledger;
     }
 
-    function getSocialActorName(
-        state,
-        actorId,
-    ) {
-        if (actorId === 'player') {
-            return '你';
-        }
-        const actor = [
-            ...(state.actorLibrary || []),
-            ...(state.actors || []),
-        ].find(entry =>
-            entry.id === actorId);
-        return actor?.name ||
-            actor?.nameEn ||
-            actorId;
-    }
-
-    function renderActorSocialStatements(
-        state,
-        actorId,
-    ) {
-        const categoryLabels = {
-            family: '家庭',
-            origin: '出身',
-            education: '教育',
-            wealth: '经济',
-            occupation: '职业',
-            identity: '身份',
-            history: '经历',
-            preference: '偏好',
-            other: '公开说法',
-        };
-        const statements =
-            buildSocialAudienceProjection(
-                state,
-                'player',
-            )
-                .statements
-                .filter(statement =>
-                    statement.subjectId ===
-                        actorId)
-                .map(statement => ({
-                    label: [
-                        categoryLabels[
-                            statement.category
-                        ] ||
-                        '公开说法',
-                        statement.speakerId !==
-                            actorId
-                            ? `由 ${getSocialActorName(
-                                state,
-                                statement.speakerId,
-                            )} 提及`
-                            : '',
-                    ].filter(Boolean)
-                        .join(' · '),
-                    detail:
-                        statement.text ||
-                        statement.textEn,
-                }));
-        return createList(
-            statements,
-            '你还没有亲耳得知此人的家庭或背景声明。',
-        );
-    }
-
-    function renderActorSocialRelationships(
-        state,
-        actorId,
-    ) {
-        const projection =
-            buildSocialAudienceProjection(
-                state,
-                'player',
-            );
-        const edgeByDirection =
-            new Map(
-                projection.relationships
-                    .map(edge => [
-                        `${edge.sourceActorId}->${edge.targetActorId}`,
-                        edge,
-                    ]),
-            );
+    function renderRelationship(relationship) {
+        const panel =
+            document.createElement('div');
+        panel.className =
+            'hpmud-dossier-relationship';
+        const labels =
+            document.createElement('div');
+        labels.className =
+            'hpmud-tags';
+        relationship.labels
+            .forEach(label => {
+                const tag =
+                    document.createElement(
+                        'span',
+                    );
+                tag.textContent = label;
+                labels.append(tag);
+            });
         const dimensions = [
             ['familiarity', '熟悉'],
             ['closeness', '亲近'],
@@ -262,103 +196,155 @@ export function createInspectorController(ports) {
             ['fear', '恐惧'],
             ['protectiveness', '保护'],
         ];
-        const formatEdge = edge => {
-            const sourceName =
-                getSocialActorName(
-                    state,
-                    edge.sourceActorId,
-                );
-            const targetName =
-                getSocialActorName(
-                    state,
-                    edge.targetActorId,
-                );
-            const labels =
-                (edge.labels || [])
-                    .join(' / ');
-            const activeEmotions =
-                (edge.activeEmotions || [])
-                    .map(emotion =>
-                        `${emotion.emotion} ${emotion.intensity}`)
-                    .join('、');
-            const latestEvidence =
-                edge.latestEvidence
-                    ?.summary ||
-                edge.latestEvidence
-                    ?.summaryEn ||
-                '';
-            return {
-                label: [
-                    `${sourceName} → ${targetName}`,
-                    labels,
-                ].filter(Boolean).join(' · '),
-                detail: [
-                    dimensions
-                        .map(([key, label]) =>
-                            `${label} ${Math.round(
+        const metricList =
+            createList(
+                dimensions.map(
+                    ([key, label]) => ({
+                        label,
+                        detail: String(
+                            Math.round(
                                 Number(
-                                    edge[key] ||
-                                    0,
+                                    relationship
+                                        .dimensions[
+                                            key
+                                        ] || 0,
                                 ),
-                            )}`)
-                        .join(' · '),
-                    activeEmotions &&
-                        `短期情绪：${activeEmotions}`,
-                    latestEvidence &&
-                        `最新 evidence：${latestEvidence}`,
-                ].filter(Boolean).join(' · '),
-            };
-        };
-        const directDirections = [
-            [actorId, 'player'],
-            ['player', actorId],
-        ];
-        const relationships =
-            directDirections.map(
-                ([sourceActorId, targetActorId]) => {
-                    const edge =
-                        edgeByDirection.get(
-                            `${sourceActorId}->${targetActorId}`,
-                        );
-                    if (edge) {
-                        return formatEdge(edge);
-                    }
-                    return {
-                        label:
-                            `${getSocialActorName(
-                                state,
-                                sourceActorId,
-                            )} → ${getSocialActorName(
-                                state,
-                                targetActorId,
-                            )}`,
-                        detail:
-                            '尚无玩家可知记录。',
-                    };
-                },
+                            ),
+                        ),
+                    }),
+                ),
             );
-        projection.relationships
-            .filter(edge =>
-                (
-                    edge.sourceActorId ===
-                        actorId ||
-                    edge.targetActorId ===
-                        actorId
-                ) &&
-                !directDirections.some(
-                    ([sourceActorId, targetActorId]) =>
-                        edge.sourceActorId ===
-                            sourceActorId &&
-                        edge.targetActorId ===
-                            targetActorId,
-                ))
-            .map(formatEdge)
-            .forEach(entry =>
-                relationships.push(entry));
-        return createList(
-            relationships,
-            '还没有形成你可知的人际关系记录。',
+        const impressions =
+            createList([
+                {
+                    label: '初见印象',
+                    detail:
+                        relationship
+                            .firstImpression
+                            ?.summary ||
+                        '尚无初见印象记录。',
+                },
+                {
+                    label: '当前看法',
+                    detail:
+                        relationship
+                            .currentSchema
+                            ?.interpretation ||
+                        '尚未形成稳定看法。',
+                },
+                {
+                    label: '行为预期',
+                    detail:
+                        relationship
+                            .currentSchema
+                            ?.expectation ||
+                        '暂无稳定预期。',
+                },
+                relationship
+                    .currentSchema
+                    ? {
+                        label:
+                            'Schema 依据',
+                        detail:
+                            `${Math.round(
+                                relationship
+                                    .currentSchema
+                                    .confidence *
+                                100,
+                            )}% · ` +
+                            `${relationship.currentSchema.status} · ` +
+                            `${relationship.currentSchema.supportingCount} 条支持 · ` +
+                            `${relationship.currentSchema.counterexampleCount} 条反例`,
+                    }
+                    : null,
+            ].filter(Boolean));
+        const sentiments =
+            relationship
+                .activeSentiments
+                .map(sentiment => ({
+                    label:
+                        sentiment.emotion ||
+                        '短期情绪',
+                    detail:
+                        String(
+                            sentiment
+                                .intensity ??
+                            '',
+                        ),
+                }));
+        const evidence =
+            relationship
+                .evidenceRefs
+                .map(reference => ({
+                    label:
+                        reference.clock ||
+                        '关系证据',
+                    detail:
+                        reference.summary,
+                }));
+        panel.append(
+            labels,
+            impressions,
+            metricList,
+            createList(
+                sentiments,
+                '当前没有活跃情绪。',
+            ),
+            createList(
+                evidence,
+                '尚无玩家可见的关系证据。',
+            ),
         );
+        return panel;
+    }
+
+    function renderIdentity(identity) {
+        const panel =
+            document.createElement('div');
+        panel.className =
+            'hpmud-dossier-identity';
+        identity.groups
+            .forEach(group => {
+                const heading =
+                    document.createElement(
+                        'h4',
+                    );
+                heading.textContent =
+                    group.title;
+                panel.append(
+                    heading,
+                    createList(
+                        group.entries
+                            .map(entry => ({
+                                label:
+                                    entry.label,
+                                detail:
+                                    [
+                                        entry.value,
+                                        entry.detail,
+                                    ].filter(Boolean)
+                                        .join(' · '),
+                                sourceKind:
+                                    entry
+                                        .sourceKind,
+                            })),
+                        group.emptyText ||
+                        '暂无',
+                    ),
+                );
+            });
+        const claimsHeading =
+            document.createElement('h4');
+        claimsHeading.textContent =
+            '关系说法';
+        panel.append(
+            claimsHeading,
+            createList(
+                identity.claims,
+                '暂无已知关系说法。',
+            ),
+        );
+        return panel;
     }
 
     function renderInspector(tab = 'character') {
@@ -370,243 +356,186 @@ export function createInspectorController(ports) {
         });
 
         if (tab === 'actor') {
-            const actor = state.actors.find(item => item.id === session.selectedActorId);
-            const profile = state.actorLibrary.find(item => item.id === session.selectedActorId);
-            if (!actor && !profile) {
+            const dossier =
+                buildActorDossierViewModel(
+                    state,
+                    session.selectedActorId,
+                    'player',
+                    {
+                        getRoomName,
+                    },
+                );
+            if (!dossier) {
                 session.selectedActorId = '';
                 renderInspector('character');
                 return;
             }
-            const name =
-                profile?.name ||
-                actor?.name ||
-                profile?.nameEn ||
-                actor?.nameEn ||
-                '未知人物';
-            const identity = document.createElement('div');
-            identity.className = 'hpmud-profile hpmud-actor-profile';
-            identity.innerHTML = `
-            <span class="hpmud-profile-avatar">${initials(name)}</span>
-            <span><h2></h2><p></p></span>
-        `;
-            identity.querySelector('h2').textContent = name;
-            identity.querySelector('p').textContent = [
-                profile?.role || actor?.role || profile?.roleEn,
-                profile?.relationshipToPlayer || actor?.relationshipToPlayer,
-            ].filter(Boolean).join(' · ');
-            inspectorElement.append(createInspectorCard('', identity));
-            if (
-                projectPeoplePanel(state)
-                    .activePeople
-                    .some(person =>
-                        person.id ===
-                        session.selectedActorId)
-            ) {
-                const addressAction =
-                    document.createElement(
-                        'button',
-                    );
-                addressAction.type = 'button';
-                addressAction.className =
-                    'hpmud-tool-button';
-                addressAction.textContent =
-                    '插入对话块';
-                addressAction.addEventListener(
-                    'click',
-                    () => {
-                        setComposerAddressTarget(
-                            profile?.name ||
-                            actor?.name ||
-                            profile?.nameEn ||
-                            actor?.nameEn ||
-                            actor.id,
-                        );
-                        toastr.success(
-                            '已插入定向台词。',
-                        );
-                    },
-                );
-                inspectorElement.append(
-                    createInspectorCard(
-                        '',
-                        addressAction,
-                    ),
-                );
-            }
-            inspectorElement.append(createInspectorCard(
-                '对你的印象',
-                renderActorImpression(profile, actor),
-            ));
-            inspectorElement.append(createInspectorCard(
-                '共同记忆',
-                renderSharedMemoryLedger(profile, actor),
-            ));
-            inspectorElement.append(createInspectorCard(
-                '家庭与背景声明',
-                renderActorSocialStatements(
-                    state,
-                    session.selectedActorId,
+            inspectorElement.append(
+                createInspectorCard(
+                    '人物本色',
+                    createList([
+                        {
+                            label: '公开背景',
+                            detail:
+                                dossier.core
+                                    .publicBackground ||
+                                '暂无公开背景。',
+                        },
+                        {
+                            label: '性格',
+                            detail:
+                                dossier.core
+                                    .personality ||
+                                '暂无性格记录。',
+                        },
+                        {
+                            label: '说话方式',
+                            detail:
+                                dossier.core
+                                    .speechStyle ||
+                                '暂无说话方式记录。',
+                        },
+                        {
+                            label: '可见外貌',
+                            detail:
+                                dossier.core
+                                    .visibleDescription ||
+                                '暂无外貌记录。',
+                        },
+                    ]),
                 ),
-            ));
-            inspectorElement.append(createInspectorCard(
-                '已知人物关系',
-                renderActorSocialRelationships(
-                    state,
-                    session.selectedActorId,
-                ),
-            ));
-            const graphAction =
-                document.createElement('button');
-            graphAction.type = 'button';
-            graphAction.className =
-                'hpmud-tool-button';
-            graphAction.textContent =
-                '在关系星图中查看';
-            graphAction.addEventListener(
-                'click',
-                () => void refs.relationshipGraphController
-                    ?.open({
-                        actorId:
-                            session.selectedActorId,
-                    }),
             );
             inspectorElement.append(
                 createInspectorCard(
-                    '',
-                    graphAction,
+                    '身份与已知说法',
+                    renderIdentity(
+                        dossier.identity,
+                    ),
                 ),
             );
-            inspectorElement.append(createInspectorCard('当前状态', createList([
-                {
-                    label: '所在位置',
-                    detail: getRoomName(
-                        state,
-                        actor?.mapId || state.map.activeMapId,
-                        actor?.roomId,
-                    ),
-                },
-                {
-                    label: '正在做',
-                    detail:
-                        actor?.currentActivity ||
-                        actor?.currentActivityEn ||
-                        '不在当前场景。',
-                },
-                {
-                    label: '身份关系',
-                    detail:
-                        profile?.relationshipToPlayer ||
-                        actor?.relationshipToPlayer ||
-                        '尚未建立关系。',
-                },
-            ])));
-            const appearance =
-                buildActorAppearanceView(
-                    state,
-                    session.selectedActorId,
-                );
+            const presentation =
+                dossier.current
+                    .presentation;
             const currentPresentation = [
-                appearance.presentation
-                    .outfit
+                presentation.outfit
                     ? {
                         label: '服装',
                         detail:
-                            appearance
-                                .presentation
+                            presentation
                                 .outfit,
                     }
                     : null,
-                appearance.presentation
-                    .wornItems.length
+                presentation.wornItemIds
+                    .length
                     ? {
-                        label: '正式穿戴',
+                        label:
+                            '正式穿戴 Item',
                         detail:
-                            appearance
-                                .presentation
-                                .wornItems
+                            presentation
+                                .wornItemIds
                                 .join(' · '),
                     }
                     : null,
-                appearance.presentation
-                    .accessories.length
+                presentation.accessories
+                    .length
                     ? {
                         label:
-                            '隐含饰品',
+                            '帽子与饰品',
                         detail:
-                            appearance
-                                .presentation
+                            presentation
                                 .accessories
                                 .join(' · '),
                     }
                     : null,
-                appearance.presentation
-                    .hair
-                    ? {
-                        label: '当前发型',
-                        detail:
-                            appearance
-                                .presentation
-                                .hair,
-                    }
-                    : null,
-                appearance.presentation
-                    .visibleConditions
+                presentation.heldItemIds
                     .length
                     ? {
-                        label: '可见状态',
+                        label: '手持 Item',
                         detail:
-                            appearance
-                                .presentation
-                                .visibleConditions
+                            presentation
+                                .heldItemIds
                                 .join(' · '),
                     }
                     : null,
-                ...appearance.presentation
-                    .heldItems.map(
-                        entry => ({
-                            label:
-                                entry.hand ===
-                                    'left'
-                                    ? '左手'
-                                    : entry
-                                        .hand ===
-                                        'right'
-                                        ? '右手'
-                                        : entry
-                                            .hand ===
-                                            'both'
-                                            ? '双手'
-                                            : '手持物',
-                            detail:
-                                entry.item,
-                        }),
-                    ),
             ].filter(Boolean);
             inspectorElement.append(
                 createInspectorCard(
-                    '当前呈现',
-                    createList(
-                        currentPresentation,
-                        '没有记录到动态服装、发型或手持物。',
+                    '当前状态',
+                    createList([
+                        {
+                            label: '所在位置',
+                            detail:
+                                dossier.current
+                                    .location ||
+                                '位置未知',
+                        },
+                        {
+                            label: '正在做',
+                            detail:
+                                dossier.current
+                                    .activity ||
+                                '当前没有活动记录。',
+                        },
+                        {
+                            label: '当前意图',
+                            detail:
+                                dossier.current
+                                    .intent ||
+                                '当前没有意图记录。',
+                        },
+                        {
+                            label: '生命状态',
+                            detail: {
+                                alive: '存活',
+                                injured: '受伤',
+                                incapacitated:
+                                    '失去行动能力',
+                                missing: '失踪',
+                                dead: '死亡',
+                            }[
+                                dossier.current
+                                    .lifeStatus
+                            ] ||
+                                dossier.current
+                                    .lifeStatus ||
+                                '未知',
+                        },
+                        {
+                            label: '状态说明',
+                            detail:
+                                dossier.current
+                                    .lifeStatusDetail ||
+                                '暂无状态说明。',
+                        },
+                        ...currentPresentation,
+                    ]),
+                ),
+            );
+            inspectorElement.append(
+                createInspectorCard(
+                    '对你的关系',
+                    renderRelationship(
+                        dossier
+                            .relationship,
                     ),
                 ),
             );
-            const formalItems =
-                projectActorItems(
-                    state,
-                    session
-                        .selectedActorId,
+            inspectorElement.append(
+                createInspectorCard(
+                    '共同经历',
+                    renderMemoryLedger(
+                        dossier.memories,
+                    ),
+                ),
+            );
+            const itemList =
+                document.createElement(
+                    'div',
                 );
-            if (
-                formalItems.length
-            ) {
-                const itemList =
-                    document.createElement(
-                        'div',
-                    );
-                itemList.className =
-                    'hpmud-item-grid hpmud-actor-item-grid';
-                formalItems
+            itemList.className =
+                'hpmud-item-grid hpmud-actor-item-grid';
+            if (dossier.items.length) {
+                dossier.items
                     .forEach(item =>
                         itemList.append(
                             createItemCard(
@@ -617,34 +546,20 @@ export function createInspectorController(ports) {
                                 },
                             ),
                         ));
-                inspectorElement
-                    .append(
-                        createInspectorCard(
-                            '正式物品',
-                            itemList,
-                        ),
-                    );
+            } else {
+                itemList.append(
+                    createList(
+                        [],
+                        '暂无玩家可见的正式物品。',
+                    ),
+                );
             }
-            inspectorElement.append(createInspectorCard('公开档案', createList([
-                {
-                    label: '固定外貌',
-                    detail:
-                        appearance
-                            .physicalDescription,
-                },
-                {
-                    label: '已知背景',
-                    detail: profile?.publicBackground || '你还不了解此人的过去。',
-                },
-                {
-                    label: '性格',
-                    detail: profile?.personality || '仍需通过交往了解。',
-                },
-                {
-                    label: '说话方式',
-                    detail: profile?.speechStyle || '仍需通过交谈了解。',
-                },
-            ])));
+            inspectorElement.append(
+                createInspectorCard(
+                    '正式物品',
+                    itemList,
+                ),
+            );
             return;
         }
 
@@ -898,11 +813,6 @@ export function createInspectorController(ports) {
     return {
         createInspectorCard,
         createList,
-        renderActorImpression,
-        renderSharedMemoryLedger,
-        getSocialActorName,
-        renderActorSocialStatements,
-        renderActorSocialRelationships,
         renderInspector,
     };
 }

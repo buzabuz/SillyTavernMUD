@@ -49,6 +49,58 @@ function playerActionMentionsItem(
     });
 }
 
+function getPlayerRelationshipMilestone(
+    worldState,
+    actorId,
+) {
+    const edges =
+        (
+            worldState.socialGraph
+                ?.relationships ||
+            []
+        ).filter(edge =>
+            (
+                edge.sourceActorId ===
+                    actorId &&
+                edge.targetActorId ===
+                    'player'
+            ) ||
+            (
+                edge.sourceActorId ===
+                    'player' &&
+                edge.targetActorId ===
+                    actorId
+            ));
+    const structuralTags =
+        new Set(
+            edges.flatMap(edge =>
+                edge.structuralTags ||
+                []),
+        );
+    if (
+        structuralTags.has(
+            'romantic_interest',
+        )
+    ) {
+        return 'romantic_interest';
+    }
+    if (structuralTags.has('enemy')) {
+        return 'enemy';
+    }
+    if (
+        structuralTags.has('rivalry') ||
+        structuralTags.has('rival')
+    ) {
+        return 'rival';
+    }
+    return edges.some(edge =>
+        Number(edge.closeness || 0) >=
+            35) ||
+        structuralTags.has('friend')
+        ? 'friend'
+        : '';
+}
+
 export function detectCausalCollapseOpportunity(
     worldState = {},
     playerAction = '',
@@ -108,16 +160,6 @@ export function detectCausalCollapseOpportunity(
             0,
         );
     if (directSpeechLength >= 12) {
-        const profiles = new Map(
-            (
-                worldState
-                    .actorLibrary ||
-                []
-            ).map(profile => [
-                profile.id,
-                profile,
-            ]),
-        );
         for (
             const actorId of [
                 ...new Set(
@@ -129,21 +171,11 @@ export function detectCausalCollapseOpportunity(
                 ),
             ]
         ) {
-            const profile =
-                profiles.get(actorId) ||
-                {};
             const milestone =
-                (
-                    profile
-                        .relationshipTags ||
-                    []
-                ).find(tag =>
-                    [
-                        'friend',
-                        'rival',
-                        'romantic_interest',
-                        'enemy',
-                    ].includes(tag));
+                getPlayerRelationshipMilestone(
+                    worldState,
+                    actorId,
+                );
             const milestoneKey =
                 milestone
                     ? `actor:${actorId}:relationship:${milestone}`

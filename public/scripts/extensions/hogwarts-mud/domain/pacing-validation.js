@@ -811,7 +811,10 @@ export function validatePacingAssessment(
         if (
             !/^[a-z][a-z0-9_]{2,79}$/
                 .test(String(actor.id || '')) ||
-            libraryIds.has(actor.id) ||
+            (
+                libraryIds.has(actor.id) &&
+                !existing?.temporary
+            ) ||
             temporaryIds.has(actor.id) ||
             (
                 existing &&

@@ -1,3 +1,12 @@
+import {
+    buildNarrativeAuthoritySnapshot,
+} from '../domain/narrative-authority.js';
+import {
+    NARRATIVE_AUTHORITY_PROMPT_CONTRACT,
+    NARRATIVE_PROMPT_ACCESS,
+    projectNarrativePromptInput,
+} from '../domain/narrative-prompt-context.js';
+
 export function createSocialMemoryWorkflow(ports) {
     const {
         CONTEXT_SIZE_PRESETS,
@@ -7,19 +16,21 @@ export function createSocialMemoryWorkflow(ports) {
         applySocialDirectorResult,
         applySystemPrompt,
         buildSocialAudienceProjection,
+        captureMemoryBoundaryGuard,
         createContextBudgetPlan,
         extractRoleResponseText,
         getContext,
         getMudState,
         getRequestHeaders,
         getSettings,
+        isMemoryBoundaryGuardCurrent,
         jobRegistry,
-        normalizeActorMemoryProfile,
         normalizeMemoryConsolidationPayload,
         normalizeSocialGraph,
+        recordTurnDiagnostic =
+        () => {},
         renderAll,
         resolveRoleSlots,
-        selectSharedMemoriesForContext,
         sendRoleRequest,
         syncLocalKnowledge,
         translateOpeningValues,
@@ -310,7 +321,7 @@ export function createSocialMemoryWorkflow(ports) {
         state,
         signals,
         evidence,
-        contextPlan = createContextBudgetPlan(
+        _contextPlan = createContextBudgetPlan(
             CONTEXT_SIZE_PRESETS.rich,
             DEFAULT_MODEL_SLOTS.medium.maxResponseLength,
         ),
@@ -327,41 +338,61 @@ export function createSocialMemoryWorkflow(ports) {
                         actor.id,
                     ))
                 .map(actor => {
-                    const dynamic =
-                        normalizeActorMemoryProfile(
-                            actor,
-                        );
                     return {
                         id: actor.id,
                         nameEn:
                             actor.nameEn,
-                        relationshipToPlayerEn:
-                            actor
-                                .relationshipToPlayerEn,
-                        impressionOfPlayerEn:
-                            dynamic
-                                .impressionOfPlayerEn,
-                        sharedMemories:
-                            selectSharedMemoriesForContext(
-                                dynamic
-                                    .sharedMemories,
-                                contextPlan,
+                        memoryRefs:
+                            structuredClone(
+                                state
+                                    .actorMemoryIndex
+                                    ?.byActorId
+                                    ?.[actor.id] ||
+                                {
+                                    firstImpressionRef:
+                                        '',
+                                    core: [],
+                                    recent: [],
+                                    everyday: [],
+                                },
                             ),
-                        socialStatements:
-                            actor
-                                .socialStatements ||
-                            [],
-                        socialRelationships:
+                        socialProjection:
                             buildSocialAudienceProjection(
                                 state,
                                 actor.id,
                             ).relationships,
                     };
                 });
+        const reviewableAppraisalIds =
+            new Set(
+                reviewableActors
+                    .flatMap(actor => [
+                        actor.memoryRefs
+                            .firstImpressionRef,
+                        ...[
+                            'core',
+                            'recent',
+                            'everyday',
+                        ].flatMap(tier =>
+                            (
+                                actor
+                                    .memoryRefs[
+                                        tier
+                                    ] ||
+                                []
+                            )
+                                .filter(ref =>
+                                    ref.recordType ===
+                                        'appraisal')
+                                .map(ref =>
+                                    ref.recordId)),
+                    ])
+                    .filter(Boolean),
+            );
         const backfillRules =
         evidence.backfill
             ? `
-- This is a versioned catch-up scan. reviews must be exactly [] and scanComplete must be true only after every supplied sceneEvidence message has been scanned.
+- This is a versioned catch-up scan. reviews and schemaOperations must both be exactly [] and scanComplete must be true only after every supplied sceneEvidence message has been scanned.
 - sceneEvidence may span multiple archived scenes. Every statement and relationship item must copy the exact sceneId supplied on its source message.
 - Output at most 12 statements and 24 relationshipEvidence items. Prioritize meaningful player-facing changes, then durable inter-NPC changes.
 - Include introductions, refusals, coercion, injury, help, promises, betrayal, repair, and structural relationships. Omit routine classroom facts, transient preferences, and evidence already represented by existingSocialGraph.`
@@ -455,9 +486,13 @@ export function createSocialMemoryWorkflow(ports) {
                 role: 'system',
                 content: `You are the single mid-tier Social Director for a persistent Harry Potter RPG. Perform one source-grounded extraction for a deterministic LangGraph reducer. Consolidate player-visible relationship memory, attributed NPC statements, and directed social evidence. Do not write scene prose or invent events. Return one compact JSON object. Internal reasoning is permitted, but the final answer must contain one complete JSON object matching the schema.
 
+${NARRATIVE_AUTHORITY_PROMPT_CONTRACT}
+
 Rules:
 - Use only supplied memory IDs and their observable summaries. Never use actor secrets, hidden clues, private goals, or facts the actor did not witness.
 - statements records what a supplied actor publicly claimed, not omniscient truth. Every statement needs subjectId, speakerId, sceneId, witnessedBy, and exact sourceMessageIds.
+- statements are evidence-grounded claim proposals and the only model output channel for identity or family claims. Keep self/other attribution and never convert a claim into objective truth.
+- Never write authority Identity, person reference resolution, or a formal family edge. Family claims remain attributed statements for an authorized Reducer to interpret later.
 - relationshipEvidence is directed and may connect a supplied actor to another supplied actor or to player. Every item needs sceneId, witnessedBy, and exact sourceMessageIds.
 - witnessedBy must be a subset of every cited message's witnessActorIds. Never grant knowledge to an absent actor.
 - Use only actorDirectory IDs and allowedMessageIds. Never assume player witnessed a message unless that message's witnessActorIds includes player.
@@ -482,6 +517,8 @@ Rules:
 - A source memory ID may appear in only one operation.
 - Use targetTier "forget" for redundant everyday/recent memories; omit summaryEn for forget.
 - Update impressionOfPlayerEn only when the supplied memories support a sharper current opinion. It must be a concrete judgment, never "stranger" or a relationship label.
+- schemaOperations may promote or update a Person Schema only from the supplied accepted memorySynapse Appraisals. A stable Schema requires at least three accepted Appraisals across at least two scenes for the same observer-target pair.
+- Person Schemas are subjective expectations, not Identity or world-fact authority. Cite exact supportAppraisalIds and counterAppraisalIds; use [] when there is no legal operation.
 - Keep each impression and summary under 40 English words.
 - Set reviewAfterTurns to 10-20. Never schedule another review sooner than 10 committed turns.
 - Review only actors who need an operation or an impression refinement. Include 0-8 actor reviews.
@@ -532,32 +569,100 @@ Schema:
       "witnessedBy": ["existing_actor_id"],
       "sourceMessageIds": [123]
     }
+  ],
+  "schemaOperations": [
+    {
+      "type": "upsert",
+      "schemaId": null,
+      "observerId": "existing_actor_id",
+      "targetId": "player",
+      "labelEn": "short subjective pattern",
+      "expectationEn": "specific expected behavior",
+      "supportAppraisalIds": ["accepted_appraisal_id"],
+      "counterAppraisalIds": [],
+      "contextTags": ["context_tag"],
+      "supersedesSchemaId": null
+    }
   ]
 }`,
             },
             {
                 role: 'user',
-                content: JSON.stringify({
-                    clock: state.clock,
-                    currentTurn:
+                content: JSON.stringify(
+                    projectNarrativePromptInput({
+                        authoritySnapshot:
+                        buildNarrativeAuthoritySnapshot(
+                            state,
+                        ),
+                        clock: state.clock,
+                        currentTurn:
                     Number(state.turn?.count || 0),
-                    consolidationSignals: signals,
-                    reviewableActors,
-                    actorDirectory:
+                        consolidationSignals: signals,
+                        reviewableActors,
+                        actorDirectory:
                     (state.actorLibrary ||
                     []).map(actor => ({
                         id: actor.id,
                         nameEn:
                             actor.nameEn,
                     })),
-                    existingSocialGraph:
+                        existingSocialGraph:
                     existingSocialGraph,
-                    sceneEvidence:
+                        memorySynapse: {
+                            appraisals:
+                            structuredClone(
+                                state
+                                    .memorySynapse
+                                    ?.appraisals ||
+                                [],
+                            ).filter(appraisal =>
+                                reviewableAppraisalIds
+                                    .has(
+                                        appraisal.id,
+                                    )),
+                            personSchemas:
+                            structuredClone(
+                                state
+                                    .memorySynapse
+                                    ?.personSchemas ||
+                                [],
+                            ).filter(schema =>
+                                reviewableIds.has(
+                                    schema
+                                        .observerId,
+                                )),
+                        },
+                        currentSceneCommittedEvents:
+                        (
+                            evidence
+                                .eventKnowledge ||
+                            []
+                        )
+                            .filter(event =>
+                                event.sceneId ===
+                                    state.scene
+                                        ?.id),
+                        earlierCommittedEvents:
+                        (
+                            evidence
+                                .eventKnowledge ||
+                            []
+                        )
+                            .filter(event =>
+                                event.sceneId !==
+                                    state.scene
+                                        ?.id),
+                        sceneEvidence:
                     evidence.messages,
-                    allowedMessageIds:
+                        allowedMessageIds:
                     evidence
                         .allowedMessageIds,
-                }),
+                    }, {
+                        access:
+                        NARRATIVE_PROMPT_ACCESS
+                            .MEDIUM,
+                    }),
+                ),
             },
         ];
     }
@@ -639,6 +744,89 @@ Schema:
         'joy',
         'distress',
     ]);
+
+    const PERSON_SCHEMA_OPERATION_SCHEMA = {
+        anyOf: [{
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+                type: {
+                    type: 'string',
+                    enum: ['upsert'],
+                },
+                schemaId: {
+                    type: [
+                        'string',
+                        'null',
+                    ],
+                },
+                observerId: {
+                    type: 'string',
+                },
+                targetId: {
+                    type: 'string',
+                },
+                labelEn: {
+                    type: 'string',
+                },
+                expectationEn: {
+                    type: 'string',
+                },
+                supportAppraisalIds: {
+                    type: 'array',
+                    items: {
+                        type: 'string',
+                    },
+                },
+                counterAppraisalIds: {
+                    type: 'array',
+                    items: {
+                        type: 'string',
+                    },
+                },
+                contextTags: {
+                    type: 'array',
+                    items: {
+                        type: 'string',
+                    },
+                },
+                supersedesSchemaId: {
+                    type: [
+                        'string',
+                        'null',
+                    ],
+                },
+            },
+            required: [
+                'type',
+                'schemaId',
+                'observerId',
+                'targetId',
+                'labelEn',
+                'expectationEn',
+                'supportAppraisalIds',
+                'counterAppraisalIds',
+                'contextTags',
+                'supersedesSchemaId',
+            ],
+        }, {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+                type: {
+                    type: 'string',
+                    enum: ['supersede'],
+                },
+                schemaId: {
+                    type: 'string',
+                },
+            },
+            required: [
+                'type',
+                'schemaId',
+            ],
+        }],
+    };
 
     const SOCIAL_DIRECTOR_RESPONSE_SCHEMA = {
         name:
@@ -919,6 +1107,12 @@ Schema:
                         ],
                     },
                 },
+                schemaOperations: {
+                    type: 'array',
+                    maxItems: 32,
+                    items:
+                        PERSON_SCHEMA_OPERATION_SCHEMA,
+                },
             },
             required: [
                 'scanComplete',
@@ -926,6 +1120,7 @@ Schema:
                 'reviews',
                 'statements',
                 'relationshipEvidence',
+                'schemaOperations',
             ],
         },
     };
@@ -991,10 +1186,15 @@ Schema:
         }
         if (
             evidence.backfill &&
-        payload.reviews.length
+            (
+                payload.reviews.length ||
+                payload
+                    .schemaOperations
+                    .length
+            )
         ) {
             throw new Error(
-                '补算模式不得修改共同记忆。',
+                '补算模式不得修改共同记忆或人物图式。',
             );
         }
         const validation =
@@ -1205,6 +1405,7 @@ Schema:
         ) {
             return null;
         }
+        let boundaryGuard = null;
         const evidence =
         collectSocialDirectorEvidence(
             state,
@@ -1266,7 +1467,18 @@ Schema:
                 };
             }
             await context.saveMetadata();
+            state = getMudState();
+            boundaryGuard =
+                backfill
+                    ? null
+                    : captureMemoryBoundaryGuard(
+                        state,
+                    );
             renderAll();
+            let proposedSchemaOperations =
+                0;
+            let schemaDiagnosticsRecorded =
+                false;
             try {
                 const slots = resolveRoleSlots(
                     state.modelSlots,
@@ -1284,6 +1496,10 @@ Schema:
                     evidence,
                     contextPlan,
                 );
+                proposedSchemaOperations =
+                    payload
+                        .schemaOperations
+                        .length;
                 try {
                     payload =
                     await localizeMemoryConsolidation(
@@ -1308,7 +1524,27 @@ Schema:
                     graphResult,
                     evidence
                         .allowedMessageIds,
+                    {
+                        boundaryGuard,
+                    },
                 );
+                recordTurnDiagnostic(
+                    'schema_operations_validation',
+                    {
+                        proposed:
+                            proposedSchemaOperations,
+                        accepted:
+                            (
+                                graphResult
+                                    .schemaOperations ||
+                                []
+                            ).length,
+                        rejected: 0,
+                        reasons: [],
+                    },
+                );
+                schemaDiagnosticsRecorded =
+                    true;
                 next.socialGraph
                     .extractorVersion =
                 SOCIAL_GRAPH_EXTRACTOR_VERSION;
@@ -1349,6 +1585,46 @@ Schema:
                 await syncLocalKnowledge();
                 return graphResult;
             } catch (error) {
+                if (
+                    !schemaDiagnosticsRecorded &&
+                    proposedSchemaOperations
+                ) {
+                    recordTurnDiagnostic(
+                        'schema_operations_validation',
+                        {
+                            proposed:
+                                proposedSchemaOperations,
+                            accepted: 0,
+                            rejected:
+                                proposedSchemaOperations,
+                            reasons: [{
+                                code:
+                                    boundaryGuard &&
+                                    !isMemoryBoundaryGuardCurrent(
+                                        getMudState(),
+                                        boundaryGuard,
+                                    )
+                                        ? 'stale_revision_or_boundary'
+                                        : 'schema_validation_failed',
+                                count:
+                                    proposedSchemaOperations,
+                            }],
+                        },
+                    );
+                }
+                if (
+                    boundaryGuard &&
+                    !isMemoryBoundaryGuardCurrent(
+                        getMudState(),
+                        boundaryGuard,
+                    )
+                ) {
+                    console.warn(
+                        '[Hogwarts MUD] Discarded stale memory consolidation result',
+                        error,
+                    );
+                    return null;
+                }
                 state = getMudState();
                 state.socialGraph =
                 normalizeSocialGraph(

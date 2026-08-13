@@ -69,22 +69,13 @@ function getActorName(
             ?.identity?.name ||
             '玩家';
     }
-    const actor =
-        (
-            state.actors ||
-            []
-        ).find(entry =>
-            entry.id === actorId);
     const profile =
         (
             state.actorLibrary ||
             []
         ).find(entry =>
             entry.id === actorId);
-    return profile?.name ||
-        actor?.name ||
-        profile?.nameEn ||
-        actor?.nameEn ||
+    return profile?.nameEn ||
         actorId;
 }
 
@@ -96,18 +87,7 @@ function getKnownActorIds(
         []
     )
         .filter(actor =>
-            actor.playerKnown ===
-                true ||
-            actor.knownToPlayer ===
-                true ||
-            Boolean(
-                actor
-                    .introducedClock,
-            ) ||
-            Boolean(
-                actor
-                    .firstImpressionClock,
-            ))
+            actor?.id)
         .map(actor =>
             actor.id);
 }

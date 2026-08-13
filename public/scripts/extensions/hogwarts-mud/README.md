@@ -17,7 +17,7 @@ SillyTavern 内置扩展，用于运行规则托底、AI 叙事驱动的持续�
 
 ### 双语消息
 
-- `message.mes`：AI 返回的英文原文，是存档和后续上下文的权威内容。
+- `message.mes`：AI 返回并已提交的英文叙事证据；当前结构化 State 与同消息的已提交 transaction 共同构成运行时权威，正文不能覆盖更高优先级的当前事实。
 - `message.extra.hogwartsMud.sourceEn`：翻译时使用的英文快照。
 - `message.extra.hogwartsMud.translatedZh`：所选翻译源返回的简体中文。
 - `message.extra.display_text`：酒馆兼容的中文显示字段。
@@ -135,9 +135,21 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 
 职责输入预算为 `Context Size - 输出安全余量`。系统预留取输入预算的 8%，下限 `6000`、上限 `12000`；职责预算下限为 `8192`。当前字符安全线按 `职责预算 × 3` 估算。默认 120K Context 与 12K 输出余量对应 108K 输入预算、99,360 职责 tokens 和 298,080 字符安全线。
 
-超出安全线时，结构化用户 JSON 不做原始字符串截头。系统先移除 `retrievedLocalKnowledge`、可重建的 `actorContinuityCapsules` 和 `contextPolicy`，同时始终保留 `playerAction`、有序 `playerTurnSequence`、addressing、时间、判定、移动以及绑定世界状态；repair 还可省略重复 Schema。非 JSON 文本才从开头裁剪并至少保留 64 字符。持久化回合诊断会记录裁剪前后长度、JSON 有效性和玩家字段是否保留。
+普通低档 Performer 与 repair 的结构化 User Payload 固定为 `LowTierContextV1` 六个顶层字段：`playerTurn`、`sceneFacts`、`actorCards`、`actionOpportunities`、`memoryActivations`、`prohibitions`。总量不超过 50 KiB，单 actor card 不超过 4 KiB；每 actor 最多 3 个 active Schema 和 3 个 hydrated Event，全局最多 8 个 Event。超限时先删除 hydrated Event，再删除可重建 opportunity，不会注入 raw Actor Library、完整 Social Graph、完整 Identity、人物记忆正文账本或全量历史补位。初次请求和 repair 使用同一个六字段 projector。
 
 每个职责槽位实时显示输入预算、系统预留、RAG 条数和三层记忆配额。手工 Context 会自动归入精简、标准或丰裕策略，但不会被快捷档位强制覆盖。
+
+### Narrative Authority 与关系突触
+
+每次低档普通表演和中档 Scene Transition/Memory Consolidation 都服从同一权威顺序：当前结构化 State/Reducer 投影 > 当前 Scene 已提交 transaction 与 Event Knowledge > 更早事件/Scene Archive > observer-scoped Appraisal/Person Schema > 有归属的历史正文。低档只通过 `LowTierContextV1.sceneFacts` 接收当前事实投影；低优先级记录只能解释事实来历，不能覆盖 Item、地点、人物生命/在场、Identity、时钟或咒语权威。
+
+- `LowTierContextV1.memoryActivations` 按 `observerId` 密封。人物可按 Schema 的 `expectationEn` 形成预期、边界和主动性，但只有 matching actor activation 内存在带 `sourceRefs` 的 canonical Event 时，才能回忆具体时间、地点、动作或原话；其他人物和旁白不得读取。
+- 中档只读取有 provenance 且通过 audience/clock/revision hydration 的证据。事件边界仍复用既有一次中档调用，在同一结果中处理 memory、social 与 `schemaOperations`；不会为 Person Schema 追加第二次中档调用。
+- Appraisal 是单个 observer 对已提交事件的主观解释，必须引用合法 event、message、Scene，并证明 observer 是 participant、witness 或获授权 rumor 接收者。稳定 Person Schema 至少需要同一 observer-target 的 3 条 accepted Appraisal，且跨至少 2 个 Scene；反例降低置信度或使 Schema contested，单一事件不能固化人格。
+- Scene close 在清理边界前必须消费 pending memory boundary，或把稳定 boundary ID 携带到下一 Scene。异步整理提交前同时校验 `timelineEpoch + stateRevision + boundaryId`；stale 结果直接丢弃。Scene Opening 只有保存后才进入事件索引，不能借开场正文创建未提交物品转移、关系、承诺或隐藏事实。
+- 正常调用预算不变：普通回合 1 次低档、0 次新增中/高档；事件边界复用 1 次中档；Scene Transition 保持原中/高档核心 + 原低档开场。Planner、Qdrant、图扩散、hydration 与 Reducer 不调用低/中/高档；本地 Planner 最多 1 次，并在 diagnostics 中单独计数。
+
+本次只统一人物数据、投影与低档输入。初级导演 System Prompt 的章节顺序、规则优先级、输出 Schema、修复 Prompt 和文风编排属于后续独立项目。
 
 同一游戏日内的普通回合默认只调用低档现场表演者和本地 Ollama 语义侧车。低档生成前，侧车使用结构化 `playerTurnSequence` 区分实际动作、对白中的未来提及、显式等待、移动、睡眠和事件边界，并以 JSON Schema 返回经过时间及是否需要骰子；低档随后用动作、环境变化和对话覆盖已锁定时长。对白中的“上课吗”“等会儿”“睡过头”等词不会被当作已经发生的长行动；“继续上课”在没有明确完成整节课时仍是普通 15 分钟镜头。生成篇幅不会反向扩大权威时间。跨入新日期时仍由中档刷新日计划。
 
@@ -172,7 +184,7 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 
 本地后置观察不可用、超时、返回无效 JSON 或 perception 未通过校验时，正文仍正常提交。确定性回退把结构化施法、公开伤害、喊叫、爆炸、教授公告、成功公开示范、公开表扬/学院加分和 `broadcast_speech` 视为 room scope；`direct_speech` 默认仅目标可听；普通动作默认 nearby；明确耳语、纸条和成功隐蔽默认 target；无法确认施事者时使用 `attribution=unknown`。Schema 合法的 observer 可扩大范围，但不能把确定性 room-wide notable/major 结果缩窄为 target-only。回退记录统一标记 `source=deterministic_fallback`，最终 witness 仍由 Witness Resolver 计算。
 
-`eventKnowledge` 先于社交关系保存事件知情范围。人物知道事件不会自动创建关系边或修改关系数值；Social Director 的 `witnessedBy` 必须是每条来源消息已提交 witness 的子集，active interaction、受话目标、同室或 cohort 身份都不能自行升级为见证。room-wide notable/major 事件会按稳定 event ID 给每名实际 witness 投影一条中性事实记忆；target-only、subtle 和成功隐蔽事件不批量写入。
+`eventKnowledge` 先于社交关系保存事件知情范围。人物知道事件不会自动创建关系边或修改关系数值；Social Director 的 `witnessedBy` 必须是每条来源消息已提交 witness 的子集，active interaction、受话目标、同室或 cohort 身份都不能自行升级为见证。room-wide notable/major 事件会按稳定 event ID 给每名实际 witness 写同一 canonical Event 的 MemoryRef，不复制事件摘要；target-only、subtle 和成功隐蔽事件不批量写入。
 
 常规语义侧车默认使用 `qwen3:1.7b`、`temperature:0`、`think:false` 和 `num_ctx:4096`。只有玩家明确取得或操作签名、信件、钥匙、魔杖、地图等耐久重要物品时，才条件调用 `qwen3:4b` 的极小 Item V2 Schema；普通食物、餐具和背景道具不会触发。所有建议必须通过逐字证据、稳定 ID、房间可达性和本地 Reducer，模型无权直接写状态。合法物质事件进入 `materialEventLog`；新重要物品先进入 `pendingItemProposals`，只有玩家收录后进入 `items`；人物当前呈现以 `outfit + wornItemIds + heldItemIds` 投影到 `actorPresentations`。当前互动卡司由 Settlement Reducer 保持稀疏；物理同室人物由 `localPresence` 独立保存，退出镜头但没有移动或离场的人仍保留当前位置。侧车调用完成后以 `keep_alive:0` 卸载；不可用时正文仍按 narrative-first 提交。
 
@@ -206,7 +218,7 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 
 普通回合和转场开场还会为可能表演的人物注入较小的 actor-ID 连续性胶囊，只包含 `hasMetPlayer`、已认识人物 ID、关系阶段/数值、当前印象和少量近期共同记忆，不包含秘密、恐惧、私有目标或不受限知识。结构化“已经见过”优先于人物卡中残留的笼统 `stranger` 标签；熟人不得在新场景中重新进行首次自我介绍，人物之间的既有认识也不能因转场丢失。
 
-Canon 目录中的角色、学院、技能和组织经历只用于身份与人物推荐，不能直接成为 `knowledgeEn`。尤其禁止 `Almost everything`、未来组织归属或后期能力为低年级角色提供全知许可。新入场 Canon 人物只获得统一的证据边界；旧存档通过 `actorKnowledgeVersion` 迁移清除目录派生字段，同时保留真正手工提交的当前时点事实。关系证据仅对 `sourceActorId` 本人或 `witnessedBy` 明确见证者可见，成为 `targetActorId` 不自动获得知情权。
+Canon 目录中的角色、学院、技能和组织经历只用于 Actor Core、Identity 与人物推荐，不能直接成为无界私有知识。尤其禁止 `Almost everything`、未来组织归属或后期能力为低年级角色提供全知许可。`ActorCoreV1.privateFacts.knowledgeEn` 只保留当前时点且有来源的私有事实。关系证据仅对 `sourceActorId` 本人或 `witnessedBy` 明确见证者可见，成为 `targetActorId` 不自动获得知情权。
 
 临时人物使用稳定的暂定 ID，不进入正式 `actorLibrary`、人物预算或社交图，只保存最多 8 条亲历记忆。离场后中档可优先从既有临时人物、正式 guestActor 和 Canon 候选中选择再次出场；相同人物必须复用原 ID。只有叙事中明确说出姓名或出现唯一强证据时，才可把临时人物合并为正式原创或 Canon 身份。合并采用原暂定 ID 作为历史主键，继承记忆和别名；系统不弹提示，人物卡随故事揭晓自然更新。
 
@@ -228,23 +240,23 @@ Canon 目录中的角色、学院、技能和组织经历只用于身份与人�
 
 ### 动态人物印象与共同记忆
 
-人物档案不再把静态 `relationshipToPlayer` 当作 NPC 对玩家的永久印象。每个角色在 `actorLibrary` 中保存：
+Actor Context V1 把稳定人物、运行态、主观解释与记忆层级分开：
 
-- `firstImpressionOfPlayerEn / firstImpressionOfPlayer`：NPC 第一次在场看见玩家时形成的不可覆盖快照。它由玩家的可见特征和该 NPC 自己的性格视角共同形成。
-- `impressionOfPlayerEn / impressionOfPlayer`：3–12 词左右的主观一句话反应，例如 `My troublesome daughter; impossible not to worry about.`，不是本轮活动摘要。
-- `sharedMemories.core`：最多 3 条“最深刻的”共同记忆。
-- `sharedMemories.recent`：最多 6 条“近期大事”。
-- `sharedMemories.everyday`：最多 8 条“日常小事”。
+- `actorLibrary[]` 只保存十字段 `ActorCoreV1`：ID/Canon 目录引用、英文名与别名、角色、唯一 `cast` 来源/首次认识、公开档案、`performanceCore`、Identity 与受 ACL 保护的 `privateFacts`。
+- `actors[]` 只保存十二字段 `ActorRuntimeV1`：位置、在场状态、完整四字段生命状态、当前活动、意图、目标与 `temporary`。
+- `memorySynapse.appraisals[]` 保存 observer 的主观解释；初见印象是不可覆盖的 Appraisal ref。
+- `memorySynapse.personSchemas[]` 保存 `factPatternEn/interpretationEn/expectationEn`、支持、反例、confidence 与修订链；当前看法由 active/contested Schema 即时投影。
+- `actorMemoryIndex.byActorId` 保存 `firstImpressionRef/core/recent/everyday`；每个 `MemoryRefV1` 只含 `recordType/recordId/addedClock`，不保存摘要。
 
-新建人物库时，家人、监护人、亲属和既有朋友必须根据玩家已确认的背景与共同生活生成短而主观的当前印象，不能使用 `stranger`、`unknown`、单纯身份标签或当前活动复述。初见快照与当前印象分开保存：后续行为只能改变当前印象，不能抹掉第一眼。族裔字段不得被用于推断隐藏血缘、国籍、阶级、道德或套用刻板印象；不同 NPC 应依据自身注意点形成不同观察。普通印象变化至少间隔 3 个已提交回合；没有形成稳定态度变化时必须省略更新。
+新建人物时，家人、监护人、亲属和既有朋友可根据玩家已确认背景形成 Appraisal，不能使用 `stranger`、`unknown`、单纯身份标签或当前活动复述。初见 Appraisal 与当前 Schema 分开投影，后续 Schema 修订不能覆盖第一眼。族裔字段不得用于推断隐藏血缘、国籍、阶级、道德或套用刻板印象。
 
-普通回合仍只调用一次低档现场表演。低档可以为亲自参与或目击本轮的 NPC 提交至多一条 `everyday / notable` 候选；无论显著度如何，低档结果都先进入“日常小事”，不能直接写“近期大事”或核心记忆。`notable` 只表示具备晋升资格，必须同时说明会影响后续信任、义务、冲突、危险或选择的长期后果。购物、吃饭、等待、赶路、玩笑、普通发脾气和小尴尬默认都是 `everyday`。
+普通回合仍只调用一次低档现场表演。低档可提交初见、当前判断或人物经历 proposal；校验通过后，Reducer 创建 Appraisal，并把 Appraisal ID 写入人物的 `everyday` 或 `recent` tier。公共 notable/major Event 则由规则层直接给实际 witness 写 Event MemoryRef。模型不能直接写 `core` tier，也不能复制 Event 摘要。
 
-`firstImpressionOfPlayerEn`、`impressionOfPlayerEn` 和 `memoryUpdate` 是低档附带的可选建议，不属于 Scene 正文事务的失败边界。规则层会独立检查视听权限、已有初见、印象冷却、字数、显著度与 `lastingImpactEn`；任一建议不合法时只删除对应字段，保留同一份 segments、公开事件、人物活动、在场集合、移动、判定和流程推进，也不会因此发起修复调用。初次见面时未生成合格初见印象则保持 pending，等待后续合法证据或中档整理。
+这些 proposal 字段不是 State 字段，也不属于 Scene 正文事务的失败边界。任一建议不合法时只删除对应 proposal，保留同一份 segments、公开事件、人物活动、在场集合、移动、判定和流程推进，也不会因此发起修复调用。
 
 低档可以在局部事件、话题、冲突、差事或实际任务明确告一段落时提交 `signals.eventEnded:true`；它不代表封存场景，也不能因为一次回复或 15 分钟结束就触发。信号缺失默认事件继续，不影响正文提交。每个合格事件边界都会调用一次中档 `Event Boundary Director`，替换已经完成或陈旧的 `nextSceneIntent` 文案；规则层继续锁定原 `mapId / roomId / tier`，因此这次规划不会自动切场。只有该边界还包含尚未整理的共同记忆，并且距离上次中档整理至少 10 回合时，才在同一次调用中追加记忆与社交图整理；冷却期内不做记忆整理，也不会在第 10 回合自动补做旧边界。只有已有近期记忆，或带明确长期影响说明的 `notable` 候选可以生成“近期大事”；多条鸡毛蒜皮不会因为重复就自动升级。中档负责晋升近期/核心记忆、遗忘冗余记录和收束短印象。整理失败时保留低档结果，不会让玩家回合失败。章节封存继续由转场导演直接执行章节级关系与记忆结算，并清除未消费的小事件边界。
 
-关系记忆 v6 迁移会把历史上由低档直接写入的“近期大事”降回日常候选，并把超过 16 词或空泛的旧印象收束成稳定 shorthand。人物档案继续按“最深刻的 / 近期大事 / 日常小事”分层展示共同记忆。
+人物档案继续按“最深刻的 / 近期大事 / 日常小事”展示，但显示内容由 MemoryRef 回源 Event/Appraisal 后生成。前端不读取人物档案中的旧记忆或印象字段。
 
 ### 场景级社交导演图
 
@@ -324,10 +336,70 @@ Reducer 对每项提案固定执行：来源与维度白名单校验 → impact 
 
 低档同时执行 Canon 知识防火墙：原著人物姓名不自带未来友谊、学院关系、昵称、稳定偏好或内部笑话。`knownRelationshipActorIds` 是 NPC 已建立人物熟悉度的穷尽列表；不在列表中的人物只能依据本场刚刚亲眼看见或听见的行为被即时评价，不能被描述成早已熟识。
 
+### Save Revision 与 NPC Identity
+
+- 每条时间线在 `chatMetadata.hogwartsMud` 保存稳定 `timelineEpoch`、单调 `stateRevision` 和最多 48 条 `revisionHistory`。所有 Hogwarts metadata/chat/翻译/设置保存都经过统一 guard；Web Locks 可用时串行 claim，否则使用同步 storage fallback。
+- 页面 revision 落后或另一页面正在提交时，宿主保存不会执行，页面显示刷新提示并停止后续世界写入和模型请求。冲突不自动合并、不自动重放模型；rollback 作为更高 revision 提交。
+- revision history 只记录 source、changed domains、Item 的 owner/holder/location/state diff 和 Identity field diff，不复制聊天正文、完整世界、secret 或 prompt。chat-only 且世界未变化时只检查 head，不增加 revision。
+- `actorLibrary[].identity` 是稳定人物权威，V1 包含 gender、birth、education、lineage、body 和 provenance；birth 只保存 exact date、exact year 或 unknown，学年/日期区间统一 unknown，且只有 exact date 按世界时钟派生年龄与相对年龄。当前年级与在学状态由教育记录独立派生。Canon 使用离线版本化 registry，缺失事实保持 unknown，不调用模型猜测。
+- `identity.body` 保存身体本身及当前身体状态，包括发型、染发、伤势、疤痕和当前形态。玩家主动检查且 narration 明确给出结果时，同一次 post-turn observer 提交 `identityObservations`：可见伤势写 `injuries[]`，未观察到伤势只写 `injuryAssessment=no_visible_injury`，两者均记录 `direct_observation` provenance 和观察时钟；NPC 自述不能单独升级为权威观察。`actorPresentations` 只保存衣服、帽子、首饰、穿戴 Item 与手持 Item；旧 presentation 身体字段由 lifecycle 确定性迁入 Identity。
+- 家庭、亲属、监护与婚姻属于 Social Graph，不属于 Identity。自称/他称进入 `identityClaims` 或 `relationshipClaims`；未知亲属使用 person reference，不创建 actor；不存在只使用 `nonexistent`。正式 family edge 需要 resolved reference 与 authority claim。
+- Performer 和 Directors 只读取 observer/clock 允许的 Identity/claims projection，不能写 authority Identity、person resolution 或正式 family edge。人物 Inspector 使用同一只读 projection 展示身份档案。
+
+真实 JSONL 可用以下命令只读预演 revision、Identity 和 social schema migration；命令不写原档，并校验 Item、关系、记忆、位置、消息、文件 SHA/mtime 与网络调用：
+
+```bash
+node scripts/dry-run-hogwarts-save-revision-identity.mjs \
+  --dry-run --file path/to/chat.jsonl
+```
+
+### Actor Context V1 原子切换
+
+- `actorContextVersion=1`、`memoryReferenceVersion=1`、`actorDossierProjectionVersion=1` 共同定义已完成切换的 State。
+- lifecycle 先在克隆 State 上构造并校验严格 `ActorCoreV1`、`ActorRuntimeV1`、`ActorMemoryIndexV1` 与 Appraisal 引用；全部成功后才一次替换并保存。
+- `ActorCoreV1.cast` 是来源与首次认识的唯一权威；`ActorRuntimeV1` 的 `lifeStatus/lifeStatusPermanent/lifeStatusDetailEn/lifeStatusSinceClock` 是生命状态唯一权威。
+- 有 Event/Appraisal ID 的旧人物记忆转为 MemoryRef；只有文本的旧记忆和印象转为不授权具体历史的 migrated Appraisal；初见单独写 `firstImpressionRef`。
+- 成功后删除人物档案和运行态中的旧 `source/introduced*`、生命状态副本、记忆正文、印象、稳定字段、Identity 与 Social Graph 副本。失败时原 State 不变，也不触发保存。
+- 人物 Inspector 与关系星图共同消费 `ActorDossierViewModelV1`：除 `schemaVersion` 外固定八个业务顶层字段，并只展示六个区块。
+
+### Calendar V2
+
+Calendar 使用四层公开权威，任何一层都不能预写下一层：
+
+```text
+storyline -> storyBeat -> schedule -> scene
+长期剧情线     学期节奏点       精确日程       实际发生的场景
+```
+
+- `chatMetadata.hogwartsMud.calendar` 固定为 `version=2 + storylines[] + storyBeats[] + entries[] + horizon`。`entries[]` 只保存 schedule；`canon`、`exam`、`date`、`class` 等仍只是普通标签。
+- High Calendar Director 只提交带 revision head 的 `storylines + storyBeats`，不创建精确时间、地点、日程或 Scene。每个 beat 固定 `sceneTarget=4`。Medium 只维护未来 7–14 天的 schedule 与成功后的 `horizon`，为进入窗口的 beat 创建稳定 `sourceBeatId + beatSlot(1..4)`，并补充适用的早餐、课程、用餐、训练、会面和社交日程。
+- Calendar V2.1 只调整日期视图的信息架构，不改变上述 V2 数据模型。桌面固定为左侧日历、中栏【计划】时间网格与【场景】折叠区、右栏精简详情；窄屏按“日期 -> 计划与场景 -> 详情”降为单列。日期切换同时刷新中栏两区，未选择具体项目时右栏不自动预览第一项。
+- 【计划】按纵向时间刻度展示一天；计划卡以 `startClock` 定位、以 `endClock - startClock` 表达时长。重叠 schedule 分列或受控错位，仍保持每项独立可见和可选，不合并、不遮蔽，也不产生认领或出席含义。长期剧情线只在【剧情线】作者视图展示。
+- 重叠 schedule 表示世界并发，不表示玩家同时出席；从某项日程进入时，新 Scene 的 `calendarEntryIds[]` 只认领该 schedule，其他同刻安排不取消、不改期，也不会进入 Performer 或 Scene Transition prompt。
+- Daily Director 可读取当天全部并发 schedule。Performer 与普通 Scene Transition 只读取当前 Scene 明确认领的 schedule 及其公开 storyline/beat 来源；自由 Scene 不会因时间重叠获知其他地点的安排。
+- 【自由开场】入口及时间、地点、校验、busy/error 表单都位于中栏【场景】区，不进入右栏。它允许在所选日期选择不早于当前时钟的时间，以及地点权威中的合法 `mapId + roomId`，并通过 `runTimelineMoment()` 复用 guarded Scene Transition；新 Scene 默认 `calendarEntryIds=[]`。打开、填写、选择视图或预览都只是 UI 操作，不保存状态、不调用模型。
+- 【场景】卡默认折叠；展开后只读取该 `sceneArchive` record 自身的 `calendarEntryIds[]`，并显示被认领计划当前已有的四态：【计划中】、【进行中】、【已完成时间段】、【已取消】。旧档缺少该字段或字段为空时显示【未关联计划】，不得按时间、地点、人物或计划区间重叠补链。
+- Calendar V2.1 不新增持久化 `attendance` 或任何同义字段，不显示“去了/没去”，也不从重叠计划推断玩家出席。场景展开状态和自由开场草稿只存在于当前页面；计划状态仍完全来自 `calendar.entries[].status`。
+- 右栏计划详情的字段白名单为标题、摘要、时间、地点、人物、状态、公开来源和合法的【进入场景】操作；场景详情只显示标题、时间、地点、档案 ID、摘要、已封存 timeline 与只读正文。右栏不显示“开始时刻的全部安排”、自由开场、认领计划列表或重复说明。
+- Scene 封存时，schedule 的 `relatedSceneIds[]` 与 archive record 的 `calendarEntryIds[]` 建立关系；带 `sourceBeatId` 的 schedule 还会为对应 beat 追加去重 Scene ID。四个不同 Scene 才能实现 beat。历史详情以所选 `sceneArchive` record 及其 `messageIds` 为只读权威，正文按这些 ID 从原 chat 消息行读取，不复制进 Calendar、不重新生成，也不提供历史写操作。
+- 本地时钟结算 schedule 的 `planned -> active` 与 `planned|active -> completed`，并在越过 beat 窗口且实际 Scene 不足时把 `planned/active` beat 标记为 `deferred`。`completed` 不代表成功、出席或成绩；时间流逝和文本声明都不能实现 beat。取消只能来自对应 director 的明确 proposal。
+- V1 迁移零模型且幂等：旧 storyline 按稳定 ID 移入 `storylines[]`，旧 event 以原 ID、时间、地点、人物、状态和 Scene 关系保留为 grandfathered schedule；旧 `parentId` 只保留为弱关联，不伪造 storyBeat、beatSlot 或完成状态。legacy `agenda` 仍不迁移、不进入 prompt/projection/UI。
+- 所有面向玩家的中文统一使用“场景”；`Scene` 只保留在代码类型、内部标识和既有存档字段中，不触发字段重命名。
+
+真实 Tina JSONL 的 Calendar 专用只读验收：
+
+```bash
+node scripts/dry-run-hogwarts-calendar.mjs \
+  --dry-run --file path/to/chat.jsonl
+```
+
+脚本接受真实 V1 或当前 V2 存档：V1 输入验证真实 `V1 -> V2`、storyline/event 稳定 ID、grandfathered schedule 字段和无伪造 beat；V2 输入验证 no-op。两种输入都会检查无 Calendar 克隆初始化 V2、重复迁移 byte-stable、模型/网络调用为 0，以及原文件 SHA、mtime、消息、Scene、Actor、Item、Identity、Social、Memory 与位置不变。
+
 ### 权威物品栏与 NPC 状态
 
-- Item V2 分开保存 `ownerId`、`holderId`、结构化 `location`、客观外观、状态、来源事件、穿戴、备注、剧情角色、可见性和获得时间精度。借出和偷走只改变当前持有人；赠送才改变主人。移动和转场按 holder 的结构化位置投影，`custody/kind/importance` 只保留为旧调用方兼容字段。
-- 正式操作覆盖获得、携带、放置、穿戴、脱下、赠送、借出、消耗、损坏、清洗、丢失和销毁。destroyed/consumed 不会被普通 carry 复活。人物 `actorPresentations` 以一个整体 `outfit` 表示普通造型，只用 `wornItemIds/heldItemIds` 关联正式物品。
+- Item V3 延续 V2 lifecycle，并分开保存 `state` 与 `physicalForm=whole|remains|absent|unknown`。`state` 描述状况/历史；`physicalForm` 才决定当前是否存在可交互物质。借出和偷走只改变 `holderId`，赠送才改变 `ownerId`；移动和转场只按 holder 的结构化位置投影。
+- `intact/damaged/dirty` 必须是 `whole`，`consumed` 必须是 `absent`，`lost` 必须是 `unknown`，`destroyed` 只能是 `remains` 或 `absent`。只有 `whole/remains` 可保留 holder/location；`absent/unknown` 清空 holder、装备和物理位置。残骸可携带或放置但不能穿戴或当原工具使用，彻底缺席的物品不能被正文重新拿起或修复。
+- 正式操作覆盖获得、携带、放置、穿戴、脱下、赠送、借出、消耗、损坏、清洗、丢失和销毁。销毁证据明确“残骸/碎片”时迁为 `remains`，明确“彻底消失/不留痕迹”时迁为 `absent`，模糊旧 `destroyed` 保守迁为 `remains`；迁移确定性、幂等且不调用模型。人物 `actorPresentations` 只用 `wornItemIds/heldItemIds` 引用当前有物质形态的正式物品。
 - Narrative Item proposal 只折叠一次，并同时规范为 V2 `operation` 与 legacy `action`。普通 `vanished` 仍表示丢失；只有 `ruin/remains/wreck ... vanished` 这类明确残骸消失证据才能支持销毁。
 - 学生的普通校服、羽毛笔和课本，教授的办公用品，店员的普通库存及日常生活用品默认是隐含叙事资源。完成的赠送、借用、归还、偷取或玩家明确保留会让该具体对象进入候选；普通背景提及仍没有 ID、数量或历史。
 - 低档演员与本地观察器只能提交带逐字证据的 proposal。新对象进入 `pendingItemProposals`，回合后由玩家“收录/忽略”；忽略不改正文，并按稳定 Item ID 抑制立即重现。`lose/destroy/consume/damage/clean` 还必须同时命中该 Item 与对应状态动作。模型、开场导演和普通 material event 都不能直接创建正式 Item。
@@ -368,9 +440,167 @@ data/<user>/user/files/hogwarts-mud/<timeline>/
 └── index.json
 ```
 
-JSON 文件是权威档案；人物、场景、回合事件和预写线索按稳定 ID 更新，不依赖聊天上下文长期保留。人物档案同时包含当前玩家印象和三层共同记忆。扩展继续使用独立的 Jina `transformers` embedding 建立四个向量集合；生成式 Ollama 模型不代替向量模型。feature-extraction 单次输入固定限制为 512 tokens，空闲五分钟后自动 dispose；再次检索时按需加载。跨场景生成前先按实体 ID 精确检索，再做语义召回，合并后只注入最多六条相关记录。向量索引损坏或不可用时回退到本地精确检索，并可从 JSON 档案重建索引。
+State 与已提交消息 transaction 是权威；本地 JSON、Vectra 和 Qdrant 都只是可从 State + chat 重建的 Knowledge V2 检索投影。每条 V2 记录保存稳定 `recordId`、`stateRevision`、`projectorVersion`、`sourceRefs`、audience visibility、`effectiveClock` 和 checksum；长 Scene transcript 分块索引。任何检索结果在注入 Prompt 前都要按 timeline、revision、clock、audience 和 superseded source 再 hydration，永不作为 Reducer 写入依据。
+
+配置且健康时 Qdrant 是首选语义后端，collection generation 随 embedding model/维度变化；JSON exact 是始终可用的确定性检索基线。Qdrant 缺失、超时、查询失败或 collection 丢失时，回合与 Scene 提交继续使用 JSON exact，并记录 degraded diagnostics；索引只能从 Knowledge Projector V2 全量重建。Planner 生成 1–4 个带 audience/time/node-type 约束的子查询，随后融合 exact/semantic 结果并沿 `derived_from/supports/contradicts/about/temporal/similar` 图最多扩散两跳，使用 edge decay 与 fan penalty，最终按 actor ACL 重新过滤并生成密封 activation。
+
+### Qdrant v1.19.0 本机运维
+
+当前 macOS arm64 原生部署使用官方 release 构件 `qdrant-aarch64-apple-darwin.tar.gz`。官方发布压缩包的 SHA-256 是 `4e279a80cc1ebe73e859318ff86375af54c123887dd7ae46605c0eb6cb7c44e8`；必须在解包或执行前校验该压缩包，不能拿解压后二进制的本地 SHA 冒充官方构件 SHA。安装和持久化位置固定为：
+
+| 用途 | 本机路径 |
+| --- | --- |
+| Qdrant `v1.19.0` 原生二进制 | `/Users/bytedance/sillytavern/SillyTavern/docker/qdrant/1.19.0/qdrant` |
+| LaunchAgent 模板 | `/Users/bytedance/sillytavern/SillyTavern/docker/qdrant/tech.qdrant.server.plist` |
+| 用户级 LaunchAgent | `/Users/bytedance/Library/LaunchAgents/tech.qdrant.server.plist` |
+| collection storage | `/Users/bytedance/sillytavern/SillyTavern/docker/data/qdrant/storage` |
+| collection snapshots | `/Users/bytedance/sillytavern/SillyTavern/docker/data/qdrant/snapshots` |
+| stdout/stderr | `/Users/bytedance/sillytavern/SillyTavern/docker/data/qdrant/logs` |
+
+标准 `tech.qdrant.server.plist` 如下；所有运行路径必须是绝对路径，HTTP `6333` 与 gRPC `6334` 都只绑定 `127.0.0.1`：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>tech.qdrant.server</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/bytedance/sillytavern/SillyTavern/docker/qdrant/1.19.0/qdrant</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/bytedance/sillytavern/SillyTavern/docker/qdrant/1.19.0</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>QDRANT__SERVICE__HOST</key>
+        <string>127.0.0.1</string>
+        <key>QDRANT__SERVICE__HTTP_PORT</key>
+        <string>6333</string>
+        <key>QDRANT__SERVICE__GRPC_PORT</key>
+        <string>6334</string>
+        <key>QDRANT__STORAGE__STORAGE_PATH</key>
+        <string>/Users/bytedance/sillytavern/SillyTavern/docker/data/qdrant/storage</string>
+        <key>QDRANT__STORAGE__SNAPSHOTS_PATH</key>
+        <string>/Users/bytedance/sillytavern/SillyTavern/docker/data/qdrant/snapshots</string>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/bytedance/sillytavern/SillyTavern/docker/data/qdrant/logs/qdrant.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/bytedance/sillytavern/SillyTavern/docker/data/qdrant/logs/qdrant.stderr.log</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+</dict>
+</plist>
+```
+
+TRAE sandbox 无权向当前用户的 GUI domain 注册 LaunchAgent，因此不能在 TRAE 中执行激活。请在仓库根目录打开用户自己的普通 Terminal，并且只运行以下命令。脚本会安装并校验 plist、安全停止已验证的本仓库手动 Qdrant、加载用户级 LaunchAgent，并验收 health、环回监听、101 个 points 与 KeepAlive 换 PID：
+
+```bash
+bash scripts/activate-hogwarts-qdrant-launchagent.sh
+```
+
+不经过 LaunchAgent 的前台手动启动与只读健康检查命令如下。手动启动前必须确认 LaunchAgent 实例未运行，避免两个进程争用同一端口和 storage：
+
+```bash
+cd /Users/bytedance/sillytavern/SillyTavern/docker/qdrant/1.19.0
+QDRANT__SERVICE__HOST=127.0.0.1 \
+QDRANT__SERVICE__HTTP_PORT=6333 \
+QDRANT__SERVICE__GRPC_PORT=6334 \
+QDRANT__STORAGE__STORAGE_PATH=/Users/bytedance/sillytavern/SillyTavern/docker/data/qdrant/storage \
+QDRANT__STORAGE__SNAPSHOTS_PATH=/Users/bytedance/sillytavern/SillyTavern/docker/data/qdrant/snapshots \
+./qdrant
+
+curl --fail --silent --show-error http://127.0.0.1:6333/healthz
+lsof -nP -iTCP:6333 -sTCP:LISTEN
+lsof -nP -iTCP:6334 -sTCP:LISTEN
+```
+
+项目配置使用真实 Transformers embedding 探测结果；不要猜测或只改其中一个 model key。当前 model/dimension 对应的 collection generation 是 `g16b00e5647de42`：
+
+```yaml
+extensions:
+  models:
+    embedding: Cohee/jina-embeddings-v2-base-en
+hogwartsMud:
+  knowledge:
+    embeddingModel: Cohee/jina-embeddings-v2-base-en
+    embeddingDimensions: 768
+    qdrant:
+      enabled: true
+      url: http://127.0.0.1:6333
+      apiKey: ""
+      collectionPrefix: hogwarts_knowledge
+      timeoutMs: 10000
+```
+
+本机环回部署不在文档或版本控制中写入 secret；若以后启用 API key，只通过未提交配置或 `HOGWARTS_QDRANT_API_KEY` 注入。Tina 的只读权威档案同步和 ACL/snapshot smoke 命令为：
+
+```bash
+node scripts/sync-hogwarts-knowledge-qdrant.mjs \
+  --archive "data/default-user/chats/Hogwarts_World_Director/Hogwarts World Director - 2026-08-02@22h16m07s339ms.jsonl" \
+  --config config.yaml \
+  --operation rebuild \
+  --expected-record-count 101 \
+  --known-record-id events_item_harry_spare_brass_quill_current \
+  --known-source-ref event:event_transfiguration_after_break_18d50cd8847574f4
+
+node scripts/smoke-hogwarts-qdrant.mjs \
+  --archive "data/default-user/chats/Hogwarts_World_Director/Hogwarts World Director - 2026-08-02@22h16m07s339ms.jsonl" \
+  --config config.yaml \
+  --expected-count 101 \
+  --snapshots-path docker/data/qdrant/snapshots
+```
+
+sync 必须报告 `projectorVersion=2`、`backend=qdrant`、`degraded=false`、generation `g16b00e5647de42`、101 records/points、0 failures、已知 sourceRef 命中、0 narrative model calls，并证明 archive 的 before/after SHA 相同。smoke 使用 Qdrant 服务端 `points/count` payload filter 验证 public、授权 actor-private、locked、缺失 visibility 和未授权 actor，创建临时探针 collection 时必须在结束前删除；未传 `--snapshot-name` 时还会创建真实 collection snapshot。
+
+collection snapshot 只备份 Qdrant collection 配置、points、vectors 与 payload，不包含 State/chat 或 collection alias。备份与恢复步骤如下：
+
+```bash
+QDRANT_URL=http://127.0.0.1:6333
+COLLECTION='hogwarts_knowledge_Hogwarts_World_Director_-_2026-08-02_22h16m07s339ms_g16b00e5647de42'
+
+# 1. 创建并列出 snapshot；把返回的 name 和同名 .checksum 一起复制到备份介质。
+curl --fail --silent --show-error -X POST \
+  "$QDRANT_URL/collections/$COLLECTION/snapshots"
+curl --fail --silent --show-error \
+  "$QDRANT_URL/collections/$COLLECTION/snapshots"
+
+# 2. 恢复前暂停 SillyTavern 的 Knowledge 写入，先校验备份文件。
+SNAPSHOT='/absolute/path/to/collection.snapshot'
+CHECKSUM="$(cat "$SNAPSHOT.checksum")"
+test "$(shasum -a 256 "$SNAPSHOT" | awk '{print $1}')" = "$CHECKSUM"
+
+# 3. 本机单节点按 snapshot 覆盖 collection，然后复跑 smoke 或 sync 查询验收。
+curl --fail --silent --show-error -X PUT \
+  "$QDRANT_URL/collections/$COLLECTION/snapshots/recover?wait=true" \
+  -H 'Content-Type: application/json' \
+  --data "{\"location\":\"file://$SNAPSHOT\",\"priority\":\"snapshot\",\"checksum\":\"$CHECKSUM\"}"
+```
+
+恢复后必须核对 health、collection generation、精确 point count、已知 sourceRef 和 ACL payload filter。若 snapshot 缺失、损坏或 generation/model/dimension 不匹配，删除错误 collection 后直接从权威 State + chat 重跑 sync 全量 rebuild；不得从 Qdrant payload、snapshot 或排名反向恢复、覆盖或修补 State、Actor Memory、ACL、revision 或 Reducer 结果。
 
 知识同步使用当前 chat 的完整快照。回滚删除消息后，同步层同时清除已不存在的事件 JSON、知识索引项和向量记录，防止被撤销的未来内容重新进入 RAG。
+
+Task 7 羽毛笔档案修复默认只做 dry-run；它严格匹配 archive SHA、timeline epoch、revision 和 212–214 目标消息 fingerprint，输出 bounded diff、`physicalForm=absent` 证据、Knowledge V2 重建计划及零模型/网络调用统计：
+
+```bash
+node scripts/repair-hogwarts-relational-memory-task7.mjs \
+  --dry-run --file path/to/chat.jsonl
+
+node scripts/repair-hogwarts-relational-memory-task7.mjs \
+  --apply --file path/to/chat.jsonl \
+  --backup-root path/to/backups \
+  --knowledge-root path/to/hogwarts-mud
+```
+
+`--apply` 只在全部 guard 命中时执行；它先创建时间戳目录，保存 archive 备份、可选 `knowledge-before/` 和 `manifest.json`，再原子替换原档并重建 exact Knowledge V2。任一步失败会自动恢复 archive 与 Knowledge 目录并把 manifest 标记为 `rolled_back`。脚本没有独立 `--restore` 参数；人工恢复必须停掉写入源，按 manifest 的 `archive.backupPath -> archive.path` 恢复原档，并用 `knowledge.backupPath` 替换 `knowledge.timelineRoot`，随后核对 manifest 中的 SHA、epoch 和 revision。
 
 ### 场景生命周期
 
@@ -397,12 +627,12 @@ JSON 文件是权威档案；人物、场景、回合事件和预写线索按稳
 - 中档封存核心同时生成 `authorQuillEn`：一篇 180–280 词的 OOC 搞笑章节评价，使用具体回收梗、善意吐槽、冷面旁白和虚构奖项评价玩家表现。它只能引用玩家已经做过的事，不得泄露隐藏真相、锁定线索、NPC 私密动机、未来事件或暗骰。
 - “作者的羽毛笔”随英文结算走现有翻译链，在下一场景开头显示为独立羊皮纸批注卡，并永久保存在旧场景只读档案底部。它不属于任何角色认知，也不进入世界内事件事实。
 - 中档核心只提交时间、地图房间、人物状态、关系结算、旧场景摘要、下一幕结构与作者羽毛笔，不包含新场景正文、社交图或世界变化。核心输出目标保持在 1200–1800 token。
-- 核心通过后，低档根据已锁定的时间、房间、人物活动和环境钩子生成 2–6 个开场分段。低档开场无效时使用规则层短开场，不回滚已经合法的封存核心。
+- 核心通过后，低档根据已锁定的时间、房间、人物活动、环境钩子及按 holder 同步到新房间的 `authoritativeItems` 生成 2–6 个开场分段。中档同样收到转场前正式 Item 快照；`ownerId` 不授予物理持有，`destroyed` 不能在开场中变成 damaged、可用或转交给其他人物。低档开场无效时使用规则层短开场，不回滚已经合法的封存核心。
 - 旧场景尚未整理的社交证据在提交后交给现有单模型 LangGraph 异步回填。失败只保留 pending 与错误信息，不影响当前场景。
 - 当 `nextClock` 至少跨越 7 个完整日时，提交后才按需生成 `worldChanges`；长转场生成 1–4 条《预言家日报》边角新闻，并从旧场景同房间见证者的公开事件创建至少一个流言包。失败保留 pending，可在重新载入时间线时重试。
 - 流言只能由已知情人物继续传播，接收者必须引用现有人物 ID；未被列为来源或接收者的 NPC 不会自动知道。每次传播最多增加一级失真，连续 28 天无人传播后自动淡出。
 - 下一幕低档只收到每名在场 NPC 自己听过的版本。直接见证者保留真相底稿，其他人物不得从 RAG 或别人的人物档案中越权获得原始事件。
-- 旧场景、消息范围、时间、地点、收束摘要和“作者的羽毛笔”写入 `sceneArchive`，随后原子提交新场景、当前房间和在场人物。提交成功后，RAG 同步、每日导演、社交整理或世界变化失败都不能再把 UI 改成“封存失败”。
+- `sceneArchive` 保存旧场景的 `messageIds`、时间、地点、收束摘要和“作者的羽毛笔”等档案元数据；场景正文继续保存在 chat 消息行，只读档案按 ID 读取。随后系统原子提交新场景、当前房间和在场人物。提交成功后，RAG 同步、每日导演、社交整理或世界变化失败都不能再把 UI 改成“封存失败”。
 - 结算失败时保留旧场景；结算成功后，左侧“场景档案”可打开旧场景的只读转录，但不能继续发送消息。
 
 ### 世界地图
@@ -531,6 +761,9 @@ Google 端点使用 `google-translate-api-x`，Bing 端点使用 `bing-translate
 
 - `spec.md`：模块入口、事务时序、持久化边界和变更规则。
 - `state-fields.md`：字段路径、真实语义、唯一写入者、读取者和兼容边界。
+- `item-lifecycle.md`：Item V3 `physicalForm`、操作、迁移与呈现不变量。
+- `actor-memory.md`：Actor Memory Index、Appraisal/Person Schema、observer 隔离与 boundary guard。
+- `knowledge-runtime.md`：Knowledge V2、Qdrant 降级、Planner/Synapse、Prompt 权威、预算与 Task 7 修复。
 - `presence-scene-transition.md`：active/local/witness 分层及课堂 cohort 转场规则。
 - `ordinary-turn-repair.md`：首次 Performer 输出、流式预览、一次结构修复与失败恢复。
 - `checklist.md`：新增字段、事务和人物状态的提交门禁。
@@ -568,6 +801,7 @@ core <- state/domain <- runtime/adapters <- workflows <- ui <- index.js
 | Campaign、人物草稿、初始世界 | `domain/campaign.js`、`domain/character.js`、`domain/initial-world.js` |
 | 物品、物质、外观、法术 | `domain/inventory.js`、`domain/material-state.js`、`domain/appearance.js`、`domain/spell-state.js` |
 | 人物身份、知识、记忆、选角 | `domain/actor-*.js`、`domain/cast.js` |
+| Narrative Authority、Knowledge V2、关系突触 | `domain/narrative-*.js`、`domain/knowledge-*.js`、`domain/memory-synapse-*.js`、`domain/relational-synapse-retrieval.js`、`src/hogwarts-mud/knowledge-*.js` |
 | 社交 Schema、迁移、投影、Reducer | `domain/social-*.js` |
 | 判定、时间、节奏、因果 | `domain/checks.js`、`domain/time-environment.js`、`domain/pacing-*.js`、`domain/causal-*.js` |
 | 回合协议、校验、提交、回滚 | `domain/turn-*.js` |

@@ -48,6 +48,7 @@ import {
     recoverScenePerformancePayload,
 } from './core/json-recovery.js';
 import { admitCurrentLocationResidents, admitMentionedKnownActors } from './domain/actor-admission.js';
+import { migrateActorContextV1 } from './domain/actor-context-cutover.js';
 import {
     buildStructuredPlayerTurnSequence,
     reconcileCanonActorDisplayNames,
@@ -66,6 +67,8 @@ import {
 import { migrateRelationshipMemoryState } from './domain/actor-memory-migration.js';
 import {
     analyzeMemoryConsolidation,
+    captureMemoryBoundaryGuard,
+    isMemoryBoundaryGuardCurrent,
     normalizeMemoryConsolidationPayload,
     validateMemoryConsolidation,
 } from './domain/actor-memory-reducer.js';
@@ -88,11 +91,10 @@ import {
 } from './domain/campaign.js';
 import { buildActorSelectionPolicy, buildSceneCastRotationPolicy } from './domain/cast.js';
 import { normalizeCausalCollapseState } from './domain/causal-state.js';
-import {
-    buildCharacterContext,
-    createDefaultCharacterDraft,
-    validateCharacterDraft,
-} from './domain/character.js';
+import { migrateNpcIdentityState } from './domain/npc-identity-migration.js';
+import { migrateNpcIdentityObservations } from './domain/npc-identity-observation-migration.js';
+import { NPC_IDENTITY_PROMPT_BOUNDARY, buildNpcIdentityPromptProjection, projectNpcRuntimeActorsForPrompt } from './domain/npc-identity-prompt-projection.js';
+import { buildCharacterContext, createDefaultCharacterDraft, validateCharacterDraft } from './domain/character.js';
 import { resolveActionCheck } from './domain/checks.js';
 import { applyDirectorFoundation, applyOpeningWorldPackage, buildMandatorySceneState, createInitialWorldState, validateDirectorFoundation, validateOpeningWorldPackage } from './domain/initial-world.js';
 import {
@@ -102,7 +104,7 @@ import {
     normalizeGeneratedInteriorMapLabels,
     validateGeneratedInteriorMap,
 } from './domain/interior-map.js';
-import { migrateObservedInventoryState, projectObservedInventoryUpdates } from './domain/inventory.js';
+import { migrateObservedInventoryState, projectObservedInventoryUpdates, synchronizeHeldItemLocations } from './domain/inventory.js';
 import { createItemOperationDirective, createItemReferenceDirective, parseItemOperationDirectives } from './domain/item-directive.js';
 import { migrateItemSystemState } from './domain/item-migration.js';
 import { getItemProposalDecision, projectActorItems, projectItemCard, projectItemLedger } from './domain/item-projection.js';
@@ -165,9 +167,7 @@ import {
     getWorldDate,
     isDailyDirectorPlanCurrent,
 } from './domain/time-environment.js';
-import {
-    projectSceneTransitionPresence,
-} from './domain/transition-presence.js';
+import { projectSceneTransitionPresence } from './domain/transition-presence.js';
 import {
     TRANSLATION_TERM_GLOSSARY,
     applyTranslationGlossaryTargets,
@@ -229,6 +229,7 @@ import {
 import { createAutomaticWorkGate } from './runtime/automatic-work.js';
 import { createJobRegistry } from './runtime/job-registry.js';
 import { createActionPorts } from './runtime/action-ports.js';
+import { createGuardedSavePorts } from './runtime/guarded-save-ports.js?v=0.1.1';
 import {
     canOpenCurrentV2SaveReadOnly,
     shouldTranslateRenderedMessage,
@@ -241,7 +242,6 @@ import {
 } from './ui/application.js';
 import { getUiDomRefs } from './ui/dom.js';
 import { createUiSessionState } from './ui/session-state.js';
-
 const MODULE_NAME = 'hogwarts-mud';
 const PROMPT_KEY = 'hogwarts_mud_system';
 const MAX_RENDERED_MESSAGES = 100;
@@ -284,19 +284,15 @@ const LIVE_STREAM_PHASE_LABELS = Object.freeze({
     translating: '原稿完成，正在译入中文',
     committing: '正在装订现场记录',
 });
-
-const automaticWork = createAutomaticWorkGate();
-const jobRegistry = createJobRegistry();
-const actionPorts =
-    createActionPorts(UI_ACTION_NAMES);
+const automaticWork = createAutomaticWorkGate(), jobRegistry = createJobRegistry();
+const saveRevisionPorts = createGuardedSavePorts({ getContext, saveMetadataDebounced,
+    onConflict: (_conflict, message) => { toastr.error(message); application?.renderAll(); } });
+const actionPorts = createActionPorts(UI_ACTION_NAMES);
 const session = createUiSessionState({
     campaign: createDefaultCampaign(),
-    currentScenePageSize:
-        CURRENT_SCENE_PAGE_SIZE,
-    archiveListPageSize:
-        ARCHIVE_LIST_PAGE_SIZE,
-    archiveTranscriptPageSize:
-        ARCHIVE_TRANSCRIPT_PAGE_SIZE,
+    currentScenePageSize: CURRENT_SCENE_PAGE_SIZE,
+    archiveListPageSize: ARCHIVE_LIST_PAGE_SIZE,
+    archiveTranscriptPageSize: ARCHIVE_TRANSCRIPT_PAGE_SIZE,
 });
 const platform = {
     ARCHIVE_LIST_PAGE_SIZE,
@@ -317,6 +313,7 @@ const platform = {
     MAP_DIRECTOR_TRIGGERS,
     MAX_RENDERED_MESSAGES,
     MODULE_NAME,
+    NPC_IDENTITY_PROMPT_BOUNDARY,
     PRESET_WORLD_MAP,
     PROFILE_SECRET_KEYS,
     PROMPT_KEY,
@@ -360,9 +357,11 @@ const platform = {
     buildMandatorySceneState,
     buildMapAuthorityContext,
     buildMapModel,
+    buildNpcIdentityPromptProjection,
     buildSceneCastRotationPolicy,
     buildSocialAudienceProjection,
     buildSpatialContext,
+    captureMemoryBoundaryGuard,
     buildStructuredPlayerTurnSequence,
     buildSystemPrompt,
     buildTemporaryActorPromotionPolicy,
@@ -413,13 +412,18 @@ const platform = {
     getSpellProficiency,
     getWorldDate,
     isDailyDirectorPlanCurrent,
+    isMemoryBoundaryGuardCurrent,
     limitMessagesToContext,
+    migrateActorContextState:
+        migrateActorContextV1,
     migrateActorKnowledgeBoundaries,
     migrateActorMovementHistory,
     migrateActorPresentationState,
     migrateLoadedSocialGraph,
     migrateObservedInventoryState,
     migrateItemSystemState,
+    migrateNpcIdentityState,
+    migrateNpcIdentityObservations,
     migrateRelationshipMemoryState,
     migrateSpellbookState,
     normalizeActorMemoryProfile,
@@ -446,6 +450,7 @@ const platform = {
     projectItemLedger,
     projectObservedInventoryUpdates,
     projectPeoplePanel,
+    projectNpcRuntimeActorsForPrompt,
     projectSceneTransitionPresence,
     projectSceneArchivePresence, reconcileObservedPerceptionWithFallback,
     protectTranslationTerms,
@@ -481,7 +486,7 @@ const platform = {
     splitTranslationChunks,
     stripExplicitAddressTargets,
     stripSyntheticSceneOpeningActorSegments,
-    syncKnowledgeBase,
+    synchronizeHeldItemLocations, syncKnowledgeBase,
     updateMessageBlock,
     uuidv4,
     validateCharacterDraft,
@@ -499,17 +504,16 @@ const platform = {
     validateTurnTransaction,
     getItemProposalDecision,
     writeSecret,
+    ...saveRevisionPorts,
 };
 
-let initializationPromise = null;
-let application = null;
-const compatibility =
-    createSocialMemoryWorkflow({
-        buildSocialAudienceProjection,
-        normalizeActorMemoryProfile,
-        normalizeSocialGraph,
-        selectSharedMemoriesForContext,
-    });
+let initializationPromise = null, application = null;
+const compatibility = createSocialMemoryWorkflow({
+    buildSocialAudienceProjection,
+    normalizeActorMemoryProfile,
+    normalizeSocialGraph,
+    selectSharedMemoriesForContext,
+});
 
 async function initialize() {
     const html =
@@ -582,19 +586,15 @@ async function initialize() {
     );
     application.renderAll();
 }
-
 export {
     canOpenCurrentV2SaveReadOnly,
     shouldTranslateRenderedMessage,
 };
-
 export const {
     createMemoryConsolidationPrompt,
     SOCIAL_DIRECTOR_RESPONSE_SCHEMA,
 } = compatibility;
-
 export function init() {
-    initializationPromise ??=
-        initialize();
+    initializationPromise ??= initialize();
     return initializationPromise;
 }

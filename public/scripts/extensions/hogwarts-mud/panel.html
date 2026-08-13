@@ -10,6 +10,9 @@
             <span id="hpmud_clock">等待角色入场</span>
         </div>
         <div class="hpmud-top-actions">
+            <button id="hpmud_calendar" class="hpmud-calendar-entry" type="button" aria-haspopup="dialog" aria-controls="hpmud_calendar_dialog">
+                <span aria-hidden="true">◇</span>日历
+            </button>
             <button id="hpmud_relationship_graph" class="hpmud-relationship-entry" type="button">
                 <span aria-hidden="true">✦</span>关系星图
             </button>
@@ -459,6 +462,158 @@
         </aside>
     </div>
 
+    <dialog
+        id="hpmud_calendar_dialog"
+        class="hpmud-calendar-dialog"
+        aria-labelledby="hpmud_calendar_title"
+        aria-describedby="hpmud_calendar_description"
+    >
+        <div class="hpmud-calendar-shell">
+            <header class="hpmud-calendar-header">
+                <div class="hpmud-calendar-title">
+                    <span class="hpmud-calendar-seal" aria-hidden="true"><i></i></span>
+                    <div>
+                        <small>Collegiate chronology archive</small>
+                        <h2 id="hpmud_calendar_title">学院日程</h2>
+                    </div>
+                </div>
+                <p id="hpmud_calendar_description">按时间阅读公开日程；预览与作者视图不会写入世界状态。</p>
+                <div class="hpmud-calendar-view-tabs" role="tablist" aria-label="日历视图">
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected="true"
+                        aria-controls="hpmud_calendar_day_sections"
+                        tabindex="0"
+                        data-calendar-view="agenda"
+                    >日期视图</button>
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected="false"
+                        aria-controls="hpmud_calendar_storylines"
+                        tabindex="-1"
+                        data-calendar-view="storylines"
+                    >剧情线</button>
+                </div>
+                <button id="hpmud_calendar_close" type="button" aria-label="关闭日历">×</button>
+            </header>
+
+            <div class="hpmud-calendar-layout">
+                <section id="hpmud_calendar_collection" class="hpmud-calendar-day" aria-label="计划、场景与剧情线">
+                    <header>
+                        <div>
+                            <small id="hpmud_calendar_collection_kicker">Selected date</small>
+                            <div class="hpmud-calendar-week-title-row">
+                                <h3 id="hpmud_calendar_date_label">选择日期</h3>
+                                <div class="hpmud-calendar-date-trigger">
+                                    <button
+                                        id="hpmud_calendar_date_modal_open"
+                                        type="button"
+                                        aria-haspopup="dialog"
+                                        aria-controls="hpmud_calendar_date_modal"
+                                        aria-expanded="false"
+                                    ><span aria-hidden="true">◇</span> 日期索引</button>
+                                    <div
+                                        id="hpmud_calendar_date_modal"
+                                        class="hpmud-calendar-date-modal"
+                                        role="dialog"
+                                        aria-modal="false"
+                                        aria-label="选择日期"
+                                        hidden
+                                    >
+                                        <header class="hpmud-calendar-date-modal-header">
+                                            <div>
+                                                <small>Date index</small>
+                                                <strong>日期索引</strong>
+                                            </div>
+                                            <button
+                                                id="hpmud_calendar_date_modal_close"
+                                                type="button"
+                                                aria-label="关闭日期索引"
+                                            >×</button>
+                                        </header>
+                                        <section class="hpmud-calendar-navigator">
+                                            <header>
+                                                <button id="hpmud_calendar_previous_month" type="button" aria-label="上个月">‹</button>
+                                                <strong id="hpmud_calendar_month_label">世界日历</strong>
+                                                <button id="hpmud_calendar_next_month" type="button" aria-label="下个月">›</button>
+                                            </header>
+                                            <div class="hpmud-calendar-weekdays" aria-hidden="true">
+                                                <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+                                            </div>
+                                            <div id="hpmud_calendar_month_grid" class="hpmud-calendar-month-grid" role="group" aria-label="选择日期"></div>
+                                        </section>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <span id="hpmud_calendar_date_summary">0 项安排</span>
+                    </header>
+                    <div
+                        id="hpmud_calendar_items"
+                        class="hpmud-calendar-items"
+                    >
+                        <div id="hpmud_calendar_day_sections" class="hpmud-calendar-day-sections">
+                            <section class="hpmud-calendar-section hpmud-calendar-plans" aria-labelledby="hpmud_calendar_plans_title">
+                                <header>
+                                    <div>
+                                        <small>WEEK GRID</small>
+                                        <h4 id="hpmud_calendar_plans_title">一周日程</h4>
+                                    </div>
+                                    <span id="hpmud_calendar_plan_summary">0 项</span>
+                                </header>
+                                <div id="hpmud_calendar_plan_grid" class="hpmud-calendar-plan-grid"></div>
+                            </section>
+                            <section class="hpmud-calendar-section hpmud-calendar-scenes" aria-labelledby="hpmud_calendar_scenes_title">
+                                <header>
+                                    <div>
+                                        <small>ARCHIVE</small>
+                                        <h4 id="hpmud_calendar_scenes_title">场景</h4>
+                                    </div>
+                                    <button
+                                        id="hpmud_calendar_free_toggle"
+                                        type="button"
+                                        aria-expanded="false"
+                                        aria-controls="hpmud_calendar_free_panel"
+                                    >自由开场</button>
+                                </header>
+                                <div id="hpmud_calendar_free_panel" class="hpmud-calendar-free-panel" hidden></div>
+                                <div
+                                    id="hpmud_calendar_scene_list"
+                                    class="hpmud-calendar-scene-list"
+                                    role="list"
+                                    aria-labelledby="hpmud_calendar_scenes_title"
+                                ></div>
+                            </section>
+                        </div>
+                        <div
+                            id="hpmud_calendar_storylines"
+                            class="hpmud-calendar-storylines"
+                            role="listbox"
+                            aria-label="公开剧情线"
+                            hidden
+                        ></div>
+                    </div>
+                </section>
+
+                <aside
+                    id="hpmud_calendar_preview"
+                    class="hpmud-calendar-preview"
+                    aria-label="计划或场景详情"
+                    aria-live="polite"
+                >
+                    <div class="hpmud-calendar-preview-empty">
+                        <span aria-hidden="true">◇</span>
+                        <h3>详情</h3>
+                        <p>选择一项计划或场景查看精简档案。</p>
+                    </div>
+                </aside>
+            </div>
+            <p id="hpmud_calendar_status" class="sr-only" role="status" aria-live="polite"></p>
+        </div>
+    </dialog>
+
     <dialog id="hpmud_relationship_dialog" class="hpmud-relationship-dialog" aria-labelledby="hpmud_relationship_title">
         <div class="hpmud-relationship-shell">
             <header class="hpmud-relationship-header">
@@ -558,7 +713,7 @@
     <dialog id="hpmud_scene_transition_dialog" class="hpmud-dialog hpmud-scene-transition-dialog">
         <form id="hpmud_scene_transition_form" class="hpmud-dialog-frame">
             <header>
-                <div><small>Scene Ledger · Atomic Transition</small><h2>封存当前场景</h2></div>
+                <div><small>场景账本 · 原子切换</small><h2>封存当前场景</h2></div>
                 <button id="hpmud_scene_transition_cancel" type="button" aria-label="关闭">×</button>
             </header>
             <div class="hpmud-dialog-scroll">
@@ -595,7 +750,7 @@
     <dialog id="hpmud_scene_archive_dialog" class="hpmud-dialog hpmud-scene-archive-dialog">
         <div class="hpmud-dialog-frame">
             <header>
-                <div><small>Closed Scene · Read Only</small><h2 id="hpmud_archive_title">场景档案</h2></div>
+                <div><small>封存场景 · 只读</small><h2 id="hpmud_archive_title">场景档案</h2></div>
                 <button id="hpmud_archive_close" type="button" aria-label="关闭">×</button>
             </header>
             <div class="hpmud-dialog-scroll">

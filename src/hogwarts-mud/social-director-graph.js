@@ -1751,6 +1751,16 @@ function deriveRelationshipState(state) {
             )
                 ? context.extraction.reviews
                 : [],
+            schemaOperations:
+                Array.isArray(
+                    context.extraction
+                        ?.schemaOperations,
+                )
+                    ? structuredClone(
+                        context.extraction
+                            .schemaOperations,
+                    )
+                    : [],
             acceptedStatementIds: (
                 state.acceptedStatements ||
                 []

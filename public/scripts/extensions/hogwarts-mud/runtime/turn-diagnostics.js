@@ -1,9 +1,44 @@
-export const TURN_DIAGNOSTICS_VERSION = 1;
+export const TURN_DIAGNOSTICS_VERSION = 2;
 export const TURN_DIAGNOSTIC_HISTORY_LIMIT = 8;
 export const TURN_DIAGNOSTIC_EVENT_LIMIT = 32;
-export const TURN_DIAGNOSTIC_STRING_LIMIT = 32_000;
+export const TURN_DIAGNOSTIC_STRING_LIMIT = 2_000;
+export const TURN_DIAGNOSTIC_ARRAY_LIMIT = 32;
+
+const SENSITIVE_DIAGNOSTIC_KEYS =
+    new Set([
+        'authorization',
+        'content',
+        'fullPrompt',
+        'invalidOutput',
+        'limitedUserPrefix',
+        'limitedUserSuffix',
+        'originalPlayerTurnSequence',
+        'originalRequest',
+        'originalSceneInput',
+        'password',
+        'playerTurnSequence',
+        'prompt',
+        'raw',
+        'reasoning',
+        'requiredSchema',
+        'segments',
+        'systemPrompt',
+    ]);
+const SENSITIVE_DIAGNOSTIC_KEY_PATTERN =
+    /(?:api.?key|private.?goal|secret|token)/iu;
 
 let fallbackTraceSequence = 0;
+
+function isSensitiveDiagnosticKey(key) {
+    const normalized =
+        String(key || '');
+    return (
+        SENSITIVE_DIAGNOSTIC_KEYS
+            .has(normalized) ||
+        SENSITIVE_DIAGNOSTIC_KEY_PATTERN
+            .test(normalized)
+    );
+}
 
 function sanitizeDiagnosticValue(
     value,
@@ -28,7 +63,7 @@ function sanitizeDiagnosticValue(
     if (value === undefined) {
         return undefined;
     }
-    if (depth >= 8) {
+    if (depth >= 6) {
         return '[depth limit]';
     }
     if (typeof value !== 'object') {
@@ -42,7 +77,10 @@ function sanitizeDiagnosticValue(
     }
     seen.add(value);
     if (Array.isArray(value)) {
-        return value.slice(0, 64).map(item =>
+        return value.slice(
+            0,
+            TURN_DIAGNOSTIC_ARRAY_LIMIT,
+        ).map(item =>
             sanitizeDiagnosticValue(
                 item,
                 {
@@ -53,7 +91,11 @@ function sanitizeDiagnosticValue(
     }
     return Object.fromEntries(
         Object.entries(value)
-            .slice(0, 96)
+            .filter(([key]) =>
+                !isSensitiveDiagnosticKey(
+                    key,
+                ))
+            .slice(0, 64)
             .map(([key, item]) => [
                 key,
                 sanitizeDiagnosticValue(
@@ -109,6 +151,12 @@ export function createTurnDiagnosticsRecorder({
                         0,
                         TURN_DIAGNOSTIC_STRING_LIMIT,
                     ),
+            callCounts: {
+                high: 0,
+                medium: 0,
+                low: 0,
+                local: 0,
+            },
             events: [],
         };
         return active.traceId;
@@ -120,6 +168,38 @@ export function createTurnDiagnosticsRecorder({
     ) {
         if (!active) {
             return null;
+        }
+        if (stage === 'model_call') {
+            const tier =
+                String(
+                    data?.tier ||
+                    '',
+                );
+            if (
+                [
+                    'high',
+                    'medium',
+                    'low',
+                ].includes(tier)
+            ) {
+                active.callCounts[tier] +=
+                    Math.max(
+                        1,
+                        Number(
+                            data?.count,
+                        ) || 1,
+                    );
+            }
+        } else if (
+            stage === 'local_call'
+        ) {
+            active.callCounts.local +=
+                Math.max(
+                    1,
+                    Number(
+                        data?.count,
+                    ) || 1,
+                );
         }
         active.events.push({
             sequence:

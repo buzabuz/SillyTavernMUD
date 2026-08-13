@@ -29,17 +29,29 @@ import {
 } from './actor-knowledge.js';
 
 import {
+    actorContextVersion,
+    actorDossierProjectionVersion,
+    memoryReferenceVersion,
+} from './actor-context-schema.js';
+
+import {
+    assertActorContextStateV1,
+    recordActorAppraisalV1,
+    removeActorV1,
+    upsertActorV1,
+} from './actor-context-runtime.js';
+
+import {
+    getCanonicalPerformanceCore,
+} from './actor-core-canon.js';
+
+import {
     ACTOR_KNOWLEDGE_VERSION,
     FIRST_IMPRESSION_MAX_WORDS,
     FIRST_IMPRESSION_VERSION,
     isValidFirstImpression,
-    normalizeActorMemoryProfile,
     RELATIONSHIP_MEMORY_VERSION,
 } from './actor-memory.js';
-
-import {
-    migrateActorPresentationState,
-} from './appearance.js';
 
 import {
     createDefaultCampaign,
@@ -55,13 +67,16 @@ import {
 } from './causal-state.js';
 
 import {
+    createInitialCalendarState,
+} from './calendar-schema.js';
+
+import {
     normalizeStoryPreferences,
 } from './character.js';
 
 import {
     createSceneItemStates,
     ENTITY_STATE_VERSION,
-    normalizeActorLifeState,
 } from './inventory.js';
 import {
     ITEM_SYSTEM_VERSION,
@@ -70,6 +85,20 @@ import {
 import {
     createMandatorySceneStateProjector,
 } from './mandatory-projection.js';
+
+import {
+    NPC_IDENTITY_MIGRATION_VERSION,
+} from './npc-identity-migration.js';
+import {
+    NPC_IDENTITY_OBSERVATION_MIGRATION_VERSION,
+} from './npc-identity-observation-migration.js';
+import {
+    normalizeNpcIdentity,
+} from './npc-identity-schema.js';
+
+import {
+    createDefaultMemorySynapse,
+} from './memory-synapse-schema.js';
 
 import {
     buildCurrentMaterialState,
@@ -98,8 +127,300 @@ export const buildMandatorySceneState =
         buildBehavioralEnvironment,
         buildCurrentMaterialState,
         getActorKnownRumors,
-        normalizeActorMemoryProfile,
     });
+
+function actorIdentitySource(
+    actor,
+) {
+    if (
+        actor?.identity &&
+        typeof actor.identity ===
+            'object'
+    ) {
+        return actor.identity;
+    }
+    const birthDate =
+        String(
+            actor?.birthDate || '',
+        ).trim();
+    const birthYearText =
+        String(
+            actor?.birthYear ?? '',
+        ).trim();
+    const birthYear =
+        birthYearText
+            ? Number(birthYearText)
+            : null;
+    return normalizeNpcIdentity({
+        birth:
+            /^\d{4}-\d{2}-\d{2}$/u
+                .test(birthDate)
+                ? {
+                    date: birthDate,
+                    precision: 'exact',
+                }
+                : Number.isInteger(
+                    birthYear,
+                )
+                    ? {
+                        year: birthYear,
+                        precision: 'year',
+                    }
+                    : {},
+    });
+}
+
+function actorCoreSource(
+    actor,
+    castDefaults = null,
+) {
+    const canonical =
+        getCanonicalPerformanceCore(
+            actor.id,
+        );
+    const originBySource = {
+        canon_catalog:
+            'canon_catalog',
+        preset_location_resident:
+            'preset_resident',
+        pacing_public_guest:
+            'generated_guest',
+        scene_temporary_actor:
+            'scene_temporary',
+    };
+    const cast =
+        actor?.cast ||
+        castDefaults ||
+        (
+            actor?.source ||
+            actor?.introducedClock ||
+            Number.isInteger(
+                actor?.introducedTurn,
+            )
+                ? {
+                    origin:
+                        originBySource[
+                            actor.source
+                        ] ||
+                        (
+                            actor
+                                .canonCatalogId
+                                ? 'canon_catalog'
+                                : 'foundation'
+                        ),
+                    introducedClock:
+                        actor
+                            .introducedClock ||
+                        '',
+                    introducedTurn:
+                        Number.isInteger(
+                            actor
+                                .introducedTurn,
+                        )
+                            ? actor
+                                .introducedTurn
+                            : null,
+                }
+                : null
+        );
+    return {
+        ...actor,
+        ...(cast
+            ? {
+                cast,
+            }
+            : {}),
+        identity:
+            actorIdentitySource(actor),
+        ...(canonical
+            ? {
+                performanceCore:
+                    canonical,
+            }
+            : {}),
+    };
+}
+
+function openingRuntimeSource(
+    actor,
+    mapId,
+    roomId,
+) {
+    return {
+        mapId,
+        roomId,
+        present:
+            actor?.present !== false,
+        lifeStatus:
+            actor?.lifeStatus ||
+            'alive',
+        lifeStatusPermanent:
+            actor
+                ?.lifeStatusPermanent ===
+            true,
+        lifeStatusDetailEn:
+            actor
+                ?.lifeStatusDetailEn ||
+            'Alive.',
+        lifeStatusSinceClock:
+            actor
+                ?.lifeStatusSinceClock ||
+            '',
+        currentActivityEn:
+            actor
+                ?.currentActivityEn ||
+            '',
+        currentIntentEn:
+            actor?.currentIntentEn ||
+            '',
+        currentGoalEn:
+            actor?.currentGoalEn ||
+            '',
+        temporary: false,
+    };
+}
+
+function recordOpeningAppraisals(
+    state,
+    actor,
+    profile,
+) {
+    const firstImpression =
+        actor
+            ?.firstImpressionOfPlayerEn ||
+        profile
+            ?.firstImpressionOfPlayerEn ||
+        '';
+    if (firstImpression) {
+        recordActorAppraisalV1(
+            state,
+            {
+                actorId: profile.id,
+                summaryEn:
+                    firstImpression,
+                kind:
+                    'first_impression',
+                tier: 'recent',
+                clock: state.clock,
+                sceneId:
+                    state.scene?.id ||
+                    '',
+                firstImpression:
+                    true,
+            },
+        );
+    }
+    const currentImpression =
+        actor?.impressionOfPlayerEn ||
+        profile
+            ?.impressionOfPlayerEn ||
+        '';
+    if (
+        currentImpression &&
+        currentImpression !==
+            firstImpression
+    ) {
+        recordActorAppraisalV1(
+            state,
+            {
+                actorId: profile.id,
+                summaryEn:
+                    currentImpression,
+                kind:
+                    'opening_impression',
+                tier: 'recent',
+                clock: state.clock,
+                sceneId:
+                    state.scene?.id ||
+                    '',
+            },
+        );
+    }
+}
+
+function openingRelationshipEdge(
+    actor,
+) {
+    const relationship =
+        String(
+            actor
+                ?.relationshipToPlayerEn ||
+            '',
+        )
+            .normalize('NFKC')
+            .toLocaleLowerCase();
+    const tags = [];
+    if (
+        /(?:father|mother|parent|family|relative|父|母|家人|亲属)/u
+            .test(relationship)
+    ) {
+        tags.push(
+            'family',
+            'parent',
+        );
+    } else if (
+        /(?:guardian|监护)/u
+            .test(relationship)
+    ) {
+        tags.push(
+            'family',
+            'guardian',
+        );
+    } else if (
+        /(?:sibling|brother|sister|兄弟|姐妹)/u
+            .test(relationship)
+    ) {
+        tags.push(
+            'family',
+            'sibling',
+        );
+    } else if (
+        /(?:friend|朋友)/u
+            .test(relationship)
+    ) {
+        tags.push('friend');
+    }
+    const familiarity =
+        tags.includes('family')
+            ? 70
+            : tags.includes('friend')
+                ? 35
+                : 12;
+    return {
+        id:
+            `relationship_${actor.id}_player`,
+        sourceActorId: actor.id,
+        targetActorId: 'player',
+        familiarity,
+        closeness:
+            tags.includes('family')
+                ? 45
+                : tags.includes('friend')
+                    ? 20
+                    : 0,
+        warmth:
+            tags.length
+                ? 20
+                : 0,
+        trust:
+            tags.length
+                ? 15
+                : 0,
+        respect: 0,
+        influence: 0,
+        tension: 0,
+        resentment: 0,
+        fear: 0,
+        protectiveness:
+            tags.includes('family')
+                ? 35
+                : 0,
+        structuralTags: tags,
+        activeEmotions: [],
+        evidenceIds: [],
+        knownToPlayer: true,
+    };
+}
 
 export function createInitialWorldState(character, modelSlots, campaign = createDefaultCampaign()) {
     const normalizedCampaign = normalizeCampaign(campaign);
@@ -155,6 +476,13 @@ export function createInitialWorldState(character, modelSlots, campaign = create
         },
         actors: [],
         actorLibrary: [],
+        actorMemoryIndex: {
+            version:
+                memoryReferenceVersion,
+            byActorId: {},
+        },
+        memorySynapse:
+            createDefaultMemorySynapse(),
         ...createDefaultPresenceWitnessState(),
         actorPresentations: {},
         materialEventLog: [],
@@ -165,7 +493,6 @@ export function createInitialWorldState(character, modelSlots, campaign = create
         ),
         storyArcs: [],
         conflict: null,
-        agenda: [],
         timeline: [],
         worldNews: [],
         gossipPacks: [],
@@ -195,12 +522,19 @@ export function createInitialWorldState(character, modelSlots, campaign = create
         },
         causalCollapse:
             normalizeCausalCollapseState(),
+        actorContextVersion,
+        memoryReferenceVersion,
+        actorDossierProjectionVersion,
         relationshipMemoryVersion:
             RELATIONSHIP_MEMORY_VERSION,
         actorKnowledgeVersion:
             ACTOR_KNOWLEDGE_VERSION,
         firstImpressionVersion:
             FIRST_IMPRESSION_VERSION,
+        npcIdentityVersion:
+            NPC_IDENTITY_MIGRATION_VERSION,
+        npcIdentityObservationVersion:
+            NPC_IDENTITY_OBSERVATION_MIGRATION_VERSION,
         entityStateVersion:
             ENTITY_STATE_VERSION,
         memoryDirector: {
@@ -540,9 +874,6 @@ export function validateOpeningWorldPackage(opening, character, campaign) {
     if (actors.some(actor => /hogwarts world director|world narrator|storage narrator/i.test(String(actor.nameEn || '')))) {
         errors.push('后台存档叙事者不能作为在场人物。');
     }
-    if (!Array.isArray(opening.agenda) || opening.agenda.length < 1) {
-        errors.push('开场必须提供至少一项后续日程。');
-    }
     const foundationValidation = validateDirectorFoundation({
         actorLibrary: opening.actorLibrary,
         storyArc: opening.storyArc,
@@ -595,6 +926,10 @@ export function applyOpeningWorldPackage(worldState, opening) {
     next.phase = 'opening_narration';
     next.chapter = display.chapter || opening.chapterEn;
     next.clock = opening.clock;
+    next.calendar ??=
+        createInitialCalendarState(
+            next.clock,
+        );
     next.location = sceneName;
     next.scene = {
         id: opening.scene.id || map.id,
@@ -616,133 +951,111 @@ export function applyOpeningWorldPackage(worldState, opening) {
         }],
         mapId: map.id,
         roomId: map.currentRoomId,
+        calendarEntryIds: [],
     };
-    next.actors = opening.actors.map((actor, index) =>
-        normalizeActorLifeState({
-            ...actor,
-            name: display.actorNames?.[index] || actor.nameEn,
-            role: display.actorRoles?.[index] || actor.roleEn,
-            relationshipToPlayer: display.actorRelationships?.[index] || actor.relationshipToPlayerEn,
-            firstImpressionOfPlayerEn:
-                actor.firstImpressionOfPlayerEn,
-            firstImpressionOfPlayer:
-                display.actorFirstImpressions?.[index] ||
-                actor.firstImpressionOfPlayerEn,
-            firstImpressionClock:
-                opening.clock,
-            firstImpressionTurn: 0,
-            firstImpressionPending: false,
-            impressionOfPlayerEn:
-            actor.impressionOfPlayerEn ||
-            actor.relationshipToPlayerEn,
-            impressionOfPlayer:
-            display.actorImpressions?.[index] ||
-            actor.impressionOfPlayerEn ||
-            display.actorRelationships?.[index] ||
-            actor.relationshipToPlayerEn,
-            impressionUpdatedClock: opening.clock,
-            impressionUpdatedTurn: 0,
-            currentActivity: display.actorActivities?.[index] || actor.currentActivityEn,
-            currentIntent: display.actorIntents?.[index] || actor.currentIntentEn,
-            mapId: customMap.id,
-            roomId: customMap.nodes.some(room => room.id === actor.roomId)
-                ? actor.roomId
-                : inferActorRoomId(actor, customMap, map.currentRoomId),
-            present: actor.present !== false,
-        }));
-    const openingActors = new Map(
-        next.actors.map(actor => [actor.id, actor]),
-    );
-    next.actorLibrary = (opening.actorLibrary || []).map(actor =>
-        normalizeActorMemoryProfile({
-            ...actor,
-            name:
-                actor.display?.name ||
-                actor.name ||
-                actor.nameEn,
-            aliases:
-                actor.aliases || [],
-            role: actor.display?.role || actor.roleEn,
-            relationshipToPlayer:
-                actor.display?.relationshipToPlayer ||
-                actor.relationshipToPlayerEn,
-            firstImpressionOfPlayerEn:
-                actor.firstImpressionOfPlayerEn ||
-                openingActors.get(actor.id)
-                    ?.firstImpressionOfPlayerEn ||
-                '',
-            firstImpressionOfPlayer:
-                actor.display?.firstImpressionOfPlayer ||
-                openingActors.get(actor.id)
-                    ?.firstImpressionOfPlayer ||
-                '',
-            firstImpressionClock:
-                openingActors.has(actor.id)
-                    ? opening.clock
-                    : '',
-            firstImpressionTurn: 0,
-            firstImpressionPending:
-                false,
-            impressionOfPlayerEn:
-                actor.impressionOfPlayerEn ||
-                openingActors.get(actor.id)
-                    ?.impressionOfPlayerEn ||
-                actor.relationshipToPlayerEn,
-            impressionOfPlayer:
-                actor.display?.impressionOfPlayer ||
-                openingActors.get(actor.id)
-                    ?.impressionOfPlayer ||
-                actor.display?.relationshipToPlayer ||
-                actor.relationshipToPlayerEn,
-            impressionUpdatedClock:
-                openingActors.has(actor.id)
-                    ? opening.clock
-                    : '',
-            impressionUpdatedTurn: 0,
-            introducedClock:
-                openingActors.has(actor.id)
-                    ? opening.clock
-                    : '',
-            introducedTurn: 0,
-            lifeStatus:
-                openingActors.get(actor.id)
-                    ?.lifeStatus ||
-                actor.lifeStatus ||
-                'alive',
-            lifeStatusPermanent:
-                Boolean(
-                    openingActors.get(actor.id)
-                        ?.lifeStatusPermanent ||
-                    actor.lifeStatusPermanent,
+    next.actorLibrary = [];
+    next.actors = [];
+    next.actorMemoryIndex = {
+        version:
+            memoryReferenceVersion,
+        byActorId: {},
+    };
+    next.memorySynapse =
+        createDefaultMemorySynapse();
+    const openingActors =
+        new Map(
+            (opening.actors || [])
+                .map(actor => [
+                    actor.id,
+                    actor,
+                ]),
+        );
+    for (const profile of (
+        opening.actorLibrary ||
+        []
+    )) {
+        const actor =
+            openingActors.get(
+                profile.id,
+            );
+        const actorRoomId = actor
+            ? (
+                customMap.nodes.some(
+                    room =>
+                        room.id ===
+                        actor.roomId,
+                )
+                    ? actor.roomId
+                    : inferActorRoomId(
+                        actor,
+                        customMap,
+                        map.currentRoomId,
+                    )
+            )
+            : '';
+        upsertActorV1(
+            next,
+            {
+                actorId:
+                    profile.id,
+                coreSource:
+                    actorCoreSource(
+                        profile,
+                        {
+                            origin:
+                                profile
+                                    .canonCatalogId
+                                    ? 'canon_catalog'
+                                    : 'foundation',
+                            introducedClock:
+                                actor
+                                    ? opening.clock
+                                    : '',
+                            introducedTurn:
+                                actor
+                                    ? Number(
+                                        next.turn
+                                            ?.count ||
+                                        0,
+                                    )
+                                    : null,
+                        },
+                    ),
+                runtimeSource:
+                    openingRuntimeSource(
+                        actor || {},
+                        actor
+                            ? customMap.id
+                            : '',
+                        actorRoomId,
+                    ),
+            },
+        );
+        if (actor) {
+            recordOpeningAppraisals(
+                next,
+                actor,
+                profile,
+            );
+        }
+    }
+    next.socialGraph =
+        normalizeSocialGraph({
+            ...next.socialGraph,
+            relationships: [
+                ...(
+                    next.socialGraph
+                        ?.relationships ||
+                    []
                 ),
-            lifeStatusDetailEn:
-                openingActors.get(actor.id)
-                    ?.lifeStatusDetailEn ||
-                actor.lifeStatusDetailEn ||
-                'Alive.',
-            lifeStatusDetail:
-                openingActors.get(actor.id)
-                    ?.lifeStatusDetail ||
-                actor.lifeStatusDetail ||
-                '存活。',
-            lifeStatusSinceClock:
-                openingActors.get(actor.id)
-                    ?.lifeStatusSinceClock ||
-                actor.lifeStatusSinceClock ||
-                '',
-            publicDescription:
-                actor.display?.publicDescription ||
-                actor.publicDescriptionEn,
-            publicBackground:
-                actor.display?.publicBackground ||
-                actor.publicBackgroundEn,
-            personality:
-                actor.display?.personality ||
-                actor.personalityEn,
-            speechStyle:
-                actor.display?.speechStyle ||
-                actor.speechStyleEn,
-        }, openingActors.get(actor.id)));
+                ...(
+                    opening.actors ||
+                    []
+                ).map(
+                    openingRelationshipEdge,
+                ),
+            ],
+        });
     next.storyArcs = opening.storyArc ? [{
         ...structuredClone(opening.storyArc),
         status: opening.storyArc.status || 'active',
@@ -756,11 +1069,6 @@ export function applyOpeningWorldPackage(worldState, opening) {
         stakes: display.conflictStakes || opening.conflict.stakesEn,
         incitingEvent: display.incitingEvent || opening.conflict.incitingEventEn,
     };
-    next.agenda = (opening.agenda || []).map((item, index) => ({
-        ...item,
-        timeLabel: display.agendaTimes?.[index] || item.timeLabelEn,
-        label: display.agendaLabels?.[index] || item.labelEn,
-    }));
     next.clues = [];
     next.timeline = [{
         clock: opening.clock,
@@ -795,11 +1103,14 @@ export function applyOpeningWorldPackage(worldState, opening) {
     next.scene.nextSceneIntent = opening.nextSceneIntent
         ? structuredClone(opening.nextSceneIntent)
         : createFallbackNextSceneIntent(next);
+    const openingPackage =
+        structuredClone(opening);
+    delete openingPackage.agenda;
     next.opening = {
         status: 'narrating',
         attempt: Number(next.opening?.attempt || 0),
         error: '',
-        package: structuredClone(opening),
+        package: openingPackage,
         committedAt: new Date().toISOString(),
     };
     next.directorFoundation = {
@@ -807,9 +1118,9 @@ export function applyOpeningWorldPackage(worldState, opening) {
         error: '',
         committedAt: new Date().toISOString(),
     };
-    return migrateActorPresentationState(
+    return assertActorContextStateV1(
         next,
-    ).state;
+    );
 }
 
 export function applyDirectorFoundation(worldState, foundation) {
@@ -818,114 +1129,130 @@ export function applyDirectorFoundation(worldState, foundation) {
         throw new Error(validation.errors.join('；'));
     }
     const next = structuredClone(worldState);
-    const previousProfiles = new Map(
-        (next.actorLibrary || []).map(actor => [
-            actor.id,
-            normalizeActorMemoryProfile(actor),
-        ]),
-    );
-    const currentActors = new Map(
-        (next.actors || []).map(actor => [actor.id, actor]),
-    );
-    next.actorLibrary = foundation.actorLibrary.map(actor => {
-        const previous = previousProfiles.get(actor.id);
-        return normalizeActorMemoryProfile({
-            ...actor,
-            name:
-                actor.display?.name ||
-                actor.name ||
-                actor.nameEn,
-            aliases:
-                actor.aliases || [],
-            role: actor.display?.role || actor.roleEn,
-            relationshipToPlayer:
-                actor.display?.relationshipToPlayer ||
-                actor.relationshipToPlayerEn,
-            firstImpressionOfPlayerEn:
-                previous
-                    ?.firstImpressionOfPlayerEn ||
-                actor.firstImpressionOfPlayerEn ||
-                '',
-            firstImpressionOfPlayer:
-                previous
-                    ?.firstImpressionOfPlayer ||
-                actor.display
-                    ?.firstImpressionOfPlayer ||
-                actor.firstImpressionOfPlayerEn ||
-                '',
-            firstImpressionClock:
-                previous
-                    ?.firstImpressionClock ||
-                (
-                    currentActors.has(actor.id)
-                        ? next.clock
-                        : ''
-                ),
-            firstImpressionTurn:
-                previous
-                    ?.firstImpressionTurn ||
-                0,
-            firstImpressionPending:
-                currentActors.has(actor.id) &&
-                !(
-                    previous
-                        ?.firstImpressionOfPlayerEn ||
-                    actor
-                        .firstImpressionOfPlayerEn
-                ),
-            impressionOfPlayerEn:
-                previous?.impressionOfPlayerEn ||
-                actor.impressionOfPlayerEn ||
-                actor.relationshipToPlayerEn,
-            impressionOfPlayer:
-                previous?.impressionOfPlayer ||
-                actor.display?.impressionOfPlayer ||
-                actor.impressionOfPlayerEn ||
-                actor.display?.relationshipToPlayer ||
-                actor.relationshipToPlayerEn,
-            impressionUpdatedClock:
-                previous?.impressionUpdatedClock || '',
-            impressionUpdatedTurn:
-                previous?.impressionUpdatedTurn || 0,
-            relationshipTags:
-                previous?.relationshipTags,
-            introducedClock:
-                previous?.introducedClock ||
-                (
-                    currentActors.has(
-                        actor.id,
-                    )
-                        ? next.clock
-                        : ''
-                ),
-            introducedTurn:
-                previous?.introducedTurn ||
-                (
-                    currentActors.has(
-                        actor.id,
-                    )
-                        ? Number(
-                            next.turn
-                                ?.count || 0,
-                        )
-                        : null
-                ),
-            sharedMemories:
-                previous?.sharedMemories,
-            publicDescription:
-                actor.display?.publicDescription ||
-                actor.publicDescriptionEn,
-            publicBackground:
-                actor.display?.publicBackground ||
-                actor.publicBackgroundEn,
-            personality:
-                actor.display?.personality ||
-                actor.personalityEn,
-            speechStyle:
-                actor.display?.speechStyle ||
-                actor.speechStyleEn,
-        }, currentActors.get(actor.id));
-    });
+    const foundationIds =
+        new Set(
+            foundation.actorLibrary
+                .map(actor =>
+                    actor.id),
+        );
+    for (const core of [
+        ...(next.actorLibrary || []),
+    ]) {
+        if (
+            !foundationIds.has(
+                core.id,
+            )
+        ) {
+            removeActorV1(
+                next,
+                core.id,
+            );
+        }
+    }
+    const currentActors =
+        new Map(
+            (next.actors || [])
+                .map(actor => [
+                    actor.id,
+                    actor,
+                ]),
+        );
+    const currentCores =
+        new Map(
+            (next.actorLibrary || [])
+                .map(actor => [
+                    actor.id,
+                    actor,
+                ]),
+        );
+    for (const profile of (
+        foundation.actorLibrary
+    )) {
+        const runtime =
+            currentActors.get(
+                profile.id,
+            ) || {};
+        upsertActorV1(
+            next,
+            {
+                actorId:
+                    profile.id,
+                coreSource:
+                    actorCoreSource(
+                        profile,
+                        currentCores.get(
+                            profile.id,
+                        )?.cast || {
+                            origin:
+                                profile
+                                    .canonCatalogId
+                                    ? 'canon_catalog'
+                                    : 'foundation',
+                            introducedClock:
+                                runtime.present
+                                    ? next.clock
+                                    : '',
+                            introducedTurn:
+                                runtime.present
+                                    ? Number(
+                                        next.turn
+                                            ?.count ||
+                                        0,
+                                    )
+                                    : null,
+                        },
+                    ),
+                runtimeSource: {
+                    mapId:
+                        runtime.mapId ||
+                        '',
+                    roomId:
+                        runtime.roomId ||
+                        '',
+                    present:
+                        runtime.present ===
+                        true,
+                    lifeStatus:
+                        runtime.lifeStatus ||
+                        'alive',
+                    lifeStatusPermanent:
+                        runtime
+                            .lifeStatusPermanent ===
+                        true,
+                    lifeStatusDetailEn:
+                        runtime
+                            .lifeStatusDetailEn ||
+                        'Alive.',
+                    lifeStatusSinceClock:
+                        runtime
+                            .lifeStatusSinceClock ||
+                        '',
+                    currentActivityEn:
+                        runtime
+                            .currentActivityEn ||
+                        '',
+                    currentIntentEn:
+                        runtime
+                            .currentIntentEn ||
+                        '',
+                    currentGoalEn:
+                        runtime
+                            .currentGoalEn ||
+                        '',
+                    temporary:
+                        runtime.temporary ===
+                        true,
+                },
+            },
+        );
+        if (runtime.present === true) {
+            recordOpeningAppraisals(
+                next,
+                runtime,
+                profile,
+            );
+        }
+    }
     next.storyArcs = [{
         ...structuredClone(foundation.storyArc),
         status: foundation.storyArc.status || 'active',
@@ -933,35 +1260,6 @@ export function applyDirectorFoundation(worldState, foundation) {
             ? foundation.storyArc.revealedClueIds
             : [],
     }];
-    next.actors = next.actors.map(actor => {
-        const profile = next.actorLibrary.find(item => item.id === actor.id);
-        return profile ? {
-            ...actor,
-            name: profile.name,
-            role: profile.role,
-            relationshipToPlayer: profile.relationshipToPlayer,
-            firstImpressionOfPlayerEn:
-                profile
-                    .firstImpressionOfPlayerEn,
-            firstImpressionOfPlayer:
-                profile
-                    .firstImpressionOfPlayer,
-            firstImpressionClock:
-                profile.firstImpressionClock,
-            firstImpressionTurn:
-                profile.firstImpressionTurn,
-            firstImpressionPending:
-                profile.firstImpressionPending,
-            impressionOfPlayerEn:
-                profile.impressionOfPlayerEn,
-            impressionOfPlayer:
-                profile.impressionOfPlayer,
-            impressionUpdatedClock:
-                profile.impressionUpdatedClock,
-            impressionUpdatedTurn:
-                profile.impressionUpdatedTurn,
-        } : actor;
-    });
     next.clues = (next.clues || []).filter(clue => clue.discovered === true);
     next.timeline = Array.isArray(next.timeline) && next.timeline.length
         ? next.timeline
@@ -974,5 +1272,7 @@ export function applyDirectorFoundation(worldState, foundation) {
         error: '',
         committedAt: new Date().toISOString(),
     };
-    return next;
+    return assertActorContextStateV1(
+        next,
+    );
 }

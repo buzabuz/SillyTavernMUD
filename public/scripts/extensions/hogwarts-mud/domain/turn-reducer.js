@@ -5,17 +5,16 @@ import {
 } from './actor-identity.js';
 
 import {
-    upsertSharedMemory,
-} from './actor-memory-migration.js';
+    settleCalendarAtClock,
+} from './calendar-reducer.js';
 
 import {
-    getActorMemoryEntries,
-} from './actor-memory-reducer.js';
-
-import {
-    hasGenericImpression,
-    normalizeActorMemoryProfile,
-} from './actor-memory.js';
+    assertActorContextStateV1,
+    markActorIntroducedV1,
+    recordActorAppraisalV1,
+    updateActorRuntimeV1,
+    upsertActorV1,
+} from './actor-context-runtime.js';
 
 import {
     migrateActorPresentationState,
@@ -28,6 +27,10 @@ import {
 import {
     applyMaterialEvents,
 } from './material-state.js';
+
+import {
+    applyNpcIdentityObservations,
+} from './npc-identity-observation.js';
 
 import {
     settleSpellProgress,
@@ -52,6 +55,49 @@ import {
 import {
     validateTurnTransaction,
 } from './turn-validation.js';
+
+export function createPendingEventBoundary(
+    worldState,
+    transaction,
+    committedTurn,
+    hasUnreviewedMemory,
+) {
+    const boundaryId =
+        `${
+            worldState.scene?.id ||
+            'scene'
+        }:event:${committedTurn}`;
+    return {
+        id: boundaryId,
+        boundaryId,
+        timelineEpoch:
+            String(
+                worldState
+                    .timelineEpoch ||
+                '',
+            ),
+        stateRevision:
+            Math.max(
+                0,
+                Number(
+                    worldState
+                        .stateRevision,
+                ) || 0,
+            ),
+        status: 'pending',
+        sceneId:
+            worldState.scene?.id ||
+            '',
+        turn: committedTurn,
+        clock: worldState.clock,
+        publicEventEn:
+            transaction.publicEventEn,
+        hasUnreviewedMemory,
+        intentRefreshed: false,
+        intentRefreshStatus:
+            'pending',
+    };
+}
 
 export function applyTurnTransaction(worldState, transaction, playerAction = '') {
     const validation = validateTurnTransaction(
@@ -82,6 +128,13 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
         ? requestedMinutes
         : Math.max(15, requestedMinutes);
     next.clock = advanceWorldClock(next.clock, elapsedMinutes);
+    if (next.calendar) {
+        next =
+            settleCalendarAtClock(
+                next,
+                next.clock,
+            );
+    }
     if (transaction.checkResolution) {
         next.checks = [
             ...(next.checks || []),
@@ -117,160 +170,127 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
     ).forEach(actor => {
         const update =
             actorUpdates.get(actor.id);
-        next.actors ??= [];
-        next.actors.push({
-            ...structuredClone(actor),
-            name:
-                actor.name ||
-                actor.nameEn,
-            aliases:
-                buildActorNameAliases(
-                    actor.nameEn,
-                    actor.name,
+        upsertActorV1(next, {
+            actorId: actor.id,
+            coreSource: {
+                ...structuredClone(
+                    actor,
                 ),
-            relationshipToPlayerEn:
-                'scene acquaintance',
-            relationshipToPlayer:
-                '场景中的临时相识',
-            currentActivityEn:
-                update
-                    ?.currentActivityEn ||
-                actor.currentActivityEn,
-            currentActivity:
-                update
-                    ?.currentActivity ||
-                update
-                    ?.currentActivityEn ||
-                actor.currentActivityEn,
-            present:
-                settledPresentActorIds
-                    ?.has(actor.id) ??
-                true,
-            temporary: true,
-            provisionalActorId:
-                actor.id,
-            identityStatus:
-                'provisional',
-            temporaryMemories: [],
-            lifeStatus: 'alive',
-            lifeStatusPermanent:
-                false,
-            lifeStatusDetailEn:
-                'Alive.',
-            lifeStatusDetail:
-                '存活。',
-            lifeStatusSinceClock: '',
-            mapId:
-                update?.mapId ||
-                next.map?.activeMapId,
-            roomId:
-                update?.roomId ||
-                next.map
-                    ?.currentLocalNodeId,
-            source:
-                'scene_temporary_actor',
-            introducedClock:
-                next.clock,
-            introducedTurn:
-                committedTurn,
-        });
-    });
-    next.actorLibrary = (next.actorLibrary || []).map(
-        profile => {
-            const update = actorUpdates.get(profile.id);
-            let normalized =
-                normalizeActorMemoryProfile(profile);
-            if (!update) return normalized;
-            if (
-                update
-                    .firstImpressionOfPlayerEn
-            ) {
-                const seedCurrent =
-                    hasGenericImpression(
-                        normalized
-                            .impressionOfPlayerEn,
-                    );
-                normalized = {
-                    ...normalized,
-                    firstImpressionOfPlayerEn:
-                        update
-                            .firstImpressionOfPlayerEn,
-                    firstImpressionOfPlayer:
-                        update
-                            .firstImpressionOfPlayer ||
-                        update
-                            .firstImpressionOfPlayerEn,
-                    firstImpressionClock:
-                        next.clock,
-                    firstImpressionTurn:
+                aliases:
+                    buildActorNameAliases(
+                        actor.nameEn,
+                        actor.name,
+                    ),
+                cast: {
+                    origin:
+                        'scene_temporary',
+                    introducedClock:
+                        next.clock ||
+                        'unknown',
+                    introducedTurn:
                         committedTurn,
-                    firstImpressionPending:
-                        false,
-                    ...(seedCurrent
-                        ? {
-                            impressionOfPlayerEn:
-                                update
-                                    .firstImpressionOfPlayerEn,
-                            impressionOfPlayer:
-                                update
-                                    .firstImpressionOfPlayer ||
-                                update
-                                    .firstImpressionOfPlayerEn,
-                            impressionUpdatedClock:
-                                next.clock,
-                            impressionUpdatedTurn:
-                                committedTurn,
-                        }
-                        : {}),
-                };
-            }
-            if (update.impressionOfPlayerEn) {
-                normalized = {
-                    ...normalized,
-                    impressionOfPlayerEn:
-                        update.impressionOfPlayerEn,
-                    impressionOfPlayer:
-                        update.impressionOfPlayer ||
-                        update.impressionOfPlayerEn,
-                    impressionUpdatedClock: next.clock,
-                    impressionUpdatedTurn: committedTurn,
-                };
-            }
-            if (update.memoryUpdate?.summaryEn) {
-                normalized = upsertSharedMemory(
-                    normalized,
-                    {
-                        id: `${profile.id}_t${committedTurn}_everyday`,
-                        summaryEn:
-                            update.memoryUpdate.summaryEn,
-                        summary:
-                            update.memoryUpdate.summary ||
-                            update.memoryUpdate.summaryEn,
-                        firstClock: next.clock,
-                        lastClock: next.clock,
-                        createdTurn: committedTurn,
-                        updatedTurn: committedTurn,
-                        source: 'low',
-                        significance:
-                            update.memoryUpdate
-                                .significance,
-                        lastingImpactEn:
-                            update.memoryUpdate
-                                .lastingImpactEn ||
-                            '',
-                        lastingImpact:
-                            update.memoryUpdate
-                                .lastingImpact ||
-                            update.memoryUpdate
-                                .lastingImpactEn ||
-                            '',
-                    },
-                    'everyday',
-                );
-            }
-            return normalized;
-        },
-    );
+                },
+            },
+            runtimeSource: {
+                mapId:
+                    update?.mapId ||
+                    next.map
+                        ?.activeMapId,
+                roomId:
+                    update?.roomId ||
+                    next.map
+                        ?.currentLocalNodeId,
+                present:
+                    settledPresentActorIds
+                        ?.has(actor.id) ??
+                    true,
+                lifeStatus: 'alive',
+                lifeStatusPermanent:
+                    false,
+                lifeStatusDetailEn:
+                    'Alive.',
+                lifeStatusSinceClock:
+                    '',
+                currentActivityEn:
+                    update
+                        ?.currentActivityEn ||
+                    actor
+                        .currentActivityEn,
+                currentIntentEn:
+                    update
+                        ?.currentIntentEn ||
+                    '',
+                currentGoalEn: '',
+                temporary: true,
+            },
+        });
+        markActorIntroducedV1(
+            next,
+            actor.id,
+            {
+                turn:
+                    committedTurn,
+            },
+        );
+    });
+    for (const update of actorUpdates.values()) {
+        if (
+            !next.actorLibrary.some(actor =>
+                actor.id === update.id)
+        ) {
+            continue;
+        }
+        if (
+            update
+                .firstImpressionOfPlayerEn
+        ) {
+            recordActorAppraisalV1(
+                next,
+                {
+                    actorId: update.id,
+                    summaryEn:
+                        update
+                            .firstImpressionOfPlayerEn,
+                    kind:
+                        'first_impression',
+                    tier: 'recent',
+                    firstImpression:
+                        true,
+                },
+            );
+        }
+        if (update.impressionOfPlayerEn) {
+            recordActorAppraisalV1(
+                next,
+                {
+                    actorId: update.id,
+                    summaryEn:
+                        update
+                            .impressionOfPlayerEn,
+                    kind:
+                        `turn_impression_${committedTurn}`,
+                    tier: 'recent',
+                },
+            );
+        }
+        if (
+            update.memoryUpdate
+                ?.summaryEn
+        ) {
+            recordActorAppraisalV1(
+                next,
+                {
+                    actorId: update.id,
+                    summaryEn:
+                        update.memoryUpdate
+                            .summaryEn,
+                    kind:
+                        `turn_memory_${committedTurn}`,
+                    tier: 'everyday',
+                },
+            );
+        }
+    }
     next =
         applyWitnessedEventMemories(
             next,
@@ -282,117 +302,40 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
                     committedTurn,
             },
         );
-    const profiles = new Map(
-        next.actorLibrary.map(profile => [
-            profile.id,
-            profile,
-        ]),
-    );
-    next.actors = (next.actors || []).map(actor => {
-        const update = actorUpdates.get(actor.id);
-        const profile = profiles.get(actor.id);
-        if (!update && !profile) return actor;
-        const temporaryMemories =
-            actor.temporary &&
-            update?.memoryUpdate
-                ?.summaryEn
-                ? [
-                    ...(
-                        actor
-                            .temporaryMemories ||
-                        []
-                    ),
-                    {
-                        id:
-                            `${actor.id}_t${committedTurn}_temporary`,
-                        summaryEn:
-                            update
-                                .memoryUpdate
-                                .summaryEn,
-                        summary:
-                            update
-                                .memoryUpdate
-                                .summary ||
-                            update
-                                .memoryUpdate
-                                .summaryEn,
-                        clock:
-                            next.clock,
-                        turn:
-                            committedTurn,
-                    },
-                ].slice(-8)
-                : actor
-                    .temporaryMemories;
-        return {
-            ...actor,
-            present:
-                settledPresentActorIds
-                    ? settledPresentActorIds
-                        .has(actor.id)
-                    : update?.present ??
-                        actor.present,
-            mapId: update?.mapId || actor.mapId ||
-                next.map?.activeMapId,
-            roomId: update?.roomId || actor.roomId ||
-                next.map?.currentLocalNodeId,
-            currentActivityEn:
-                update?.currentActivityEn ||
-                actor.currentActivityEn,
-            currentIntentEn:
-                update?.currentIntentEn ||
-                actor.currentIntentEn,
-            currentActivity:
-                update?.currentActivity ||
-                update?.currentActivityEn ||
-                actor.currentActivity,
-            currentIntent:
-                update?.currentIntent ||
-                update?.currentIntentEn ||
-                actor.currentIntent,
-            firstImpressionOfPlayerEn:
-                profile
-                    ?.firstImpressionOfPlayerEn ||
-                actor
-                    .firstImpressionOfPlayerEn,
-            firstImpressionOfPlayer:
-                profile
-                    ?.firstImpressionOfPlayer ||
-                actor
-                    .firstImpressionOfPlayer,
-            firstImpressionClock:
-                profile
-                    ?.firstImpressionClock ||
-                actor.firstImpressionClock,
-            firstImpressionTurn:
-                profile
-                    ?.firstImpressionTurn ||
-                actor.firstImpressionTurn,
-            firstImpressionPending:
-                profile
-                    ?.firstImpressionPending ||
-                false,
-            impressionOfPlayerEn:
-                profile?.impressionOfPlayerEn ||
-                actor.impressionOfPlayerEn,
-            impressionOfPlayer:
-                profile?.impressionOfPlayer ||
-                actor.impressionOfPlayer,
-            impressionUpdatedClock:
-                profile?.impressionUpdatedClock ||
-                actor.impressionUpdatedClock,
-            impressionUpdatedTurn:
-                profile?.impressionUpdatedTurn ||
-                actor.impressionUpdatedTurn,
-            ...(actor.temporary
-                ? {
-                    temporaryMemories:
-                        temporaryMemories ||
-                        [],
-                }
-                : {}),
-        };
-    });
+    for (const actor of next.actors) {
+        const update =
+            actorUpdates.get(actor.id);
+        updateActorRuntimeV1(
+            next,
+            actor.id,
+            {
+                present:
+                    settledPresentActorIds
+                        ? settledPresentActorIds
+                            .has(actor.id)
+                        : update?.present ??
+                            actor.present,
+                mapId:
+                    update?.mapId ||
+                    actor.mapId ||
+                    next.map
+                        ?.activeMapId,
+                roomId:
+                    update?.roomId ||
+                    actor.roomId ||
+                    next.map
+                        ?.currentLocalNodeId,
+                currentActivityEn:
+                    update
+                        ?.currentActivityEn ??
+                    actor.currentActivityEn,
+                currentIntentEn:
+                    update
+                        ?.currentIntentEn ??
+                    actor.currentIntentEn,
+            },
+        );
+    }
     const itemOperations =
         (
             transaction
@@ -457,6 +400,27 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
             turn: committedTurn,
         },
     );
+    next =
+        applyNpcIdentityObservations(
+            next,
+            transaction
+                .identityObservations ||
+            [],
+            {
+                clock:
+                    next.clock,
+                eventId:
+                    transaction
+                        .eventKnowledge
+                        ?.eventId ||
+                    '',
+                sourceMessageIds:
+                    transaction
+                        .eventKnowledge
+                        ?.sourceMessageIds ||
+                    [],
+            },
+        ).state;
     if (next.scene) {
         next.scene.itemStates =
             createSceneItemStates(
@@ -508,16 +472,23 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
             0,
         );
     const hasUnreviewedMemory =
-        (next.actorLibrary || [])
-            .some(profile =>
-                getActorMemoryEntries(
-                    profile,
-                ).some(memory =>
-                    Number(
-                        memory.updatedTurn ||
-                        0,
-                    ) >
-                    lastReviewedTurn));
+        committedTurn >
+            lastReviewedTurn &&
+        (
+            [...actorUpdates.values()]
+                .some(update =>
+                    Boolean(
+                        update.memoryUpdate
+                            ?.summaryEn ||
+                        update
+                            .impressionOfPlayerEn,
+                    )) ||
+            Boolean(
+                transaction
+                    .eventKnowledge
+                    ?.eventId,
+            )
+        );
     if (
         transaction.eventEnded ===
             true
@@ -529,26 +500,13 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
             error: '',
             triggerMode:
                 'event_boundary',
-            pendingEventBoundary: {
-                id: `${
-                    next.scene?.id ||
-                    'scene'
-                }:event:${committedTurn}`,
-                status: 'pending',
-                sceneId:
-                    next.scene?.id ||
-                    '',
-                turn: committedTurn,
-                clock: next.clock,
-                publicEventEn:
-                    transaction
-                        .publicEventEn,
-                hasUnreviewedMemory,
-                intentRefreshed:
-                    false,
-                intentRefreshStatus:
-                    'pending',
-            },
+            pendingEventBoundary:
+                createPendingEventBoundary(
+                    next,
+                    transaction,
+                    committedTurn,
+                    hasUnreviewedMemory,
+                ),
         };
         delete next.memoryDirector
             .reviewAfterTurns;
@@ -566,7 +524,9 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
             playerAction,
             transaction,
         );
-    return migrateActorPresentationState(
-        next,
-    ).state;
+    return assertActorContextStateV1(
+        migrateActorPresentationState(
+            next,
+        ).state,
+    );
 }

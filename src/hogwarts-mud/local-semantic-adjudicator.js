@@ -8,6 +8,7 @@ import {
 import { z } from 'zod';
 
 import { getConfigValue } from '../util.js';
+import { IDENTITY_OBSERVATION_JSON_SCHEMA, IDENTITY_OBSERVATION_RESULT_SCHEMA, IDENTITY_OBSERVATION_SYSTEM_RULES } from './identity-observation-contract.js';
 
 const SCHEMA_VERSION = 1;
 const DEFAULT_API_URL =
@@ -371,6 +372,8 @@ const postTurnResultSchema =
                     confidenceSchema,
             }).strict(),
         ).max(16),
+        identityObservations:
+            z.array(IDENTITY_OBSERVATION_RESULT_SCHEMA).max(16),
         perception:
             perceptionSchema,
     }).strict();
@@ -758,6 +761,7 @@ const postTurnJsonSchema = {
         'materialEvents',
         'eventBoundary',
         'actorUpdates',
+        'identityObservations',
         'perception',
     ],
     properties: {
@@ -844,8 +848,8 @@ const postTurnJsonSchema = {
                 },
             },
         },
-        perception:
-            perceptionJsonSchema,
+        identityObservations: { type: 'array', maxItems: 16, items: IDENTITY_OBSERVATION_JSON_SCHEMA },
+        perception: perceptionJsonSchema,
     },
 };
 
@@ -1182,7 +1186,7 @@ async function ensureOllamaServer(
     }
 }
 
-function enqueue(operation) {
+export function enqueueLocalSemanticOperation(operation) {
     const current =
         requestQueue.then(
             operation,
@@ -1193,7 +1197,7 @@ function enqueue(operation) {
     return current;
 }
 
-async function callStructuredModel({
+export async function callStructuredModel({
     system,
     input,
     jsonSchema,
@@ -1416,6 +1420,7 @@ Actor rules:
 - Actor evidence must be one concise sentence no longer than 500 characters.
 - Keep actor updates sparse and evidence-based.
 
+${IDENTITY_OBSERVATION_SYSTEM_RULES}
 Perception rules:
 - Return exactly one primary event perception for the enacted turn. Describe how the completed result could be perceived, not merely what the player intended.
 - visualScope is none, target, nearby, room, or area. audibleScope is none, target, nearby, room, or adjacent.
@@ -1430,7 +1435,7 @@ Perception rules:
 Calibration examples:
 1. Narrative "Harry turned and walked through the great doors into the Entrance Hall, leaving the breakfast table behind." => no material event; eventBoundary ended true; one Harry actor update with presence absent, roomId entrance_hall, and that exact sentence as evidence.
 2. Player "Tina把二十八只玩具熊排列在床头，然后换上条纹睡衣。" => object_placed for the bears and outfit_changed for striped pyjamas. No updates for unrelated actors.
-3. Pure dialogue with no physical or presence change => empty materialEvents and actorUpdates; perception still describes that primary exchange.
+3. Pure dialogue with no physical or presence change => empty materialEvents, actorUpdates, and identityObservations; perception still describes that primary exchange.
 4. A failed secret spell sends Ron into the rafters in front of class => visualScope room, audibleScope room, concealment attempted, Ron as a direct participant.
 5. A note quietly passed to Harry without discovery => visualScope target, audibleScope none, concealment successful, Harry as a direct participant.`;
 
@@ -1564,7 +1569,7 @@ export function translateText(
         glossary = [],
     } = {},
 ) {
-    return enqueue(async () => {
+    return enqueueLocalSemanticOperation(async () => {
         const source =
             String(
                 text || '',
@@ -1712,7 +1717,7 @@ export function adjudicateTurn(
         model = '',
     } = {},
 ) {
-    return enqueue(() =>
+    return enqueueLocalSemanticOperation(() =>
         callStructuredModel({
             system:
                 PRE_TURN_SYSTEM,
@@ -1814,7 +1819,7 @@ export function observeTurn(
         inventoryModel = '',
     } = {},
 ) {
-    return enqueue(async () => {
+    return enqueueLocalSemanticOperation(async () => {
         const {
             inventory = [],
             ...coreInput

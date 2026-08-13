@@ -13,11 +13,21 @@ import {
     validatePerceptionContract,
 } from '../public/scripts/extensions/hogwarts-mud/helpers.js';
 import {
+    migrateActorContextV1,
+} from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js';
+import {
+    buildActorDossierViewModel,
+} from '../public/scripts/extensions/hogwarts-mud/domain/actor-dossier-projection.js';
+import {
     validateObservedPerception,
 } from '../src/hogwarts-mud/local-semantic-adjudicator.js';
 import {
     applyWitnessedEventMemories,
 } from '../public/scripts/extensions/hogwarts-mud/domain/event-memory.js';
+import {
+    markCommittedMessageEventsKnownToPlayer,
+    reduceEventKnowledge,
+} from '../public/scripts/extensions/hogwarts-mud/presence-witness-contract.js';
 
 const roomId = 'charms_classroom';
 const mapId = 'hogwarts_castle';
@@ -98,6 +108,38 @@ function makePerception(overrides = {}) {
         source: 'post_turn_observer',
         ...overrides,
     };
+}
+
+function strictActorContextState() {
+    return migrateActorContextV1({
+        clock:
+            '1991-09-02 · 12:30',
+        turn: {
+            count: 96,
+        },
+        actors:
+            actors.map(actor => ({
+                ...actor,
+                currentActivityEn:
+                    'Attending Charms.',
+                currentIntentEn:
+                    'Watch the lesson.',
+                currentGoalEn: '',
+                temporary: false,
+            })),
+        actorLibrary:
+            actors.map(actor => ({
+                id: actor.id,
+                nameEn: actor.id,
+                roleEn: 'Student',
+                sharedMemories: {
+                    core: [],
+                    recent: [],
+                    everyday: [],
+                },
+            })),
+        eventKnowledge: [],
+    }).state;
 }
 
 test('presence reducer keeps non-interacting classroom occupants until movement proves they left', () => {
@@ -324,22 +366,8 @@ test('room-wide notable event knowledge becomes neutral memory for every witness
                     .evidenceText,
             ],
         });
-    const state = {
-        clock:
-            '1991-09-02 · 12:30',
-        turn: {
-            count: 96,
-        },
-        actorLibrary:
-            actors.map(actor => ({
-                id: actor.id,
-                sharedMemories: {
-                    core: [],
-                    recent: [],
-                    everyday: [],
-                },
-            })),
-    };
+    const state =
+        strictActorContextState();
     const transaction = {
         publicEvent:
             '蒂娜在公开的魔法反噬中毁掉了哈利的备用羽毛笔。',
@@ -355,35 +383,45 @@ test('room-wide notable event knowledge becomes neutral memory for every witness
             first,
             transaction,
         );
-    const witnessProfiles =
-        first.actorLibrary
-            .filter(profile =>
+    const witnessMemories =
+        Object.entries(
+            first
+                .actorMemoryIndex
+                .byActorId,
+        )
+            .filter(([
+                actorId,
+            ]) =>
                 resolution
                     .witnessActorIds
                     .includes(
-                        profile.id,
-                    ));
+                        actorId,
+                    ))
+            .map(([
+                ,
+                memory,
+            ]) => memory);
 
     assert.equal(
-        witnessProfiles.length,
+        witnessMemories.length,
         roomActorIds.length,
     );
     assert.equal(
-        witnessProfiles.every(profile =>
-            profile
-                .sharedMemories
+        witnessMemories.every(memory =>
+            memory
                 .everyday
-                .some(memory =>
-                    memory.eventId ===
+                .some(reference =>
+                    reference.recordType ===
+                        'event' &&
+                    reference.recordId ===
                     eventKnowledge
-                        .eventId &&
-                    memory.source ===
-                    'event_witness')),
+                        .eventId)),
         true,
     );
     assert.deepEqual(
-        second.actorLibrary,
-        first.actorLibrary,
+        second
+            .actorMemoryIndex,
+        first.actorMemoryIndex,
     );
     const privateEvent = {
         ...eventKnowledge,
@@ -402,15 +440,161 @@ test('room-wide notable event knowledge becomes neutral memory for every witness
             'harry',
         ],
     };
-    assert.deepEqual(
+    const privateResult =
         applyWitnessedEventMemories(
             state,
             {
                 eventKnowledge:
                     privateEvent,
             },
-        ),
-        state,
+        );
+    assert.equal(
+        privateResult.eventKnowledge
+            .some(event =>
+                event.eventId ===
+                    'private_event'),
+        true,
+    );
+    assert.equal(
+        Object.values(
+            privateResult
+                .actorMemoryIndex
+                .byActorId,
+        ).some(memory =>
+            memory.everyday.some(
+                reference =>
+                    reference.recordId ===
+                    'private_event',
+            )),
+        false,
+    );
+});
+
+test('Event player ACL is false by default, ignores model input, and becomes visible only after committed writer proof', () => {
+    const perception =
+        makePerception();
+    const resolution =
+        resolveEventWitnesses({
+            perception,
+            localPresence,
+            actors,
+        });
+    const proposed =
+        normalizeEventKnowledge({
+            sceneId:
+                'first_charms_class',
+            sourceMessageIds: [202],
+            summaryEn:
+                'Tina levitated Ron instead of the feather.',
+            ...resolution,
+            perception,
+            knownToPlayer: true,
+            source:
+                'post_turn_observer',
+        }, {
+            actors,
+            cohortIds: [
+                cohort.id,
+            ],
+            sourceTexts: [
+                perception.evidenceText,
+            ],
+        });
+    assert.equal(
+        proposed.knownToPlayer,
+        false,
+    );
+
+    const base =
+        strictActorContextState();
+    const withMemory =
+        applyWitnessedEventMemories(
+            base,
+            {
+                eventKnowledge:
+                    proposed,
+            },
+        );
+    assert.equal(
+        withMemory
+            .eventKnowledge[0]
+            .knownToPlayer,
+        false,
+    );
+    assert.equal(
+        buildActorDossierViewModel(
+            withMemory,
+            'ron',
+            'player',
+        ).memories.everyday
+            .length,
+        0,
+    );
+
+    const modelRetry =
+        reduceEventKnowledge(
+            withMemory,
+            {
+                ...proposed,
+                knownToPlayer: true,
+            },
+        );
+    assert.equal(
+        modelRetry[0]
+            .knownToPlayer,
+        false,
+    );
+
+    const committed =
+        markCommittedMessageEventsKnownToPlayer(
+            withMemory,
+            {
+                is_user: false,
+                is_system: false,
+                extra: {
+                    hogwartsMud: {
+                        role:
+                            'scene_turn',
+                        segments: [{
+                            type:
+                                'narration',
+                            textEn:
+                                'Ron drops back into his chair.',
+                        }],
+                    },
+                },
+            },
+            202,
+            [proposed.eventId],
+        );
+    assert.equal(
+        committed
+            .eventKnowledge[0]
+            .knownToPlayer,
+        true,
+    );
+    assert.equal(
+        buildActorDossierViewModel(
+            committed,
+            'ron',
+            'player',
+        ).memories.everyday[0]
+            .recordId,
+        proposed.eventId,
+    );
+
+    const preserved =
+        reduceEventKnowledge(
+            committed,
+            {
+                ...proposed,
+                knownToPlayer: false,
+            },
+        );
+    assert.equal(
+        preserved[0]
+            .knownToPlayer,
+        true,
     );
 });
 
