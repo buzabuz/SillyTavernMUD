@@ -11,9 +11,6 @@ import {
     resolvePlayerAddressing,
 } from './actor-identity.js';
 import {
-    normalizeSharedMemories,
-} from './actor-memory.js';
-import {
     getLocalMapDefinition,
     getMapRooms,
 } from './map-access.js';
@@ -92,24 +89,42 @@ export function buildStoryCastPolicy(
                 ]),
         ).values(),
     ];
-    const canonActorCount =
+    const runtimeById =
+        new Map(
+            (worldState.actors || [])
+                .filter(actor =>
+                    actor?.id)
+                .map(actor => [
+                    actor.id,
+                    actor,
+                ]),
+        );
+    const persistentProfiles =
         profiles.filter(actor =>
-            actor.source ===
-                'preset_location_resident' ||
-            actor.source ===
-                'canon_catalog' ||
+            runtimeById.get(actor.id)
+                ?.temporary !== true);
+    const canonActorCount =
+        persistentProfiles.filter(actor =>
+            Boolean(
+                actor.canonCatalogId,
+            ) ||
             Boolean(
                 findCanonCharacter(
                     actor.nameEn,
                 ),
             )).length;
     const generatedGuestCount =
-        profiles.filter(actor =>
-            actor.source ===
-                'pacing_public_guest')
+        persistentProfiles.filter(actor =>
+            !actor.canonCatalogId &&
+            [
+                'generated_guest',
+                'scene_temporary',
+            ].includes(
+                actor.cast?.origin,
+            ))
             .length;
     const storyActorCount =
-        profiles.length;
+        persistentProfiles.length;
     const metActorIds = new Set([
         ...(worldState.sceneArchive || [])
             .flatMap(scene =>
@@ -120,7 +135,8 @@ export function buildStoryCastPolicy(
             .map(actor => actor.id),
         ...profiles
             .filter(actor =>
-                actor.introducedClock)
+                actor.cast
+                    ?.introducedClock)
             .map(actor => actor.id),
     ]);
     const ageProfiles =
@@ -167,6 +183,38 @@ export function buildStoryCastPolicy(
                         ? edge.targetActorId
                         : edge.sourceActorId),
         );
+    const playerEdges =
+        (
+            worldState.socialGraph
+                ?.relationships ||
+            []
+        ).filter(edge =>
+            edge.sourceActorId ===
+                'player' ||
+            edge.targetActorId ===
+                'player');
+    const playerStructuralTags =
+        new Map();
+    playerEdges.forEach(edge => {
+        const actorId =
+            edge.sourceActorId ===
+                'player'
+                ? edge.targetActorId
+                : edge.sourceActorId;
+        const tags =
+            playerStructuralTags
+                .get(actorId) ||
+            new Set();
+        (
+            edge.structuralTags ||
+            []
+        ).forEach(tag =>
+            tags.add(tag));
+        playerStructuralTags.set(
+            actorId,
+            tags,
+        );
+    });
     const meaningfulRelationshipPattern =
         /(?:family|parent|guardian|friend|mentor|mentee|rival|enemy|romantic|spouse|partner|sibling|cousin|relative|家人|父|母|监护|朋友|导师|师生|对手|敌人|恋人|伴侣|亲属)/iu;
     const meaningfulRelationshipTags =
@@ -190,15 +238,25 @@ export function buildStoryCastPolicy(
                 ) {
                     return false;
                 }
-                const memories =
-                    normalizeSharedMemories(
-                        actor
-                            .sharedMemories,
-                    );
                 const memoryCount =
-                    memories.core.length +
-                    memories.recent.length +
-                    memories.everyday.length;
+                    [
+                        'core',
+                        'recent',
+                        'everyday',
+                    ].reduce(
+                        (total, tier) =>
+                            total +
+                            (
+                                worldState
+                                    .actorMemoryIndex
+                                    ?.byActorId
+                                    ?.[actor.id]
+                                    ?.[tier]
+                                    ?.length ||
+                                0
+                            ),
+                        0,
+                    );
                 const sceneCount = [
                     ...(
                         worldState
@@ -221,22 +279,23 @@ export function buildStoryCastPolicy(
                         actor.id,
                     )).length;
                 const priorityRelationship =
-                    (
-                        actor
-                            .relationshipTags ||
-                        []
-                    ).some(tag =>
+                    [
+                        ...(
+                            playerStructuralTags
+                                .get(actor.id) ||
+                            []
+                        ),
+                    ].some(tag =>
                         meaningfulRelationshipTags
                             .has(tag)) ||
                     meaningfulRelationshipPattern
                         .test([
-                            actor
-                                .relationshipToPlayerEn,
-                            actor
-                                .relationshipToPlayer,
-                        ]
-                            .filter(Boolean)
-                            .join(' '));
+                            ...(
+                                playerStructuralTags
+                                    .get(actor.id) ||
+                                []
+                            ),
+                        ].join(' '));
                 return (
                     priorityRelationship ||
                     (
@@ -263,11 +322,11 @@ export function buildStoryCastPolicy(
                 socialStageExcludedPattern
                     .test([
                         actor.roleEn,
-                        actor.role,
-                        actor
-                            .relationshipToPlayerEn,
-                        actor
-                            .relationshipToPlayer,
+                        ...(
+                            playerStructuralTags
+                                .get(actor.id) ||
+                            []
+                        ),
                     ]
                         .filter(Boolean)
                         .join(' ')))
@@ -315,11 +374,11 @@ export function buildStoryCastPolicy(
             /(?:professor|teacher|headmaster|headmistress|parent|guardian|mother|father|minister|authority)/i
                 .test([
                     actor.roleEn,
-                    actor.role,
-                    actor
-                        .relationshipToPlayerEn,
-                    actor
-                        .relationshipToPlayer,
+                    ...(
+                        playerStructuralTags
+                            .get(actor.id) ||
+                        []
+                    ),
                 ].filter(Boolean).join(' ')));
     const sceneActorIds = [
         ...(
@@ -570,24 +629,49 @@ export function buildActorSelectionPolicy(
                 .map(([actorId]) =>
                     actorId),
         );
+    const playerStructuralTags =
+        new Map();
     (
-        worldState.actorLibrary ||
+        worldState.socialGraph
+            ?.relationships ||
         []
-    ).forEach(actor => {
-        if (
+    )
+        .filter(edge =>
+            edge.sourceActorId ===
+                'player' ||
+            edge.targetActorId ===
+                'player')
+        .forEach(edge => {
+            const actorId =
+                edge.sourceActorId ===
+                    'player'
+                    ? edge.targetActorId
+                    : edge.sourceActorId;
+            const tags =
+                playerStructuralTags
+                    .get(actorId) ||
+                new Set();
             (
-                actor
-                    .relationshipTags ||
+                edge.structuralTags ||
                 []
-            ).some(tag =>
-                LONG_TERM_PURSUIT_TAGS
-                    .has(tag))
-        ) {
-            pursuedActorIds.add(
-                actor.id,
+            ).forEach(tag =>
+                tags.add(tag));
+            playerStructuralTags.set(
+                actorId,
+                tags,
             );
-        }
-    });
+        });
+    playerStructuralTags
+        .forEach((tags, actorId) => {
+            if (![...tags].some(tag =>
+                LONG_TERM_PURSUIT_TAGS
+                    .has(tag))) {
+                return;
+            }
+            pursuedActorIds.add(
+                actorId,
+            );
+        });
     const pendingBeat =
         worldState.pacingDirector
             ?.pendingBeat;

@@ -193,7 +193,7 @@ export function createSharedMemoryContextSelector(
 const STRUCTURED_CONTEXT_TRIM_KEYS =
     Object.freeze([
         'retrievedLocalKnowledge',
-        'actorContinuityCapsules',
+        'historicalKnowledgeEvidence',
         'contextPolicy',
     ]);
 
@@ -207,16 +207,32 @@ const STRUCTURED_CONTEXT_PRESERVE_KEYS =
         'targetWordRange',
         'ensemblePolicy',
         'clockBeforeTurn',
+        'calendar',
+        'calendarClock',
+        'calendarEntries',
+        'calendarStorySources',
+        'calendarMoment',
+        'timelineMoment',
+        'openingClock',
         'currentScene',
         'currentLocation',
         'currentRoomId',
+        'destinationAuthority',
+        'nextScene',
+        'presentActorStates',
         'movementResolution',
         'momentumDirective',
         'checkResolution',
         'mentionedKnownActors',
         'presentActors',
         'actorProfiles',
+        'authoritySnapshot',
+        'itemDirectives',
+        'authoritativeItems',
+        'actorKnowledge',
         'addressedActorKnowledge',
+        'actorContinuityCapsules',
+        'memoryActivationCapsules',
         'behavioralEnvironment',
         'currentRoomState',
         'currentMaterialState',
@@ -225,9 +241,142 @@ const STRUCTURED_CONTEXT_PRESERVE_KEYS =
         'pacingDirective',
     ]);
 
+const STRUCTURED_CONTEXT_DEGRADE_KEYS =
+    Object.freeze([
+        // Legacy alias of actorKnowledge. Keeping both can duplicate
+        // the largest actor-scoped context block.
+        'addressedActorKnowledge',
+        // These snapshots are already represented in authoritySnapshot.
+        'currentMaterialState',
+        'currentRoomState',
+        // The remaining fields add progressively less authority than the
+        // system contract and the core turn input.
+        'actorContinuityCapsules',
+        'presentActors',
+        'actorProfiles',
+        'behavioralEnvironment',
+        'spatialContext',
+        'actorKnowledge',
+        'memoryActivationCapsules',
+    ]);
+
+const STRUCTURED_REPAIR_INPUT_KEYS =
+    Object.freeze([
+        'originalSceneInput',
+        'originalRequest',
+    ]);
+
+const STRUCTURED_REPAIR_ENVELOPE_KEYS =
+    Object.freeze([
+        'authoritySnapshot',
+        'memoryActivationCapsules',
+        'validationConflict',
+        'validationError',
+    ]);
+
+function isStructuredObject(value) {
+    return Boolean(
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value),
+    );
+}
+
+function getStructuredRepairInput(
+    value,
+) {
+    const key =
+        STRUCTURED_REPAIR_INPUT_KEYS
+            .find(candidate =>
+                isStructuredObject(
+                    value?.[candidate],
+                ));
+    return key
+        ? {
+            key,
+            value: value[key],
+        }
+        : {
+            key: '',
+            value,
+        };
+}
+
+function compactInvalidSegment(
+    segment,
+) {
+    if (!isStructuredObject(segment)) {
+        return segment;
+    }
+    return Object.fromEntries(
+        [
+            'id',
+            'type',
+            'actorId',
+            'textEn',
+            'historicalClaims',
+            'sourceEventIds',
+        ]
+            .filter(key =>
+                Object.hasOwn(
+                    segment,
+                    key,
+                ))
+            .map(key => [
+                key,
+                structuredClone(
+                    segment[key],
+                ),
+            ]),
+    );
+}
+
+function compactRepairInvalidOutput(
+    value,
+    fallbackCharacters,
+) {
+    const wasString =
+        typeof value === 'string';
+    let parsed = value;
+    if (wasString) {
+        try {
+            parsed = JSON.parse(value);
+        } catch {
+            return value.slice(
+                0,
+                fallbackCharacters,
+            );
+        }
+    }
+    if (
+        !isStructuredObject(parsed) ||
+        !Array.isArray(parsed.segments)
+    ) {
+        return wasString
+            ? value.slice(
+                0,
+                fallbackCharacters,
+            )
+            : String(value || '').slice(
+                0,
+                fallbackCharacters,
+            );
+    }
+    const compact = {
+        segments:
+            parsed.segments.map(
+                compactInvalidSegment,
+            ),
+    };
+    return wasString
+        ? JSON.stringify(compact)
+        : compact;
+}
+
 function trimStructuredMessageContent(
     content,
     removeCharacters,
+    structuredContextTrimmer,
 ) {
     let parsed;
     try {
@@ -251,21 +400,41 @@ function trimStructuredMessageContent(
                     removeCharacters,
                 ),
         );
+    if (
+        typeof structuredContextTrimmer ===
+        'function'
+    ) {
+        const trimmed =
+            structuredContextTrimmer(
+                parsed,
+                targetCharacters,
+            );
+        if (trimmed) {
+            const serialized =
+                JSON.stringify(trimmed);
+            return {
+                content: serialized,
+                removedCharacters:
+                    Math.max(
+                        0,
+                        content.length -
+                            serialized.length,
+                    ),
+            };
+        }
+    }
     let next =
         structuredClone(parsed);
+    const repairInput =
+        getStructuredRepairInput(
+            next,
+        );
     const sceneInput =
-        next.originalSceneInput &&
-        typeof next.originalSceneInput ===
-            'object' &&
-        !Array.isArray(
-            next.originalSceneInput,
-        )
-            ? next.originalSceneInput
-            : next;
+        repairInput.value;
     const prefix =
-        sceneInput === next
-            ? ''
-            : 'originalSceneInput.';
+        repairInput.key
+            ? `${repairInput.key}.`
+            : '';
     const omitted = [];
     let serialized =
         JSON.stringify(next);
@@ -296,7 +465,7 @@ function trimStructuredMessageContent(
     if (
         serialized.length >
             targetCharacters &&
-        sceneInput !== next &&
+        repairInput.key &&
         Object.hasOwn(
             next,
             'requiredSchema',
@@ -342,15 +511,28 @@ function trimStructuredMessageContent(
             next =
                 mandatoryInput;
         } else {
-            next = {
-                validationError:
-                    next.validationError,
-                invalidOutput:
-                    String(
-                        next.invalidOutput ||
-                        '',
-                    ).slice(
-                        0,
+            const envelope =
+                Object.fromEntries(
+                    STRUCTURED_REPAIR_ENVELOPE_KEYS
+                        .filter(key =>
+                            Object.hasOwn(
+                                next,
+                                key,
+                            ))
+                        .map(key => [
+                            key,
+                            next[key],
+                        ]),
+                );
+            if (
+                Object.hasOwn(
+                    next,
+                    'invalidOutput',
+                )
+            ) {
+                envelope.invalidOutput =
+                    compactRepairInvalidOutput(
+                        next.invalidOutput,
                         Math.max(
                             1_000,
                             Math.floor(
@@ -358,13 +540,55 @@ function trimStructuredMessageContent(
                                 3,
                             ),
                         ),
-                    ),
-                originalSceneInput:
-                    mandatoryInput,
-            };
+                    );
+            }
+            envelope[
+                repairInput.key
+            ] = mandatoryInput;
+            omitted.push(
+                ...Object.keys(next)
+                    .filter(key =>
+                        !Object.hasOwn(
+                            envelope,
+                            key,
+                        ))
+                    .map(key => key),
+            );
+            next = envelope;
         }
         serialized =
             JSON.stringify(next);
+    }
+    const degradedInput =
+        getStructuredRepairInput(
+            next,
+        );
+    for (
+        const key of
+        STRUCTURED_CONTEXT_DEGRADE_KEYS
+    ) {
+        if (
+            serialized.length <=
+                targetCharacters
+        ) {
+            break;
+        }
+        if (
+            Object.hasOwn(
+                degradedInput.value,
+                key,
+            )
+        ) {
+            delete degradedInput
+                .value[key];
+            omitted.push(
+                degradedInput.key
+                    ? `${degradedInput.key}.${key}`
+                    : key,
+            );
+            serialized =
+                JSON.stringify(next);
+        }
     }
     if (omitted.length) {
         next.contextOmittedFields =
@@ -384,7 +608,12 @@ function trimStructuredMessageContent(
     };
 }
 
-export function limitMessagesToContext(messages, contextSize, maxResponseLength) {
+export function limitMessagesToContext(
+    messages,
+    contextSize,
+    maxResponseLength,
+    structuredContextTrimmer = null,
+) {
     const contextPlan = createContextBudgetPlan(
         contextSize,
         maxResponseLength,
@@ -406,7 +635,6 @@ export function limitMessagesToContext(messages, contextSize, maxResponseLength)
     }
     const trimOrder = [
         ...next.map((message, index) => ({ message, index })).filter(item => item.message?.role !== 'system'),
-        ...next.map((message, index) => ({ message, index })).filter(item => item.message?.role === 'system'),
     ];
     for (const { message } of trimOrder) {
         if (overflow <= 0) break;
@@ -415,6 +643,7 @@ export function limitMessagesToContext(messages, contextSize, maxResponseLength)
             trimStructuredMessageContent(
                 content,
                 overflow,
+                structuredContextTrimmer,
             );
         if (
             structured &&

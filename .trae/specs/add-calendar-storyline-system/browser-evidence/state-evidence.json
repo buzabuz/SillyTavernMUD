@@ -1,0 +1,43 @@
+{
+  "session": {
+    "url": "http://127.0.0.1:8000/?calendar_acceptance=20260809-01",
+    "save": "Tina Zhang",
+    "measuredViewportCssPx": { "width": 728, "height": 470 }
+  },
+  "beforeCalendarMoment": {
+    "clock": "1991-09-02 · 13:35",
+    "stateRevision": 26,
+    "sceneId": "gryffindor_common_room_quill_repair",
+    "sceneCalendarEntryIds": [],
+    "sceneArchiveCount": 11,
+    "calendarStatuses": {
+      "storyline_tina_heritage_and_parseltongue": "planned",
+      "event_hermione_study_session_quill": "planned"
+    }
+  },
+  "historySelection": {
+    "archiveId": "transfiguration_after_break",
+    "timelineEntriesInState": 7,
+    "timelineRendered": false,
+    "authorQuillRendered": true,
+    "enterSceneRendered": false,
+    "resourceCountBefore": 250,
+    "resourceCountAfter": 250,
+    "stateRevisionAfter": 26
+  },
+  "afterCalendarMoment": {
+    "clock": "1991-09-02 · 19:00",
+    "stateRevision": 27,
+    "sceneId": "gryffindor_after_school_study",
+    "sceneName": "课后学习小组",
+    "sceneCalendarEntryIds": [
+      "storyline_tina_heritage_and_parseltongue",
+      "event_hermione_study_session_quill"
+    ],
+    "sceneArchiveCount": 12,
+    "calendarStatuses": {
+      "storyline_tina_heritage_and_parseltongue": "active",
+      "event_hermione_study_session_quill": "active"
+    }
+  }
+}

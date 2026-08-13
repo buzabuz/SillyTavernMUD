@@ -31,12 +31,15 @@ import {
     resolveItemCandidate,
 } from '../public/scripts/extensions/hogwarts-mud/domain/item-reducer.js';
 import {
+    inferDestroyedPhysicalForm,
     isItemOperationEvidenceGrounded,
     isItemVisibleToPlayer,
     normalizeCurrentPresentation,
     normalizeItem,
+    validateItem,
 } from '../public/scripts/extensions/hogwarts-mud/domain/item-schema.js';
 import {
+    createSceneItemStates,
     projectObservedInventoryUpdates,
     synchronizeHeldItemLocations,
 } from '../public/scripts/extensions/hogwarts-mud/domain/inventory.js';
@@ -258,6 +261,99 @@ test('Item V2 normalization separates owner, holder and legacy custody while pre
             ],
         ),
         false,
+    );
+});
+
+test('Item physicalForm normalization and validation enforce material existence invariants', () => {
+    assert.equal(
+        inferDestroyedPhysicalForm(
+            'the smoking ruin of the quill vanished entirely',
+        ),
+        'absent',
+    );
+    assert.equal(
+        inferDestroyedPhysicalForm(
+            'the quill shattered and its pieces were gathered',
+        ),
+        'remains',
+    );
+
+    const consumed =
+        normalizeItem({
+            id: 'consumed_toffee',
+            state: 'consumed',
+            physicalForm: 'whole',
+            holderId: 'player',
+            isEquipped: true,
+            location: {
+                mapId: 'old_map',
+                roomId: 'old_room',
+                placement: 'in_hand',
+            },
+        });
+    assert.equal(
+        consumed.physicalForm,
+        'absent',
+    );
+    assert.equal(
+        consumed.holderId,
+        '',
+    );
+    assert.equal(
+        consumed.isEquipped,
+        false,
+    );
+    assert.deepEqual(
+        consumed.location,
+        {
+            mapId: '',
+            roomId: '',
+            placement: '',
+        },
+    );
+    assert.deepEqual(
+        validateItem(consumed),
+        [],
+    );
+
+    const lost =
+        normalizeItem({
+            id: 'lost_key',
+            state: 'lost',
+            holderId: 'player',
+        });
+    assert.equal(
+        lost.physicalForm,
+        'unknown',
+    );
+    assert.equal(
+        lost.holderId,
+        '',
+    );
+
+    const legacyDestroyed =
+        normalizeItem({
+            id: 'ambiguous_wreck',
+            state: 'destroyed',
+            holderId: 'player',
+        });
+    assert.equal(
+        legacyDestroyed
+            .physicalForm,
+        'remains',
+    );
+    assert.equal(
+        legacyDestroyed.holderId,
+        'player',
+    );
+
+    assert.match(
+        validateItem({
+            ...legacyDestroyed,
+            physicalForm: 'absent',
+            holderId: 'player',
+        }).join(' '),
+        /不能有 holderId/u,
     );
 });
 
@@ -1028,6 +1124,272 @@ test('destroyed Item remains are grounded and narrative proposals fold once', ()
     );
 });
 
+test('[defect-probing] vanished quill becomes absent, clears placement and replays idempotently', () => {
+    const quill =
+        createItem({
+            id:
+                'harry_spare_brass_quill',
+            type: 'tool',
+            labelEn:
+                'Harry\'s Spare Brass Quill',
+            label:
+                '哈利的备用黄铜羽毛笔',
+            ownerId:
+                'canon_harry_james_potter',
+            holderId: 'player',
+            isEquipped: true,
+        });
+    const state =
+        createState({
+            items: [quill],
+            actorPresentations: {
+                player: {
+                    wornItemIds: [
+                        quill.id,
+                    ],
+                    heldItemIds: [
+                        quill.id,
+                    ],
+                },
+            },
+        });
+    const destroy =
+        proposal({
+            id: quill.id,
+            operation: 'destroy',
+            evidenceText:
+                'the smoking ruin of the quill vanished entirely',
+        });
+    const destroyed =
+        applyItemOperations(
+            state,
+            [destroy],
+        );
+    const absent =
+        destroyed.items[0];
+
+    assert.equal(
+        destroy.physicalForm,
+        'absent',
+    );
+    assert.equal(
+        absent.state,
+        'destroyed',
+    );
+    assert.equal(
+        absent.physicalForm,
+        'absent',
+    );
+    assert.equal(
+        absent.holderId,
+        '',
+    );
+    assert.equal(
+        absent.isEquipped,
+        false,
+    );
+    assert.deepEqual(
+        absent.location,
+        {
+            mapId: '',
+            roomId: '',
+            placement: '',
+        },
+    );
+    assert.deepEqual(
+        destroyed
+            .actorPresentations
+            .player.wornItemIds,
+        [],
+    );
+    assert.deepEqual(
+        destroyed
+            .actorPresentations
+            .player.heldItemIds,
+        [],
+    );
+
+    const replayed =
+        applyItemOperations(
+            destroyed,
+            [
+                proposal({
+                    id: quill.id,
+                    operation:
+                        'destroy',
+                }),
+            ],
+        );
+    assert.deepEqual(
+        replayed.items,
+        destroyed.items,
+    );
+    assert.deepEqual(
+        replayed
+            .actorPresentations,
+        destroyed
+            .actorPresentations,
+    );
+
+    const carryAttempt =
+        applyItemOperations(
+            destroyed,
+            [
+                proposal({
+                    id: quill.id,
+                    operation: 'carry',
+                    targetHolderId:
+                        'player',
+                    held: true,
+                }),
+            ],
+        );
+    assert.deepEqual(
+        carryAttempt.items,
+        destroyed.items,
+    );
+    assert.deepEqual(
+        carryAttempt
+            .actorPresentations,
+        destroyed
+            .actorPresentations,
+    );
+});
+
+test('[defect-probing] gathered quill remains can be carried and placed but not equipped', () => {
+    const quill =
+        createItem({
+            id:
+                'harry_spare_brass_quill',
+            type: 'tool',
+            labelEn:
+                'Harry\'s Spare Brass Quill',
+            holderId: 'player',
+        });
+    const state =
+        createState({
+            items: [quill],
+            actorPresentations: {
+                player: {
+                    heldItemIds: [
+                        quill.id,
+                    ],
+                },
+            },
+        });
+    const remains =
+        applyItemOperations(
+            state,
+            [
+                proposal({
+                    id: quill.id,
+                    operation:
+                        'destroy',
+                    evidenceText:
+                        'The quill shattered and its pieces were gathered.',
+                }),
+            ],
+        );
+    assert.equal(
+        remains.items[0]
+            .physicalForm,
+        'remains',
+    );
+    assert.equal(
+        remains.items[0]
+            .holderId,
+        'player',
+    );
+    assert.deepEqual(
+        remains
+            .actorPresentations
+            .player.heldItemIds,
+        [quill.id],
+    );
+
+    const equipAttempt =
+        applyItemOperations(
+            remains,
+            [
+                proposal({
+                    id: quill.id,
+                    operation: 'equip',
+                    targetHolderId:
+                        'player',
+                }),
+            ],
+        );
+    assert.deepEqual(
+        equipAttempt.items,
+        remains.items,
+    );
+
+    const carried =
+        applyItemOperations(
+            remains,
+            [
+                proposal({
+                    id: quill.id,
+                    operation: 'carry',
+                    targetHolderId:
+                        'canon_harry_james_potter',
+                    held: true,
+                }),
+            ],
+        );
+    assert.equal(
+        carried.items[0]
+            .physicalForm,
+        'remains',
+    );
+    assert.equal(
+        carried.items[0]
+            .holderId,
+        'canon_harry_james_potter',
+    );
+    assert.deepEqual(
+        carried
+            .actorPresentations
+            .canon_harry_james_potter
+            .heldItemIds,
+        [quill.id],
+    );
+
+    const placed =
+        applyItemOperations(
+            carried,
+            [
+                proposal({
+                    id: quill.id,
+                    operation: 'place',
+                    location: {
+                        mapId:
+                            'hogwarts_castle',
+                        roomId:
+                            'transfiguration_classroom',
+                        placement:
+                            'on_desk',
+                    },
+                }),
+            ],
+        );
+    assert.equal(
+        placed.items[0]
+            .physicalForm,
+        'remains',
+    );
+    assert.equal(
+        placed.items[0]
+            .holderId,
+        '',
+    );
+    assert.equal(
+        placed.items[0]
+            .location.placement,
+        'on_desk',
+    );
+});
+
 test('a completed loan promotes an ordinary quill to a player-confirmed candidate', () => {
     const evidence =
         'Harry nudged a spare brass quill toward Tina and told her she could use it.';
@@ -1222,6 +1584,141 @@ test('V1 migration preserves five items and presentation details, seeds canon on
     );
 });
 
+test('[defect-probing] migration distinguishes absent evidence from remains and is idempotent', () => {
+    const state =
+        createState({
+            items: [
+                {
+                    id:
+                        'vanished_quill',
+                    type: 'tool',
+                    labelEn:
+                        'Vanished Quill',
+                    state:
+                        'destroyed',
+                    holderId:
+                        'player',
+                    evidenceText:
+                        'The smoking ruin vanished entirely.',
+                },
+                {
+                    id:
+                        'gathered_quill',
+                    type: 'tool',
+                    labelEn:
+                        'Gathered Quill',
+                    state:
+                        'destroyed',
+                    holderId:
+                        'player',
+                    evidenceText:
+                        'Its shattered pieces were gathered.',
+                },
+                {
+                    id:
+                        'legacy_wreck',
+                    type: 'tool',
+                    labelEn:
+                        'Legacy Wreck',
+                    state:
+                        'destroyed',
+                    holderId:
+                        'player',
+                },
+            ],
+            actorPresentations: {
+                player: {
+                    wornItemIds: [
+                        'vanished_quill',
+                        'gathered_quill',
+                    ],
+                    heldItemIds: [
+                        'vanished_quill',
+                        'gathered_quill',
+                        'legacy_wreck',
+                    ],
+                },
+                canon_harry_james_potter: {
+                    heldItemIds: [
+                        'gathered_quill',
+                    ],
+                },
+            },
+        });
+    const first =
+        migrateItemSystemState(
+            state,
+        );
+    const migrated =
+        new Map(
+            first.state.items
+                .map(item => [
+                    item.id,
+                    item,
+                ]),
+        );
+
+    assert.equal(
+        migrated.get(
+            'vanished_quill',
+        ).physicalForm,
+        'absent',
+    );
+    assert.equal(
+        migrated.get(
+            'vanished_quill',
+        ).holderId,
+        '',
+    );
+    assert.equal(
+        migrated.get(
+            'gathered_quill',
+        ).physicalForm,
+        'remains',
+    );
+    assert.equal(
+        migrated.get(
+            'legacy_wreck',
+        ).physicalForm,
+        'remains',
+    );
+    assert.deepEqual(
+        first.state
+            .actorPresentations
+            .player.wornItemIds,
+        [],
+    );
+    assert.deepEqual(
+        first.state
+            .actorPresentations
+            .player.heldItemIds,
+        [
+            'gathered_quill',
+            'legacy_wreck',
+        ],
+    );
+    assert.deepEqual(
+        first.state
+            .actorPresentations
+            .canon_harry_james_potter
+            .heldItemIds,
+        [],
+    );
+
+    const second =
+        migrateItemSystemState(
+            first.state,
+        );
+    assert.equal(
+        second.changed,
+        false,
+    );
+    assert.deepEqual(
+        second.state,
+        first.state,
+    );
+});
+
 test('Canon seed respects actor availability, dates and Ron wand ownership', () => {
     const before = createState();
     before.clock =
@@ -1356,6 +1853,90 @@ test('item projections group history, filter hidden NPC items and expose candida
             candidate.key,
         ),
         'ignored',
+    );
+});
+
+test('[defect-probing] scene item states exclude nonphysical items and preserve carried remains form', () => {
+    const itemStates =
+        createSceneItemStates(
+            [
+                createItem(),
+                createItem({
+                    id: 'broken_quill',
+                    type: 'tool',
+                    labelEn:
+                        'Broken Quill',
+                    state: 'destroyed',
+                    physicalForm:
+                        'remains',
+                    location: {
+                        mapId: 'old_map',
+                        roomId:
+                            'old_room',
+                        placement:
+                            'with_holder',
+                    },
+                }),
+                createItem({
+                    id: 'vanished_quill',
+                    type: 'tool',
+                    labelEn:
+                        'Vanished Quill',
+                    state: 'destroyed',
+                    physicalForm:
+                        'absent',
+                    holderId: '',
+                }),
+                createItem({
+                    id: 'lost_quill',
+                    type: 'tool',
+                    labelEn:
+                        'Lost Quill',
+                    state: 'lost',
+                    physicalForm:
+                        'unknown',
+                    holderId: '',
+                }),
+            ],
+            {
+                mapId:
+                    'hogwarts_castle',
+                roomId:
+                    'great_hall',
+            },
+        );
+
+    assert.deepEqual(
+        itemStates.map(item =>
+            item.id),
+        [
+            'pink_ribbon',
+            'broken_quill',
+        ],
+    );
+    assert.equal(
+        itemStates[0]
+            .physicalForm,
+        'whole',
+    );
+    assert.deepEqual(
+        itemStates[1],
+        {
+            id: 'broken_quill',
+            version: 3,
+            type: 'tool',
+            custody: 'carried',
+            ownerId: 'player',
+            holderId: 'player',
+            mapId:
+                'hogwarts_castle',
+            roomId: 'great_hall',
+            status: 'destroyed',
+            state: 'destroyed',
+            physicalForm:
+                'remains',
+            isEquipped: false,
+        },
     );
 });
 

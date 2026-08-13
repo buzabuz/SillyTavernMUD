@@ -1,3 +1,18 @@
+import {
+    migrateCalendarState as migrateCalendarStateDefault,
+} from '../domain/calendar-migration.js';
+import {
+    isCalendarWorldClock,
+} from '../domain/calendar-schema.js';
+import {
+    normalizeCalendarEntryIds,
+} from '../domain/calendar-scene.js';
+import {
+    actorContextVersion,
+    actorDossierProjectionVersion,
+    memoryReferenceVersion,
+} from '../domain/actor-context-schema.js';
+
 export function createLifecycleRuntime(ports) {
     const {
         createFallbackNextSceneIntent,
@@ -7,12 +22,29 @@ export function createLifecycleRuntime(ports) {
         getMudState,
         getRoomName,
         jobRegistry,
+        migrateActorContextState =
+        state => ({
+            state,
+            changed: false,
+        }),
         migrateActorKnowledgeBoundaries,
         migrateActorMovementHistory,
         migrateActorPresentationState,
         migrateLoadedSocialGraph,
         migrateObservedInventoryState,
         migrateItemSystemState =
+        state => ({
+            state,
+            changed: false,
+        }),
+        migrateCalendarState =
+        migrateCalendarStateDefault,
+        migrateNpcIdentityState =
+        state => ({
+            state,
+            changed: false,
+        }),
+        migrateNpcIdentityObservations =
         state => ({
             state,
             changed: false,
@@ -35,7 +67,27 @@ export function createLifecycleRuntime(ports) {
 
     function ensureSceneLifecycleState(state = getMudState()) {
         if (!state) return false;
-        let changed = false;
+        const originalState =
+            state;
+        const actorContextMigration =
+            migrateActorContextState(
+                structuredClone(
+                    originalState,
+                ),
+            );
+        state =
+            actorContextMigration.state;
+        let changed =
+            actorContextMigration.changed;
+        let saveOptions;
+        const actorContextV1 =
+            state.actorContextVersion ===
+                actorContextVersion &&
+            state.memoryReferenceVersion ===
+                memoryReferenceVersion &&
+            state
+                .actorDossierProjectionVersion ===
+                actorDossierProjectionVersion;
         const normalizedModelSlots =
         normalizeModelSlots(
             state.modelSlots,
@@ -52,56 +104,110 @@ export function createLifecycleRuntime(ports) {
             normalizedModelSlots;
             changed = true;
         }
-        const relationshipMigration =
-        migrateRelationshipMemoryState(
-            state,
-            getContext().chat,
-        );
-        if (relationshipMigration.changed) {
-            Object.assign(state, relationshipMigration.state);
-            saveMetadataDebounced();
-            changed = true;
-        }
-        const knowledgeMigration =
-        migrateActorKnowledgeBoundaries(
-            state,
-        );
-        if (knowledgeMigration.changed) {
-            Object.assign(
+        if (!actorContextV1) {
+            const relationshipMigration =
+            migrateRelationshipMemoryState(
                 state,
-                knowledgeMigration.state,
+                getContext().chat,
             );
-            saveMetadataDebounced();
-            changed = true;
-        }
-        const presentationMigration =
-        migrateActorPresentationState(
-            state,
-        );
-        if (
-            presentationMigration.changed
-        ) {
-            Object.assign(
+            if (
+                relationshipMigration
+                    .changed
+            ) {
+                Object.assign(
+                    state,
+                    relationshipMigration
+                        .state,
+                );
+                changed = true;
+            }
+            const knowledgeMigration =
+            migrateActorKnowledgeBoundaries(
                 state,
-                presentationMigration.state,
             );
-            saveMetadataDebounced();
-            changed = true;
-        }
-        const actorMovementMigration =
-        migrateActorMovementHistory(
-            state,
-            getContext().chat,
-        );
-        if (
-            actorMovementMigration.changed
-        ) {
-            Object.assign(
+            if (
+                knowledgeMigration.changed
+            ) {
+                Object.assign(
+                    state,
+                    knowledgeMigration.state,
+                );
+                changed = true;
+            }
+            const presentationMigration =
+                migrateActorPresentationState(
+                    state,
+                );
+            if (
+                presentationMigration
+                    .changed
+            ) {
+                Object.assign(
+                    state,
+                    presentationMigration
+                        .state,
+                );
+                changed = true;
+            }
+            const identityMigration =
+                migrateNpcIdentityState(
+                    state,
+                );
+            if (
+                identityMigration.changed
+            ) {
+                Object.assign(
+                    state,
+                    identityMigration.state,
+                );
+                saveOptions = {
+                    source:
+                        'identity_migration',
+                    changedDomains: [
+                        'identity',
+                    ],
+                };
+                changed = true;
+            }
+            const identityObservationMigration =
+                migrateNpcIdentityObservations(
+                    state,
+                    getContext().chat,
+                );
+            if (
+                identityObservationMigration
+                    .changed
+            ) {
+                Object.assign(
+                    state,
+                    identityObservationMigration
+                        .state,
+                );
+                saveOptions = {
+                    source:
+                        'identity_observation_migration',
+                    changedDomains: [
+                        'identity',
+                    ],
+                };
+                changed = true;
+            }
+            const actorMovementMigration =
+            migrateActorMovementHistory(
                 state,
-                actorMovementMigration.state,
+                getContext().chat,
             );
-            saveMetadataDebounced();
-            changed = true;
+            if (
+                actorMovementMigration
+                    .changed
+            ) {
+                Object.assign(
+                    state,
+                    actorMovementMigration
+                        .state,
+                );
+                changed = true;
+            }
         }
         const inventoryMigration =
         migrateObservedInventoryState(
@@ -115,7 +221,6 @@ export function createLifecycleRuntime(ports) {
                 state,
                 inventoryMigration.state,
             );
-            saveMetadataDebounced();
             changed = true;
         }
         const itemSystemMigration =
@@ -130,7 +235,6 @@ export function createLifecycleRuntime(ports) {
                 itemSystemMigration
                     .state,
             );
-            saveMetadataDebounced();
             changed = true;
         }
         const spellbookMigration =
@@ -145,32 +249,66 @@ export function createLifecycleRuntime(ports) {
                 state,
                 spellbookMigration.state,
             );
-            saveMetadataDebounced();
             changed = true;
         }
-        const canonNameMigration =
-        reconcileCanonActorDisplayNames(
-            state,
-        );
-        if (canonNameMigration.changed) {
-            Object.assign(
-                state,
-                canonNameMigration.state,
-            );
-            saveMetadataDebounced();
-            changed = true;
+        if (
+            state.calendar ||
+            isCalendarWorldClock(
+                state.clock,
+            )
+        ) {
+            const calendarMigration =
+                migrateCalendarState(
+                    state,
+                );
+            if (
+                calendarMigration.changed
+            ) {
+                Object.assign(
+                    state,
+                    calendarMigration
+                        .state,
+                );
+                saveOptions = {
+                    source:
+                        'calendar_migration',
+                    changedDomains: [
+                        'calendar',
+                    ],
+                };
+                changed = true;
+            }
         }
-        const temporaryNameMigration =
-        reconcileTemporaryActorDisplayNames(
-            state,
-            getContext().chat,
-        );
-        if (temporaryNameMigration.changed) {
-            Object.assign(
+        if (!actorContextV1) {
+            const canonNameMigration =
+            reconcileCanonActorDisplayNames(
                 state,
-                temporaryNameMigration.state,
             );
-            changed = true;
+            if (
+                canonNameMigration.changed
+            ) {
+                Object.assign(
+                    state,
+                    canonNameMigration.state,
+                );
+                changed = true;
+            }
+            const temporaryNameMigration =
+            reconcileTemporaryActorDisplayNames(
+                state,
+                getContext().chat,
+            );
+            if (
+                temporaryNameMigration
+                    .changed
+            ) {
+                Object.assign(
+                    state,
+                    temporaryNameMigration
+                        .state,
+                );
+                changed = true;
+            }
         }
         const normalizedCausalCollapse =
         normalizeCausalCollapseState(
@@ -207,22 +345,25 @@ export function createLifecycleRuntime(ports) {
                 .graph;
             changed = true;
         }
-        const projectedActorLibrary =
-        projectActorSocialRelationships(
-            state.actorLibrary,
-            state.socialGraph,
-        );
-        if (
+        if (!actorContextV1) {
+            const projectedActorLibrary =
+                projectActorSocialRelationships(
+                    state.actorLibrary,
+                    state.socialGraph,
+                );
+            if (
+                JSON.stringify(
+                    state.actorLibrary ||
+                    [],
+                ) !==
             JSON.stringify(
-                state.actorLibrary || [],
-            ) !==
-        JSON.stringify(
-            projectedActorLibrary,
-        )
-        ) {
-            state.actorLibrary =
-            projectedActorLibrary;
-            changed = true;
+                projectedActorLibrary,
+            )
+            ) {
+                state.actorLibrary =
+                projectedActorLibrary;
+                changed = true;
+            }
         }
         const presenceMapId =
             state.map?.activeMapId ||
@@ -534,7 +675,6 @@ export function createLifecycleRuntime(ports) {
                 state.memoryDirector.lastReviewedTurn =
                 Number(state.turn?.count || 0);
             }
-            saveMetadataDebounced();
             changed = true;
         }
         if (state.sceneTransition?.status === 'failed' &&
@@ -593,6 +733,35 @@ export function createLifecycleRuntime(ports) {
                 }
                 changed = true;
             }
+            const calendarEntryIds =
+                normalizeCalendarEntryIds(
+                    state.scene
+                        .calendarEntryIds,
+                );
+            if (
+                JSON.stringify(
+                    state.scene
+                        .calendarEntryIds ||
+                    [],
+                ) !==
+                JSON.stringify(
+                    calendarEntryIds,
+                )
+            ) {
+                state.scene
+                    .calendarEntryIds =
+                    calendarEntryIds;
+                changed = true;
+            } else if (
+                !Array.isArray(
+                    state.scene
+                        .calendarEntryIds,
+                )
+            ) {
+                state.scene
+                    .calendarEntryIds = [];
+                changed = true;
+            }
             if (!state.sceneArchive.length &&
             state.scene.startedMessageId !== 0) {
                 state.scene.startedMessageId = 0;
@@ -615,7 +784,23 @@ export function createLifecycleRuntime(ports) {
                 changed = true;
             }
         }
-        return changed;
+        if (!changed) {
+            return false;
+        }
+        for (
+            const key
+            of Object.keys(originalState)
+        ) {
+            delete originalState[key];
+        }
+        Object.assign(
+            originalState,
+            state,
+        );
+        saveMetadataDebounced(
+            saveOptions,
+        );
+        return true;
     }
 
     return {

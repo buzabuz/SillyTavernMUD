@@ -9,12 +9,15 @@ import * as actorKnowledge from '../public/scripts/extensions/hogwarts-mud/domai
 import * as actorMemory from '../public/scripts/extensions/hogwarts-mud/domain/actor-memory.js';
 import * as actorMemoryMigration from '../public/scripts/extensions/hogwarts-mud/domain/actor-memory-migration.js';
 import * as actorMemoryReducer from '../public/scripts/extensions/hogwarts-mud/domain/actor-memory-reducer.js';
+import * as actorContextSchema from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-schema.js';
 import * as appearance from '../public/scripts/extensions/hogwarts-mud/domain/appearance.js';
 import * as cast from '../public/scripts/extensions/hogwarts-mud/domain/cast.js';
 import * as causalState from '../public/scripts/extensions/hogwarts-mud/domain/causal-state.js';
 import * as inventory from '../public/scripts/extensions/hogwarts-mud/domain/inventory.js';
+import * as knowledgeProjectorV2 from '../public/scripts/extensions/hogwarts-mud/domain/knowledge-projector-v2.js';
 import * as mapAccess from '../public/scripts/extensions/hogwarts-mud/domain/map-access.js';
 import * as materialState from '../public/scripts/extensions/hogwarts-mud/domain/material-state.js';
+import * as memorySynapseSchema from '../public/scripts/extensions/hogwarts-mud/domain/memory-synapse-schema.js';
 import * as socialMigration from '../public/scripts/extensions/hogwarts-mud/domain/social-migration.js';
 import * as socialProjection from '../public/scripts/extensions/hogwarts-mud/domain/social-projection.js';
 import * as socialReducer from '../public/scripts/extensions/hogwarts-mud/domain/social-reducer.js';
@@ -86,6 +89,7 @@ const TASK3_INTERNAL_EXPORTS = new Set([
     'CAUSAL_COLLAPSE_PERSISTENCE_TARGETS',
     'CAUSAL_SOCIAL_STRUCTURAL_TAG_BY_EDGE_TYPE',
     'CAUSAL_WITNESS_ACCOUNT_KEYS',
+    'captureMemoryBoundaryGuard',
     'clampSocialDimension',
     'countTextWords',
     'CROWDED_SCENE_ROOM_KINDS',
@@ -102,6 +106,7 @@ const TASK3_INTERNAL_EXPORTS = new Set([
     'impactForSocialDelta',
     'inferItemKind',
     'inferSocialEventKind',
+    'isMemoryBoundaryGuardCurrent',
     'isValidFirstImpression',
     'isValidImpressionShorthand',
     'normalizeActorLifeState',
@@ -176,11 +181,11 @@ test('knowledge and relationship graph import their real domain owners', async (
     }
     assert.match(
         knowledgeSource,
-        /from\s+['"]\.\/domain\/actor-memory\.js['"]/u,
+        /from\s+['"]\.\/domain\/actor-context-schema\.js['"]/u,
     );
     assert.match(
         graphSource,
-        /from\s+['"]\.\/domain\/social-projection\.js['"]/u,
+        /from\s+['"]\.\/domain\/actor-dossier-projection\.js['"]/u,
     );
 });
 
@@ -219,7 +224,11 @@ function extractFunction(source, name) {
     return source.slice(start, end);
 }
 
-async function loadKnowledgeModule() {
+async function loadKnowledgeModule(
+    {
+        fetchImpl,
+    } = {},
+) {
     const source =
         await readFile(
             KNOWLEDGE_URL,
@@ -228,10 +237,15 @@ async function loadKnowledgeModule() {
     const context = vm.createContext({
         console,
         Date,
-        fetch: async () => ({
-            ok: true,
-            json: async () => ({}),
-        }),
+        fetch:
+            fetchImpl ||
+            (
+                async () => ({
+                    ok: true,
+                    json:
+                        async () => ({}),
+                })
+            ),
         structuredClone,
         URL,
     });
@@ -303,6 +317,12 @@ async function loadKnowledgeModule() {
                     helpers
                         .getActiveInteractionActorIds,
             },
+            './domain/actor-context-schema.js':
+                actorContextSchema,
+            './domain/knowledge-projector-v2.js':
+                knowledgeProjectorV2,
+            './domain/memory-synapse-schema.js':
+                memorySynapseSchema,
         };
         const values =
             exportsBySpecifier[specifier];
@@ -634,8 +654,8 @@ test('[defect-probing] knowledge records use event participants, witnesses, coho
         records.find(record =>
             record.category ===
                 'events' &&
-            record.id ===
-                eventKnowledge.eventId);
+            record.recordId ===
+                `events_${eventKnowledge.eventId}`);
     const scene =
         records.find(record =>
             record.category ===
@@ -669,6 +689,216 @@ test('[defect-probing] knowledge records use event participants, witnesses, coho
     assert.deepEqual(
         scene.data.localCohortIds,
         ['gryffindor_charms'],
+    );
+});
+
+test('[defect-probing] production Event projection preserves explicit ACL through hydration', async () => {
+    let projectedRecords = [];
+    const knowledge =
+        await loadKnowledgeModule({
+            fetchImpl:
+                async () => ({
+                    ok: true,
+                    json: async () => ({
+                        records:
+                            projectedRecords,
+                        diagnostics: {
+                            backend:
+                                'qdrant',
+                        },
+                    }),
+                }),
+        });
+    const event = (
+        eventId,
+        overrides = {},
+    ) => createEventKnowledge({
+        eventId,
+        sourceMessageIds: [
+            overrides.sourceMessageId ||
+                10,
+        ],
+        participantActorIds: [],
+        witnessActorIds: [],
+        witnessCohortIds: [],
+        witnessBasis: {},
+        ...overrides,
+    });
+    const state = {
+        timelineEpoch: 'epoch_acl',
+        stateRevision: 16,
+        clock:
+            '1991-09-02 · 19:00',
+        scene: {
+            id: 'charms_class',
+            nameEn: 'Charms',
+            startedMessageId: 0,
+        },
+        sceneArchive: [],
+        actors: [],
+        actorLibrary: [
+            'hermione',
+            'ron',
+            'luna',
+        ].map(id => ({
+            id,
+            sharedMemories: {},
+        })),
+        activeInteractionActorIds: [],
+        eventKnowledge: [
+            event(
+                'event_hermione_only',
+                {
+                    participantActorIds: [
+                        'hermione',
+                    ],
+                    witnessActorIds: [
+                        'hermione',
+                    ],
+                    witnessBasis: {
+                        hermione:
+                            'direct',
+                    },
+                },
+            ),
+            event(
+                'event_explicit_public',
+                {
+                    sourceMessageId: 11,
+                    visibility:
+                        'public',
+                },
+            ),
+            event(
+                'event_authorized_rumor',
+                {
+                    sourceMessageId: 12,
+                    participantActorIds: [
+                        'hermione',
+                    ],
+                    witnessActorIds: [
+                        'hermione',
+                    ],
+                    witnessBasis: {
+                        hermione:
+                            'direct',
+                    },
+                },
+            ),
+            event(
+                'event_unmarked_empty_acl',
+                {
+                    sourceMessageId: 13,
+                },
+            ),
+        ],
+        gossipPacks: [{
+            id: 'rumor_acl',
+            status: 'active',
+            sourceEventIds: [
+                'event_authorized_rumor',
+            ],
+            sourceMessageIds: [12],
+            sourceActorIds: [
+                'hermione',
+            ],
+            versions: [{
+                id: 'rumor_acl_v1',
+                sourceEventIds: [
+                    'event_authorized_rumor',
+                ],
+                sourceMessageIds: [12],
+                sourceActorIds: [
+                    'hermione',
+                ],
+                audienceActorIds: [
+                    'luna',
+                ],
+            }],
+        }],
+        map: {},
+        socialGraph: {},
+        causalCollapse: {
+            records: [],
+        },
+        clues: [],
+        storyArcs: [],
+    };
+    const records =
+        knowledge.buildKnowledgeRecords(
+            state,
+            [],
+        );
+    projectedRecords = records;
+    const visibleEventIds =
+        async actorId =>
+            (
+                await knowledge
+                    .retrieveKnowledge(
+                        {
+                            getCurrentChatId:
+                                () =>
+                                    'timeline_acl',
+                        },
+                        state,
+                        'ACL event',
+                        [],
+                        20,
+                        {
+                            audienceActorIds: [
+                                actorId,
+                            ],
+                            nodeTypes: [
+                                'fact',
+                            ],
+                        },
+                    )
+            )
+                .map(record =>
+                    record.data
+                        .eventKnowledge
+                        ?.eventId)
+                .filter(Boolean);
+
+    assert.deepEqual(
+        await visibleEventIds(
+            'player',
+        ),
+        ['event_explicit_public'],
+    );
+    assert.deepEqual(
+        await visibleEventIds('ron'),
+        ['event_explicit_public'],
+    );
+    assert.deepEqual(
+        await visibleEventIds(
+            'hermione',
+        ),
+        [
+            'event_authorized_rumor',
+            'event_explicit_public',
+            'event_hermione_only',
+        ],
+    );
+    assert.deepEqual(
+        await visibleEventIds('luna'),
+        [
+            'event_authorized_rumor',
+            'event_explicit_public',
+        ],
+    );
+    const locked =
+        records.find(record =>
+            record.data
+                .eventKnowledge
+                ?.eventId ===
+            'event_unmarked_empty_acl');
+    assert.deepEqual(
+        locked.visibility,
+        {
+            scope: 'locked',
+            actorIds: [],
+        },
     );
 });
 
@@ -956,5 +1186,211 @@ test('Social Reducer never promotes active actors outside the event witness map'
             .relationshipEvidence[0]
             .witnessedBy,
         ['ron'],
+    );
+});
+
+test('Knowledge V2 indexes independent Actor Core and Social Evidence records', async () => {
+    const knowledge =
+        await loadKnowledgeModule();
+    const state = {
+        timelineEpoch:
+            'task5_knowledge',
+        stateRevision: 5,
+        clock:
+            '1991-09-05 · 10:00',
+        actorLibrary: [{
+            id: 'hermione',
+            nameEn:
+                'Hermione Granger',
+            roleEn: 'Student',
+            performanceCore: {
+                temperamentEn:
+                    'Exacting and brave.',
+                speechStyleEn:
+                    'Precise.',
+                motivesEn: [
+                    'Master difficult magic.',
+                ],
+                socialStrategiesEn: [
+                    'Correct errors directly.',
+                ],
+                boundariesEn: [
+                    'Reject cruelty.',
+                ],
+                vulnerabilitiesEn: [],
+            },
+            sharedMemories: {
+                core: [{
+                    summaryEn:
+                        'Forbidden copied memory.',
+                }],
+            },
+            socialStatements: [{
+                textEn:
+                    'Forbidden copied statement.',
+            }],
+        }],
+        actors: [{
+            id: 'hermione',
+            roomId: 'library',
+            currentActivityEn:
+                'Reading now.',
+        }],
+        actorPresentations: {
+            hermione: {
+                outfit:
+                    'Current robes.',
+            },
+        },
+        activeInteractionActorIds: [
+            'hermione',
+        ],
+        sceneArchive: [],
+        eventKnowledge: [],
+        socialGraph: {
+            relationshipEvidence: [{
+                id: 'evidence_help',
+                sourceActorId:
+                    'hermione',
+                targetActorId:
+                    'player',
+                summaryEn:
+                    'Hermione offered help.',
+                witnessedBy: [
+                    'hermione',
+                ],
+                sourceMessageIds: [
+                    12,
+                ],
+            }],
+        },
+        memorySynapse: {
+            appraisals: [],
+            personSchemas: [],
+        },
+        causalCollapse: {
+            records: [],
+        },
+        clues: [],
+        storyArcs: [],
+    };
+    const records =
+        knowledge
+            .buildKnowledgeRecords(
+                state,
+                [],
+            );
+    const actor =
+        records.find(record =>
+            record.category ===
+                'actors');
+    const social =
+        records.find(record =>
+            record.category ===
+                'social_evidence');
+
+    assert.equal(
+        actor.recordId,
+        'actors_hermione',
+    );
+    assert.deepEqual(
+        Object.keys(actor.data),
+        ['actorCore'],
+    );
+    assert.doesNotMatch(
+        JSON.stringify(actor),
+        /sharedMemories|socialStatements|currentActivity|Current robes/u,
+    );
+    assert.equal(
+        social.recordId,
+        'social_evidence_evidence_help',
+    );
+});
+
+test('Knowledge retrieval canonical-hydrates hits and does not mutate State', async () => {
+    let returnedRecords = [];
+    const knowledge =
+        await loadKnowledgeModule({
+            fetchImpl:
+                async () => ({
+                    ok: true,
+                    json:
+                        async () => ({
+                            records:
+                                returnedRecords,
+                            diagnostics: {
+                                backend:
+                                    'qdrant',
+                            },
+                        }),
+                }),
+        });
+    const state = {
+        timelineEpoch:
+            'task5_hydration',
+        stateRevision: 7,
+        clock:
+            '1991-09-05 · 10:00',
+        actorLibrary: [],
+        actors: [],
+        activeInteractionActorIds: [],
+        sceneArchive: [],
+        eventKnowledge: [{
+            eventId:
+                'event_canonical',
+            sceneId: 'scene_one',
+            summaryEn:
+                'The canonical bell rang.',
+            visibility: 'public',
+            sourceMessageIds: [],
+            participantActorIds: [],
+            witnessActorIds: [],
+        }],
+        socialGraph: {},
+        memorySynapse: {
+            appraisals: [],
+            personSchemas: [],
+        },
+        causalCollapse: {
+            records: [],
+        },
+        clues: [],
+        storyArcs: [],
+    };
+    const canonical =
+        knowledge
+            .buildKnowledgeRecords(
+                state,
+                [],
+            )
+            .find(record =>
+                record.category ===
+                'events');
+    returnedRecords = [{
+        ...canonical,
+        text:
+            'Qdrant-injected noncanonical text.',
+    }];
+    const before =
+        structuredClone(state);
+    const records =
+        await knowledge
+            .retrieveKnowledge(
+                {
+                    chat: [],
+                },
+                state,
+                'bell',
+                [],
+                5,
+            );
+
+    assert.equal(
+        records[0].text,
+        canonical.text,
+    );
+    assert.deepEqual(
+        state,
+        before,
     );
 });

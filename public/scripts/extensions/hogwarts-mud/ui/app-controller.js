@@ -69,6 +69,7 @@ export function createAppController(ports) {
         root.classList.toggle('home-mode', showHome);
         root.classList.toggle('setup-mode', showSetup);
         root.querySelector('#hpmud_focus').hidden = !showGame;
+        root.querySelector('#hpmud_calendar').hidden = !showGame;
         root.querySelector('#hpmud_reopen_setup').hidden = !showGame;
         if (showHome) {
             root.querySelector('#hpmud_location').textContent = '档案大厅';
@@ -287,6 +288,23 @@ Continue from this exact state. Perform present NPCs using the supplied personal
             scene: state.scene || null,
             actors: Array.isArray(state.actors) ? state.actors : [],
             actorLibrary: Array.isArray(state.actorLibrary) ? state.actorLibrary : [],
+            actorMemoryIndex:
+                state.actorMemoryIndex || {
+                    version: 1,
+                    byActorId: {},
+                },
+            memorySynapse:
+                state.memorySynapse || {
+                    version: 1,
+                    appraisals: [],
+                    personSchemas: [],
+                },
+            eventKnowledge:
+                Array.isArray(
+                    state.eventKnowledge,
+                )
+                    ? state.eventKnowledge
+                    : [],
             ...(
                 Object.prototype
                     .hasOwnProperty.call(
@@ -313,7 +331,6 @@ Continue from this exact state. Perform present NPCs using the supplied personal
                     : {},
             storyArcs: Array.isArray(state.storyArcs) ? state.storyArcs : [],
             conflict: state.conflict || null,
-            agenda: Array.isArray(state.agenda) ? state.agenda : [],
             timeline: Array.isArray(state.timeline) ? state.timeline : [],
             turn: state.turn || null,
             dailyDirector: state.dailyDirector || null,
@@ -326,6 +343,15 @@ Continue from this exact state. Perform present NPCs using the supplied personal
                 normalizeSocialGraph(
                     state.socialGraph,
                 ),
+            calendar:
+                state.calendar || {
+                    version: 2,
+                    storylines: [],
+                    storyBeats: [],
+                    entries: [],
+                    horizon:
+                        state.clock || '',
+                },
             sceneArchive: Array.isArray(state.sceneArchive) ? state.sceneArchive : [],
             sceneTransition: state.sceneTransition || null,
             spatial: state.spatial || null,
@@ -394,6 +420,9 @@ Continue from this exact state. Perform present NPCs using the supplied personal
             ? 'actor'
             : root.querySelector('[data-hpmud-tab].active')?.dataset.hpmudTab || 'character';
         renderInspector(activeTab);
+        if (refs.calendarDialog?.open) {
+            ports.renderCalendar();
+        }
         void refs.relationshipGraphController?.refresh();
     }
 

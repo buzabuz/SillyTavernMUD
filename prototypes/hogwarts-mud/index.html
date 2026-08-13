@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="zh-CN" class="wa-dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>魔法世界文字 MUD · 布局原型</title>
+    <link rel="stylesheet" href="https://ka-f.webawesome.com/webawesome@3.11.0/styles/themes/default.css">
+    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./theme-academy.css">
+    <link rel="stylesheet" href="./refined-layout.css">
+    <script type="module">
+        import 'https://ka-f.webawesome.com/webawesome@3.11.0/components/button/button.js';
+        import 'https://ka-f.webawesome.com/webawesome@3.11.0/components/dropdown/dropdown.js';
+        import 'https://ka-f.webawesome.com/webawesome@3.11.0/components/dropdown-item/dropdown-item.js';
+        import 'https://ka-f.webawesome.com/webawesome@3.11.0/components/tooltip/tooltip.js';
+    </script>
+</head>
+<body class="theme-academy">
+    <div class="app-shell">
+        <header class="world-bar">
+            <div class="world-identity">
+                <button class="panel-restore" id="restore-scene" type="button" aria-label="显示场景栏">◫</button>
+                <strong>黑镜议事厅</strong>
+                <span class="save-state"><i></i> 已自动保存</span>
+            </div>
+            <div class="world-context">
+                <strong class="chapter-title">第一枚信物</strong>
+                <span>11 月 3 日 · 21:18</span>
+                <span class="scene-state">关键交涉</span>
+            </div>
+            <div class="world-actions">
+                <button class="text-button" id="toggle-focus" type="button">专注</button>
+                <wa-dropdown>
+                    <wa-button slot="trigger" appearance="plain" size="s" with-caret>更多</wa-button>
+                    <wa-dropdown-item id="open-log">本轮记录</wa-dropdown-item>
+                    <wa-dropdown-item id="open-timeline">时间线</wa-dropdown-item>
+                    <wa-dropdown-item id="open-models">AI 配置</wa-dropdown-item>
+                </wa-dropdown>
+                <button class="avatar-button" id="open-character" type="button" aria-label="打开人物卡">CS</button>
+            </div>
+        </header>
+
+        <div class="workspace">
+            <aside class="scene-panel" id="scene-panel">
+                <button class="collapse-button scene-collapse" type="button" data-collapse="scene" aria-label="收起场景面板">‹</button>
+                <div class="scene-scroll">
+                    <section class="panel-section">
+                        <div class="section-title">
+                            <h3 class="asset-heading">
+                                <img src="./assets/processed/icon-map.png" alt="">
+                                附近地图
+                            </h3>
+                            <button class="link-button" type="button" data-inspector="map">展开</button>
+                        </div>
+                        <button class="mini-map" type="button" data-inspector="map" aria-label="打开完整地图">
+                            <span class="map-node node-west">前厅</span>
+                            <span class="map-path path-one"></span>
+                            <span class="map-node node-current">你在这里</span>
+                            <span class="map-path path-two"></span>
+                            <span class="map-node node-east">契约室</span>
+                            <span class="map-node node-locked">?</span>
+                        </button>
+                        <p class="muted compact">庄园封闭 · 外部守卫处于警戒状态</p>
+                    </section>
+
+                    <section class="panel-section">
+                        <div class="section-title">
+                            <h3>在场人物</h3>
+                            <span class="count">3</span>
+                        </div>
+                        <div class="person-list">
+                            <button class="person-row active" type="button" data-person="rodolphus">
+                                <span class="person-avatar">RL</span>
+                                <span>
+                                    <strong>Rodolphus Lestrange</strong>
+                                    <small>疲惫 · 准备宣誓</small>
+                                </span>
+                            </button>
+                            <button class="person-row" type="button" data-person="kharza">
+                                <span class="person-avatar">KH</span>
+                                <span>
+                                    <strong>Kharza</strong>
+                                    <small>冷静 · 记录契约</small>
+                                </span>
+                            </button>
+                            <button class="person-row" type="button" data-person="dradnok">
+                                <span class="person-avatar">DR</span>
+                                <span>
+                                    <strong>Dradnok</strong>
+                                    <small>戒备 · 监视来客</small>
+                                </span>
+                            </button>
+                        </div>
+                    </section>
+
+                    <section class="panel-section">
+                        <div class="section-title">
+                            <h3>接下来</h3>
+                            <button class="link-button" type="button" data-inspector="schedule">日程</button>
+                        </div>
+                        <ol class="schedule-list">
+                            <li class="current">
+                                <time>21:18</time>
+                                <span>宣誓交涉</span>
+                            </li>
+                            <li>
+                                <time>21:30</time>
+                                <span>签署契约</span>
+                            </li>
+                            <li>
+                                <time>之后</time>
+                                <span>处置情报</span>
+                            </li>
+                        </ol>
+                    </section>
+
+                    <section class="panel-section">
+                        <div class="section-title">
+                            <h3>场景风险</h3>
+                        </div>
+                        <div class="risk-row">
+                            <span>交涉破裂</span>
+                            <strong>中等</strong>
+                        </div>
+                        <div class="risk-row">
+                            <span>情报存在诱导</span>
+                            <strong>较高</strong>
+                        </div>
+                    </section>
+                </div>
+            </aside>
+
+            <main class="story-column">
+                <div class="story-scroll longform-reader" id="story-scroll">
+                    <article class="turn-document message" data-speaker="rodolphus">
+                        <header class="turn-header">
+                            <div class="turn-avatar">RL</div>
+                            <div class="turn-identity">
+                                <strong>Rodolphus Lestrange</strong>
+                                <span>回应你的条件</span>
+                            </div>
+                            <button class="turn-menu" id="turn-menu" type="button" aria-label="回合操作">•••</button>
+                            <wa-tooltip for="turn-menu">编辑、重试或查看本轮上下文</wa-tooltip>
+                        </header>
+
+                        <div class="turn-prose">
+                            <p>Rodolphus absorbed it in silence, and the cynicism in his hollow face slowly deepened into something like grim recognition.</p>
+
+                            <p class="thought-beat">Three-fifths.</p>
+
+                            <p>He did not doubt it. That was the terrible thing—he did not doubt it for an instant. He knew these men. He had knelt beside them for a decade, had watched Yaxley calculate and Nott hoard and Malfoy buy his way out of Azkaban with gold he'd sworn he didn't have. He knew exactly how a pure-blood lord's professed devotion evaporated the moment his vault was threatened.</p>
+
+                            <p class="spoken-paragraph"><span class="opening-quote">“</span>Cowards,” Rodolphus said quietly. Not to her. To the room. To his entire generation. “A conqueror at the gates and half his lords are quietly wiring their gold into goblin escrow so they'll have something left when he burns.” His mouth curved without humor. “Bella would have killed every one of them herself if she'd known. She believed. She actually believed.</p>
+
+                            <p>He was silent a moment, and something moved behind his eyes—the filing-away of a very dangerous piece of knowledge, that the goblins held the secret purse-strings of most of the Dark Lord's inner circle. But he was too far into his own ruin to do anything with it now except recognize its weight.</p>
+
+                            <p class="spoken-paragraph"><span class="opening-quote">“</span>Very well, Countess. You have explained Malfoy. He is one coward among many, and I will treat him as such—a nervous fool to be watched and reported on, nothing more.” He drew a slow breath. “I accept your terms. I will swear.”</p>
+
+                            <p class="scene-beat">Kharza's quill moved to a fresh line. Dradnok shifted forward.</p>
+
+                            <p>But Rodolphus lifted one hand—not to stop them, but to add something, and his voice changed as he did, dropping into the low, careful register of a man offering a first coin of good faith to prove the rest are coming.</p>
+
+                            <p class="spoken-paragraph"><span class="opening-quote">“</span>And because I am about to bind my life to yours,” he said, “I will give you something now. Freely. Before the oath. So you understand the quality of what you are buying.” His hollow eyes fixed on the smoked glass. “You want to know what troubles the Dark Lord? What he does when he believes no one watches?”</p>
+
+                            <p class="thought-beat">The chamber went very still.</p>
+
+                            <p class="spoken-paragraph"><span class="opening-quote">“</span>Since Hogwarts—since the raid, since Dumbledore fell and Bellatrix vanished and half the raiding party never came home—he has changed. Not grief. He does not grieve. But he has grown… distracted.” His brow furrowed, genuinely baffled. “He is checking on his hidden possessions, Countess, over and over, like a man counting coins he suspects are being stolen—and whatever he is counting, the numbers are frightening him.”</p>
+
+                            <p>The Morsglass-free skin of his forearm bore only the old Dark Mark, dull in the candlelight, as he extended his hand palm-up over the black table—ready to swear, and watching the mirror to see what his first gift had bought him.</p>
+                        </div>
+
+                        <footer class="turn-footer">
+                            <span>1,026 words · 6 min read</span>
+                            <div>
+                                <button type="button">编辑</button>
+                                <button type="button">重试</button>
+                                <button type="button" data-inspector="log">状态变更 3</button>
+                            </div>
+                        </footer>
+                    </article>
+
+                    <article class="system-memory message asset-callout">
+                        <img class="callout-icon" src="./assets/processed/icon-memory-vial.png" alt="">
+                        <div class="event-mark">已写入世界记忆</div>
+                        <p>Rodolphus 主动透露：黑魔王正在反复检查分散隐藏的私人物品，并对此表现出罕见恐惧。</p>
+                        <button type="button" data-inspector="memory">查看相关记忆</button>
+                    </article>
+
+                    <article class="player-message message">
+                        <div class="player-body">
+                            <span class="message-kind">你的上一回合 · 混合表达</span>
+                            <p>我没有立刻回答，只把契约推到他面前，用指尖压住最后一行。<br>“你会宣誓，但不是向我。向你刚刚说出的真相。”<br>我注视着他的手腕，心里判断这份主动交出的情报究竟值多少信任。</p>
+                        </div>
+                        <div class="dialogue-avatar player">CS</div>
+                    </article>
+
+                    <article class="check-card message" id="completed-check">
+                        <div class="check-main">
+                            <span class="check-type">已完成判定</span>
+                            <h3>判断 Rodolphus 是否隐瞒关键条件</h3>
+                            <p>感知 +2 · 洞察 +2 · 对方主动示好 +1</p>
+                        </div>
+                        <div class="check-result">
+                            <span class="die-value">15</span>
+                            <strong>重大成功</strong>
+                            <small>总值 20</small>
+                        </div>
+                        <button class="detail-toggle" type="button" data-inspector="check">展开依据</button>
+                    </article>
+
+                    <article class="pending-check message">
+                        <img class="pending-check-icon" src="./assets/processed/icon-d20.png" alt="">
+                        <div>
+                            <span class="check-type">主动判定建议</span>
+                            <h3>在接受宣誓前追问隐藏物品</h3>
+                            <p>预计使用：魅力 + 审讯 · 失败可能消耗刚建立的信任</p>
+                        </div>
+                        <button id="prepare-roll" type="button">发起判定</button>
+                    </article>
+                </div>
+
+                <form class="composer" id="composer">
+                    <div class="input-row">
+                        <textarea id="action-input" name="turn-content" rows="3" placeholder="写下你的行动、台词或想法……"></textarea>
+                    </div>
+                    <div class="composer-toolbar">
+                        <div class="expression-tools">
+                            <wa-dropdown id="expression-menu">
+                                <wa-button slot="trigger" appearance="outlined" size="s" with-caret>
+                                    插入表达
+                                </wa-button>
+                                <wa-dropdown-item value="speech">台词 “……”</wa-dropdown-item>
+                                <wa-dropdown-item value="action">动作描写</wa-dropdown-item>
+                                <wa-dropdown-item value="thought">内心思考</wa-dropdown-item>
+                            </wa-dropdown>
+                            <button class="tool-button" id="insert-spell" type="button">
+                                <img src="./assets/processed/icon-wand.png" alt="">
+                                施法
+                            </button>
+                            <span class="composer-hint">Enter 换行 · Ctrl/⌘ + Enter 提交</span>
+                        </div>
+                        <div class="turn-actions">
+                            <button class="check-action-button" id="request-check" type="button">
+                                <img src="./assets/processed/icon-d20.png" alt="">
+                                <strong>主动判定</strong>
+                            </button>
+                            <button class="send-button" type="submit">
+                                <span>提交回合</span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </main>
+
+            <aside class="inspector-panel" id="inspector-panel">
+                <div class="inspector-tabs" role="tablist">
+                    <button class="active" type="button" data-tab="context">人物</button>
+                    <button type="button" data-tab="clues">线索</button>
+                    <button type="button" data-tab="status">状态</button>
+                    <button type="button" data-tab="inventory">物品</button>
+                </div>
+                <div class="inspector-content" id="inspector-content"></div>
+            </aside>
+        </div>
+    </div>
+
+    <div class="overlay hidden" id="roll-overlay" aria-hidden="true">
+        <section class="roll-dialog" role="dialog" aria-modal="true" aria-labelledby="roll-title">
+            <button class="close-overlay" type="button" data-close="roll">关闭</button>
+            <span class="eyebrow">重要判定</span>
+            <h2 id="roll-title">追问隐藏物品的真实含义</h2>
+            <p class="roll-summary">结果将改变当前场景并写入世界状态。确认前可以修改行动或重新裁定。</p>
+            <div class="formula-strip">
+                <span>魅力 <strong>+2</strong></span>
+                <span>审讯 <strong>+2</strong></span>
+                <span>主动示好 <strong>+1</strong></span>
+                <span>信任消耗 <strong>风险</strong></span>
+            </div>
+            <div class="dice-stage">
+                <div class="dice-placeholder" id="dice-placeholder">
+                    <img src="./assets/processed/icon-d20.png" alt="">
+                    <span>D20</span>
+                </div>
+                <div class="dice-result-text" id="dice-result-text">点击下方按钮掷骰</div>
+            </div>
+            <div class="roll-actions">
+                <button class="secondary-button" id="revise-action" type="button">返回修改</button>
+                <button class="secondary-button" id="rejudge-action" type="button">重新裁定</button>
+                <button class="primary-button" id="roll-die" type="button">确认并掷骰</button>
+            </div>
+        </section>
+    </div>
+
+    <div class="overlay hidden" id="model-overlay" aria-hidden="true">
+        <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="models-title">
+            <header>
+                <div>
+                    <span class="eyebrow">模型职责槽位</span>
+                    <h2 id="models-title">AI 配置</h2>
+                </div>
+                <button class="close-overlay" type="button" data-close="model">关闭</button>
+            </header>
+            <div class="settings-scroll">
+                <div class="preset-row">
+                    <span>调用预设</span>
+                    <button type="button">节省</button>
+                    <button class="active" type="button">均衡</button>
+                    <button type="button">质量</button>
+                </div>
+                <article class="model-card">
+                    <div class="model-level">低</div>
+                    <div class="model-info">
+                        <h3>现场叙事者</h3>
+                        <p>日常对话、场景描写、已提交结果的表达</p>
+                        <label>配置槽位
+                            <select id="model-slot-low" name="model-slot-low">
+                                <option>OpenRouter · Gemini Flash</option>
+                                <option>复用中端模型</option>
+                            </select>
+                        </label>
+                    </div>
+                    <span class="connected">已连接</span>
+                </article>
+                <article class="model-card">
+                    <div class="model-level">中</div>
+                    <div class="model-info">
+                        <h3>角色导演</h3>
+                        <p>人物动机、关系变化、记忆和秘密状态</p>
+                        <label>配置槽位
+                            <select id="model-slot-medium" name="model-slot-medium">
+                                <option>OpenRouter · Claude Sonnet</option>
+                                <option>复用高端模型</option>
+                            </select>
+                        </label>
+                    </div>
+                    <span class="connected">已连接</span>
+                </article>
+                <article class="model-card">
+                    <div class="model-level">高</div>
+                    <div class="model-info">
+                        <h3>世界导演</h3>
+                        <p>复杂裁定、重大因果、每日世界演算</p>
+                        <label>配置槽位
+                            <select id="model-slot-high" name="model-slot-high">
+                                <option>OpenRouter · GPT Reasoning</option>
+                                <option>复用中端模型</option>
+                            </select>
+                        </label>
+                    </div>
+                    <span class="connected">已连接</span>
+                </article>
+            </div>
+            <footer>
+                <button class="secondary-button" type="button" data-close="model">取消</button>
+                <button class="primary-button" type="button" data-close="model">保存配置</button>
+            </footer>
+        </section>
+    </div>
+
+    <script src="./app.js"></script>
+</body>
+</html>

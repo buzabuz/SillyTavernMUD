@@ -1247,13 +1247,8 @@ export function createComposerController(ports) {
         projectPeoplePanel(state)
             .activePeople
             .forEach(person => {
-                const { actor, profile } =
-                    person;
                 createOption(
-                    profile?.name ||
-                    actor?.name ||
-                    profile?.nameEn ||
-                    actor?.nameEn ||
+                    person.header?.name ||
                     person.id,
                     person.id,
                 );

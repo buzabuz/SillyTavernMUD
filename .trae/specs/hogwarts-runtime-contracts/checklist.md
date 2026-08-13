@@ -29,6 +29,11 @@
 - [ ] actorLibrary membership 未被解释为物理在场。
 - [ ] local roster 合并 movement、position、scene roster 与 cohort。
 - [ ] cohort witness 未自动创建关系边。
+- [ ] Cast 来源与首次认识只有 `ActorCore.cast` 一个权威。
+- [ ] 临时身份只有 Runtime `temporary` 一个状态权威，揭晓证据只保存 source ref。
+- [ ] 生命状态四字段只存在于 Actor Runtime，并由一个 reducer 原子更新。
+- [ ] Story Cast、People、Appearance、Calendar 不再读取旧 Actor lifecycle 字段。
+- [ ] Dossier 保持 8 个业务顶层字段，LowTier 保持 6 个顶层字段。
 
 ## 提交门禁
 
@@ -52,6 +57,23 @@
 - [x] Item directive 只表达意图，未绕过英文 outcome evidence、proposal validation 或 Reducer。
 - [x] 目标测试、全量测试、ESLint、语法和 diff 检查通过。
 - [x] `item-lifecycle.md`、字段表、专题 progress 和项目记忆已同步。
+
+## Save Revision / NPC Identity V1 闭环
+
+- [x] `timelineEpoch/stateRevision/revisionHistory` 已登记写入者、读取者、上限和敏感信息边界。
+- [x] 所有 Hogwarts metadata/chat/translation/settings 保存经过统一 guard；stale 页面不触达宿主保存或模型。
+- [x] Web Locks、storage fallback、rollback、chat-only、持久化失败恢复和双页面竞争有自动化测试。
+- [x] legacy revision migration 在先 observe 后 register 时仍会持久化，新时间线使用独立 epoch。
+- [x] Identity V1 已登记 gender、birth、education、lineage、body、provenance 及 clock 派生边界。
+- [x] Identity migration 已接入 initial world、opening/foundation、resident/pacing actor、lifecycle 与 load。
+- [x] 身体状态属于 `identity.body`；presentation 只保留衣服、帽子、首饰、穿戴 Item 与手持 Item。
+- [x] 家庭属于 Social Graph；self/other claims 不覆盖 authority；未知人物不创建 actor；不存在只用 `nonexistent`。
+- [x] Ordinary Turn、Scene Transition、Daily/Pacing Director 只读取 observer/clock projection。
+- [x] Inspector dossier 只读，unknown、键盘焦点、390px 和 reduced-motion 有自动化测试。
+- [x] Tina 真实 JSONL 只读 dry-run 保持 10 个 Item、34 条关系既有字段、记忆、位置和 206 条消息不变。
+- [x] Tina dry-run 只新增 120 个 revision/identity/social schema 字段，21/21 profile 与 23/23 runtime actor 获得 Identity V1，重复运行 byte-stable，网络调用为 0。
+- [x] 全量 Hogwarts Node `370/370`、ESLint、完整语法、diff、模块尺寸和依赖边界通过。
+- [x] 浏览器 Identity dossier、字段级来源标签、390px 布局与 stale conflict 提示已验收。
 
 ## Turn 93 False Departure 闭环
 
@@ -186,3 +208,56 @@
 - [x] 全量 Hogwarts Node `311/311`、ESLint、语法、diff 与模块尺寸门禁通过。
 - [x] 浏览器确认错误双实体句消失、修正收束存在、麦格人物卡只有一张。
 - [x] 用户确认后已清理本次 instrumentation、debug server 和会话文件。
+
+## Transition Item Authority 闭环
+
+- [x] 备份时间线证明 holder 在转场前的旧运行时回滚中丢失，而非 transition reducer 清空。
+- [x] pre/post-fix 埋点证明 destroyed Item normalization 保留 holder，位置只按 holder 同步。
+- [x] 中档转场与低档开场均收到精简 `authoritativeItems`。
+- [x] Prompt 明确 owner 不授予持有，destroyed 不得降级、复活、修复或无证据转交。
+- [x] transition diagnostics 持久化按新房间投影后的 Item 权威。
+- [x] 当前 JSONL、scene snapshot、rollback checkpoint 与 message 206 已备份并原子修复。
+- [x] 浏览器确认 Item 卡为“已销毁 / 主人 Harry / 持有人 Tina / 随 Tina”，正文不再把羽毛笔放回 Harry 手里。
+- [x] 目标 projection、Prompt 与 transition reducer 测试通过。
+- [x] 全量 Hogwarts Node `312/312`、ESLint、语法、diff 与模块尺寸门禁通过。
+- [x] 用户确认后已清理本次 instrumentation、debug server 和会话文件。
+
+## Item / NPC Identity / Calendar 准入审计
+
+- [x] Item V2 的 Schema、12 操作、proposal、迁移、UI、转场与真实档案完成审计。
+- [x] 当前 10 个 Item 无重复 ID、dangling presentation 或 scene snapshot mismatch。
+- [x] Item V2 评定为 8/10，可冻结功能面并进入维护模式。
+- [x] NPC 身份解析、Canon、临时人物、记忆、知识、关系和 presence 底座完成盘点。
+- [x] 已确认 actorLibrary 缺正式 Identity Schema，稳定身份与当日意图仍混用自由字段。
+- [x] Calendar 时间发动机与产品事件层分开评估。
+- [x] 已确认 opening `agenda` 陈旧且只写一次，daily directive 同日卡司覆盖不完整。
+- [x] Save Revision Guard 登记为 Calendar 快进/后台模拟的 P0 前置。
+- [x] 推荐顺序确定为 revision guard -> NPC Identity V1 -> Calendar V1 -> school-day slice -> montage。
+
+## Calendar V1 Task 7 历史验收（已由 V2 替代）
+
+- [x] `calendar.version/entries/horizon`、条目字段、状态写入者、Scene 多对多关系与 legacy `agenda` 边界已登记。
+- [x] Tina 真实 JSONL Calendar dry-run 保持 SHA/mtime、210 条消息及 clock/scene/archive/actors/Item/Identity/Social/Memory/location 不变。
+- [x] 真实现存 V1 与移除 Calendar 后的 legacy 克隆均重复迁移 byte-stable；网络与模型调用均为 0。
+- [x] legacy `agenda` 不迁移、不进入 prompt/projection/UI；legacy 克隆得到空 entries，sceneArchive 正文不复制。
+- [x] V1 曾要求考试与约会从任一预览进入后同时关联；V2 已删除该语义并以“世界并发、玩家出席分离”替代。
+- [x] V1 曾向 low Performer、Daily、medium/high Scene Transition 投影全部重叠条目；V2 仅保留 Daily 全量并发投影。
+- [x] Calendar 专项 `47/47`、workflow/save/identity/social/item 回归 `102/102`、全量 Hogwarts Node `422/422` 通过。
+- [x] 生产/测试 ESLint、138 个生产模块、32 个测试模块及 dry-run 脚本语法、diff、体积和依赖边界通过。
+- [ ] 桌面/390px Calendar、同刻逐项预览、进入时间点、相关 Scene 与历史只读等待浏览器 agent 证据。
+
+## Calendar V2 Task 39 文档与回归同步
+
+- [x] README 已记录四层模型、High/Medium 边界、会议式日程、自由开场与 V1 迁移。
+- [x] runtime spec/state fields 已登记 V2 typed collections、Prompt 投影和 schedule/Scene/beat 关系。
+- [x] dry-run 覆盖真实 V1→V2、当前 V2 no-op、无 Calendar 初始化、稳定 ID、幂等、模型/网络 0 及原文件不变。
+- [x] 标准 E2E fixture 覆盖会议式日程、剧情线、只认领所选 schedule、自由开场与历史只读。
+- [x] V1“全部重叠安排强制进入同一 Scene”的测试与当前文档断言已替换为世界并发和玩家出席分离。
+
+## Actor Context V1 Task 6 契约同步
+
+- [x] `state-fields.md` 已登记 ActorCoreV1、ActorRuntimeV1、ActorMemoryIndexV1、Appraisal/Schema、Dossier、Knowledge 与 LowTier 六字段所有权。
+- [x] `actor-memory.md` 已删除人物记忆正文与 impression 持久化语义，改为 Event/Appraisal 引用和一次性原子迁移。
+- [x] `knowledge-runtime.md` 已登记独立 canonical records、可重建索引、hydration 与 LowTierContextV1 预算。
+- [x] runtime `spec.md` 与 README 已明确初级导演 System Prompt 编排属于后续独立项目。
+- [ ] Tina 玩家可见事实、全量测试、ESLint、模块边界与调用预算仍待 Task 6 系统验收。

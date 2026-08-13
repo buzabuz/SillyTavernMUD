@@ -939,6 +939,11 @@ export function normalizeEventKnowledge(
         sceneId,
         sourceMessageIds,
         summaryEn,
+        activationSchemaIds:
+            normalizeIdList(
+                eventKnowledge
+                    .activationSchemaIds,
+            ).slice(0, 64),
         participantActorIds:
             resolution
                 .participantActorIds,
@@ -949,6 +954,7 @@ export function normalizeEventKnowledge(
         witnessBasis:
             resolution.witnessBasis,
         perception,
+        knownToPlayer: false,
         source: eventKnowledge.source,
     };
 }
@@ -1856,9 +1862,19 @@ export function reduceEventKnowledge(
                 ),
             ]),
         );
+    const existing =
+        byId.get(
+            normalized.eventId,
+        );
     byId.set(
         normalized.eventId,
-        normalized,
+        {
+            ...normalized,
+            knownToPlayer:
+                existing
+                    ?.knownToPlayer ===
+                true,
+        },
     );
     return [...byId.values()]
         .sort((left, right) =>
@@ -1866,6 +1882,91 @@ export function reduceEventKnowledge(
                 left.eventId,
                 right.eventId,
             ));
+}
+
+const PLAYER_VISIBLE_EVENT_MESSAGE_ROLES =
+    new Set([
+        'opening_narrative',
+        'scene_opening',
+        'scene_turn',
+    ]);
+
+/**
+ * Mark canonical Events visible only after a locally-built player message has
+ * been committed. Event/model input cannot set this bit through normalization.
+ *
+ * @param {object} worldState Canonical world state.
+ * @param {object} message Committed player-visible chat message.
+ * @param {number} messageId Committed chat row index.
+ * @param {string[]} eventIds Canonical Event IDs proven by the local writer.
+ * @returns {object} Detached world state.
+ */
+export function markCommittedMessageEventsKnownToPlayer(
+    worldState = {},
+    message,
+    messageId,
+    eventIds = [],
+) {
+    const mud =
+        message?.extra
+            ?.hogwartsMud;
+    const playerVisible =
+        Number.isInteger(
+            messageId,
+        ) &&
+        messageId >= 0 &&
+        message?.is_user ===
+            false &&
+        message?.is_system ===
+            false &&
+        PLAYER_VISIBLE_EVENT_MESSAGE_ROLES
+            .has(mud?.role) &&
+        Array.isArray(
+            mud?.segments,
+        ) &&
+        mud.segments.length > 0;
+    const allowedEventIds =
+        new Set(
+            normalizeIdList(
+                eventIds,
+            ),
+        );
+    if (
+        !playerVisible ||
+        !allowedEventIds.size
+    ) {
+        return structuredClone(
+            worldState,
+        );
+    }
+    const next =
+        structuredClone(
+            worldState,
+        );
+    next.eventKnowledge =
+        (
+            next.eventKnowledge ||
+            []
+        ).map(event => ({
+            ...event,
+            knownToPlayer:
+                event
+                    ?.knownToPlayer ===
+                    true ||
+                (
+                    allowedEventIds
+                        .has(
+                            event?.eventId,
+                        ) &&
+                    normalizeMessageIds(
+                        event
+                            ?.sourceMessageIds,
+                    ).includes(
+                        messageId,
+                    )
+                ),
+        }));
+    return next;
 }
 
 export function applyPresenceWitnessTransaction(

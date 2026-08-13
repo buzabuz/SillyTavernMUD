@@ -27,6 +27,7 @@ export function createStoryRenderer(ports) {
         getWorldState,
         initializeOpeningWorld,
         jobRegistry,
+        openCalendar,
         projectPeoplePanel,
         renderAuthorQuillCard,
         renderComposerAddressing,
@@ -35,6 +36,10 @@ export function createStoryRenderer(ports) {
         renderMessage,
         renderMiniMap,
         retryFailedPlayerTurn,
+        SAVE_REVISION_REFRESH_MESSAGE =
+        '时间线已更新，请刷新后继续。',
+        isSaveRevisionBlocked =
+        () => false,
         validateNextSceneIntent,
     } = ports;
 
@@ -43,7 +48,6 @@ export function createStoryRenderer(ports) {
         storyElement,
         composerInput,
         sceneTransitionDialog,
-        sceneArchiveDialog,
     } = refs;
 
     function initials(name) {
@@ -56,31 +60,25 @@ export function createStoryRenderer(ports) {
             .toUpperCase();
     }
 
-    function getPeopleDisplay(state, person) {
-        const { actor, profile } = person;
+    function getPeopleDisplay(_state, person) {
         const displayName =
-            profile?.name ||
-            actor?.name ||
-            profile?.nameEn ||
-            actor?.nameEn ||
+            person.header?.name ||
             person.id;
-        const roomName = getRoomName(
-            state,
-            actor?.mapId ||
-                state.map.activeMapId,
-            actor?.roomId ||
-                state.map
-                    .currentLocalNodeId,
-        );
         return {
             displayName,
             detail: [
-                roomName,
-                actor?.currentActivity ||
-                    actor?.role ||
-                    profile?.role,
+                person.current
+                    ?.location,
+                person.current
+                    ?.activity ||
+                    person.header?.role,
+                person.current
+                    ?.lifeStatusDetail,
             ].filter(Boolean).join(' · '),
-            intent: actor?.currentIntent || '',
+            intent:
+                person.current
+                    ?.intent ||
+                '',
         };
     }
 
@@ -333,8 +331,19 @@ export function createStoryRenderer(ports) {
         }
     }
 
-    function renderSceneArchiveTranscript(scene, preserveScrollAnchor = false) {
-        const transcript = root.querySelector('#hpmud_archive_transcript');
+    function renderSceneArchiveTranscript(
+        scene,
+        preserveScrollAnchor = false,
+        target = null,
+        {
+            readOnly = false,
+        } = {},
+    ) {
+        const transcript =
+            target ||
+            root.querySelector(
+                '#hpmud_archive_transcript',
+            );
         const scroll = transcript.closest('.hpmud-dialog-scroll');
         const previousHeight = scroll?.scrollHeight || 0;
         transcript.replaceChildren();
@@ -349,14 +358,29 @@ export function createStoryRenderer(ports) {
                 `↑ 向上加载更早记录 · 还剩 ${messageIds.length - visibleIds.length}`;
             more.addEventListener('click', () => {
                 session.archiveTranscriptLimit += ARCHIVE_TRANSCRIPT_PAGE_SIZE;
-                renderSceneArchiveTranscript(scene, true);
+                renderSceneArchiveTranscript(
+                    scene,
+                    true,
+                    transcript,
+                    {
+                        readOnly,
+                    },
+                );
             });
             transcript.append(more);
         }
         visibleIds.forEach(messageId => {
             const message = context.chat[messageId];
             if (message) {
-                transcript.append(renderMessage(message, messageId));
+                transcript.append(
+                    renderMessage(
+                        message,
+                        messageId,
+                        {
+                            readOnly,
+                        },
+                    ),
+                );
             }
         });
         const quillCard = renderAuthorQuillCard(
@@ -394,47 +418,9 @@ export function createStoryRenderer(ports) {
             toastr.warning('该场景档案不存在或尚未完成封存。');
             return;
         }
-        session.archiveTranscriptLimit = ARCHIVE_TRANSCRIPT_PAGE_SIZE;
-        root.querySelector('#hpmud_archive_title').textContent =
-            scene.name || scene.nameEn || '场景档案';
-        const meta = root.querySelector('#hpmud_archive_meta');
-        meta.replaceChildren();
-        [
-            ['时间', `${scene.startedClock || '未知'} → ${scene.endedClock || '未知'}`],
-            ['地点', scene.location || scene.roomId || '未知地点'],
-            ['结算', scene.tier === 'high' ? '高档重大转折' : '中档普通切场'],
-        ].forEach(([label, detail]) => {
-            const card = document.createElement('div');
-            const strong = document.createElement('strong');
-            const small = document.createElement('small');
-            strong.textContent = label;
-            small.textContent = detail;
-            card.append(strong, small);
-            meta.append(card);
+        openCalendar({
+            archiveId: scene.id,
         });
-        const timeline = root.querySelector('#hpmud_archive_timeline');
-        timeline.replaceChildren();
-        const timelineEntries = scene.timelineEntries || [];
-        timeline.setAttribute(
-            'aria-label',
-            `已封存现场记录：${timelineEntries
-                .map(entry => `${entry.clock || ''} ${entry.label || ''}`)
-                .join('；')}`,
-        );
-        timelineEntries.forEach(entry => {
-            const row = document.createElement('span');
-            const time = document.createElement('time');
-            time.textContent = entry.timeLabel ||
-                String(entry.clock || '').split(' · ').at(-1) ||
-                '未知';
-            row.append(
-                time,
-                document.createTextNode(` ${entry.label || ''}`),
-            );
-            timeline.append(row);
-        });
-        renderSceneArchiveTranscript(scene);
-        sceneArchiveDialog.showModal();
     }
 
     function updateSceneDestinationStatus() {
@@ -468,6 +454,14 @@ export function createStoryRenderer(ports) {
     }
 
     function openSceneTransitionDialog() {
+        if (
+            isSaveRevisionBlocked()
+        ) {
+            toastr.error(
+                SAVE_REVISION_REFRESH_MESSAGE,
+            );
+            return;
+        }
         const state = getWorldState();
         if (state.phase !== 'playing' || !state.scene) {
             toastr.warning('当前没有可以封存的活动场景。');
@@ -506,6 +500,8 @@ export function createStoryRenderer(ports) {
     function renderStory(preserveScrollAnchor = false) {
         const context = getContext();
         const state = getWorldState();
+        const saveRevisionBlocked =
+            isSaveRevisionBlocked();
         const sceneId = state.scene?.id || '';
         const initialSceneLoad =
             !session.renderedSceneId;
@@ -599,7 +595,13 @@ export function createStoryRenderer(ports) {
                 <button id="hpmud_retry_opening" type="button">重新编排首幕</button>
             `;
                 empty.querySelector('span').textContent = state.opening?.error || '世界导演调用失败。';
-                empty.querySelector('#hpmud_retry_opening').addEventListener('click', () => {
+                const retryOpening =
+                    empty.querySelector(
+                        '#hpmud_retry_opening',
+                    );
+                retryOpening.disabled =
+                    saveRevisionBlocked;
+                retryOpening.addEventListener('click', () => {
                     void initializeOpeningWorld().catch(error => {
                         console.error('[Hogwarts MUD] Opening retry failed', error);
                         toastr.error(String(error?.cause?.message || error?.message || error));
@@ -624,6 +626,34 @@ export function createStoryRenderer(ports) {
         } else {
             visibleEntries.forEach(({ message, messageId }) =>
                 storyElement.append(renderMessage(message, messageId)));
+        }
+
+        if (saveRevisionBlocked) {
+            const conflict =
+                document.createElement(
+                    'div',
+                );
+            conflict.className =
+                'hpmud-system-turn hpmud-turn-failure';
+            const title =
+                document.createElement(
+                    'strong',
+                );
+            const detail =
+                document.createElement(
+                    'span',
+                );
+            title.textContent =
+                '时间线已更新';
+            detail.textContent =
+                SAVE_REVISION_REFRESH_MESSAGE;
+            conflict.append(
+                title,
+                detail,
+            );
+            storyElement.append(
+                conflict,
+            );
         }
 
         const failedPlayerTurn =
@@ -661,6 +691,8 @@ export function createStoryRenderer(ports) {
             retry.type = 'button';
             retry.className =
                 'hpmud-retry-turn';
+            retry.disabled =
+                saveRevisionBlocked;
             retry.textContent =
                 '重试本回合';
             retry.addEventListener(
@@ -795,6 +827,8 @@ export function createStoryRenderer(ports) {
                 '结算包未通过规则校验。';
             retry.type = 'button';
             retry.textContent = '重新打开结算';
+            retry.disabled =
+                saveRevisionBlocked;
             retry.addEventListener('click', openSceneTransitionDialog);
             failure.append(title, detail, retry);
             storyElement.append(failure);
@@ -847,6 +881,8 @@ export function createStoryRenderer(ports) {
                 getContext().chat,
                 state.turn,
             );
+        const saveRevisionBlocked =
+            isSaveRevisionBlocked();
         const ready = state.phase === 'playing' &&
             !foundationBuilding &&
             !dailyDirectorBuilding &&
@@ -854,6 +890,7 @@ export function createStoryRenderer(ports) {
             !memoryDirectorBuilding &&
             !sceneTransitionBuilding &&
             !failedPlayerTurn &&
+            !saveRevisionBlocked &&
             !jobRegistry.turnActive;
         const composer = root.querySelector('#hpmud_composer');
         composer.classList.toggle('locked', !ready);
@@ -871,6 +908,15 @@ export function createStoryRenderer(ports) {
             );
         rollbackButton.disabled =
             !ready;
+        const sceneTransitionButton =
+            root.querySelector(
+                '#hpmud_end_scene',
+            );
+        if (sceneTransitionButton) {
+            sceneTransitionButton
+                .disabled =
+                saveRevisionBlocked;
+        }
         rollbackButton.title =
             rollbackCheckpoint
                 ? '删除上一组玩家/场景消息，并恢复该回合提交前的世界状态'
@@ -881,23 +927,25 @@ export function createStoryRenderer(ports) {
         }
         composerInput.placeholder = ready
             ? '写下你的行动、台词或想法……'
-            : failedPlayerTurn
-                ? '上一条玩家消息已保存，请先在上方重试本回合'
-                : foundationBuilding
-                    ? '世界导演正在建立出场角色库与隐藏故事线，请稍候'
-                    : dailyDirectorBuilding
-                        ? '中档正在执行本日唯一一次日结，请稍候'
-                        : memoryDirectorBuilding
-                            ? '中档正在整理人物印象与共同记忆，请稍候'
-                            : pacingDirectorBuilding
-                                ? '中档正在检查场景节奏与人物变化，请稍候'
-                                : sceneTransitionBuilding
-                                    ? '正在封存当前场景并建立下一幕，请稍候'
-                                    : jobRegistry.turnActive
-                                        ? '低档正在表演本轮动作、场景与对白，请稍候'
-                                        : state.phase === 'initialization_failed'
-                                            ? '首幕编排失败，请先在上方重试'
-                                            : '世界正在建立，首幕完成后即可行动';
+            : saveRevisionBlocked
+                ? SAVE_REVISION_REFRESH_MESSAGE
+                : failedPlayerTurn
+                    ? '上一条玩家消息已保存，请先在上方重试本回合'
+                    : foundationBuilding
+                        ? '世界导演正在建立出场角色库与隐藏故事线，请稍候'
+                        : dailyDirectorBuilding
+                            ? '中档正在执行本日唯一一次日结，请稍候'
+                            : memoryDirectorBuilding
+                                ? '中档正在整理人物印象与共同记忆，请稍候'
+                                : pacingDirectorBuilding
+                                    ? '中档正在检查场景节奏与人物变化，请稍候'
+                                    : sceneTransitionBuilding
+                                        ? '正在封存当前场景并建立下一幕，请稍候'
+                                        : jobRegistry.turnActive
+                                            ? '低档正在表演本轮动作、场景与对白，请稍候'
+                                            : state.phase === 'initialization_failed'
+                                                ? '首幕编排失败，请先在上方重试'
+                                                : '世界正在建立，首幕完成后即可行动';
     }
 
     return {

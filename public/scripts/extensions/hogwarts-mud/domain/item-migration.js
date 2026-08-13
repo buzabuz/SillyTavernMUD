@@ -176,16 +176,32 @@ function migratePresentations(
     worldState,
     items,
 ) {
+    const itemsById =
+        new Map(
+            items.map(item => [
+                item.id,
+                item,
+            ]),
+        );
     const validItemIds =
         new Set(
             items
                 .filter(item =>
                     ![
-                        'consumed',
-                        'destroyed',
+                        'absent',
+                        'unknown',
                     ].includes(
-                        item.state,
+                        item.physicalForm,
                     ))
+                .map(item =>
+                    item.id),
+        );
+    const wearableItemIds =
+        new Set(
+            items
+                .filter(item =>
+                    item.physicalForm ===
+                        'whole')
                 .map(item =>
                     item.id),
         );
@@ -199,25 +215,61 @@ function migratePresentations(
                 ([
                     actorId,
                     presentation,
-                ]) => [
-                    actorId,
-                    normalizeCurrentPresentation(
-                        presentation,
-                        {
-                            validItemIds,
-                            clock:
+                ]) => {
+                    const normalized =
+                        normalizeCurrentPresentation(
+                            presentation,
+                            {
+                                validItemIds,
+                                clock:
                                 worldState
                                     .clock,
+                            },
+                        );
+                    return [
+                        actorId,
+                        {
+                            ...normalized,
+                            wornItemIds:
+                                normalized
+                                    .wornItemIds
+                                    .filter(id => {
+                                        const item =
+                                            itemsById
+                                                .get(id);
+                                        return (
+                                            wearableItemIds
+                                                .has(id) &&
+                                            item
+                                                ?.holderId ===
+                                                actorId
+                                        );
+                                    }),
+                            heldItemIds:
+                                normalized
+                                    .heldItemIds
+                                    .filter(id => {
+                                        const item =
+                                            itemsById
+                                                .get(id);
+                                        return (
+                                            validItemIds
+                                                .has(id) &&
+                                            item
+                                                ?.holderId ===
+                                                actorId
+                                        );
+                                    }),
                         },
-                    ),
-                ],
+                    ];
+                },
             ),
         );
     for (const item of items) {
         if (
             !item.isEquipped ||
             !item.holderId ||
-            !validItemIds.has(
+            !wearableItemIds.has(
                 item.id,
             )
         ) {

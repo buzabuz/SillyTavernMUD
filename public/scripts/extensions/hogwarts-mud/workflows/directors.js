@@ -1,13 +1,27 @@
+import {
+    projectCalendarAtMoment,
+    projectCalendarToday,
+    projectUpcomingCalendar,
+} from '../domain/calendar-projection.js';
+import {
+    NARRATIVE_PROMPT_ACCESS,
+    projectNarrativePromptInput,
+} from '../domain/narrative-prompt-context.js';
+
 export function createDirectorWorkflows(ports) {
     const {
         CANON_CAST_IDENTITY_CONTRACT,
         CONTEXT_SIZE_PRESETS,
         DEFAULT_MODEL_SLOTS,
+        NPC_IDENTITY_PROMPT_BOUNDARY =
+        '',
         analyzePacingSignals,
         applyPacingAssessment,
         applySystemPrompt,
         buildActorSelectionPolicy,
         buildMapAuthorityContext,
+        buildNpcIdentityPromptProjection =
+        () => null,
         createContextBudgetPlan,
         extractRoleResponseText,
         formatRetrievedKnowledge,
@@ -16,13 +30,21 @@ export function createDirectorWorkflows(ports) {
         getWorldDate,
         isDailyDirectorPlanCurrent,
         jobRegistry,
-        normalizeActorMemoryProfile,
         normalizePacingAssessmentPayload,
         parseJsonObject,
+        projectNpcRuntimeActorsForPrompt =
+        state => (
+            state?.actors ||
+            []
+        ).map(actor =>
+            Object.fromEntries(
+                Object.entries(actor)
+                    .filter(([key]) =>
+                        key !== 'identity'),
+            )),
         renderAll,
         resolveRoleSlots,
         retrieveLocalKnowledge,
-        selectSharedMemoriesForContext,
         sendRoleRequest,
         syncLocalKnowledge,
         validatePacingAssessment,
@@ -30,50 +52,114 @@ export function createDirectorWorkflows(ports) {
 
     function projectActorLibraryForContext(
         actorLibrary,
-        contextPlan,
+        _contextPlan,
         {
             actorIds = null,
             includePrivate = true,
-            includeMemories = true,
+            identityObserver =
+            includePrivate
+                ? 'self'
+                : 'player',
+            worldState = null,
         } = {},
     ) {
         const allowedIds = actorIds
             ? new Set(actorIds)
             : null;
+        const projectionState =
+            worldState ||
+            getMudState?.() ||
+            {
+                actorLibrary,
+            };
+        const runtimeById =
+            new Map(
+                (
+                    projectionState
+                        .actors ||
+                    []
+                ).map(actor => [
+                    actor.id,
+                    actor,
+                ]),
+            );
         return (actorLibrary || [])
             .filter(actor =>
                 !allowedIds || allowedIds.has(actor.id))
             .map(actor => {
-                const dynamic =
-                normalizeActorMemoryProfile(actor);
+                const runtime =
+                    runtimeById.get(
+                        actor.id,
+                    ) || {};
+                const identityProjection =
+                buildNpcIdentityPromptProjection(
+                    projectionState,
+                    actor.id,
+                    identityObserver ===
+                        'self'
+                        ? actor.id
+                        : identityObserver,
+                    {
+                        clock:
+                            projectionState
+                                ?.clock ||
+                            '',
+                    },
+                );
                 return {
                     id: actor.id,
                     nameEn: actor.nameEn,
                     roleEn: actor.roleEn,
-                    relationshipToPlayerEn:
-                    actor.relationshipToPlayerEn,
-                    impressionOfPlayerEn:
-                    dynamic.impressionOfPlayerEn,
-                    publicDescriptionEn:
-                    actor.publicDescriptionEn,
-                    publicBackgroundEn:
-                    actor.publicBackgroundEn,
-                    personalityEn: actor.personalityEn,
-                    speechStyleEn: actor.speechStyleEn,
+                    publicProfile:
+                    actor.publicProfile,
+                    performanceCore:
+                    actor.performanceCore,
+                    runtime: {
+                        mapId:
+                        runtime.mapId ||
+                        '',
+                        roomId:
+                        runtime.roomId ||
+                        '',
+                        present:
+                        runtime.present ===
+                        true,
+                        lifeStatus:
+                        runtime.lifeStatus ||
+                        'alive',
+                        lifeStatusPermanent:
+                        runtime
+                            .lifeStatusPermanent ===
+                        true,
+                        lifeStatusDetailEn:
+                        runtime
+                            .lifeStatusDetailEn ||
+                        'Alive.',
+                        currentActivityEn:
+                        runtime
+                            .currentActivityEn ||
+                        '',
+                        currentIntentEn:
+                        runtime
+                            .currentIntentEn ||
+                        '',
+                        currentGoalEn:
+                        runtime
+                            .currentGoalEn ||
+                        '',
+                        temporary:
+                        runtime.temporary ===
+                        true,
+                    },
                     ...(includePrivate ? {
-                        privateGoalEn: actor.privateGoalEn,
-                        fearEn: actor.fearEn,
-                        secretEn: actor.secretEn,
-                        knowledgeEn:
-                        dynamic.knowledgeEn,
+                        privateFacts:
+                        actor.privateFacts,
                     } : {}),
-                    ...(includeMemories ? {
-                        sharedMemories:
-                        selectSharedMemoriesForContext(
-                            dynamic.sharedMemories,
-                            contextPlan,
-                        ),
-                    } : {}),
+                    ...(identityProjection
+                        ? {
+                            identityProjection,
+                        }
+                        : {}),
                 };
             });
     }
@@ -87,6 +173,35 @@ export function createDirectorWorkflows(ports) {
         ),
     ) {
         const date = getWorldDate(state.clock);
+        const hasCalendar =
+            Array.isArray(
+                state.calendar
+                    ?.entries,
+            );
+        const calendar = {
+            today:
+                hasCalendar
+                    ? projectCalendarToday(
+                        state,
+                        state.clock,
+                    )
+                    : [],
+            upcoming:
+                hasCalendar
+                    ? projectUpcomingCalendar(
+                        state,
+                        state.clock,
+                        7,
+                    )
+                    : [],
+            currentMoment:
+                hasCalendar
+                    ? projectCalendarAtMoment(
+                        state,
+                        state.clock,
+                    )
+                    : [],
+        };
         return [
             {
                 role: 'system',
@@ -94,11 +209,15 @@ export function createDirectorWorkflows(ports) {
 
 Rules:
 - Produce one directive for every currently present actor.
-- Use actor-library private goals, fears, secrets, and knowledge boundaries.
+- Use only the supplied medium-tier actor projection. Private goals, secrets, locked clues, and Story Arc state are unavailable.
 - A revealed clue must be prewritten and must have had its unlock condition satisfied in the supplied previous-day events.
+- Calendar is read-only. Use calendar.today, calendar.upcoming and calendar.currentMoment for guidance, but never output a Calendar proposal, entry, cancellation, reschedule, status change or horizon.
+- calendar.currentMoment is the complete set of schedules overlapping the current clock. Keep every entry regardless of participant, location, tag or planningTier.
 - Do not write scene prose or NPC dialogue.
 - Keep ordinary turn durations at least 15 minutes. Instantaneous magic may use fewer.
 - Keep every string under 20 English words. Do not restate character profiles.
+
+${NPC_IDENTITY_PROMPT_BOUNDARY}
 
 Schema:
 {
@@ -123,34 +242,100 @@ Schema:
             },
             {
                 role: 'user',
-                content: JSON.stringify({
-                    date,
-                    currentScene: state.scene,
-                    presentActors: state.actors,
-                    actorLibrary:
-                    projectActorLibraryForContext(
-                        state.actorLibrary,
-                        contextPlan,
+                content: JSON.stringify(
+                    projectNarrativePromptInput(
+                        {
+                            date,
+                            calendar,
+                            currentScene:
+                                state.scene,
+                            presentActors:
+                            projectNpcRuntimeActorsForPrompt(
+                                state,
+                            ),
+                            actorLibrary:
+                            projectActorLibraryForContext(
+                                state.actorLibrary,
+                                contextPlan,
+                                {
+                                    includePrivate:
+                                        false,
+                                    identityObserver:
+                                        'self',
+                                    worldState:
+                                        state,
+                                },
+                            ),
+                            discoveredClues:
+                            (
+                                state.clues ||
+                                []
+                            ).filter(clue =>
+                                clue
+                                    .discovered ===
+                                true),
+                            recentTimeline:
+                            (
+                                state.timeline ||
+                                []
+                            ).slice(
+                                -contextPlan
+                                    .recentMessageLimit,
+                            ),
+                            recentMessages:
+                            getContext().chat
+                                .slice(
+                                    -contextPlan
+                                        .recentMessageLimit,
+                                )
+                                .map(message => ({
+                                    isUser:
+                                        Boolean(
+                                            message
+                                                .is_user,
+                                        ),
+                                    text:
+                                        message.mes,
+                                })),
+                            retrievedLocalKnowledge:
+                            formatRetrievedKnowledge(
+                                projectNarrativePromptInput(
+                                    retrievedKnowledge,
+                                ),
+                            ),
+                        },
+                        {
+                            access:
+                            NARRATIVE_PROMPT_ACCESS
+                                .MEDIUM,
+                        },
                     ),
-                    hiddenStoryArcs: state.storyArcs,
-                    discoveredClues: state.clues,
-                    recentTimeline: (state.timeline || []).slice(
-                        -contextPlan.recentMessageLimit,
-                    ),
-                    recentMessages: getContext().chat.slice(
-                        -contextPlan.recentMessageLimit,
-                    ).map(message => ({
-                        isUser: Boolean(message.is_user),
-                        text: message.mes,
-                    })),
-                    retrievedLocalKnowledge: formatRetrievedKnowledge(retrievedKnowledge),
-                }),
+                ),
             },
         ];
     }
 
     function validateDailyDirectorPlan(plan, state) {
         const errors = [];
+        for (const key of [
+            'calendar',
+            'calendarEntries',
+            'calendarUpdates',
+            'calendarProposal',
+            'entries',
+            'horizon',
+        ]) {
+            if (
+                Object.hasOwn(
+                    plan || {},
+                    key,
+                )
+            ) {
+                errors.push(
+                    `Daily Director 不得输出 Calendar 字段 ${key}。`,
+                );
+            }
+        }
         const date = getWorldDate(state.clock);
         const actorIds = new Set((state.actorLibrary || []).map(actor => actor.id));
         const presentActorIds = (state.actors || [])
@@ -292,7 +477,6 @@ Schema:
                     `Daily plan for ${date}. ${state.scene?.summaryEn || state.scene?.summary || ''}`,
                     entityIds,
                     {
-                        includeLockedClues: true,
                         limit: contextPlan.ragLimit,
                     },
                 );
@@ -483,11 +667,13 @@ Authority and limits:
 - When pacingSignals.reasons includes explicit_canon_actor_request, do not hold. Admit the plausible selected Canon candidate with its supplied stable ID; if the candidate is genuinely impossible at this time or place, use a concrete non-actor intervention rather than inventing a duplicate.
 - New people must be plausible for the current room, age context, and activity. A public guest has no secret, hidden relationship, private lore, special power, or permanent plot authority.
 - guestActor.publicDescriptionEn must contain only stable physical traits. Never put clothes, accessories, held items, nearby belongings, furniture, pose, activity, or location into it; currentActivityEn carries activity and the material observer records dynamic presentation.
-- You may foreground one supplied active story arc through observable pressure, but never invent or reveal a hidden truth or locked clue.
+- Story Arc state is unavailable at this tier. Keep arcId empty and use only supplied observable scene pressure.
 - You may create an immediate public complication, but not a permanent consequence, new map, item, spell, relationship, or canon rewrite.
 - The intervention will be binding for the next low-tier performance. Keep it playable and stop before the player chooses a response.
 - Use hold when the current interaction still has meaningful unused pressure, except when causal_collapse_opportunity is active.
 - Keep diagnosisEn, beatEn, pressureEn, and actor activities under 45 English words each.
+
+${NPC_IDENTITY_PROMPT_BOUNDARY}
 
 Schema:
 {
@@ -503,7 +689,7 @@ For intervene, intervention must be:
   "timing": "this_turn",
   "beatEn": "observable event the low tier must realize",
   "pressureEn": "immediate public pressure requiring player response",
-  "arcId": "existing_active_arc_id_or_empty",
+  "arcId": "",
   "actorEntrances": [
     {
       "id": "existing_absent_actor_id",
@@ -556,79 +742,139 @@ When a public guest is necessary, guestActor must contain exactly:
             },
             {
                 role: 'user',
-                content: JSON.stringify({
-                    pacingSignals,
-                    clock: state.clock,
-                    currentScene: state.scene,
-                    currentLocation: state.location,
-                    presentActors: state.actors.filter(actor =>
-                        actor.present !== false),
-                    actorSelectionPolicy,
-                    knownAbsentActors:
-                    projectActorLibraryForContext(
-                        state.actorLibrary,
-                        contextPlan,
+                content: JSON.stringify(
+                    projectNarrativePromptInput(
                         {
-                            actorIds:
-                                knownAbsentActorIds,
-                            includePrivate: false,
-                            includeMemories: false,
+                            pacingSignals,
+                            clock: state.clock,
+                            currentScene:
+                                state.scene,
+                            currentLocation:
+                                state.location,
+                            presentActors:
+                            projectNpcRuntimeActorsForPrompt(
+                                state,
+                                {
+                                    presentOnly:
+                                        true,
+                                },
+                            ),
+                            actorSelectionPolicy,
+                            knownAbsentActors:
+                            projectActorLibraryForContext(
+                                state.actorLibrary,
+                                contextPlan,
+                                {
+                                    actorIds:
+                                        knownAbsentActorIds,
+                                    includePrivate:
+                                        false,
+                                    includeMemories:
+                                        false,
+                                    identityObserver:
+                                        'player',
+                                    worldState:
+                                        state,
+                                },
+                            ),
+                            unmetAvailableActors:
+                            projectActorLibraryForContext(
+                                state.actorLibrary,
+                                contextPlan,
+                                {
+                                    actorIds:
+                                        unmetAbsentActorIds,
+                                    includePrivate:
+                                        false,
+                                    includeMemories:
+                                        false,
+                                    identityObserver:
+                                        'player',
+                                    worldState:
+                                        state,
+                                },
+                            ),
+                            explicitCanonCandidates:
+                            actorSelectionPolicy
+                                .explicitCanonCandidates,
+                            discoveredClues:
+                            (
+                                state.clues ||
+                                []
+                            ).filter(clue =>
+                                clue
+                                    .discovered ===
+                                true),
+                            recentScenes:
+                            (
+                                state.sceneArchive ||
+                                []
+                            ).slice(
+                                contextPlan.mode ===
+                                    'lean'
+                                    ? -1
+                                    : contextPlan.mode ===
+                                        'balanced'
+                                        ? -2
+                                        : -3,
+                            ),
+                            currentSceneTimeline:
+                            (
+                                state.scene
+                                    ?.timelineEntries ||
+                                []
+                            ).slice(
+                                -contextPlan
+                                    .recentMessageLimit,
+                            ),
+                            recentMessages:
+                            getContext().chat
+                                .slice(Math.max(
+                                    0,
+                                    Number(
+                                        state.scene
+                                            ?.startedMessageId ||
+                                        0,
+                                    ),
+                                ))
+                                .slice(
+                                    -contextPlan
+                                        .recentMessageLimit,
+                                )
+                                .map(message => ({
+                                    isUser:
+                                        Boolean(
+                                            message
+                                                .is_user,
+                                        ),
+                                    text:
+                                        message.mes,
+                                })),
+                            causalCollapseRecords:
+                            (
+                                state
+                                    .causalCollapse
+                                    ?.records ||
+                                []
+                            ).slice(-8),
+                            mapAuthority:
+                            buildMapAuthorityContext(
+                                state,
+                            ),
+                            retrievedLocalKnowledge:
+                            formatRetrievedKnowledge(
+                                projectNarrativePromptInput(
+                                    retrievedKnowledge,
+                                ),
+                            ),
+                        },
+                        {
+                            access:
+                            NARRATIVE_PROMPT_ACCESS
+                                .MEDIUM,
                         },
                     ),
-                    unmetAvailableActors:
-                    projectActorLibraryForContext(
-                        state.actorLibrary,
-                        contextPlan,
-                        {
-                            actorIds:
-                                unmetAbsentActorIds,
-                            includePrivate: false,
-                            includeMemories: false,
-                        },
-                    ),
-                    explicitCanonCandidates:
-                    actorSelectionPolicy
-                        .explicitCanonCandidates,
-                    activeStoryArcs: (state.storyArcs || []).filter(arc =>
-                        arc.status === 'active'),
-                    discoveredClues: state.clues,
-                    recentScenes: (state.sceneArchive || []).slice(
-                        contextPlan.mode === 'lean'
-                            ? -1
-                            : contextPlan.mode === 'balanced'
-                                ? -2
-                                : -3,
-                    ),
-                    currentSceneTimeline:
-                    (
-                        state.scene?.timelineEntries ||
-                        []
-                    ).slice(
-                        -contextPlan.recentMessageLimit,
-                    ),
-                    recentMessages: getContext().chat
-                        .slice(Math.max(
-                            0,
-                            Number(state.scene?.startedMessageId || 0),
-                        ))
-                        .slice(
-                            -contextPlan.recentMessageLimit,
-                        )
-                        .map(message => ({
-                            isUser: Boolean(message.is_user),
-                            text: message.mes,
-                        })),
-                    causalCollapseRecords:
-                    (
-                        state
-                            .causalCollapse
-                            ?.records ||
-                        []
-                    ).slice(-8),
-                    mapAuthority: buildMapAuthorityContext(state),
-                    retrievedLocalKnowledge:
-                    formatRetrievedKnowledge(retrievedKnowledge),
-                }),
+                ),
             },
         ];
     }
@@ -686,7 +932,7 @@ When a public guest is necessary, guestActor must contain exactly:
                 response = await sendRoleRequest(roleSlot, [
                     {
                         role: 'system',
-                        content: 'Repair the pacing assessment JSON. Preserve actorSelectionPolicy priority order and social-stage quota. Use only supplied active arc, actor, item, map, and room IDs. If causal_collapse_opportunity is active, return one compatible causal_collision with aftermath-only surface data, or one ordinary incident with causalCollapse null; never hold. Causal facts must be reversible and requireHighTier false. Otherwise return hold with null intervention or one safe this_turn intervention. Return JSON only.',
+                        content: 'Repair the pacing assessment JSON. Preserve actorSelectionPolicy priority order and social-stage quota. Keep arcId empty and use only supplied actor, item, map, and room IDs. If causal_collapse_opportunity is active, return one compatible causal_collision with aftermath-only surface data, or one ordinary incident with causalCollapse null; never hold. Causal facts must be reversible and requireHighTier false. Otherwise return hold with null intervention or one safe this_turn intervention. Return JSON only.',
                     },
                     {
                         role: 'user',
@@ -790,7 +1036,6 @@ When a public guest is necessary, guestActor must contain exactly:
                     `${state.scene?.summaryEn || state.scene?.summary || ''}`,
                     entityIds,
                     {
-                        includeLockedClues: true,
                         limit: contextPlan.ragLimit,
                     },
                 );

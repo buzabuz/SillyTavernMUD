@@ -232,6 +232,15 @@ export function migrateRelationshipMemoryState(
     if (!worldState) {
         return { state: worldState, changed: false };
     }
+    if (
+        worldState.actorContextVersion ===
+        1
+    ) {
+        return {
+            state: worldState,
+            changed: false,
+        };
+    }
     const needsVersionMigration =
         Number(
             worldState

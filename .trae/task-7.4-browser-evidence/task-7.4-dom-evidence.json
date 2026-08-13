@@ -1,0 +1,67 @@
+{
+  "url": "http://127.0.0.1:8000/?hpmud_identity_v1=verify",
+  "save": "Tina Zhang / Hogwarts / 206 records / Gryffindor Common Room",
+  "identityDossier": {
+    "outerHTMLStart": "<section class=\"hpmud-inspector-card hpmud-identity-dossier\" tabindex=\"0\" aria-label=\"哈利·波特的只读身份档案\">",
+    "header": "IDENTITY DOSSIER / 哈利·波特 / Student · newly met stranger / 权威",
+    "groups": {
+      "basic": {"heading": "基本身份", "fields": ["性别=未知", "出生=未知", "当前年龄=未知"]},
+      "education": {"heading": "教育", "fields": ["学校=未知", "学院=未知", "当前学籍=未知"]},
+      "lineage": {"heading": "血统", "fields": ["血统状态=未知"]},
+      "body": {"heading": "身体状态", "fields": ["身高=未知", "体型=未知", "自然发色=未知", "当前发色 / 染发=未知", "发型=未知", "眼睛=未知", "疤痕=未知", "伤势=未知", "其他身体特征=未知", "当前形态=未知"]},
+      "claims": {"heading": "已知说法", "fields": ["暂无已知说法=未知"]}
+    },
+    "familyAndBackgroundDeclaration": {
+      "heading": "家庭与背景声明",
+      "claims": [
+        "身份：我不是麻瓜。我不会签东西。我从未签过任何东西。我就是哈利。",
+        "出身：我目前没有女朋友。我并非伦敦人。我住在萨里郡。",
+        "身份：我不会签任何东西。没人曾经请我签过东西。你为什么要——你能不能先让我吃早餐?"
+      ]
+    }
+  },
+  "visual": {
+    "app": {"background": "rgb(9, 11, 14)", "color": "rgb(241, 238, 230)"},
+    "inspector": {"background": "rgba(16, 20, 25, 0.98)", "border": "rgba(225, 196, 119, 0.2)"},
+    "dossier": {"border": "rgba(200, 172, 104, 0.22)", "goldInset": "rgba(200, 172, 104, 0.44) 3px 0px 0px inset"},
+    "observed": ["deep midnight blue", "dark green wash", "gold rules", "purple star/dot field"]
+  },
+  "responsive390TemporaryEmulation": {
+    "note": "Browser API exposed no viewport setter; existing <=720/560/420/390 media rules were temporarily applied to a 390px app box, then fully removed.",
+    "appClientWidth": 390,
+    "appScrollWidth": 460,
+    "horizontalOverflowPx": 70,
+    "overflowCause": [
+      ".hpmud-top-actions right=460px",
+      "#hpmud_character right=446px",
+      ".hpmud-more right=404px"
+    ],
+    "inspector": {"clientWidth": 370, "scrollWidth": 370},
+    "dossier": {"clientWidth": 348, "scrollWidth": 348}
+  },
+  "accessibility": {
+    "dossierTabindex": 0,
+    "dossierSnapshotState": ["active", "focused"],
+    "bodyClasses": ["no_animation", "reduced-motion", "hpmud-mode"],
+    "focusStyle": ".hpmud-identity-dossier:focus-visible { outline: rgba(220,193,120,.82) solid 2px; outline-offset: 2px; ... }",
+    "globalFocusStyle": ".hpmud-app button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--hp-gold); outline-offset: 2px; }",
+    "reducedMotionStyle": "@media (prefers-reduced-motion: reduce) { .hpmud-identity-dossier, ... { animation: none !important; transition: none !important; } }"
+  },
+  "staleConflict": {
+    "mode": "naturally present after loading the current save; no synthetic mutation and no guard/session test hook used",
+    "warningOuterHTML": "<div class=\"hpmud-system-turn hpmud-turn-failure\"><strong>时间线已更新</strong><span>时间线已在其他页面更新，请刷新后继续。</span></div>",
+    "inputOuterHTML": "<textarea id=\"hpmud_input\" name=\"turn\" aria-label=\"写下你的行动、台词或想法\" placeholder=\"时间线已在其他页面更新，请刷新后继续。\" disabled></textarea>",
+    "disabledControls": ["重新翻译", "移动", "咒语", "回滚上一轮", "封存场景", "主动判定", "提交回合"]
+  },
+  "network": {
+    "storyModelInferenceRequest": false,
+    "observedNonInference": [
+      "POST /api/tokenizers/openai/count?model=gpt-3.5-turbo",
+      "POST /api/backends/chat-completions/status (ERR_ABORTED; connection status only)",
+      "Generate dryRun console path (Before-generation hook skipped due to dryRun)"
+    ],
+    "hostAutomaticWrites": [
+      "POST /api/chats/save was initiated by host chat loading and logged ERR_ABORTED; no manual save/turn/metadata submission was performed"
+    ]
+  }
+}

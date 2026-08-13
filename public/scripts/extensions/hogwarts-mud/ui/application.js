@@ -10,6 +10,7 @@ import { createComposerController } from './composer-controller.js';
 import { createTurnController } from './turn-controller.js';
 import { createAppController } from './app-controller.js';
 import { createUiBindings } from './bindings.js';
+import { createCalendarController } from './calendar-controller.js';
 import { createHostEventBindings } from '../runtime/host-events.js';
 
 export const UI_ACTION_NAMES = Object.freeze([
@@ -30,6 +31,7 @@ export const UI_ACTION_NAMES = Object.freeze([
     'clearDisplayTranslations',
     'clearLiveSceneStream',
     'clearTemporaryProfileSecret',
+    'closeCalendar',
     'closeMovementPicker',
     'closeSpellPicker',
     'collectCharacterDraft',
@@ -66,6 +68,8 @@ export const UI_ACTION_NAMES = Object.freeze([
     'getSpellProgressPercent',
     'getTranslationProviderLabel',
     'getWorldState',
+    'handleCalendarDialogClose',
+    'handleCalendarKeyDown',
     'importPreset',
     'importRegexFiles',
     'importRoleChatPreset',
@@ -77,6 +81,7 @@ export const UI_ACTION_NAMES = Object.freeze([
     'loadSetupDraft',
     'normalizeRegexPresetItems',
     'openExistingHogwartsSave',
+    'openCalendar',
     'openMovementPicker',
     'openProfileEditor',
     'openSceneArchive',
@@ -98,6 +103,7 @@ export const UI_ACTION_NAMES = Object.freeze([
     'renderActorSocialStatements',
     'renderAll',
     'renderAuthorQuillCard',
+    'renderCalendar',
     'renderCheckCard',
     'renderComposerAddressing',
     'renderComposerSpellPreview',
@@ -122,6 +128,7 @@ export const UI_ACTION_NAMES = Object.freeze([
     'renderWorldMap',
     'repairNarratorCharacter',
     'requestMapExpansion',
+    'resetCalendarSelection',
     'resetInspectorMapScope',
     'rollbackLastTurn',
     'saveInGameModelConfigAndReturn',
@@ -135,10 +142,12 @@ export const UI_ACTION_NAMES = Object.freeze([
     'setComposerMovementDestination',
     'setComposerSpell',
     'setControlValue',
+    'setCalendarView',
     'setLiveSceneStreamPhase',
     'setTranslationProvider',
     'setUiVisible',
     'showSetupStep',
+    'shiftCalendarMonth',
     'startGameFromSetup',
     'submitTurn',
     'syncCampaignUi',
@@ -187,6 +196,7 @@ export function createUiApplication({
         createTurnController(dependencies),
         createAppController(dependencies),
         createUiBindings(dependencies),
+        createCalendarController(dependencies),
         createHostEventBindings(dependencies),
     );
 }

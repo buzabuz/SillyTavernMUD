@@ -4,8 +4,14 @@ import {
 } from './actor-memory-reducer.js';
 import {
     normalizeSocialGraph,
-    projectActorSocialRelationships,
 } from './social-migration.js';
+import {
+    assertActorContextStateV1,
+} from './actor-context-runtime.js';
+import {
+    mergeSocialClaimStores,
+    validateSocialClaimGraph,
+} from './social-claims-reducer.js';
 
 export function validateSocialDirectorResult(
     result,
@@ -25,8 +31,17 @@ export function validateSocialDirectorResult(
             ],
         };
     }
+    const previousGraph =
+        normalizeSocialGraph(
+            worldState.socialGraph,
+        );
+    const sourceGraph =
+        mergeSocialClaimStores(
+            worldState,
+            result.socialGraph,
+        );
     const graph = normalizeSocialGraph(
-        result.socialGraph,
+        sourceGraph,
     );
     const actorIds = new Set(
         (worldState.actorLibrary || [])
@@ -49,6 +64,30 @@ export function validateSocialDirectorResult(
                 .acceptedEvidenceIds ||
             [],
         );
+    const acceptedIdentityClaimIds =
+        new Set(
+            result
+                .acceptedIdentityClaimIds ||
+            [],
+        );
+    const acceptedRelationshipClaimIds =
+        new Set(
+            result
+                .acceptedRelationshipClaimIds ||
+            [],
+        );
+    errors.push(
+        ...validateSocialClaimGraph({
+            sourceGraph:
+                result.socialGraph,
+            graph,
+            actorIds,
+            messageIds,
+            acceptedIdentityClaimIds,
+            acceptedRelationshipClaimIds,
+            previousGraph,
+        }),
+    );
     const validWitness = id =>
         id === 'player' ||
         actorIds.has(id);
@@ -149,6 +188,14 @@ export function validateSocialDirectorResult(
                     ? result
                         .memoryReviews
                     : [],
+                schemaOperations:
+                    Array.isArray(
+                        result
+                            .schemaOperations,
+                    )
+                        ? result
+                            .schemaOperations
+                        : [],
             },
             worldState,
         );
@@ -165,6 +212,9 @@ export function applySocialDirectorResult(
     worldState,
     result,
     allowedMessageIds = [],
+    {
+        boundaryGuard = null,
+    } = {},
 ) {
     const validation =
         validateSocialDirectorResult(
@@ -180,37 +230,42 @@ export function applySocialDirectorResult(
     const reviews =
         result.memoryReviews ||
         [];
+    const schemaOperations =
+        result.schemaOperations ||
+        [];
     let next =
-        reviews.length
+        (
+            reviews.length ||
+            schemaOperations.length ||
+            boundaryGuard
+        )
             ? applyMemoryConsolidation(
                 worldState,
                 {
                     reviews,
+                    schemaOperations,
+                },
+                {
+                    boundaryGuard,
                 },
             )
             : structuredClone(
                 worldState,
             );
+    const graphSource =
+        mergeSocialClaimStores(
+            worldState,
+            result.socialGraph,
+        );
     next.socialGraph =
         normalizeSocialGraph(
-            result.socialGraph,
+            graphSource,
             {
                 currentTurn:
                     worldState?.turn?.count,
             },
         );
-    const graph = next.socialGraph;
-    next.actorLibrary =
-        projectActorSocialRelationships(
-            next.actorLibrary,
-            graph,
-        ).map(profile => ({
-            ...profile,
-            socialStatements:
-                graph.statements
-                    .filter(statement =>
-                        statement.subjectId ===
-                            profile.id),
-        }));
-    return next;
+    return assertActorContextStateV1(
+        next,
+    );
 }

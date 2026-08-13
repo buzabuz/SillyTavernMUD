@@ -2,14 +2,16 @@ import {
     projectActorEventKnowledge,
 } from '../presence-witness-contract.js';
 import {
-    normalizeActorMemoryProfile,
-    selectSharedMemoriesForContext,
     ACTOR_KNOWLEDGE_VERSION,
     sanitizeActorKnowledgeEn,
 } from './actor-memory.js';
 import {
     normalizeCausalCollapseState,
 } from './causal-state.js';
+import {
+    buildNpcIdentityKnowledgeForObserver,
+    buildNpcIdentityPromptProjection,
+} from './npc-identity-prompt-projection.js';
 import {
     buildSocialAudienceProjection,
 } from './social-projection.js';
@@ -138,13 +140,17 @@ export function buildActorKnowledgeCapsules(
                 profile,
             ]),
     );
-    const currentActors = new Map(
-        (worldState?.actors || [])
-            .map(actor => [
-                actor.id,
-                actor,
+    const continuityById =
+        new Map(
+            buildActorContinuityCapsules(
+                worldState,
+                requestedActorIds,
+                contextPlan,
+            ).map(capsule => [
+                capsule.actorId,
+                capsule,
             ]),
-    );
+        );
     const dailyDirectives =
         new Map(
             (
@@ -162,36 +168,25 @@ export function buildActorKnowledgeCapsules(
             const actor =
                 profiles.get(actorId);
             if (!actor) return null;
-            const dynamic =
-                normalizeActorMemoryProfile(
-                    actor,
-                    currentActors.get(
-                        actorId,
-                    ) || {},
+            const identityProjection =
+                buildNpcIdentityPromptProjection(
+                    worldState,
+                    actorId,
+                    actorId,
                 );
             return {
                 actorId,
                 roleEn: actor.roleEn,
-                relationshipToPlayerEn:
-                    actor
-                        .relationshipToPlayerEn,
-                publicBackgroundEn:
-                    actor.publicBackgroundEn,
-                privateGoalEn:
-                    actor.privateGoalEn,
-                fearEn: actor.fearEn,
-                secretEn: actor.secretEn,
-                knowledgeEn:
-                    dynamic.knowledgeEn,
-                impressionOfPlayerEn:
-                    dynamic
-                        .impressionOfPlayerEn,
-                sharedMemories:
-                    selectSharedMemoriesForContext(
-                        dynamic
-                            .sharedMemories,
-                        contextPlan,
-                    ),
+                publicProfile:
+                    actor.publicProfile,
+                performanceCore:
+                    actor.performanceCore,
+                privateFacts:
+                    actor.privateFacts,
+                continuity:
+                    continuityById.get(
+                        actorId,
+                    ) || null,
                 dailyDirective:
                     dailyDirectives
                         .get(actorId) ||
@@ -208,6 +203,12 @@ export function buildActorKnowledgeCapsules(
                     ),
                 socialKnowledge:
                     getActorVisibleSocialKnowledge(
+                        worldState,
+                        actorId,
+                    ),
+                identityProjection,
+                identityKnowledge:
+                    buildNpcIdentityKnowledgeForObserver(
                         worldState,
                         actorId,
                     ),
@@ -284,51 +285,156 @@ export function buildActorContinuityCapsules(
                 profile,
             ]),
     );
-    const currentActors = new Map(
-        (worldState?.actors || [])
-            .map(actor => [
-                actor.id,
-                actor,
+    const appraisalsById =
+        new Map(
+            (
+                worldState
+                    ?.memorySynapse
+                    ?.appraisals ||
+                []
+            ).map(appraisal => [
+                appraisal.id,
+                appraisal,
             ]),
-    );
+        );
+    const eventsById =
+        new Map(
+            (
+                worldState
+                    ?.eventKnowledge ||
+                []
+            ).map(event => [
+                event.eventId,
+                event,
+            ]),
+        );
     return requestedActorIds
         .map(actorId => {
             const profile =
                 profiles.get(actorId);
             if (!profile) return null;
-            const dynamic =
-                normalizeActorMemoryProfile(
-                    profile,
-                    currentActors.get(
-                        actorId,
-                    ) || {},
-                );
-            const selectedMemories =
-                selectSharedMemoriesForContext(
-                    dynamic.sharedMemories,
-                    contextPlan,
-                );
-            const sharedMemories = [
-                ...(
-                    selectedMemories.core ||
+            const memoryEntry =
+                worldState
+                    .actorMemoryIndex
+                    ?.byActorId
+                    ?.[actorId] ||
+                {
+                    firstImpressionRef:
+                        '',
+                    core: [],
+                    recent: [],
+                    everyday: [],
+                };
+            const limits = {
+                core:
+                    Math.min(
+                        1,
+                        contextPlan
+                            ?.memoryLimits
+                            ?.core ??
+                        1,
+                    ),
+                recent:
+                    Math.min(
+                        2,
+                        contextPlan
+                            ?.memoryLimits
+                            ?.recent ??
+                        2,
+                    ),
+                everyday:
+                    Math.min(
+                        1,
+                        contextPlan
+                            ?.memoryLimits
+                            ?.everyday ??
+                        1,
+                    ),
+            };
+            const memories = [
+                'core',
+                'recent',
+                'everyday',
+            ].flatMap(tier =>
+                (
+                    memoryEntry[tier] ||
                     []
-                ).slice(-1),
-                ...(
-                    selectedMemories.recent ||
+                )
+                    .slice(
+                        -limits[tier],
+                    )
+                    .map(reference => {
+                        const record =
+                            reference
+                                .recordType ===
+                                'event'
+                                ? eventsById
+                                    .get(
+                                        reference
+                                            .recordId,
+                                    )
+                                : appraisalsById
+                                    .get(
+                                        reference
+                                            .recordId,
+                                    );
+                        if (!record) {
+                            return null;
+                        }
+                        return {
+                            recordId:
+                                reference
+                                    .recordId,
+                            recordType:
+                                reference
+                                    .recordType,
+                            tier,
+                            summaryEn:
+                                record
+                                    .summaryEn ||
+                                '',
+                            lastClock:
+                                record.clock ||
+                                record
+                                    .committedClock ||
+                                reference
+                                    .addedClock,
+                        };
+                    })
+                    .filter(Boolean));
+            const currentSchema =
+                (
+                    worldState
+                        .memorySynapse
+                        ?.personSchemas ||
                     []
-                ).slice(-2),
-                ...(
-                    selectedMemories.everyday ||
-                    []
-                ).slice(-1),
-            ].map(memory => ({
-                id: memory.id,
-                tier: memory.tier,
-                summaryEn:
-                    memory.summaryEn,
-                lastClock:
-                    memory.lastClock,
-            }));
+                )
+                    .filter(schema =>
+                        schema
+                            .observerId ===
+                            actorId &&
+                        schema.targetId ===
+                            'player' &&
+                        [
+                            'active',
+                            'contested',
+                        ].includes(
+                            schema.status,
+                        ))
+                    .sort((left, right) =>
+                        String(
+                            right
+                                .updatedClock ||
+                            '',
+                        ).localeCompare(
+                            String(
+                                left
+                                    .updatedClock ||
+                                '',
+                            ),
+                            'en',
+                        ))[0] ||
+                null;
             const socialKnowledge =
                 getActorVisibleSocialKnowledge(
                     worldState,
@@ -351,11 +457,11 @@ export function buildActorContinuityCapsules(
                 null;
             const hasMetPlayer =
                 Boolean(
-                    dynamic
-                        .firstImpressionClock ||
-                    dynamic
-                        .firstImpressionOfPlayerEn ||
-                    sharedMemories.length ||
+                    profile.cast
+                        ?.introducedClock ||
+                    memoryEntry
+                        .firstImpressionRef ||
+                    memories.length ||
                     playerEdge,
                 );
             const knownActorIds =
@@ -498,11 +604,25 @@ export function buildActorContinuityCapsules(
                         playerEdge
                             ?.latestEvidence ||
                         null,
-                    impressionOfPlayerEn:
-                        dynamic
-                            .impressionOfPlayerEn,
+                    currentSchema:
+                        currentSchema
+                            ? {
+                                schemaId:
+                                    currentSchema
+                                        .id,
+                                expectationEn:
+                                    currentSchema
+                                        .expectationEn,
+                                confidence:
+                                    currentSchema
+                                        .confidence,
+                                status:
+                                    currentSchema
+                                        .status,
+                            }
+                            : null,
                 },
-                sharedMemories,
+                memories,
             };
         })
         .filter(Boolean);
@@ -511,6 +631,16 @@ export function buildActorContinuityCapsules(
 export function migrateActorKnowledgeBoundaries(
     worldState,
 ) {
+    if (
+        worldState
+            ?.actorContextVersion ===
+        1
+    ) {
+        return {
+            state: worldState,
+            changed: false,
+        };
+    }
     if (
         !worldState ||
         Number(

@@ -23,6 +23,8 @@ export function createMessageRenderer(ports) {
         ignoreItemCandidate,
         ignoreSpellCandidate,
         initials,
+        isSaveRevisionBlocked =
+        () => false,
         normalizeTranslationProvider,
         projectItemCard,
         translateMessage,
@@ -206,6 +208,9 @@ export function createMessageRenderer(ports) {
         article,
         message,
         messageId,
+        {
+            readOnly = false,
+        } = {},
     ) {
         const translation =
             message.extra
@@ -223,7 +228,9 @@ export function createMessageRenderer(ports) {
             );
         summary.textContent = 'EN';
         summary.title =
-            '切换语言或重新翻译';
+            readOnly
+                ? '切换语言'
+                : '切换语言或重新翻译';
 
         const menu =
             document.createElement(
@@ -316,7 +323,8 @@ export function createMessageRenderer(ports) {
                     .translationProvider,
             )}`;
         retranslate.disabled =
-            Number(messageId) < 0;
+            Number(messageId) < 0 ||
+            isSaveRevisionBlocked();
         retranslate.addEventListener(
             'click',
             async () => {
@@ -337,7 +345,7 @@ export function createMessageRenderer(ports) {
                     status.textContent =
                         '已重新翻译';
                     retranslate.disabled =
-                        false;
+                        isSaveRevisionBlocked();
                     setOriginal(false);
                 }
             },
@@ -346,8 +354,10 @@ export function createMessageRenderer(ports) {
             status,
             chinese,
             english,
-            retranslate,
         );
+        if (!readOnly) {
+            menu.append(retranslate);
+        }
         details.append(
             summary,
             menu,
@@ -355,7 +365,14 @@ export function createMessageRenderer(ports) {
         return details;
     }
 
-    function renderSegmentedMessage(message, messageId, segments) {
+    function renderSegmentedMessage(
+        message,
+        messageId,
+        segments,
+        {
+            readOnly = false,
+        } = {},
+    ) {
         const state = getWorldState();
         const actorLibrary = new Map([
             ...(state.actorLibrary || []),
@@ -390,6 +407,9 @@ export function createMessageRenderer(ports) {
                     article,
                     message,
                     messageId,
+                    {
+                        readOnly,
+                    },
                 ),
             );
         }
@@ -464,6 +484,9 @@ export function createMessageRenderer(ports) {
                         item,
                         {
                             decision,
+                            disabled:
+                                isSaveRevisionBlocked(),
+                            readOnly,
                             onAccept:
                                 acceptItemCandidate,
                             onIgnore:
@@ -491,6 +514,9 @@ export function createMessageRenderer(ports) {
                         candidate,
                         {
                             decision,
+                            disabled:
+                                isSaveRevisionBlocked(),
+                            readOnly,
                             onAccept:
                                 acceptSpellCandidate,
                             onIgnore:
@@ -595,7 +621,13 @@ export function createMessageRenderer(ports) {
         });
     }
 
-    function renderMessage(message, messageId) {
+    function renderMessage(
+        message,
+        messageId,
+        {
+            readOnly = false,
+        } = {},
+    ) {
         if (message.is_system) {
             const system = document.createElement('article');
             system.className = 'hpmud-system-turn';
@@ -605,7 +637,14 @@ export function createMessageRenderer(ports) {
 
         const segments = message.extra?.hogwartsMud?.segments;
         if (!message.is_user && Array.isArray(segments) && segments.length) {
-            return renderSegmentedMessage(message, messageId, segments);
+            return renderSegmentedMessage(
+                message,
+                messageId,
+                segments,
+                {
+                    readOnly,
+                },
+            );
         }
 
         const translationEnabled = getSettings().translationEnabled;
@@ -631,6 +670,9 @@ export function createMessageRenderer(ports) {
                     article,
                     message,
                     messageId,
+                    {
+                        readOnly,
+                    },
                 ),
             );
         }

@@ -9,6 +9,10 @@ export function createHostEventBindings(ports) {
         eventSource,
         event_types,
         getMudState,
+        registerSaveRevisionHead =
+        async () => null,
+        resetCalendarSelection =
+        () => {},
         renderSaveLibrary,
         scheduleRender,
         setUiVisible,
@@ -78,6 +82,14 @@ export function createHostEventBindings(ports) {
             }
         });
         on(event_types.CHAT_CHANGED, () => {
+            resetCalendarSelection();
+            void registerSaveRevisionHead()
+                .catch(error => {
+                    console.error(
+                        '[Hogwarts MUD] Failed to register save revision head',
+                        error,
+                    );
+                });
             applySystemPrompt();
             syncModelSlotControls();
             scheduleRender();

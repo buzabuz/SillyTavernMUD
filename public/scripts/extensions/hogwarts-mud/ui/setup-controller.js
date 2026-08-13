@@ -9,12 +9,16 @@ export function createSetupController(ports) {
         RESPONSE_HEADROOM_VERSION,
         applyNativeRoleSettings,
         applySystemPrompt,
+        assertSaveRevisionWritable =
+        () => {},
         createDefaultCharacterDraft,
         createInitialWorldState,
         getContext,
         getMudState,
         getPresetLocalMap,
         getSettings,
+        initializeNewTimelineState =
+        state => state,
         initializeOpeningWorld,
         isGameStarted,
         normalizeCampaign,
@@ -318,6 +322,9 @@ export function createSetupController(ports) {
             : settings.campaignDraft);
         settings.setupDraft = structuredClone(character);
         settings.modelSlots = structuredClone(slots);
+        if (wasStarted) {
+            assertSaveRevisionWritable();
+        }
         await applyNativeRoleSettings(slots.low);
 
         const context = getContext();
@@ -328,10 +335,22 @@ export function createSetupController(ports) {
             };
             context.chatMetadata.hogwartsMud.modelSlots = structuredClone(slots);
         } else {
-            context.chatMetadata.hogwartsMud = createInitialWorldState(character, slots, campaign);
+            context.chatMetadata.hogwartsMud =
+                initializeNewTimelineState(
+                    createInitialWorldState(
+                        character,
+                        slots,
+                        campaign,
+                    ),
+                );
         }
         saveSettingsDebounced();
-        await context.saveMetadata();
+        await context.saveMetadata({
+            source:
+                wasStarted
+                    ? 'setup_update'
+                    : 'timeline_create',
+        });
         applySystemPrompt();
         setAppScreen('game');
         if (wasStarted && getMudState().opening?.status === 'ready') {

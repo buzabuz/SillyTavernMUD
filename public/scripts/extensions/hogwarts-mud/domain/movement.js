@@ -77,27 +77,51 @@ function getExplicitMovementCompanionIds(
         .filter(actor => {
             const profile =
                 profiles.get(actor.id) || {};
-            const relationship = [
-                actor.relationshipToPlayerEn,
-                actor.relationshipToPlayer,
-                profile.relationshipToPlayerEn,
-                profile.relationshipToPlayer,
-            ].filter(Boolean).join(' ');
+            const structuralTags =
+                (
+                    worldState
+                        .socialGraph
+                        ?.relationships ||
+                    []
+                )
+                    .filter(edge =>
+                        (
+                            edge.sourceActorId ===
+                                actor.id &&
+                            edge.targetActorId ===
+                                'player'
+                        ) ||
+                        (
+                            edge.sourceActorId ===
+                                'player' &&
+                            edge.targetActorId ===
+                                actor.id
+                        ))
+                    .flatMap(edge =>
+                        edge.structuralTags ||
+                        []);
+            const family =
+                structuralTags.some(tag =>
+                    [
+                        'family',
+                        'parent',
+                        'guardian',
+                    ].includes(tag));
             const familyAliases =
-                /(?:father|dad|父亲|爸爸)/i
-                    .test(relationship)
+                family &&
+                profile.identity
+                    ?.gender?.code ===
+                    'male'
                     ? ['爸爸', '我爸', '父亲', 'dad', 'father']
-                    : /(?:mother|mum|mom|母亲|妈妈)/i
-                        .test(relationship)
+                    : family &&
+                        profile.identity
+                            ?.gender?.code ===
+                            'female'
                         ? ['妈妈', '我妈', '母亲', 'mum', 'mom', 'mother']
                         : [];
             return [
                 actor.id,
-                actor.name,
-                actor.nameEn,
-                profile.name,
                 profile.nameEn,
-                ...(actor.aliases || []),
                 ...(profile.aliases || []),
                 ...familyAliases,
             ]

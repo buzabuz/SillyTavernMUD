@@ -54,6 +54,14 @@ export function createStatePorts(ports) {
         const resolved = normalizeModelSlots(slots);
         resolved.medium.profileId ||= resolved.low.profileId;
         resolved.high.profileId ||= resolved.medium.profileId;
+        for (const tier of [
+            'high',
+            'medium',
+            'low',
+        ]) {
+            resolved[tier].diagnosticTier =
+                tier;
+        }
         return resolved;
     }
 

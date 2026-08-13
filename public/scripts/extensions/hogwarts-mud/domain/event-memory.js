@@ -1,6 +1,10 @@
 import {
-    upsertSharedMemory,
-} from './actor-memory-migration.js';
+    addActorMemoryRefV1,
+    assertActorContextStateV1,
+} from './actor-context-runtime.js';
+import {
+    reduceEventKnowledge,
+} from '../presence-witness-contract.js';
 
 const PUBLIC_MEMORY_SALIENCE =
     new Set([
@@ -74,116 +78,71 @@ export function applyWitnessedEventMemories(
         0,
     } = {},
 ) {
+    assertActorContextStateV1(
+        worldState,
+    );
     const eventKnowledge =
         transaction
             ?.eventKnowledge;
-    if (
-        !isPublicWitnessMemoryEvent(
-            eventKnowledge,
-        )
-    ) {
+    if (!eventKnowledge?.eventId) {
         return worldState;
     }
-    const witnessIds =
-        new Set(
-            eventKnowledge
-                .witnessActorIds,
-        );
-    const summaryEn =
-        String(
-            eventKnowledge
-                .summaryEn,
-        ).trim();
-    const summary =
-        String(
-            transaction
-                ?.publicEvent ||
-            summaryEn,
-        ).trim();
-    const significance =
-        eventKnowledge
-            .perception
-            .salience ===
-            'major'
-            ? 'notable'
-            : 'everyday';
     const next =
         structuredClone(
             worldState,
         );
-    next.actorLibrary =
-        (
-            next.actorLibrary ||
-            []
-        ).map(profile => {
-            if (
-                !witnessIds.has(
-                    profile.id,
-                )
-            ) {
-                return profile;
-            }
-            const alreadyRecorded =
-                Object.values(
-                    profile
-                        .sharedMemories ||
-                    {},
-                )
-                    .flat()
-                    .some(memory =>
-                        memory.eventId ===
-                        eventKnowledge
-                            .eventId);
-            if (alreadyRecorded) {
-                return profile;
-            }
-            return upsertSharedMemory(
-                profile,
-                {
-                    id:
-                        `${
-                            profile.id
-                        }_${
-                            eventKnowledge
-                                .eventId
-                        }_witness`,
-                    summaryEn,
-                    summary,
-                    firstClock:
-                        clock,
-                    lastClock:
-                        clock,
-                    createdTurn:
-                        turn,
-                    updatedTurn:
-                        turn,
-                    source:
-                        'event_witness',
-                    significance,
-                    lastingImpactEn:
-                        '',
-                    lastingImpact:
-                        '',
-                    eventId:
-                        eventKnowledge
-                            .eventId,
-                    sourceMessageIds: [
-                        ...(
-                            eventKnowledge
-                                .sourceMessageIds ||
-                            []
-                        ),
-                    ],
-                    witnessBasis:
-                        eventKnowledge
-                            .witnessBasis
-                            ?.[
-                                profile.id
-                            ] ||
-                        'witnessed',
-                },
-                'everyday',
-            );
-        });
-    return next;
+    next.eventKnowledge =
+        reduceEventKnowledge(
+            next,
+            eventKnowledge,
+        );
+    const canonicalEvent =
+        next.eventKnowledge
+            .find(event =>
+                event.eventId ===
+                    eventKnowledge
+                        .eventId);
+    if (!canonicalEvent) {
+        return assertActorContextStateV1(
+            next,
+        );
+    }
+    if (
+        !isPublicWitnessMemoryEvent(
+            canonicalEvent,
+        )
+    ) {
+        return assertActorContextStateV1(
+            next,
+        );
+    }
+    const witnessIds =
+        new Set(
+            canonicalEvent
+                .witnessActorIds,
+        );
+    for (const actorId of witnessIds) {
+        if (
+            !next.actorLibrary
+                ?.some(actor =>
+                    actor.id === actorId)
+        ) {
+            continue;
+        }
+        addActorMemoryRefV1(
+            next,
+            actorId,
+            'everyday',
+            {
+                recordType: 'event',
+                recordId:
+                    canonicalEvent
+                        .eventId,
+                addedClock: clock,
+            },
+        );
+    }
+    return assertActorContextStateV1(
+        next,
+    );
 }

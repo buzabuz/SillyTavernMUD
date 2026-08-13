@@ -392,6 +392,10 @@ test('event knowledge receives an idempotent id and survives normalized serializ
         sourceMessageIds: [191, 190, 191],
         summaryEn:
             'Tina levitated Ron instead of the feather.',
+        activationSchemaIds: [
+            'schema_ron_player_patience',
+            'schema_ron_player_patience',
+        ],
         participantActorIds: ['ron'],
         witnessActorIds: [
             'ron',
@@ -446,6 +450,10 @@ test('event knowledge receives an idempotent id and survives normalized serializ
     assert.deepEqual(
         first.sourceMessageIds,
         [190, 191],
+    );
+    assert.deepEqual(
+        first.activationSchemaIds,
+        ['schema_ron_player_patience'],
     );
     assert.deepEqual(second, first);
     assert.deepEqual(

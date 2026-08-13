@@ -1,0 +1,16 @@
+Read-only calendar/history phase:
+- Performance resource count stayed 250 before/after selecting archive and planned entries.
+- stateRevision stayed 26; clock stayed 1991-09-02 · 13:35; scene and Calendar byte summary stayed unchanged.
+- No Calendar-triggered model request or world save was observed.
+
+Authorized Enter Scene phase:
+- POST /api/hogwarts-mud/knowledge/search
+- POST /api/vector/query-multi
+- POST /api/backends/chat-completions/generate (2 requests)
+- POST /api/hogwarts-mud/local/translate (multiple requests)
+- POST /api/chats/save
+
+Console:
+- No new Calendar-specific exception was emitted.
+- Baseline load errors existed before Calendar interaction: aborted /api/settings/save and aborted /api/secrets/rotate.
+- The failed keyboard ArrowUp path was consumed by global RossAscends hotkeys ("got uparrow input").

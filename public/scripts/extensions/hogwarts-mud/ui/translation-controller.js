@@ -139,6 +139,12 @@ export function createTranslationController(ports) {
                 await context.saveChat();
                 updateNativeMessageBlock(messageId, message);
             } catch (error) {
+                if (
+                    error?.name ===
+                    'SaveRevisionConflictError'
+                ) {
+                    return;
+                }
                 console.error('[Hogwarts MUD] Translation failed', error);
                 message.extra.hogwartsMud = {
                     ...message.extra.hogwartsMud,

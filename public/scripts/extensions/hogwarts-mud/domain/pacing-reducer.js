@@ -2,24 +2,31 @@
 
 import {
     findCanonCharacter,
-    getCanonSettingProfile,
 } from '../canon-characters.js';
 
 import {
-    buildActorNameAliases,
     getCanonActorDisplayMetadata,
 } from './actor-identity.js';
 
 import {
+    getCanonIdentity,
+} from './npc-identity-canon.js';
+
+import {
+    normalizeNpcIdentity,
+} from './npc-identity-schema.js';
+
+import {
     ACTOR_KNOWLEDGE_BOUNDARY_EN,
-    normalizeActorMemoryProfile,
-    normalizeSharedMemories,
-    SHARED_MEMORY_TIER_LIMITS,
 } from './actor-memory.js';
 
 import {
-    migrateActorPresentationState,
-} from './appearance.js';
+    assertActorContextStateV1,
+    markActorIntroducedV1,
+    removeActorV1,
+    updateActorRuntimeV1,
+    upsertActorV1,
+} from './actor-context-runtime.js';
 
 import {
     CAUSAL_SOCIAL_STRUCTURAL_TAG_BY_EDGE_TYPE,
@@ -36,7 +43,6 @@ import {
 
 import {
     normalizeSocialGraph,
-    projectActorSocialRelationships,
 } from './social-migration.js';
 
 import {
@@ -58,6 +64,9 @@ export function applyPacingAssessment(
     payload,
     signals = {},
 ) {
+    assertActorContextStateV1(
+        worldState,
+    );
     const validation = validatePacingAssessment(
         payload,
         worldState,
@@ -537,11 +546,6 @@ export function applyPacingAssessment(
                         .values(),
                 ].slice(-500),
             };
-            next.actorLibrary =
-                projectActorSocialRelationships(
-                    next.actorLibrary,
-                    next.socialGraph,
-                );
         }
     }
     next.causalCollapse =
@@ -552,10 +556,6 @@ export function applyPacingAssessment(
             findCanonCharacter(
                 guest.nameEn,
             );
-        const canonProfile =
-            getCanonSettingProfile(
-                canonIdentity,
-            );
         const canonDisplay =
             getCanonActorDisplayMetadata({
                 ...guest,
@@ -563,165 +563,126 @@ export function applyPacingAssessment(
                     canonIdentity?.id ||
                     '',
             });
-        const actorSource = canonIdentity
-            ? 'canon_catalog'
-            : 'pacing_public_guest';
         const guestRoomId = inferActorRoomId(
             guest,
             getLocalMapDefinition(mapId, next.map),
             roomId,
         );
-        next.actorLibrary = [
-            ...(next.actorLibrary || []),
-            normalizeActorMemoryProfile({
-                ...guest,
-                ...(canonDisplay || {}),
-                privateGoalEn: 'Complete the committed public scene beat.',
-                fearEn: '',
-                secretEn: '',
-                knowledgeEn: canonIdentity
-                    ? [
-                        ACTOR_KNOWLEDGE_BOUNDARY_EN,
-                    ]
-                    : [],
-                impressionOfPlayerEn:
-                    'Has only just noticed the player.',
-                impressionOfPlayer:
-                    '刚刚注意到玩家，还没有形成稳定看法。',
-                firstImpressionPending:
-                    true,
-                canonCatalogId:
-                    canonIdentity?.id || '',
-                fixedBirthText:
-                    canonProfile
-                        ?.fixedBirthText ||
-                    '',
-                birthYear:
-                    canonProfile
-                        ?.estimatedBirthYear ||
-                    (
+        const identity =
+            getCanonIdentity(
+                canonIdentity ||
+                guest,
+            ) ||
+            normalizeNpcIdentity({
+                birth:
+                    /^\d{4}-\d{2}-\d{2}$/u
+                        .test(
+                            guest
+                                .birthDate ||
+                            '',
+                        )
+                        ? {
+                            date:
+                                guest
+                                    .birthDate,
+                            precision:
+                                'exact',
+                        }
+                        : {},
+                provenance: {
+                    registryVersion: 1,
+                    generatedBy:
+                        'pacing_guest_reducer',
+                    records:
                         guest.birthDate
-                            ? Number(
-                                guest.birthDate
-                                    .slice(
-                                        0,
-                                        4,
-                                    ),
-                            )
-                            : null
-                    ),
-                birthDate:
-                    canonIdentity
-                        ? ''
-                        : guest.birthDate,
-                settingTags:
-                    canonProfile
-                        ?.settingTags ||
-                    guest.settingTags,
-                relationshipTags: [
-                    'acquaintance',
-                ],
-                introducedClock:
-                    next.clock,
-                introducedTurn:
-                    Number(
-                        next.turn?.count ||
-                        0,
-                    ),
-                source: actorSource,
-            }),
-        ];
-        next.actors = [
-            ...(next.actors || []),
+                            ? [{
+                                fieldPath:
+                                    'birth',
+                                sourceTier:
+                                    'authorized_reducer',
+                                sourceRef:
+                                    `pacing-guest:${guest.id}:${next.clock || 'unknown'}`,
+                                effectiveFrom:
+                                    next.clock ||
+                                    '',
+                                effectiveTo:
+                                    '',
+                            }]
+                            : [],
+                },
+            });
+        upsertActorV1(
+            next,
             {
-                id: guest.id,
-                nameEn:
-                    canonDisplay
-                        ?.nameEn ||
-                    guest.nameEn,
-                name:
-                    canonDisplay
-                        ?.name ||
-                    guest.name ||
-                    guest.nameEn,
-                aliases:
-                    canonDisplay
-                        ?.aliases ||
-                    buildActorNameAliases(
-                        guest.nameEn,
-                        guest.name,
-                        guest.aliases,
-                    ),
-                roleEn: guest.roleEn,
-                role: guest.roleEn,
-                relationshipToPlayerEn: guest.relationshipToPlayerEn,
-                relationshipToPlayer: guest.relationshipToPlayerEn,
-                impressionOfPlayerEn:
-                    'Has only just noticed the player.',
-                impressionOfPlayer:
-                    '刚刚注意到玩家，还没有形成稳定看法。',
-                impressionUpdatedClock: next.clock,
-                impressionUpdatedTurn:
-                    Number(next.turn?.count || 0),
-                firstImpressionPending:
-                    true,
-                publicDescriptionEn: guest.publicDescriptionEn,
-                currentActivityEn: guest.currentActivityEn,
-                currentActivity: guest.currentActivityEn,
-                currentIntentEn: intervention.pressureEn,
-                currentIntent: intervention.pressureEn,
-                present: true,
-                lifeStatus: 'alive',
-                lifeStatusPermanent:
-                    false,
-                lifeStatusDetailEn:
-                    'Alive.',
-                lifeStatusDetail:
-                    '存活。',
-                lifeStatusSinceClock: '',
-                mapId,
-                roomId: guestRoomId,
-                canonCatalogId:
-                    canonIdentity?.id || '',
-                fixedBirthText:
-                    canonProfile
-                        ?.fixedBirthText ||
-                    '',
-                birthYear:
-                    canonProfile
-                        ?.estimatedBirthYear ||
-                    (
-                        guest.birthDate
-                            ? Number(
-                                guest.birthDate
-                                    .slice(
-                                        0,
-                                        4,
-                                    ),
-                            )
-                            : null
-                    ),
-                birthDate:
-                    canonIdentity
-                        ? ''
-                        : guest.birthDate,
-                settingTags:
-                    canonProfile
-                        ?.settingTags ||
-                    guest.settingTags,
-                relationshipTags: [
-                    'acquaintance',
-                ],
-                introducedClock:
-                    next.clock,
-                introducedTurn:
-                    Number(
-                        next.turn?.count ||
-                        0,
-                    ),
-                source: actorSource,
+                actorId: guest.id,
+                coreSource: {
+                    ...guest,
+                    ...(canonDisplay || {}),
+                    aliases:
+                        canonDisplay
+                            ?.aliases ||
+                        guest.aliases ||
+                        [],
+                    canonCatalogId:
+                        canonIdentity?.id ||
+                        '',
+                    identity,
+                    cast: {
+                        origin:
+                            canonIdentity
+                                ? 'canon_catalog'
+                                : 'generated_guest',
+                        introducedClock:
+                            next.clock ||
+                            'unknown',
+                        introducedTurn:
+                            totalTurns,
+                    },
+                    privateFacts: {
+                        secretEn: '',
+                        knowledgeEn:
+                            canonIdentity
+                                ? [
+                                    ACTOR_KNOWLEDGE_BOUNDARY_EN,
+                                ]
+                                : [],
+                    },
+                },
+                runtimeSource: {
+                    mapId,
+                    roomId:
+                        guestRoomId,
+                    present: true,
+                    lifeStatus:
+                        'alive',
+                    lifeStatusPermanent:
+                        false,
+                    lifeStatusDetailEn:
+                        'Alive.',
+                    lifeStatusSinceClock:
+                        '',
+                    currentActivityEn:
+                        guest
+                            .currentActivityEn ||
+                        '',
+                    currentIntentEn:
+                        intervention
+                            .pressureEn ||
+                        '',
+                    currentGoalEn: '',
+                    temporary:
+                        false,
+                },
             },
-        ];
+        );
+        markActorIntroducedV1(
+            next,
+            guest.id,
+            {
+                turn:
+                    totalTurns,
+            },
+        );
     }
     const identityMergeFromId =
         intervention?.identityMergeFromId;
@@ -747,93 +708,83 @@ export function applyPacingAssessment(
             guestProfile &&
             guestActor
         ) {
-            const sharedMemories =
-                normalizeSharedMemories(
-                    guestProfile
-                        .sharedMemories,
-                );
-            sharedMemories.everyday = [
-                ...sharedMemories.everyday,
-                ...(
-                    temporary
-                        .temporaryMemories ||
-                    []
-                ),
-            ].slice(
-                -SHARED_MEMORY_TIER_LIMITS
-                    .everyday,
-            );
-            const mergedProfile =
-                normalizeActorMemoryProfile({
-                    ...guestProfile,
-                    id:
-                        identityMergeFromId,
-                    aliases:
-                        buildActorNameAliases(
-                            guestProfile
-                                .nameEn,
-                            guestProfile.name,
-                            [
-                                ...(
-                                    guestProfile
-                                        .aliases ||
-                                    []
-                                ),
-                                ...(
-                                    temporary
-                                        .aliases ||
-                                    []
-                                ),
-                                temporary
-                                    .nameEn,
-                            ],
-                        ),
-                    sharedMemories,
-                    provisionalActorId:
-                        identityMergeFromId,
-                    resolvedIdentityId:
-                        guest.id,
-                    identityStatus:
-                        'confirmed',
-                    identityEvidenceEn:
-                        intervention
-                            .identityEvidenceEn,
-                });
-            next.actorLibrary =
+            const temporaryCore =
                 next.actorLibrary
-                    .filter(actor =>
-                        actor.id !==
-                            guest.id)
-                    .concat(
-                        mergedProfile,
-                    );
-            next.actors =
-                next.actors
-                    .filter(actor =>
-                        ![
-                            guest.id,
+                    .find(actor =>
+                        actor.id ===
+                            identityMergeFromId);
+            removeActorV1(
+                next,
+                guest.id,
+            );
+            upsertActorV1(
+                next,
+                {
+                    actorId:
+                        identityMergeFromId,
+                    coreSource: {
+                        ...guestProfile,
+                        id:
                             identityMergeFromId,
-                        ].includes(
-                            actor.id,
-                        ))
-                    .concat({
+                        cast:
+                            temporaryCore
+                                ?.cast ||
+                            guestProfile.cast,
+                        aliases: [
+                            ...guestProfile
+                                .aliases,
+                            ...(
+                                temporaryCore
+                                    ?.aliases ||
+                                []
+                            ),
+                            temporaryCore
+                                ?.nameEn ||
+                                '',
+                        ],
+                        identity: {
+                            ...guestProfile
+                                .identity,
+                            provenance: {
+                                ...guestProfile
+                                    .identity
+                                    .provenance,
+                                generatedBy:
+                                    'pacing_identity_merge',
+                                records: [
+                                    ...(
+                                        guestProfile
+                                            .identity
+                                            .provenance
+                                            .records ||
+                                        []
+                                    ),
+                                    {
+                                        fieldPath:
+                                            'identity',
+                                        sourceTier:
+                                            'authorized_reducer',
+                                        sourceRef:
+                                            `pacing-assessment:${next.scene?.id || 'unknown'}:${totalTurns}`,
+                                        effectiveFrom:
+                                            next.clock ||
+                                            '',
+                                        effectiveTo:
+                                            '',
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                    runtimeSource: {
                         ...guestActor,
                         id:
                             identityMergeFromId,
-                        aliases:
-                            mergedProfile
-                                .aliases,
-                        temporary: false,
-                        provisionalActorId:
-                            identityMergeFromId,
-                        resolvedIdentityId:
-                            guest.id,
-                        identityStatus:
-                            'confirmed',
-                        identityEvidenceEn:
-                            intervention
-                                .identityEvidenceEn,
-                    });
+                        temporary:
+                            false,
+                    },
+                },
+            );
         }
     }
     (
@@ -850,210 +801,166 @@ export function applyPacingAssessment(
             next.actors.find(item =>
                 item.id === actor.id);
         if (existing?.temporary) {
-            Object.assign(existing, {
-                ...actor,
-                name:
-                    existing.name ||
-                    actor.nameEn,
-                aliases:
-                    buildActorNameAliases(
-                        actor.nameEn,
-                        existing.name,
-                        existing.aliases,
-                    ),
-                present: true,
-                mapId,
-                roomId,
-                currentActivity:
-                    actor
-                        .currentActivityEn,
-                currentIntentEn:
-                    intervention
-                        .pressureEn,
-                currentIntent:
-                    intervention
-                        .pressureEn,
-            });
+            updateActorRuntimeV1(
+                next,
+                actor.id,
+                {
+                    present: true,
+                    mapId,
+                    roomId,
+                    currentActivityEn:
+                        actor
+                            .currentActivityEn ||
+                        existing
+                            .currentActivityEn,
+                    currentIntentEn:
+                        intervention
+                            .pressureEn ||
+                        existing
+                            .currentIntentEn,
+                },
+            );
             return;
         }
-        next.actors.push({
-            ...actor,
-            name: actor.nameEn,
-            aliases:
-                buildActorNameAliases(
-                    actor.nameEn,
-                ),
-            relationshipToPlayerEn:
-                'scene acquaintance',
-            relationshipToPlayer:
-                '场景中的临时相识',
-            currentActivity:
-                actor.currentActivityEn,
-            currentIntentEn:
-                intervention.pressureEn,
-            currentIntent:
-                intervention.pressureEn,
-            present: true,
-            temporary: true,
-            provisionalActorId:
-                actor.id,
-            identityStatus:
-                'provisional',
-            temporaryMemories: [],
-            lifeStatus: 'alive',
-            lifeStatusPermanent:
-                false,
-            lifeStatusDetailEn:
-                'Alive.',
-            lifeStatusDetail:
-                '存活。',
-            lifeStatusSinceClock: '',
-            mapId,
-            roomId,
-            source:
-                'scene_temporary_actor',
-            introducedClock:
-                next.clock,
-            introducedTurn:
-                Number(
-                    next.turn?.count ||
-                    0,
-                ),
-        });
+        upsertActorV1(
+            next,
+            {
+                actorId: actor.id,
+                coreSource: {
+                    ...actor,
+                    cast: {
+                        origin:
+                            'scene_temporary',
+                        introducedClock:
+                            next.clock ||
+                            'unknown',
+                        introducedTurn:
+                            totalTurns,
+                    },
+                },
+                runtimeSource: {
+                    mapId,
+                    roomId,
+                    present: true,
+                    lifeStatus:
+                        'alive',
+                    lifeStatusPermanent:
+                        false,
+                    lifeStatusDetailEn:
+                        'Alive.',
+                    lifeStatusSinceClock:
+                        '',
+                    currentActivityEn:
+                        actor
+                            .currentActivityEn ||
+                        '',
+                    currentIntentEn:
+                        intervention
+                            .pressureEn ||
+                        '',
+                    currentGoalEn: '',
+                    temporary: true,
+                },
+            },
+        );
+        markActorIntroducedV1(
+            next,
+            actor.id,
+            {
+                turn:
+                    totalTurns,
+            },
+        );
     });
     const entrances = new Map(
         (intervention?.actorEntrances || [])
             .map(entry => [entry.id, entry]),
     );
-    next.actorLibrary =
-        (next.actorLibrary || [])
-            .map(profile =>
-                entrances.has(profile.id)
-                    ? normalizeActorMemoryProfile({
-                        ...profile,
-                        introducedClock:
-                            profile
-                                .introducedClock ||
-                            next.clock,
-                        introducedTurn:
-                            profile
-                                .introducedTurn ??
-                            Number(
-                                next.turn
-                                    ?.count ||
-                                0,
-                            ),
-                        firstImpressionPending:
-                            !profile
-                                .firstImpressionOfPlayerEn,
-                    }, {
-                        ...profile,
-                        present: true,
-                    })
-                    : profile);
-    next.actors = (next.actors || []).map(actor => {
-        const entrance = entrances.get(actor.id);
-        const profile = next.actorLibrary
-            .find(item =>
-                item.id === actor.id);
-        const entranceRoomId = entrance
-            ? inferActorRoomId(
-                entrance,
-                getLocalMapDefinition(mapId, next.map),
-                roomId,
-            )
-            : roomId;
-        return entrance ? {
-            ...actor,
-            present: true,
-            mapId,
-            roomId: entranceRoomId,
-            currentActivityEn: entrance.currentActivityEn,
-            currentActivity: entrance.currentActivityEn,
-            firstImpressionOfPlayerEn:
-                profile
-                    ?.firstImpressionOfPlayerEn ||
-                actor
-                    .firstImpressionOfPlayerEn ||
-                '',
-            firstImpressionOfPlayer:
-                profile
-                    ?.firstImpressionOfPlayer ||
-                actor
-                    .firstImpressionOfPlayer ||
-                '',
-            firstImpressionClock:
-                profile
-                    ?.firstImpressionClock ||
-                actor.firstImpressionClock ||
-                '',
-            firstImpressionTurn:
-                profile
-                    ?.firstImpressionTurn ||
-                actor.firstImpressionTurn ||
-                0,
-            firstImpressionPending:
-                !(
-                    profile
-                        ?.firstImpressionOfPlayerEn ||
-                    actor
-                        .firstImpressionOfPlayerEn
-                ),
-        } : actor;
-    });
     for (const [actorId, entrance] of entrances) {
-        if (next.actors.some(actor => actor.id === actorId)) {
-            continue;
-        }
         const profile = next.actorLibrary.find(actor =>
             actor.id === actorId);
+        if (!profile) {
+            continue;
+        }
         const entranceRoomId = inferActorRoomId(
             entrance,
             getLocalMapDefinition(mapId, next.map),
             roomId,
         );
-        next.actors.push({
-            id: profile.id,
-            nameEn: profile.nameEn,
-            name: profile.name || profile.nameEn,
-            roleEn: profile.roleEn,
-            role: profile.role || profile.roleEn,
-            relationshipToPlayerEn:
-                profile.relationshipToPlayerEn,
-            relationshipToPlayer:
-                profile.relationshipToPlayer ||
-                profile.relationshipToPlayerEn,
-            impressionOfPlayerEn:
-                profile.impressionOfPlayerEn,
-            impressionOfPlayer:
-                profile.impressionOfPlayer ||
-                profile.impressionOfPlayerEn,
-            impressionUpdatedClock:
-                profile.impressionUpdatedClock,
-            impressionUpdatedTurn:
-                profile.impressionUpdatedTurn,
-            firstImpressionOfPlayerEn:
-                profile
-                    .firstImpressionOfPlayerEn,
-            firstImpressionOfPlayer:
-                profile
-                    .firstImpressionOfPlayer,
-            firstImpressionClock:
-                profile.firstImpressionClock,
-            firstImpressionTurn:
-                profile.firstImpressionTurn,
-            firstImpressionPending:
-                !profile
-                    .firstImpressionOfPlayerEn,
-            publicDescriptionEn: profile.publicDescriptionEn,
-            currentActivityEn: entrance.currentActivityEn,
-            currentActivity: entrance.currentActivityEn,
-            currentIntentEn: intervention.pressureEn,
-            currentIntent: intervention.pressureEn,
-            present: true,
-            mapId,
-            roomId: entranceRoomId,
-        });
+        const existing =
+            next.actors.find(actor =>
+                actor.id === actorId);
+        if (existing) {
+            updateActorRuntimeV1(
+                next,
+                actorId,
+                {
+                    present: true,
+                    mapId,
+                    roomId:
+                        entranceRoomId,
+                    currentActivityEn:
+                        entrance
+                            .currentActivityEn ||
+                        existing
+                            .currentActivityEn,
+                    currentIntentEn:
+                        intervention
+                            .pressureEn ||
+                        existing
+                            .currentIntentEn,
+                },
+            );
+            markActorIntroducedV1(
+                next,
+                actorId,
+                {
+                    turn:
+                        totalTurns,
+                },
+            );
+            continue;
+        }
+        upsertActorV1(
+            next,
+            {
+                actorId,
+                coreSource: profile,
+                runtimeSource: {
+                    mapId,
+                    roomId:
+                        entranceRoomId,
+                    present: true,
+                    lifeStatus:
+                        'alive',
+                    lifeStatusPermanent:
+                        false,
+                    lifeStatusDetailEn:
+                        'Alive.',
+                    lifeStatusSinceClock:
+                        '',
+                    currentActivityEn:
+                        entrance
+                            .currentActivityEn ||
+                        '',
+                    currentIntentEn:
+                        intervention
+                            .pressureEn ||
+                        '',
+                    currentGoalEn: '',
+                    temporary:
+                        false,
+                },
+            },
+        );
+        markActorIntroducedV1(
+            next,
+            actorId,
+            {
+                turn:
+                    totalTurns,
+            },
+        );
     }
     next.pacingDirector = {
         status: 'ready',
@@ -1074,9 +981,9 @@ export function applyPacingAssessment(
     if (intervention && next.scene) {
         next.scene.pacingPressureEn = intervention.pressureEn;
     }
-    return migrateActorPresentationState(
+    return assertActorContextStateV1(
         next,
-    ).state;
+    );
 }
 
 export function consumePacingBeat(worldState) {

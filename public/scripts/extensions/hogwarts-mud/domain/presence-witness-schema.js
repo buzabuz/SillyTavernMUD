@@ -61,6 +61,7 @@ export const PERCEPTION_SOURCE_VALUES =
     Object.freeze([
         'post_turn_observer',
         'deterministic_fallback',
+        'structured_scene_opening',
         'migration',
     ]);
 export const LOCAL_PRESENCE_SOURCE_VALUES =
@@ -84,6 +85,7 @@ export const EVENT_KNOWLEDGE_SOURCE_VALUES =
     Object.freeze([
         'post_turn_observer',
         'deterministic_fallback',
+        'structured_scene_opening',
         'migration',
     ]);
 export const WITNESS_BASIS_VALUES =
@@ -150,10 +152,12 @@ export const EVENT_KNOWLEDGE_CONTRACT_KEYS =
         'sceneId',
         'sourceMessageIds',
         'summaryEn',
+        'activationSchemaIds',
         'participantActorIds',
         'witnessActorIds',
         'witnessCohortIds',
         'witnessBasis',
         'perception',
+        'knownToPlayer',
         'source',
     ]);

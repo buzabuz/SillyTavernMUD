@@ -1,4 +1,4 @@
-# Item V2 运行事务
+# Item V3 运行事务（V2 lifecycle + physicalForm）
 
 ## 边界
 
@@ -26,6 +26,17 @@ prose mention
 - `actorPresentations` 只投影整体造型和正式 Item ID。
 
 模型不得直接创建 `items[]`。低档演员与本地观察器只能输出证据化 proposal；medium/high 来源值已登记，但本阶段没有调用入口。Canon seed 和旧档迁移是离线确定性写入者。
+
+正式 Item 的当前物质存在由 `physicalForm` 决定，不能再从 `state=destroyed` 推断“仍有残骸”：
+
+| `physicalForm` | 语义 | holder/location |
+| --- | --- | --- |
+| `whole` | 完整或损坏但仍存在的物体 | 可有，可装备 |
+| `remains` | 不可作为原物使用的残骸 | 可有，不可装备 |
+| `absent` | 没有可交互物质 | 必须清空 |
+| `unknown` | 下落/存在未知 | 必须清空 |
+
+`intact/damaged/dirty -> whole`，`consumed -> absent`，`lost -> unknown`，`destroyed -> remains|absent`。低档正文、Scene Opening 和检索历史都必须服从当前 `physicalForm`。
 
 ## 普通回合
 
@@ -141,7 +152,7 @@ resolveItemCandidate()
 | `damage` | 不变 | 不变 | `state=damaged` |
 | `clean` | 不变 | 不变 | 只允许 dirty -> intact |
 | `lose` | 不变 | 清 holder，保留最后位置 | `state=lost` |
-| `destroy` | 不变 | 保留 holder/location 并继续跟随 | `state=destroyed`，清穿戴/手持展示，不可 carry 复活 |
+| `destroy` | 不变 | remains 可保留并跟随；absent 清 holder/location | `state=destroyed`；按证据写 remains/absent，清装备 |
 
 偷走使用已有 Item 的 `acquire + transferMode=theft`：只改变 holder，不改变 owner。归还使用 `transferMode=return` 和结构化目标 holder。
 
@@ -153,7 +164,9 @@ resolveItemCandidate()
 - 玩家 `spatial/map` 位置；
 - runtime actor 的 `mapId/roomId`。
 
-所有权不参与位置判断。玩家借来的物品跟随玩家，NPC 借走或偷走的物品跟随 NPC。`destroyed` 仍是可追责、可定位的稳定 Item，保留当前 holder 并继续跟随，供后续修复或替换流程引用；只有 `lose` 和 `consume` 清空 holder。移动、内部地图、空间修复、回滚和场景转场都在人物位置提交后调用同一投影。
+所有权不参与位置判断。玩家借来的物品跟随玩家，NPC 借走或偷走的物品跟随 NPC。只有 `whole/remains` 能按 holder 跟随；`absent/unknown` 必须清空 holder、装备和物理位置。`destroyed + remains` 仍是可追责、可定位的稳定残骸；`destroyed + absent` 只保留 Item 身份与历史，不能再被携带、放置、修复或当作原工具使用。移动、内部地图、空间修复、回滚和场景转场都调用同一投影。
+
+场景转场的中档 Director 与低档 Opening Performer 都必须收到精简的 `authoritativeItems`/authority snapshot。中档读取转场前正式 Item；低档读取按下一幕 holder 位置同步后的投影。`ownerId` 只表示主人，`holderId` 才表示物理持有；`remains` 只能表现为残骸，`absent` 不得出现可操作实体，任何终态都不能无证据降级、恢复或转交。隐含普通物品也不得与同名正式 Item 的 `physicalForm/state/holder/location` 冲突。
 
 ## Current Presentation
 
@@ -170,20 +183,21 @@ resolveItemCandidate()
 - `wornItemIds/heldItemIds` 由 Item Reducer 同步。
 - hidden Item 在 ID 解析前先经过 player visibility projection。
 - `accessories/heldItems/heldObject` 只保留为旧档只读 fallback；新 material event 不再写这些字段。
-- 发型和可见状态沿用 material presentation 字段，不在 Item 迁移时删除。
+- presentation 只保存衣服、帽子、首饰、穿戴 Item 与手持 Item；发型、染发、伤势、疤痕和当前身体形态属于 `identity.body`。
 
 ## 旧档与 Canon
 
 `migrateItemSystemState()`：
 
 1. 将 V1 `kind/custody/detail/source` 确定性映射到 V2。
-2. 保留 ID、主人、位置、状态、来源、时间和兼容投影。
-3. 将 equipped Item 加入对应人物 `wornItemIds`。
-4. 保留 legacy presentation 的发型、可见状态和只读 fallback。
-5. 按 actor library、世界日期和稳定 ID seed Canon 标志物。
-6. 设置 `itemSystemVersion=2` 与 `canonItemCatalogVersion`。
+2. V2/V3 Item 按明确证据补 `physicalForm`：完整/损坏/脏污为 whole，consumed 为 absent，lost 为 unknown；destroyed 的彻底消失证据为 absent，残骸证据为 remains，模糊旧值保守为 remains。
+3. absent/unknown 清空 holder/location/equipped；remains 保留有证据的 holder/location，但从 worn presentation 移除。
+4. 保留 ID、主人、状态、来源、时间和兼容投影，并将合法 equipped whole Item 加入对应人物 `wornItemIds`。
+5. Item migration 不解释 legacy 身体字段；后续 Identity migration 将 hair/hairstyle/injury/form 移入 `identity.body`，presentation 保留附着物 fallback。
+6. 按 actor library、世界日期和稳定 ID seed Canon 标志物。
+7. 设置 `itemSystemVersion=3` 与 `canonItemCatalogVersion`。
 
-重复加载必须 byte-stable；`legacy_` 来源前缀不能重复叠加。迁移不调用用户模型。
+重复加载必须 byte-stable；`legacy_` 来源前缀不能重复叠加。迁移不调用用户模型，也不从无边界 raw transcript 猜测物质形态。
 
 ## UI 与可见性
 

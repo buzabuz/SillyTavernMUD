@@ -11,6 +11,13 @@ import {
     SOCIAL_GRAPH_EXTRACTOR_VERSION,
     SOCIAL_GRAPH_VERSION,
 } from './social-schema.js';
+import {
+    migrateLegacyFamilyEdges,
+    normalizeLegacySocialStatements,
+    normalizeSocialClaimStores,
+    reconcileSocialFamilyRelationships,
+    sanitizeSocialFamilyEvidence,
+} from './social-claims-reducer.js';
 
 function normalizeSocialLastRunStats(value) {
     if (
@@ -166,72 +173,66 @@ export function normalizeSocialGraph(
                 1,
             ),
         );
-    const source =
+    const versionedSource =
         sourceVersion <
             SOCIAL_GRAPH_VERSION
             ? parseSocialGraphV1MigrationInput(
                 value,
             )
             : value;
-    const relationshipEvidence = (
-        Array.isArray(
-            source.relationshipEvidence,
-        )
-            ? source.relationshipEvidence
-            : []
-    )
-        .filter(evidence =>
-            evidence?.id &&
-            evidence?.sourceActorId &&
-            evidence?.targetActorId)
-        .map(evidence =>
-            normalizeSocialRelationshipEvidence(
-                evidence,
-            ))
-        .slice(-1000);
-    return {
-        version: SOCIAL_GRAPH_VERSION,
-        extractorVersion: Math.max(
-            0,
-            finiteSocialNumber(
-                source.extractorVersion,
-                0,
-            ),
-        ),
-        statements: Array.isArray(
+    const source =
+        sourceVersion <
+            SOCIAL_GRAPH_VERSION
+            ? migrateLegacyFamilyEdges(
+                versionedSource,
+            )
+            : versionedSource;
+    const statements =
+        normalizeLegacySocialStatements(
             source.statements,
-        )
-            ? source.statements
-                .filter(statement =>
-                    statement?.id &&
-                    statement?.subjectId &&
-                    statement?.speakerId &&
-                    statement?.textEn)
-                .map(statement => ({
-                    ...statement,
-                    witnessedBy: [
-                        ...new Set(
-                            (
-                                Array.isArray(
-                                    statement
-                                        .witnessedBy,
-                                )
-                                    ? statement
-                                        .witnessedBy
-                                    : []
-                            )
-                                .map(String)
-                                .filter(Boolean),
-                        ),
-                    ],
-                }))
-                .slice(-500)
-            : [],
-        relationshipEvidence,
-        relationships: Array.isArray(
-            source.relationships,
-        )
-            ? source.relationships
+        );
+    const {
+        identityClaims,
+        relationshipClaims,
+        personReferences,
+    } = normalizeSocialClaimStores(
+        source,
+        statements,
+    );
+    const relationshipEvidence =
+        sanitizeSocialFamilyEvidence(
+            (
+                Array.isArray(
+                    source.relationshipEvidence,
+                )
+                    ? source
+                        .relationshipEvidence
+                    : []
+            )
+                .filter(evidence =>
+                    evidence?.id &&
+                    evidence
+                        ?.sourceActorId &&
+                    evidence
+                        ?.targetActorId)
+                .map(evidence =>
+                    normalizeSocialRelationshipEvidence(
+                        evidence,
+                    ))
+                .slice(-1000),
+            relationshipClaims,
+            personReferences,
+        );
+    const relationships =
+        reconcileSocialFamilyRelationships(
+            (
+                Array.isArray(
+                    source.relationships,
+                )
+                    ? source
+                        .relationships
+                    : []
+            )
                 .filter(edge =>
                     edge?.id &&
                     edge?.sourceActorId &&
@@ -243,9 +244,25 @@ export function normalizeSocialGraph(
                             relationshipEvidence,
                             currentTurn,
                         },
-                    ))
-                .slice(-500)
-            : [],
+                    )),
+            relationshipClaims,
+            personReferences,
+        );
+    return {
+        version: SOCIAL_GRAPH_VERSION,
+        extractorVersion: Math.max(
+            0,
+            finiteSocialNumber(
+                source.extractorVersion,
+                0,
+            ),
+        ),
+        statements,
+        identityClaims,
+        relationshipClaims,
+        personReferences,
+        relationshipEvidence,
+        relationships,
         lastProcessedMessageId:
             Number.isInteger(
                 source.lastProcessedMessageId,
@@ -300,24 +317,20 @@ export function normalizeSocialGraph(
 
 export function projectActorSocialRelationships(
     actorLibrary = [],
-    graphValue = {},
 ) {
-    const graph =
-        normalizeSocialGraph(graphValue);
     return (
         Array.isArray(actorLibrary)
             ? actorLibrary
             : []
-    ).map(profile => ({
-        ...profile,
-        socialRelationships:
-            graph.relationships
-                .filter(edge =>
-                    edge.sourceActorId ===
-                        profile.id ||
-                    edge.targetActorId ===
-                        profile.id),
-    }));
+    ).map(profile => {
+        const cleaned =
+            { ...profile };
+        delete cleaned
+            .socialStatements;
+        delete cleaned
+            .socialRelationships;
+        return cleaned;
+    });
 }
 
 export function migrateLoadedSocialGraph(
@@ -352,8 +365,25 @@ export function migrateLoadedSocialGraph(
                 SOCIAL_GRAPH_EXTRACTOR_VERSION,
             ),
         );
+    const hasClaimsBoundary =
+        Object.hasOwn(
+            value,
+            'relationshipClaims',
+        ) ||
+        Object.hasOwn(
+            value,
+            'personReferences',
+        );
     const graph =
-        normalizeSocialGraph(value);
+        normalizeSocialGraph(
+            sourceVersion >=
+                SOCIAL_GRAPH_VERSION &&
+                !hasClaimsBoundary
+                ? migrateLegacyFamilyEdges(
+                    value,
+                )
+                : value,
+        );
     const lastMessageId =
         Math.max(
             -1,

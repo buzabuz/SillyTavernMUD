@@ -2,6 +2,8 @@ export function createSpellCandidateCard(
     candidate,
     {
         decision = 'pending',
+        disabled = false,
+        readOnly = false,
         onAccept,
         onIgnore,
     } = {},
@@ -163,7 +165,7 @@ export function createSpellCandidateCard(
         },
     );
     actions.append(info);
-    if (decision === 'pending') {
+    if (decision === 'pending' && !readOnly) {
         const accept =
             document.createElement(
                 'button',
@@ -173,6 +175,8 @@ export function createSpellCandidateCard(
             'is-primary';
         accept.textContent =
             '收录';
+        accept.disabled =
+            disabled;
         const ignore =
             document.createElement(
                 'button',
@@ -180,6 +184,8 @@ export function createSpellCandidateCard(
         ignore.type = 'button';
         ignore.textContent =
             '忽略';
+        ignore.disabled =
+            disabled;
         const resolve =
             async (
                 button,

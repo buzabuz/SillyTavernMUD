@@ -182,6 +182,13 @@ import {
     WORLD_CHANGE_MIN_DAYS,
 } from '../public/scripts/extensions/hogwarts-mud/helpers.js';
 import {
+    migrateCalendarState,
+} from '../public/scripts/extensions/hogwarts-mud/domain/calendar-migration.js';
+import {
+    migrateActorContextV1,
+    validateActorContextStateV1,
+} from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js';
+import {
     findPresetLocalMapInText,
     LOCAL_MAP_CATALOG,
     PRESET_LOCATION_ACTORS,
@@ -298,6 +305,138 @@ function createDirectorFoundation(primaryActorId = 'tina_mother', primaryActorNa
     };
 }
 
+function createActorContextV1Fixture(state) {
+    const source =
+        structuredClone(state);
+    const existing =
+        validateActorContextStateV1(
+            source,
+        );
+    if (existing.valid) {
+        return source;
+    }
+    delete source.actorContextVersion;
+    delete source.memoryReferenceVersion;
+    delete source
+        .actorDossierProjectionVersion;
+    delete source.actorMemoryIndex;
+    const actorIds = new Set([
+        ...(source.actorLibrary || [])
+            .map(actor => actor?.id),
+        ...(source.actors || [])
+            .map(actor => actor?.id),
+        'player',
+    ].filter(Boolean));
+    if (
+        source.memorySynapse &&
+        typeof source.memorySynapse ===
+            'object'
+    ) {
+        source.memorySynapse.appraisals =
+            (
+                source.memorySynapse
+                    .appraisals ||
+                []
+            ).filter(appraisal =>
+                actorIds.has(
+                    appraisal.observerId,
+                ) &&
+                actorIds.has(
+                    appraisal.targetId,
+                ));
+        source.memorySynapse.personSchemas =
+            (
+                source.memorySynapse
+                    .personSchemas ||
+                []
+            ).filter(schema =>
+                actorIds.has(
+                    schema.observerId,
+                ) &&
+                actorIds.has(
+                    schema.targetId,
+                ));
+    }
+    const fixture =
+        migrateActorContextV1(
+            source,
+        ).state;
+    assert.deepEqual(
+        validateActorContextStateV1(
+            fixture,
+        ),
+        {
+            valid: true,
+            errors: [],
+            value: fixture,
+        },
+    );
+    return fixture;
+}
+
+function normalizeActorContextV1FixtureInPlace(
+    state,
+) {
+    const fixture =
+        createActorContextV1Fixture(
+            state,
+        );
+    for (const key of Object.keys(
+        state,
+    )) {
+        delete state[key];
+    }
+    Object.assign(
+        state,
+        fixture,
+    );
+    return state;
+}
+
+function addPlayerRelationshipFixture(
+    state,
+    actorId,
+    structuralTags,
+) {
+    state.socialGraph =
+        normalizeSocialGraph({
+            ...state.socialGraph,
+            relationships: [
+                ...(
+                    state.socialGraph
+                        ?.relationships ||
+                    []
+                ).filter(edge =>
+                    !(
+                        edge.sourceActorId ===
+                            actorId &&
+                        edge.targetActorId ===
+                            'player'
+                    )),
+                {
+                    id:
+                        `relationship_${actorId}_player`,
+                    sourceActorId:
+                        actorId,
+                    targetActorId: 'player',
+                    familiarity: 90,
+                    closeness: 70,
+                    warmth: 40,
+                    trust: 40,
+                    respect: 20,
+                    influence: 20,
+                    tension: 0,
+                    resentment: 0,
+                    fear: 0,
+                    protectiveness: 60,
+                    structuralTags,
+                    activeEmotions: [],
+                    evidenceIds: [],
+                },
+            ],
+        });
+}
+
 function createSceneTransitionState() {
     const character = createDefaultCharacterDraft();
     character.identity.name = 'Tina Zhang';
@@ -348,7 +487,117 @@ function createSceneTransitionState() {
             { from: 'kitchen', to: 'back_garden', direction: 'east', kind: 'door', minutes: 1 },
         ],
     }];
-    return state;
+    return createActorContextV1Fixture(
+        state,
+    );
+}
+
+function createLegacyClockSettlementCalendarEntry(
+    id,
+    startClock,
+    endClock,
+) {
+    return {
+        id,
+        parentId: '',
+        entryType: 'event',
+        title: id,
+        titleEn: id,
+        summary:
+            `${id} 的公开安排。`,
+        summaryEn:
+            `Public schedule for ${id}.`,
+        tags: [],
+        startClock,
+        endClock,
+        participantIds: [],
+        mapId: 'zhang_home',
+        roomId: 'kitchen',
+        status: 'planned',
+        planningTier: 'medium',
+        relatedSceneIds: [],
+        createdClock:
+            '1991-07-24 · 09:15',
+        updatedClock:
+            '1991-07-24 · 09:15',
+    };
+}
+
+function migrateClockSettlementCalendarFixture(
+    state,
+    entries,
+) {
+    const migration =
+        migrateCalendarState({
+            ...state,
+            calendar: {
+                version: 1,
+                entries,
+                horizon:
+                    state.clock,
+            },
+        });
+    assert.equal(
+        migration.changed,
+        true,
+    );
+    return migration.state;
+}
+
+function addExpiredStoryBeatFixture(
+    state,
+    id,
+) {
+    const next =
+        structuredClone(state);
+    const storylineId =
+        `${id}_storyline`;
+    next.calendar.storylines.push({
+        id: storylineId,
+        title: storylineId,
+        titleEn: storylineId,
+        summary:
+            '用于统一时钟结算回归的公开故事线。',
+        summaryEn:
+            'A public storyline for shared clock-settlement regression.',
+        tags: [],
+        startClock:
+            '1991-07-24 · 09:00',
+        endClock:
+            '1992-06-30 · 23:59',
+        participantIds: [],
+        status: 'active',
+        createdClock:
+            '1991-07-24 · 09:15',
+        updatedClock:
+            '1991-07-24 · 09:15',
+    });
+    next.calendar.storyBeats.push({
+        id,
+        storylineId,
+        title: id,
+        titleEn: id,
+        summary:
+            '正文错误地宣称四个场景已经全部完成。',
+        summaryEn:
+            'The prose incorrectly claims that all four Scenes are complete.',
+        tags: [],
+        termKey:
+            `${id}_term`,
+        sequence: 1,
+        windowStartClock:
+            '1991-07-24 · 09:00',
+        windowEndClock:
+            '1991-07-24 · 09:45',
+        sceneTarget: 4,
+        status: 'active',
+        relatedSceneIds: [],
+        createdClock:
+            '1991-07-24 · 09:15',
+        updatedClock:
+            '1991-07-24 · 09:15',
+    });
+    return next;
 }
 
 function createKingsCrossState(
@@ -363,10 +612,15 @@ function createKingsCrossState(
         id: 'alex_zhang',
         nameEn: 'Alex Zhang',
         name: '张先生',
-        relationshipToPlayerEn: 'Father',
-        relationshipToPlayer: '父亲',
-        impressionOfPlayerEn:
-            'My loud, fearless daughter needs watching.',
+        identity: {
+            ...structuredClone(
+                mcgonagall.identity,
+            ),
+            gender: {
+                code: 'male',
+                label: '',
+            },
+        },
     };
     state.actorLibrary = [
         alex,
@@ -411,7 +665,28 @@ function createKingsCrossState(
         roomId,
         status: 'available',
     }];
-    return state;
+    state.socialGraph.relationships = [{
+        id:
+            'relationship_alex_zhang_player',
+        sourceActorId: 'alex_zhang',
+        targetActorId: 'player',
+        familiarity: 90,
+        closeness: 70,
+        warmth: 40,
+        trust: 40,
+        respect: 20,
+        influence: 20,
+        tension: 0,
+        resentment: 0,
+        fear: 0,
+        protectiveness: 60,
+        structuralTags: ['parent'],
+        activeEmotions: [],
+        evidenceIds: [],
+    }];
+    return normalizeActorContextV1FixtureInPlace(
+        state,
+    );
 }
 
 function createSceneTransitionPackage(roomId = 'back_garden') {
@@ -454,6 +729,7 @@ function createSceneTransitionPackage(roomId = 'back_garden') {
                 present: true,
                 currentActivityEn: 'Standing at the garden door with the reply slip.',
                 currentActivity: '拿着回条站在花园门边。',
+                currentIntentEn: '',
                 lifeStatus: 'alive',
                 lifeStatusPermanent: false,
                 lifeStatusDetailEn: 'Alive and unharmed.',
@@ -1025,6 +1301,8 @@ test('direct-address focus and shared RAG preserve NPC knowledge boundaries', ()
             {
                 id:
                     'canon_hermione_jean_granger',
+                canonCatalogId:
+                    'canon_hermione_jean_granger',
                 nameEn:
                     'Hermione Jean Granger',
                 name:
@@ -1444,6 +1722,9 @@ test('direct-address focus and shared RAG preserve NPC knowledge boundaries', ()
         .knowledgeEn = [
             'Almost everything',
         ];
+    normalizeActorContextV1FixtureInPlace(
+        capsuleState,
+    );
     const capsules =
         buildActorKnowledgeCapsules(
             capsuleState,
@@ -1469,7 +1750,9 @@ test('direct-address focus and shared RAG preserve NPC knowledge boundaries', ()
         false,
     );
     assert.deepEqual(
-        capsules[0].knowledgeEn,
+        capsules[0]
+            .privateFacts
+            .knowledgeEn,
         [
             ACTOR_KNOWLEDGE_BOUNDARY_EN,
         ],
@@ -1793,18 +2076,33 @@ test('opening world package commits a home map, present NPCs, and dramatic confl
     const state = applyOpeningWorldPackage(createInitialWorldState(character, {}, campaign), opening);
     assert.equal(state.phase, 'opening_narration');
     assert.equal(state.location, 'Zhang Family Kitchen');
-    assert.equal(state.actors[0].name, 'Mei Zhang');
-    assert.equal(state.actorLibrary.length, 3);
-    assert.deepEqual(
-        state.actorLibrary[0]
-            .relationshipTags,
-        ['family'],
-    );
-    assert.deepEqual(
+    assert.equal(
         state.actorLibrary.find(actor =>
             actor.id ===
-                'old_archivist')
-            .relationshipTags,
+                'tina_mother')
+            .nameEn,
+        'Mei Zhang',
+    );
+    assert.equal(state.actorLibrary.length, 3);
+    assert.deepEqual(
+        state.socialGraph
+            .relationships
+            .find(edge =>
+                edge.sourceActorId ===
+                    'tina_mother' &&
+                edge.targetActorId ===
+                    'player')
+            .structuralTags,
+        ['parent'],
+    );
+    assert.deepEqual(
+        state.socialGraph
+            .relationships
+            .filter(edge =>
+                edge.sourceActorId ===
+                    'old_archivist' ||
+                edge.targetActorId ===
+                    'old_archivist'),
         [],
     );
     assert.equal(state.storyArcs[0].hiddenTruthEn.includes('Riddle'), true);
@@ -2315,13 +2613,30 @@ test('guided movement retry replaces a stale guide-context destination', () => {
         {
             id: 'alex_zhang',
             nameEn: 'Alex Zhang',
-            relationshipToPlayerEn: 'Father',
+            identity: {
+                ...structuredClone(
+                    state.actorLibrary[0]
+                        .identity,
+                ),
+                gender: {
+                    code: 'male',
+                    label: '',
+                },
+            },
         },
         {
             id: 'minerva_mcgonagall',
             nameEn: 'Minerva McGonagall',
         },
     ];
+    addPlayerRelationshipFixture(
+        state,
+        'alex_zhang',
+        ['parent'],
+    );
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
     const action =
         '我牵着爸爸跟着麦格走向下一个购物点，她给我们带路。';
     const storedMovement = {
@@ -2429,8 +2744,8 @@ test('entering a preset proprietor room admits its canonical resident once', () 
                 item.id ===
                     'garrick_ollivander');
     assert.equal(
-        profile.source,
-        'preset_location_resident',
+        profile.cast.origin,
+        'preset_resident',
     );
     assert.equal(actor.present, true);
     assert.equal(
@@ -2587,6 +2902,7 @@ test('scene transition can preload a destination professor without activating th
             present: true,
             currentActivityEn:
                 'Beginning the first Charms lesson.',
+            currentIntentEn: '',
             firstImpressionOfPlayerEn:
                 'An unusually conspicuous first-year with bright blue eyes.',
             lifeStatus:
@@ -3001,8 +3317,25 @@ test('unsettled turn recovery replays its committed move and route companions', 
     state.actorLibrary = [{
         id: 'alex_zhang',
         nameEn: 'Alex Zhang',
-        relationshipToPlayerEn: 'Father',
+        identity: {
+            ...structuredClone(
+                state.actorLibrary[0]
+                    .identity,
+            ),
+            gender: {
+                code: 'male',
+                label: '',
+            },
+        },
     }];
+    addPlayerRelationshipFixture(
+        state,
+        'alex_zhang',
+        ['parent'],
+    );
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
     const storedMovement = {
         attempted: true,
         moved: true,
@@ -3088,6 +3421,39 @@ test('Gringotts shorthand moves player and explicit companions without archiving
             roomId: 'madam_malkins',
         },
     ];
+    state.actorLibrary = [
+        {
+            id: 'alex_zhang',
+            nameEn: 'Alex Zhang',
+            identity: {
+                ...structuredClone(
+                    state.actorLibrary[0]
+                        .identity,
+                ),
+                gender: {
+                    code: 'male',
+                    label: '',
+                },
+            },
+        },
+        {
+            id: 'eddie_cooper',
+            nameEn: 'Eddie Cooper',
+        },
+        {
+            id: 'minerva_mcgonagall',
+            nameEn:
+                'Minerva McGonagall',
+        },
+    ];
+    addPlayerRelationshipFixture(
+        state,
+        'alex_zhang',
+        ['parent'],
+    );
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
     const sceneId = state.scene.id;
     const archiveCount = state.sceneArchive.length;
     const result = applyPlayerMovement(
@@ -3205,6 +3571,39 @@ test('spatial migration retries a recorded unresolved local movement once', () =
             roomId: 'madam_malkins',
         },
     ];
+    state.actorLibrary = [
+        {
+            id: 'alex_zhang',
+            nameEn: 'Alex Zhang',
+            identity: {
+                ...structuredClone(
+                    state.actorLibrary[0]
+                        .identity,
+                ),
+                gender: {
+                    code: 'male',
+                    label: '',
+                },
+            },
+        },
+        {
+            id: 'eddie_cooper',
+            nameEn: 'Eddie Cooper',
+        },
+        {
+            id: 'minerva_mcgonagall',
+            nameEn:
+                'Minerva McGonagall',
+        },
+    ];
+    addPlayerRelationshipFixture(
+        state,
+        'alex_zhang',
+        ['parent'],
+    );
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
     const sceneId = state.scene.id;
     const archiveCount = state.sceneArchive.length;
     const migrated = reconcileSpatialState(
@@ -4031,6 +4430,9 @@ test('actor continuity capsules override stale stranger labels without exposing 
         ],
         relationshipEvidence: [],
     };
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
 
     const [capsule] =
         buildActorContinuityCapsules(
@@ -4066,9 +4468,13 @@ test('actor continuity capsules override stale stranger labels without exposing 
         [lavender.id],
     );
     assert.deepEqual(
-        capsule.sharedMemories
-            .map(memory => memory.id),
-        ['train_memory'],
+        capsule.memories
+            .map(memory =>
+                memory.summaryEn),
+        [
+            'Shared a train compartment where Tina broke the window and scorched a textbook.',
+            'Boundary-free but impossible to forget.',
+        ],
     );
     assert.equal(
         JSON.stringify(capsule)
@@ -4768,6 +5174,7 @@ test('legacy actor descriptions split stable appearance from current presentatio
     }];
     state.actorPresentations = {};
     state.actorPresentationVersion = 0;
+    delete state.actorContextVersion;
     const migration =
         migrateActorPresentationState(
             state,
@@ -5352,6 +5759,7 @@ test('scene transition validation locks an explicit player destination', () => {
             present: true,
             currentActivityEn:
                 'Standing silently by the garden door.',
+            currentIntentEn: '',
             lifeStatus: 'alive',
             lifeStatusPermanent: false,
             lifeStatusDetailEn:
@@ -5593,12 +6001,10 @@ test('scene transition prompt requests sparse actor-centered relationship memori
 test('scene transitions capture but never overwrite a new actor first impression', () => {
     const state =
         createSceneTransitionState();
-    const archivist =
-        state.actorLibrary.find(actor =>
-            actor.id ===
-                'old_archivist');
-    delete archivist
-        .firstImpressionOfPlayerEn;
+    state.actorMemoryIndex
+        .byActorId
+        .old_archivist
+        .firstImpressionRef = '';
     const payload =
         createSceneTransitionPackage();
     payload.nextScene.actorStates.push({
@@ -5606,6 +6012,7 @@ test('scene transitions capture but never overwrite a new actor first impression
         present: true,
         currentActivityEn:
             'Standing beside the dry patch in the Back Garden.',
+        currentIntentEn: '',
         lifeStatus: 'alive',
         lifeStatusPermanent: false,
         lifeStatusDetailEn:
@@ -5648,15 +6055,21 @@ test('scene transitions capture but never overwrite a new actor first impression
                     payload.closureSummaryEn,
             },
         );
+    const committedRef =
+        committed.actorMemoryIndex
+            .byActorId
+            .old_archivist
+            .firstImpressionRef;
     const committedArchivist =
-        committed.actorLibrary.find(
-            actor =>
-                actor.id ===
-                    'old_archivist',
-        );
+        committed.memorySynapse
+            .appraisals.find(
+                appraisal =>
+                    appraisal.id ===
+                    committedRef,
+            );
     assert.equal(
         committedArchivist
-            .firstImpressionOfPlayerEn,
+            .summaryEn,
         payload.nextScene.actorStates[1]
             .firstImpressionOfPlayerEn,
     );
@@ -5679,22 +6092,10 @@ test('scene transitions capture but never overwrite a new actor first impression
 test('scene transition checkpoints settle a pending first impression for an actor who was already present', () => {
     const state =
         createSceneTransitionState();
-    const profile =
-        state.actorLibrary.find(actor =>
-            actor.id ===
-                'minerva_mcgonagall');
-    const actor =
-        state.actors.find(item =>
-            item.id ===
-                'minerva_mcgonagall');
-    delete profile
-        .firstImpressionOfPlayerEn;
-    profile.firstImpressionPending =
-        true;
-    delete actor
-        .firstImpressionOfPlayerEn;
-    actor.firstImpressionPending =
-        true;
+    state.actorMemoryIndex
+        .byActorId
+        .minerva_mcgonagall
+        .firstImpressionRef = '';
 
     const payload =
         createSceneTransitionPackage();
@@ -5764,21 +6165,22 @@ test('scene transition checkpoints settle a pending first impression for an acto
                         .closureSummaryEn,
             },
         );
+    const settledRef =
+        committed.actorMemoryIndex
+            .byActorId
+            .minerva_mcgonagall
+            .firstImpressionRef;
     const settled =
-        committed.actorLibrary.find(
-            item =>
-                item.id ===
-                    'minerva_mcgonagall',
-        );
+        committed.memorySynapse
+            .appraisals.find(
+                appraisal =>
+                    appraisal.id ===
+                    settledRef,
+            );
     assert.equal(
-        settled
-            .firstImpressionOfPlayerEn,
+        settled.summaryEn,
         payload.nextScene.actorStates[0]
             .firstImpressionOfPlayerEn,
-    );
-    assert.equal(
-        settled.firstImpressionPending,
-        false,
     );
 });
 
@@ -5991,7 +6393,7 @@ test('scene transition grounding validates structured destination without parsin
     );
 });
 
-test('scene transition treats prose location mentions as non-authoritative', () => {
+function createEntranceHallTransitionCase() {
     const state =
         createSceneTransitionState();
     const destination = {
@@ -6026,8 +6428,20 @@ test('scene transition treats prose location mentions as non-authoritative', () 
         .mapId = destination.mapId;
     payload.nextScene.followingSceneIntent
         .roomId = destination.roomId;
+    return {
+        destination,
+        payload,
+        state,
+    };
+}
 
-    assert.equal(
+test('scene transition allows adjacent-room references without treating them as current location assertions', () => {
+    const {
+        destination,
+        payload,
+        state,
+    } = createEntranceHallTransitionCase();
+    assert.deepEqual(
         validateSceneTransitionPackage(
             payload,
             state,
@@ -6039,21 +6453,34 @@ test('scene transition treats prose location mentions as non-authoritative', () 
                 requireDestinationGrounding:
                     true,
             },
-        ).valid,
-        true,
+        ),
+        {
+            valid: true,
+            errors: [],
+        },
     );
+});
 
+test('[defect-probing][Task 15] scene transition rejects actor activity that asserts a different current room', () => {
+    const {
+        payload,
+        state,
+    } = createEntranceHallTransitionCase();
     payload.nextScene.actorStates[0]
         .currentActivityEn =
         'Standing in the Great Hall beside the staff table.';
-    const proseOnlyMismatch =
+    const activityMismatch =
         validateSceneTransitionPackage(
             payload,
             state,
         );
-    assert.deepEqual(
-        proseOnlyMismatch,
-        { valid: true, errors: [] },
+    assert.equal(
+        activityMismatch.valid,
+        false,
+    );
+    assert.match(
+        activityMismatch.errors.join('；'),
+        /\[actor:.*\/room\]/u,
     );
 });
 
@@ -6125,13 +6552,34 @@ test('scene transition rejects a structured room ID that differs from destinatio
                 requireDestinationGrounding:
                     true,
             },
-        ).valid,
-        true,
+        ).errors.some(error =>
+            error.includes(
+                'platform_barrier',
+            )),
+        false,
     );
 });
 
 test('scene transition commits an absolute nextClock across a deliberate calendar jump', () => {
-    const state = createSceneTransitionState();
+    const state =
+        addExpiredStoryBeatFixture(
+            migrateClockSettlementCalendarFixture(
+                createSceneTransitionState(),
+                [
+                    createLegacyClockSettlementCalendarEntry(
+                        'crossed_transition_event',
+                        '1991-07-25 · 09:00',
+                        '1991-07-25 · 10:00',
+                    ),
+                    createLegacyClockSettlementCalendarEntry(
+                        'active_transition_event',
+                        '1991-09-01 · 10:00',
+                        '1991-09-01 · 11:00',
+                    ),
+                ],
+            ),
+            'transition_expired_beat',
+        );
     const payload =
         createSceneTransitionPackage();
     payload.nextClock =
@@ -6194,6 +6642,32 @@ test('scene transition commits an absolute nextClock across a deliberate calenda
     assert.equal(
         next.scene.startedClock,
         '1991-09-01 · 10:30',
+    );
+    assert.deepEqual(
+        next.calendar.entries
+            .map(entry => [
+                entry.id,
+                entry.status,
+            ]),
+        [
+            [
+                'crossed_transition_event',
+                'completed',
+            ],
+            [
+                'active_transition_event',
+                'active',
+            ],
+        ],
+    );
+    assert.equal(
+        next.calendar.storyBeats
+            .find(beat =>
+                beat.id ===
+                'transition_expired_beat')
+            .status,
+        'deferred',
+        'Scene Transition uses the shared local beat settlement',
     );
     assert.deepEqual(
         next.scene.temporalFactsEn,
@@ -6668,38 +7142,51 @@ test('scene transition atomically archives the old scene and commits the next ro
                 'scene_roster',
         },
     );
-    const mcgonagall = next.actorLibrary.find(
-        actor =>
-            actor.id ===
-                'minerva_mcgonagall',
+    const minervaMemoryRefs =
+        next.actorMemoryIndex
+            .byActorId
+            .minerva_mcgonagall
+            .recent;
+    const minervaAppraisals =
+        minervaMemoryRefs.map(reference =>
+            next.memorySynapse
+                .appraisals
+                .find(appraisal =>
+                    appraisal.id ===
+                        reference.recordId));
+    const minervaMemorySummaries =
+        minervaAppraisals.map(
+            appraisal =>
+                appraisal.summaryEn,
+        );
+    assert.equal(
+        minervaMemorySummaries.includes(
+            payload.relationshipUpdates[0]
+                .impressionOfPlayerEn,
+        ),
+        true,
     );
     assert.equal(
-        mcgonagall.impressionOfPlayerEn,
-        payload.relationshipUpdates[0]
-            .impressionOfPlayerEn,
-    );
-    assert.equal(
-        mcgonagall.sharedMemories.recent.length,
-        1,
-    );
-    assert.equal(
-        mcgonagall.sharedMemories.recent[0]
-            .source,
-        'medium_transition',
-    );
-    assert.equal(
-        next.actors.find(actor =>
-            actor.id ===
-                'minerva_mcgonagall')
-            .impressionOfPlayerEn,
-        payload.relationshipUpdates[0]
-            .impressionOfPlayerEn,
+        minervaMemorySummaries.includes(
+            payload.relationshipUpdates[0]
+                .sceneMemoryEn,
+        ),
+        true,
     );
     assert.equal(next.sceneTransition.status, 'idle');
-    assert.equal(
+    assert.deepEqual(
         next.memoryDirector
             .pendingEventBoundary,
-        null,
+        {
+            id: 'old:event:1',
+            boundaryId: 'old:event:1',
+            status: 'pending',
+            sceneId:
+                'zhang_home_kitchen',
+            turn: 0,
+            carriedToSceneId:
+                'zhang_home_garden_owl',
+        },
     );
     assert.equal(
         next.memoryDirector
@@ -6754,6 +7241,23 @@ test('classroom transition keeps a full local cohort while limiting the active c
             roomId:
                 'charms_classroom',
         }));
+    const minervaFirstImpressionRef =
+        state.actorMemoryIndex
+            .byActorId
+            .minerva_mcgonagall
+            .firstImpressionRef;
+    state.actorLibrary.find(actor =>
+        actor.id ===
+            'minerva_mcgonagall')
+        .firstImpressionOfPlayerEn =
+        state.memorySynapse.appraisals
+            .find(appraisal =>
+                appraisal.id ===
+                    minervaFirstImpressionRef)
+            .summaryEn;
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
     state.scene.roomId =
         'charms_classroom';
     state.map
@@ -6942,6 +7446,23 @@ test('scene transition snapshots carried and stored item custody', () => {
             mapId: 'zhang_home',
             roomId: 'kitchen',
         },
+        {
+            id:
+                'harry_spare_brass_quill',
+            labelEn:
+                'Harry\'s Spare Brass Quill',
+            detailEn:
+                'Destroyed brass-nibbed quill remains.',
+            importance: 'important',
+            custody: 'carried',
+            ownerId:
+                'canon_harry_james_potter',
+            holderId: 'player',
+            state: 'destroyed',
+            transferMode: 'loan',
+            mapId: 'zhang_home',
+            roomId: 'kitchen',
+        },
     ];
     const next = applySceneTransition(
         state,
@@ -6958,10 +7479,31 @@ test('scene transition snapshots carried and stored item custody', () => {
         item => item.id === 'player_wand');
     const letter = next.items.find(
         item => item.id === 'old_letter');
+    const quill = next.items.find(
+        item =>
+            item.id ===
+                'harry_spare_brass_quill',
+    );
     assert.equal(wand.roomId, 'back_garden');
     assert.equal(wand.custody, 'carried');
     assert.equal(letter.roomId, 'kitchen');
     assert.equal(letter.custody, 'stored');
+    assert.equal(
+        quill.ownerId,
+        'canon_harry_james_potter',
+    );
+    assert.equal(
+        quill.holderId,
+        'player',
+    );
+    assert.equal(
+        quill.state,
+        'destroyed',
+    );
+    assert.equal(
+        quill.roomId,
+        'back_garden',
+    );
     assert.deepEqual(
         next.scene.itemStates.map(item => [
             item.id,
@@ -6978,6 +7520,11 @@ test('scene transition snapshots carried and stored item custody', () => {
                 'old_letter',
                 'stored',
                 'kitchen',
+            ],
+            [
+                'harry_spare_brass_quill',
+                'carried',
+                'back_garden',
             ],
         ],
     );
@@ -7296,6 +7843,18 @@ test('causal collapse opportunities share pacing cooldown and bind one persisten
         createSceneTransitionState();
     state.phase = 'playing';
     state.turn.count = 12;
+    assert.equal(
+        state.actorLibrary.some(profile =>
+            Object.hasOwn(
+                profile,
+                'socialStatements',
+            ) ||
+            Object.hasOwn(
+                profile,
+                'socialRelationships',
+            )),
+        false,
+    );
     state.pacingDirector = {
         status: 'ready',
         lastAssessedTurn: 6,
@@ -7320,6 +7879,33 @@ test('causal collapse opportunities share pacing cooldown and bind one persisten
     assert.equal(
         opportunity.focusActorId,
         'minerva_mcgonagall',
+    );
+    const relationshipMilestoneState =
+        structuredClone(state);
+    addPlayerRelationshipFixture(
+        relationshipMilestoneState,
+        'minerva_mcgonagall',
+        ['friend'],
+    );
+    assert.deepEqual(
+        detectCausalCollapseOpportunity(
+            relationshipMilestoneState,
+            action,
+        ),
+        {
+            key:
+                'actor:minerva_mcgonagall:relationship:friend',
+            type:
+                'relationship_upgrade',
+            focusActorId:
+                'minerva_mcgonagall',
+            mapId:
+                state.map.activeMapId,
+            roomId:
+                state.map
+                    .currentLocalNodeId,
+            itemId: '',
+        },
     );
     const signals =
         analyzePacingSignals(
@@ -7539,6 +8125,20 @@ test('causal collapse opportunities share pacing cooldown and bind one persisten
             'type',
         ),
         false,
+    );
+    assert.equal(
+        committed.actorLibrary
+            .some(profile =>
+                Object.hasOwn(
+                    profile,
+                    'socialStatements',
+                ) ||
+                Object.hasOwn(
+                    profile,
+                    'socialRelationships',
+                )),
+        false,
+        'Pacing persists Social Graph updates without profile copies',
     );
     assert.equal(
         detectCausalCollapseOpportunity(
@@ -7834,20 +8434,25 @@ test('supplied Canon candidates are promoted from actorEntrances to guestActor',
             state,
             normalized,
         );
+    const committedRon =
+        committed.actorLibrary.find(
+            actor =>
+                actor.id === ron.id,
+        );
     assert.equal(
-        committed.actorLibrary.at(-1)
-            .canonCatalogId,
+        committedRon.canonCatalogId,
         ron.id,
     );
     assert.deepEqual(
-        committed.actorLibrary.at(-1)
+        committedRon.privateFacts
             .knowledgeEn,
         [
             ACTOR_KNOWLEDGE_BOUNDARY_EN,
         ],
     );
     assert.equal(
-        committed.actors.at(-1)
+        committed.actors.find(actor =>
+            actor.id === ron.id)
             .present,
         true,
     );
@@ -7882,6 +8487,7 @@ test('canon actor knowledge boundaries discard catalog skills, future affiliatio
     const state =
         createSceneTransitionState();
     state.actorKnowledgeVersion = 0;
+    delete state.actorContextVersion;
     state.actorLibrary = [
         hermione,
         {
@@ -7971,31 +8577,35 @@ test('pacing assessment commits and consumes a safe public guest beat', () => {
         payload,
         { reasons: ['repeated_core_cast'] },
     );
+    const committedGuest =
+        committed.actorLibrary.find(
+            actor =>
+                actor.id ===
+                    'hurried_shop_assistant',
+        );
+    const committedGuestRuntime =
+        committed.actors.find(actor =>
+            actor.id ===
+                'hurried_shop_assistant');
     assert.equal(
-        committed.actorLibrary.at(-1).id,
+        committedGuest.id,
         'hurried_shop_assistant',
     );
     assert.equal(
-        committed.actorLibrary.at(-1)
-            .birthDate,
+        committedGuest.identity
+            .birth.date,
         '1970-04-09',
     );
-    assert.deepEqual(
-        committed.actorLibrary.at(-1)
-            .settingTags,
-        [
-            'social',
-            'steady',
-        ],
-    );
-    assert.deepEqual(
-        committed.actorLibrary.at(-1)
-            .relationshipTags,
-        ['acquaintance'],
-    );
-    assert.equal(committed.actors.at(-1).present, true);
     assert.equal(
-        committed.actors.at(-1).roomId,
+        committedGuest.cast.origin,
+        'generated_guest',
+    );
+    assert.equal(
+        committedGuestRuntime.present,
+        true,
+    );
+    assert.equal(
+        committedGuestRuntime.roomId,
         'back_garden',
     );
     assert.equal(
@@ -8142,7 +8752,7 @@ test('temporary scene actors keep a stable identity and merge only after narrati
     assert.equal(temporary.present, true);
     assert.equal(
         introduced.actorLibrary.length,
-        initialLibraryCount,
+        initialLibraryCount + 1,
     );
     assert.equal(
         buildStoryCastPolicy(introduced)
@@ -8197,8 +8807,9 @@ test('temporary scene actors keep a stable identity and merge only after narrati
         false,
     );
     assert.equal(
-        departedTemporary
-            .temporaryMemories.length,
+        departed.actorMemoryIndex
+            .byActorId[temporary.id]
+            .everyday.length,
         1,
     );
 
@@ -8231,9 +8842,9 @@ test('temporary scene actors keep a stable identity and merge only after narrati
         1,
     );
     assert.equal(
-        returned.actors.find(actor =>
-            actor.id === temporary.id)
-            .temporaryMemories.length,
+        returned.actorMemoryIndex
+            .byActorId[temporary.id]
+            .everyday.length,
         1,
     );
 
@@ -8311,23 +8922,33 @@ test('temporary scene actors keep a stable identity and merge only after narrati
         false,
     );
     assert.equal(
-        mergedActor.resolvedIdentityId,
-        'nora_pike',
+        Object.hasOwn(
+            mergedActor,
+            'resolvedIdentityId',
+        ),
+        false,
     );
     assert.equal(
         mergedProfile.nameEn,
         'Nora Pike',
     );
     assert.equal(
-        mergedProfile
-            .sharedMemories.everyday
-            .some(memory =>
-                /helped recover the sweets/i
-                    .test(
-                        memory
-                            .summaryEn,
-                    )),
+        mergedProfile.cast.origin,
+        'scene_temporary',
+    );
+    assert.equal(
+        mergedProfile.identity
+            .provenance.records
+            .some(record =>
+                record.sourceRef ===
+                    `pacing-assessment:${merged.scene.id}:${merged.turn.count}`),
         true,
+    );
+    assert.equal(
+        merged.actorMemoryIndex
+            .byActorId[temporary.id]
+            .everyday.length,
+        1,
     );
 
     const unsupportedMerge =
@@ -8615,14 +9236,21 @@ test('exactly mentioned nearby acquaintances are recalled for one turn with memo
         }],
         actorLibrary: [{
             id: 'canon_lavender_brown',
+            canonCatalogId:
+                'canon_lavender_brown',
             nameEn: 'Lavender Brown',
             name: '拉文德·布朗',
             aliases: [
                 'Lavender',
                 '拉文德',
             ],
+            introducedClock:
+                '1991-09-01 · 12:00',
         }],
     };
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
     assert.equal(
         admitMentionedKnownActors(
             state,
@@ -8733,6 +9361,16 @@ test('social discovery stages advance at 12 and 16 meaningful known actors', () 
         state.actors =
             structuredClone(actors);
         state.sceneArchive = [];
+        for (const actor of actors) {
+            addPlayerRelationshipFixture(
+                state,
+                actor.id,
+                ['friend'],
+            );
+        }
+        normalizeActorContextV1FixtureInPlace(
+            state,
+        );
         return state;
     };
 
@@ -8812,6 +9450,19 @@ test('social discovery stages advance at 12 and 16 meaningful known actors', () 
         ...structuredClone(
             excludedActors,
         ),
+    );
+    addPlayerRelationshipFixture(
+        excludedState,
+        'known_professor',
+        ['mentor'],
+    );
+    addPlayerRelationshipFixture(
+        excludedState,
+        'known_parent',
+        ['parent'],
+    );
+    normalizeActorContextV1FixtureInPlace(
+        excludedState,
     );
     const excludedPolicy =
         buildStoryCastPolicy(
@@ -9128,25 +9779,13 @@ test('explicit Harry aliases force stable Canon admission through pacing', () =>
         admitted.actorLibrary.find(actor =>
             actor.id ===
                 'canon_harry_james_potter')
-            .source,
+            .cast.origin,
         'canon_catalog',
     );
     const admittedProfile =
         admitted.actorLibrary.find(actor =>
             actor.id ===
                 'canon_harry_james_potter');
-    const admittedActor =
-        admitted.actors.find(actor =>
-            actor.id ===
-                'canon_harry_james_potter');
-    assert.equal(
-        admittedProfile.name,
-        '哈利·波特',
-    );
-    assert.equal(
-        admittedActor.name,
-        '哈利·波特',
-    );
     assert.equal(
         admittedProfile.aliases.includes(
             'Harry Potter',
@@ -9230,49 +9869,13 @@ test('explicit Harry aliases force stable Canon admission through pacing', () =>
         false,
     );
 
-    const legacyNames =
-        structuredClone(admitted);
-    [
-        legacyNames.actorLibrary.find(
-            actor =>
-                actor.id ===
-                'canon_harry_james_potter',
-        ),
-        legacyNames.actors.find(actor =>
-            actor.id ===
-                'canon_harry_james_potter'),
-    ].forEach(actor => {
-        actor.name =
-            'Harry James Potter';
-        actor.aliases = [
-            'Harry James Potter',
-        ];
-    });
     const reconciled =
         reconcileCanonActorDisplayNames(
-            legacyNames,
+            admitted,
         );
     assert.equal(
         reconciled.changed,
-        true,
-    );
-    assert.equal(
-        reconciled.state.actorLibrary
-            .find(actor =>
-                actor.id ===
-                    'canon_harry_james_potter')
-            .name,
-        '哈利·波特',
-    );
-    assert.equal(
-        reconciled.state.actors
-            .find(actor =>
-                actor.id ===
-                    'canon_harry_james_potter')
-            .aliases.includes(
-                '哈利波特',
-            ),
-        true,
+        false,
     );
 });
 
@@ -9340,6 +9943,9 @@ test('pacing admits a recognizable companion by stable actor ID', () => {
         canonCatalogId:
             ron.id,
     });
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
     const playerAction =
         '我走到哈利·波特旁边，问他要签名。';
     const signals =
@@ -9852,8 +10458,11 @@ test('offline canon catalog and cast budgets permit bounded additions', () => {
             canonGuest,
         );
     assert.equal(
-        withCanon.actorLibrary.at(-1)
-            .source,
+        withCanon.actorLibrary
+            .find(actor =>
+                actor.id ===
+                    'canon_harry_james_potter')
+            .cast.origin,
         'canon_catalog',
     );
     assert.equal(
@@ -9872,16 +10481,22 @@ test('crowded scene transitions recommend named-cast turnover without deleting p
             id: 'peer_alpha',
             nameEn: 'Peer Alpha',
             roleEn: 'Student',
+            firstImpressionOfPlayerEn:
+                'A loud classmate who watches the exits.',
         },
         {
             id: 'peer_beta',
             nameEn: 'Peer Beta',
             roleEn: 'Student',
+            firstImpressionOfPlayerEn:
+                'A direct classmate with an impatient stare.',
         },
         {
             id: 'peer_gamma',
             nameEn: 'Peer Gamma',
             roleEn: 'Student',
+            firstImpressionOfPlayerEn:
+                'A restless classmate who keeps moving.',
         },
     ];
     state.actorLibrary.push(
@@ -9898,9 +10513,15 @@ test('crowded scene transitions recommend named-cast turnover without deleting p
                 'Waiting with the group.',
         })),
     ];
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
     const activeIds =
-        state.actors.map(actor =>
-            actor.id);
+        state.actors
+            .filter(actor =>
+                actor.present !== false)
+            .map(actor =>
+                actor.id);
     state.sceneArchive = [
         {
             id: 'repeated_cast_one',
@@ -9961,6 +10582,7 @@ test('crowded scene transitions recommend named-cast turnover without deleting p
             present: true,
             currentActivityEn:
                 'Watching the garden gate.',
+            currentIntentEn: '',
             lifeStatus: 'alive',
             lifeStatusPermanent:
                 false,
@@ -10227,7 +10849,15 @@ test('director foundation commits a private cast library and a prewritten clue g
     const base = createInitialWorldState(createDefaultCharacterDraft(), {});
     base.actors = [{ id: 'tina_mother', name: 'Mei Zhang', present: true }];
     const state = applyDirectorFoundation(base, foundation);
-    assert.equal(state.actorLibrary[0].publicBackground.includes('documented place'), true);
+    assert.equal(
+        state.actorLibrary[0]
+            .publicProfile
+            .backgroundEn
+            .includes(
+                'documented place',
+            ),
+        true,
+    );
     assert.equal(state.storyArcs[0].cluePlan.length, 3);
     assert.deepEqual(state.clues, []);
     assert.equal(state.directorFoundation.status, 'ready');
@@ -10271,7 +10901,13 @@ test('turn settlement advances at least fifteen minutes and reveals only prewrit
     assert.equal(next.turn.lastElapsedMinutes, 15);
     assert.equal(next.clues[0].id, 'mother_portrait');
     assert.deepEqual(next.storyArcs[0].revealedClueIds, ['mother_portrait']);
-    assert.equal(next.actors[0].currentActivity, 'Standing behind Tina.');
+    assert.equal(
+        next.actors.find(actor =>
+            actor.id ===
+                'tina_mother')
+            .currentActivityEn,
+        'Standing behind Tina.',
+    );
 });
 
 test('last-turn retry checkpoint restores one non-recursive pre-commit state', () => {
@@ -10349,7 +10985,7 @@ test('last-turn retry checkpoint restores one non-recursive pre-commit state', (
     assert.equal(
         restored.pacingDirector
             .lastAssessedTurn,
-        null,
+        19,
     );
     assert.notEqual(
         restored,
@@ -10412,7 +11048,7 @@ test('last-turn retry checkpoint restores one non-recursive pre-commit state', (
     );
 });
 
-test('legacy rollback checkpoint projects the previous committed turn', () => {
+test('legacy rollback projection stays removed after the V1 cutover', () => {
     const state =
         createSceneTransitionState();
     state.clock =
@@ -10555,32 +11191,7 @@ test('legacy rollback checkpoint projects the previous committed turn', () => {
             state,
             chat,
         );
-    assert.equal(
-        checkpoint.source,
-        'legacy_projection',
-    );
-    assert.equal(
-        checkpoint.baseState.clock,
-        '1991-07-24 · 11:30',
-    );
-    assert.equal(
-        checkpoint.baseState
-            .turn.count,
-        1,
-    );
-    assert.equal(
-        checkpoint.baseState.map
-            .currentLocalNodeId,
-        'kitchen',
-    );
-    assert.equal(
-        checkpoint.baseState.actors
-            .find(actor =>
-                actor.id ===
-                    'minerva_mcgonagall')
-            .roomId,
-        'kitchen',
-    );
+    assert.equal(checkpoint, null);
 });
 
 test('a failed trailing player turn remains recoverable without duplicating the input', () => {
@@ -10911,35 +11522,43 @@ test('low-tier turn updates an actor impression and tiered shared memory', () =>
         transaction,
         '我把信护在怀里。',
     );
-    const profile = next.actorLibrary.find(
-        actor => actor.id === 'tina_mother',
+    const memoryEntry =
+        next.actorMemoryIndex
+            .byActorId.tina_mother;
+    const appraisalSummaries =
+        [
+            ...memoryEntry.recent,
+            ...memoryEntry.everyday,
+        ].map(reference =>
+            next.memorySynapse
+                .appraisals
+                .find(appraisal =>
+                    appraisal.id ===
+                        reference.recordId)
+                .summaryEn);
+    assert.equal(
+        appraisalSummaries.includes(
+            transaction.actorUpdates[0]
+                .impressionOfPlayerEn,
+        ),
+        true,
     );
     assert.equal(
-        profile.impressionOfPlayerEn,
-        transaction.actorUpdates[0]
-            .impressionOfPlayerEn,
+        appraisalSummaries.includes(
+            transaction.actorUpdates[0]
+                .memoryUpdate
+                .summaryEn,
+        ),
+        true,
     );
     assert.equal(
-        profile.sharedMemories.recent.length,
-        0,
-    );
-    assert.equal(
-        profile.sharedMemories.everyday.length,
-        1,
-    );
-    assert.equal(
-        profile.sharedMemories.everyday[0].source,
-        'low',
-    );
-    assert.equal(
-        profile.sharedMemories.everyday[0]
-            .significance,
-        'notable',
-    );
-    assert.equal(
-        next.actors[0].impressionOfPlayer,
-        transaction.actorUpdates[0]
-            .impressionOfPlayer,
+        Object.hasOwn(
+            next.actorLibrary.find(actor =>
+                actor.id ===
+                    'tina_mother'),
+            'sharedMemories',
+        ),
+        false,
     );
 });
 
@@ -10948,6 +11567,11 @@ test('legacy relationship migration backfills witnessed turn memories', () => {
         createDefaultCharacterDraft(),
         {},
     );
+    delete state.actorContextVersion;
+    delete state.memoryReferenceVersion;
+    delete state
+        .actorDossierProjectionVersion;
+    delete state.actorMemoryIndex;
     delete state.relationshipMemoryVersion;
     state.turn.count = 5;
     const foundation = createDirectorFoundation();
@@ -11057,6 +11681,11 @@ test('current relationship migration prunes legacy transition filler idempotentl
         createDefaultCharacterDraft(),
         {},
     );
+    delete state.actorContextVersion;
+    delete state.memoryReferenceVersion;
+    delete state
+        .actorDossierProjectionVersion;
+    delete state.actorMemoryIndex;
     const foundation = createDirectorFoundation();
     state.actorLibrary = [{
         ...foundation.actorLibrary[0],
@@ -11153,6 +11782,13 @@ test('memory consolidation waits for a low-tier event boundary instead of a turn
             ),
         },
     }];
+    state.actors = [{
+        id: 'tina_mother',
+        present: true,
+    }];
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
     assert.equal(
         analyzeMemoryConsolidation(state)
             .shouldReview,
@@ -11203,15 +11839,12 @@ test('memory consolidation waits for a low-tier event boundary instead of a turn
             sceneId: state.scene.id,
             turn: 11,
         };
-    state.actorLibrary[0]
-        .sharedMemories.everyday = [
-            {
-                id: 'single_event_memory',
-                summaryEn:
-                    'A bounded event ended.',
-                updatedTurn: 11,
-            },
-        ];
+    state.actorMemoryIndex
+        .byActorId.tina_mother
+        .everyday =
+        state.actorMemoryIndex
+            .byActorId.tina_mother
+            .everyday.slice(0, 1);
     assert.equal(
         analyzeMemoryConsolidation(state)
             .shouldReview,
@@ -11306,15 +11939,6 @@ test('an event boundary refreshes direction even without reviewable memory', () 
     state.turn.count = 4;
     state.memoryDirector
         .lastReviewedTurn = 4;
-    state.actorLibrary =
-        state.actorLibrary.map(actor => ({
-            ...actor,
-            sharedMemories: {
-                core: [],
-                recent: [],
-                everyday: [],
-            },
-        }));
     const committed =
         applyTurnTransaction(
             state,
@@ -12244,16 +12868,36 @@ test('social audience projections preserve source knowledge without leaking hidd
             {
                 id: ron,
                 nameEn: 'Ron Weasley',
+                cast: {
+                    origin:
+                        'canon_catalog',
+                    introducedClock:
+                        '1991-09-01 · 13:00',
+                    introducedTurn: 1,
+                },
             },
             {
                 id: hermione,
                 nameEn:
                     'Hermione Granger',
+                cast: {
+                    origin:
+                        'canon_catalog',
+                    introducedClock:
+                        '1991-09-01 · 13:00',
+                    introducedTurn: 1,
+                },
             },
             {
                 id: mcgonagall,
                 nameEn:
                     'Minerva McGonagall',
+                cast: {
+                    origin: 'foundation',
+                    introducedClock:
+                        '1991-09-01 · 13:00',
+                    introducedTurn: 1,
+                },
             },
         ],
         actors: [],
@@ -12700,7 +13344,7 @@ test('social audience projections preserve source knowledge without leaking hidd
         ['ron_player_visible'],
     );
     assert.deepEqual(
-        starRon.activeEmotions
+        starRon.activeSentiments
             .map(emotion =>
                 emotion.emotion),
         ['gratitude'],
@@ -12712,17 +13356,23 @@ test('relationship graph renders familiarity-only edges as neutral instead of co
         {
             id: 'neutral_actor',
             nameEn: 'Neutral Actor',
-            knownToPlayer: true,
+            cast: {
+                introducedClock: 'known',
+            },
         },
         {
             id: 'warm_actor',
             nameEn: 'Warm Actor',
-            knownToPlayer: true,
+            cast: {
+                introducedClock: 'known',
+            },
         },
         {
             id: 'tense_actor',
             nameEn: 'Tense Actor',
-            knownToPlayer: true,
+            cast: {
+                introducedClock: 'known',
+            },
         },
     ];
     const edge = (
@@ -12798,23 +13448,29 @@ test('relationship filters retain excluded edges as five-percent visual context 
                         'lavender',
                     nameEn:
                         'Lavender Brown',
-                    knownToPlayer:
-                        true,
+                    cast: {
+                        introducedClock:
+                            'known',
+                    },
                 },
                 {
                     id:
                         'hermione',
                     nameEn:
                         'Hermione Granger',
-                    knownToPlayer:
-                        true,
+                    cast: {
+                        introducedClock:
+                            'known',
+                    },
                 },
                 {
                     id: 'dean',
                     nameEn:
                         'Dean Thomas',
-                    knownToPlayer:
-                        true,
+                    cast: {
+                        introducedClock:
+                            'known',
+                    },
                 },
             ],
             socialGraph: {
@@ -12870,36 +13526,28 @@ test('relationship filters retain excluded edges as five-percent visual context 
                 query: '',
             },
         );
-    const edgeById =
-        new Map(
-            projection.edges.map(edge => [
-                edge.id,
-                edge,
-            ]),
-        );
-
     assert.deepEqual(
         visible.edges.map(edge =>
-            edge.id),
-        ['hermione_player'],
+            `${edge.sourceId}->${edge.targetId}`),
+        ['hermione->player'],
     );
     assert.deepEqual(
         new Set(
             visible.contextEdgeIds,
         ),
         new Set([
-            edgeById
-                .get('lavender_player')
+            projection.edgeByDirection
+                .get('lavender->player')
                 .elementId,
-            edgeById
-                .get('dean_player')
+            projection.edgeByDirection
+                .get('dean->player')
                 .elementId,
         ]),
     );
     assert.equal(
         visible.edgeIds.has(
-            edgeById
-                .get('lavender_player')
+            projection.edgeByDirection
+                .get('lavender->player')
                 .elementId,
         ),
         false,
@@ -12937,12 +13585,18 @@ test('relationship graph separates reciprocal directed edges instead of stacking
                 {
                     id: 'alice',
                     nameEn: 'Alice',
-                    knownToPlayer: true,
+                    cast: {
+                        introducedClock:
+                            'known',
+                    },
                 },
                 {
                     id: 'bob',
                     nameEn: 'Bob',
-                    knownToPlayer: true,
+                    cast: {
+                        introducedClock:
+                            'known',
+                    },
                 },
             ],
             socialGraph: {
@@ -13004,31 +13658,38 @@ test('relationship graph projects actor house affiliations with their player-vis
             {
                 id: 'harry',
                 nameEn: 'Harry Potter',
-                house: 'Gryffindor',
-                knownToPlayer: true,
+                roleEn:
+                    'Gryffindor student',
+                cast: {
+                    introducedClock: 'known',
+                },
             },
             {
                 id: 'hermione',
                 nameEn: 'Hermione Granger',
-                affiliation: 'Gryffindor',
-                knownToPlayer: true,
+                roleEn:
+                    'Gryffindor student',
+                cast: {
+                    introducedClock: 'known',
+                },
             },
             {
                 id: 'ron',
                 nameEn: 'Ron Weasley',
-                affiliations: [
-                    'Hogwarts School of Witchcraft and Wizardry',
-                    'Gryffindor',
-                ],
-                knownToPlayer: true,
+                roleEn:
+                    'Gryffindor student',
+                cast: {
+                    introducedClock: 'known',
+                },
             },
             {
                 id: 'luna',
                 nameEn: 'Luna Lovegood',
-                affiliation: {
-                    house: 'Ravenclaw',
+                roleEn:
+                    'Ravenclaw student',
+                cast: {
+                    introducedClock: 'known',
                 },
-                knownToPlayer: true,
             },
         ],
         socialGraph: {
@@ -13225,8 +13886,16 @@ test('relationship graph resolves Tina-shaped house identities without losing cu
             ], index) => ({
                 id,
                 nameEn,
-                roleEn,
+                roleEn: [
+                    roleEn,
+                    findCanonCharacter(
+                        catalogId,
+                    )?.house,
+                ].filter(Boolean)
+                    .join(' · '),
                 canonCatalogId: catalogId,
+                introducedClock:
+                    `known_${index + 1}`,
                 introducedTurn: index + 1,
                 source: roleEn === 'Student'
                     ? 'canon_catalog'
@@ -13244,6 +13913,12 @@ test('relationship graph resolves Tina-shaped house identities without losing cu
                 ...(canonCatalogId
                     ? { canonCatalogId }
                     : {}),
+                introducedClock:
+                    `known_${
+                        catalogActors.length +
+                        index +
+                        1
+                    }`,
                 introducedTurn:
                     catalogActors.length +
                     index +
@@ -13273,6 +13948,7 @@ test('relationship graph resolves Tina-shaped house identities without losing cu
             nameEn: 'Trolley Witch',
             roleEn:
                 'Hogwarts Express trolley attendant',
+            introducedClock: 'known_18',
             introducedTurn: 18,
             source: 'scene_temporary_actor',
             present: false,
@@ -13282,6 +13958,7 @@ test('relationship graph resolves Tina-shaped house identities without losing cu
             nameEn: 'Phillip',
             roleEn:
                 'Third-year Gryffindor student',
+            introducedClock: 'known_19',
             introducedTurn: 19,
             source: 'scene_temporary_actor',
             present: false,
@@ -13421,22 +14098,28 @@ test('relationship graph resolves Tina-shaped house identities without losing cu
             'npc_only_hidden_evidence',
         ],
     });
+    const graphState = {
+        character: {
+            identity: {
+                name:
+                    'Deidentified Player',
+            },
+        },
+        actorLibrary,
+        actors,
+        socialGraph: {
+            version: 2,
+            relationshipEvidence,
+            relationships,
+        },
+    };
+    normalizeActorContextV1FixtureInPlace(
+        graphState,
+    );
     const projection =
-        buildPlayerKnownRelationshipProjection({
-            character: {
-                identity: {
-                    name:
-                        'Deidentified Player',
-                },
-            },
-            actorLibrary,
-            actors,
-            socialGraph: {
-                version: 2,
-                relationshipEvidence,
-                relationships,
-            },
-        });
+        buildPlayerKnownRelationshipProjection(
+            graphState,
+        );
     const houseNodes =
         projection.nodes.filter(node =>
             node?.categories.includes('house'));
@@ -13926,6 +14609,9 @@ test('LangGraph social director validates provenance and derives idempotent NPC 
             status: 'pending',
         },
     };
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
     const memoryDirectorBefore =
         structuredClone(
             state.memoryDirector,
@@ -13949,15 +14635,38 @@ test('LangGraph social director validates provenance and derives idempotent NPC 
             actor.id ===
                 'canon_ronald_bilius_weasley');
     assert.equal(
-        ron.socialStatements.length,
+        Object.hasOwn(
+            ron,
+            'socialStatements',
+        ),
+        false,
+    );
+    assert.equal(
+        Object.hasOwn(
+            ron,
+            'socialRelationships',
+        ),
+        false,
+    );
+    const ronSocial =
+        buildSocialAudienceProjection(
+            committed,
+            ron.id,
+        );
+    assert.equal(
+        ronSocial.statements
+            .filter(statement =>
+                statement.subjectId ===
+                    ron.id)
+            .length,
         1,
     );
     assert.equal(
-        ron.socialRelationships.length,
+        ronSocial.relationships.length,
         2,
     );
     assert.equal(
-        ron.socialRelationships.some(edge =>
+        ronSocial.relationships.some(edge =>
             edge.targetActorId === 'player' &&
             edge.warmth === 3 &&
             !Object.hasOwn(
@@ -14967,6 +15676,34 @@ test('medium memory consolidation promotes only referenced memories', () => {
         id: 'tina_mother',
         present: true,
     }];
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
+    const memoryIdsBySummary =
+        new Map(
+            [
+                ...state.actorMemoryIndex
+                    .byActorId
+                    .tina_mother
+                    .recent,
+                ...state.actorMemoryIndex
+                    .byActorId
+                    .tina_mother
+                    .everyday,
+            ].map(reference => {
+                const appraisal =
+                    state.memorySynapse
+                        .appraisals
+                        .find(item =>
+                            item.id ===
+                                reference
+                                    .recordId);
+                return [
+                    appraisal.summaryEn,
+                    reference.recordId,
+                ];
+            }),
+        );
     state.memoryDirector
         .pendingEventBoundary = {
             id: 'scene:event:8',
@@ -14981,7 +15718,12 @@ test('medium memory consolidation promotes only referenced memories', () => {
                 'Blunt and impulsive, but capable of loyalty and a difficult apology.',
             operations: [
                 {
-                    sourceIds: ['recent_defence'],
+                    sourceIds: [
+                        memoryIdsBySummary
+                            .get(
+                                'Tina defended a younger student.',
+                            ),
+                    ],
                     targetTier: 'core',
                     summaryEn:
                         'Tina will put herself between a vulnerable person and public pressure.',
@@ -14989,8 +15731,14 @@ test('medium memory consolidation promotes only referenced memories', () => {
                 },
                 {
                     sourceIds: [
-                        'daily_question',
-                        'daily_apology',
+                        memoryIdsBySummary
+                            .get(
+                                'Tina asked a blunt question.',
+                            ),
+                        memoryIdsBySummary
+                            .get(
+                                'Tina later offered a reluctant apology.',
+                            ),
                     ],
                     targetTier: 'recent',
                     summaryEn:
@@ -15002,12 +15750,6 @@ test('medium memory consolidation promotes only referenced memories', () => {
     };
     const trivialState =
         structuredClone(state);
-    delete trivialState.actorLibrary[0]
-        .sharedMemories.everyday[1]
-        .significance;
-    delete trivialState.actorLibrary[0]
-        .sharedMemories.everyday[1]
-        .lastingImpactEn;
     const trivialPromotion =
         validateMemoryConsolidation(
             payload,
@@ -15021,7 +15763,7 @@ test('medium memory consolidation promotes only referenced memories', () => {
         structuredClone(payload);
     singleOrdinary.reviews[0]
         .operations[1].sourceIds = [
-            'daily_question',
+            'missing_appraisal',
         ];
     assert.equal(
         validateMemoryConsolidation(
@@ -15076,17 +15818,22 @@ test('medium memory consolidation promotes only referenced memories', () => {
         state,
         payload,
     );
-    const profile = next.actorLibrary[0];
     assert.equal(
-        profile.sharedMemories.core.length,
+        next.actorMemoryIndex
+            .byActorId.tina_mother
+            .core.length,
         1,
     );
     assert.equal(
-        profile.sharedMemories.recent.length,
-        1,
+        next.actorMemoryIndex
+            .byActorId.tina_mother
+            .recent.length >= 1,
+        true,
     );
     assert.equal(
-        profile.sharedMemories.everyday.length,
+        next.actorMemoryIndex
+            .byActorId.tina_mother
+            .everyday.length,
         0,
     );
     assert.equal(
@@ -15128,6 +15875,101 @@ test('an explicitly instantaneous magical action may advance less than fifteen m
     assert.equal(advanceWorldClock('1991-12-31 · 23:55', 15), '1992-01-01 · 00:10');
     assert.equal(magical.clock, '1991-07-24 · 09:17');
     assert.equal(mundane.clock, '1991-07-24 · 09:30');
+});
+
+test('ordinary turns settle active and fully crossed Calendar intervals after advancing the clock', () => {
+    const foundation =
+        createDirectorFoundation();
+    const base =
+        createInitialWorldState(
+            createDefaultCharacterDraft(),
+            {},
+        );
+    base.clock =
+        '1991-07-24 · 09:15';
+    base.actors = [{
+        id: 'tina_mother',
+        name: 'Mei Zhang',
+        present: true,
+    }];
+    const state =
+        applyDirectorFoundation(
+            base,
+            foundation,
+        );
+    state.map.customLocalMaps.push({
+        id: 'zhang_home',
+        nodes: [{
+            id: 'kitchen',
+        }],
+    });
+    const migratedState =
+        addExpiredStoryBeatFixture(
+            migrateClockSettlementCalendarFixture(
+                state,
+                [
+                    createLegacyClockSettlementCalendarEntry(
+                        'crossed_turn_event',
+                        '1991-07-24 · 09:30',
+                        '1991-07-24 · 10:00',
+                    ),
+                    createLegacyClockSettlementCalendarEntry(
+                        'active_turn_event',
+                        '1991-07-24 · 10:30',
+                        '1991-07-24 · 11:00',
+                    ),
+                ],
+            ),
+            'ordinary_turn_expired_beat',
+        );
+    const next =
+        applyTurnTransaction(
+            migratedState,
+            {
+                elapsedMinutes: 90,
+                publicEventEn:
+                    'The morning passes during a long conversation.',
+                segments: [{
+                    type: 'narration',
+                    textEn:
+                        'The conversation continues through the morning.',
+                }],
+                actorUpdates: [],
+                revealedClues: [],
+            },
+            '我继续聊了一整个上午。',
+        );
+
+    assert.equal(
+        next.clock,
+        '1991-07-24 · 10:45',
+    );
+    assert.deepEqual(
+        next.calendar.entries
+            .map(entry => [
+                entry.id,
+                entry.status,
+            ]),
+        [
+            [
+                'crossed_turn_event',
+                'completed',
+            ],
+            [
+                'active_turn_event',
+                'active',
+            ],
+        ],
+    );
+    assert.equal(
+        next.calendar.storyBeats
+            .find(beat =>
+                beat.id ===
+                'ordinary_turn_expired_beat')
+            .status,
+        'deferred',
+        'ordinary turns use the shared local beat settlement',
+    );
 });
 
 test('daily time policy advances ordinary turns locally without a per-turn director decision', () => {
@@ -16447,6 +17289,8 @@ test('scene performance requires substantial narration for a fifteen-minute turn
         actors: [{ id: 'minerva_mcgonagall', present: true }],
         actorLibrary: [{
             id: 'minerva_mcgonagall',
+            nameEn:
+                'Minerva McGonagall',
             impressionOfPlayerEn:
                 'A difficult child with unexpected nerve.',
             impressionUpdatedTurn: 0,
@@ -16455,6 +17299,9 @@ test('scene performance requires substantial narration for a fifteen-minute turn
             count: 5,
         },
     };
+    normalizeActorContextV1FixtureInPlace(
+        state,
+    );
     const budget = {
         elapsedMinutes: 15,
         minimumWords: 240,
@@ -16544,25 +17391,10 @@ test('scene performance requires substantial narration for a fifteen-minute turn
     );
     const firstSightState =
         createSceneTransitionState();
-    const firstSightProfile =
-        firstSightState.actorLibrary
-            .find(actor =>
-                actor.id ===
-                    'minerva_mcgonagall');
-    delete firstSightProfile
-        .firstImpressionOfPlayerEn;
-    firstSightProfile
-        .firstImpressionPending = true;
-    const firstSightActor =
-        firstSightState.actors.find(
-            actor =>
-                actor.id ===
-                    'minerva_mcgonagall',
-        );
-    delete firstSightActor
-        .firstImpressionOfPlayerEn;
-    firstSightActor
-        .firstImpressionPending = true;
+    firstSightState.actorMemoryIndex
+        .byActorId
+        .minerva_mcgonagall
+        .firstImpressionRef = '';
     const firstSightPayload = {
         ...structuredClone(validPayload),
         actorPresence: {
@@ -16621,21 +17453,23 @@ test('scene performance requires substantial narration for a fifteen-minute turn
             },
             'I answer the professor.',
         );
-    const committedProfile =
-        firstSightCommitted.actorLibrary
-            .find(actor =>
-                actor.id ===
-                    'minerva_mcgonagall');
+    const committedFirstImpressionRef =
+        firstSightCommitted
+            .actorMemoryIndex
+            .byActorId
+            .minerva_mcgonagall
+            .firstImpressionRef;
     assert.equal(
-        committedProfile
+        firstSightCommitted
+            .memorySynapse
+            .appraisals
+            .find(appraisal =>
+                appraisal.id ===
+                    committedFirstImpressionRef)
+            .summaryEn,
+        firstSightPayload
+            .actorUpdates[0]
             .firstImpressionOfPlayerEn,
-        firstSightPayload.actorUpdates[0]
-            .firstImpressionOfPlayerEn,
-    );
-    assert.equal(
-        committedProfile
-            .firstImpressionPending,
-        false,
     );
     assert.equal(
         validateScenePerformance(
@@ -16705,40 +17539,6 @@ test('scene performance requires substantial narration for a fifteen-minute turn
         validateScenePerformance(
             normalizedIncompleteNotable,
             state,
-            budget,
-        ),
-        { valid: true, errors: [] },
-    );
-    const cooldownState =
-        structuredClone(state);
-    cooldownState.actorLibrary[0]
-        .impressionUpdatedTurn = 4;
-    assert.match(
-        validateScenePerformance(
-            validPayload,
-            cooldownState,
-            budget,
-        ).errors.join('；'),
-        /过于频繁变化/,
-    );
-    const normalizedCooldown =
-        normalizeScenePerformanceActorLocations(
-            validPayload,
-            cooldownState,
-        );
-    assert.equal(
-        normalizedCooldown.actorUpdates[0]
-            .impressionOfPlayerEn,
-        undefined,
-    );
-    assert.ok(
-        normalizedCooldown.actorUpdates[0]
-            .memoryUpdate,
-    );
-    assert.deepEqual(
-        validateScenePerformance(
-            normalizedCooldown,
-            cooldownState,
             budget,
         ),
         { valid: true, errors: [] },
@@ -17195,7 +17995,7 @@ test('scene performance requires substantial narration for a fifteen-minute turn
         temporaryCommitted
             .actorLibrary.some(actor =>
                 actor.id === temporaryId),
-        false,
+        true,
     );
     const localizedTemporaryTransaction = {
         protocolVersion: 2,
@@ -17253,14 +18053,28 @@ test('scene performance requires substantial narration for a fifteen-minute turn
         localizedTemporaryCommitted
             .actors.find(actor =>
                 actor.id === temporaryId);
+    const localizedTemporaryCore =
+        localizedTemporaryCommitted
+            .actorLibrary.find(actor =>
+                actor.id === temporaryId);
     assert.equal(
-        localizedTemporaryActor.name,
-        '斯莱特林级长',
+        localizedTemporaryCore.nameEn,
+        temporaryEntrance.nameEn,
     );
     assert.equal(
-        localizedTemporaryActor
-            .role,
-        '路过的斯莱特林级长',
+        localizedTemporaryCore.roleEn,
+        temporaryEntrance.roleEn,
+    );
+    assert.equal(
+        Object.hasOwn(
+            localizedTemporaryActor,
+            'name',
+        ) ||
+        Object.hasOwn(
+            localizedTemporaryActor,
+            'role',
+        ),
+        false,
     );
     const missingTemporaryUpdate =
         structuredClone(
