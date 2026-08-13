@@ -374,27 +374,6 @@ export function worldClockToEpochMinutes(clock) {
 
 export const TEMPORAL_STATE_VERSION = 1;
 
-export const WORLD_CHANGE_MIN_DAYS = 7;
-
-export const GOSSIP_CHANNEL_VALUES =
-    Object.freeze([
-        'classmates',
-        'family',
-        'house',
-        'staff',
-        'local',
-        'public',
-    ]);
-
-export const WORLD_NEWS_CATEGORY_VALUES =
-    Object.freeze([
-        'ministry',
-        'britain',
-        'hogwarts',
-        'local',
-        'international',
-    ]);
-
 export function getWorldClockGapMinutes(
     fromClock,
     toClock,
@@ -439,6 +418,10 @@ export function reconcileTemporalState(
         next.map?.activeMapId ||
         scene.mapId;
     const isLegacySchoolDeparture =
+        Number(
+            next.timelineChronicleVersion ||
+            0,
+        ) < 1 &&
         mapId === 'kings_cross' &&
         /(?:first of september|1(?:st)? september|september (?:the )?first|september 1(?:st)?)/i
             .test(normalizedOpening) &&
@@ -519,20 +502,6 @@ export function reconcileTemporalState(
                                 ),
                         }));
                 }
-                shifted.timeline = (
-                    shifted.timeline || []
-                ).map(entry =>
-                    currentSceneClocks.has(
-                        entry.clock,
-                    )
-                        ? {
-                            ...entry,
-                            clock:
-                                shiftClock(
-                                    entry.clock,
-                                ),
-                        }
-                        : entry);
                 shifted.items = (
                     shifted.items || []
                 ).map(item =>

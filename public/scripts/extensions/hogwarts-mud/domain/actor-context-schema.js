@@ -4,7 +4,7 @@ import {
 } from './npc-identity-schema.js';
 
 export const actorContextVersion = 1;
-export const memoryReferenceVersion = 2;
+export const memoryReferenceVersion = 3;
 export const actorDossierProjectionVersion = 1;
 
 export const MEMORY_REF_RECORD_TYPE_VALUES =

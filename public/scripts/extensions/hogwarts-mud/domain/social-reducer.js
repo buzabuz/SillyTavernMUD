@@ -1,3 +1,9 @@
+/*
+Removed by compact-timeline-appraisal-lifecycle Revision 4.
+
+The former Statement/prose-Evidence reducer is intentionally non-executable.
+Production uses social-v3-reducer.js.
+
 import {
     applyMemoryConsolidation,
     validateMemoryConsolidation,
@@ -269,3 +275,6 @@ export function applySocialDirectorResult(
         next,
     );
 }
+*/
+
+export {};

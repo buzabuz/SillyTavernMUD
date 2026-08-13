@@ -22,7 +22,7 @@ import {
 import {
     runSocialDirectorGraph,
     validateCommittedEventWitnessInput,
-} from '../hogwarts-mud/social-director-graph.js';
+} from '../hogwarts-mud/social-director-v3-graph.js';
 import { runTurnSettlementGraph } from '../hogwarts-mud/turn-settlement-graph.js';
 import { clientRelativePath } from '../util.js';
 
@@ -872,19 +872,47 @@ router.post('/social/resolve', async (request, response) => {
             Number(
                 input.existingGraph
                     .version,
-            ) !== 2 ||
+            ) !== 3 ||
             !input.extraction ||
             typeof input.extraction !==
                 'object' ||
             Array.isArray(
                 input.extraction,
             ) ||
-            !Array.isArray(
-                input.extraction
-                    .statements,
+            Object.hasOwn(
+                input.extraction,
+                'statements',
             ) ||
+            ![
+                'reviews',
+                'reportedEvents',
+                'recipientAppraisals',
+                'identityClaims',
+                'relationshipClaims',
+                'personReferences',
+                'relationshipEvidence',
+                'schemaOperations',
+            ].every(field =>
+                Array.isArray(
+                    input.extraction[
+                        field
+                    ],
+                )) ||
             input.extraction
-                .statements.length > 100 ||
+                .reportedEvents
+                .length > 24 ||
+            input.extraction
+                .recipientAppraisals
+                .length > 24 ||
+            input.extraction
+                .identityClaims
+                .length > 24 ||
+            input.extraction
+                .relationshipClaims
+                .length > 24 ||
+            input.extraction
+                .personReferences
+                .length > 24 ||
             !Array.isArray(
                 input.extraction
                     .relationshipEvidence,
@@ -910,11 +938,11 @@ router.post('/social/resolve', async (request, response) => {
                     (
                         Array.isArray(
                             evidence
-                                .emotionAppraisals,
+                                .emotionEffects,
                         ) &&
                         evidence
-                            .emotionAppraisals
-                            .length > 12
+                            .emotionEffects
+                            .length > 4
                     ) ||
                     (
                         Array.isArray(
@@ -925,32 +953,41 @@ router.post('/social/resolve', async (request, response) => {
                             .structuralTags
                             .length > 20
                     )) ||
-            !Array.isArray(
-                input.extraction.reviews,
-            ) ||
             input.extraction
                 .reviews.length > 16 ||
+            input.extraction
+                .schemaOperations
+                .length > 32 ||
+            input.extraction
+                .schemaOperations
+                .some(operation =>
+                    !operation ||
+                    typeof operation !==
+                        'object' ||
+                    Array.isArray(
+                        operation,
+                    )) ||
+            !Array.isArray(
+                input.sceneEvidence,
+            ) ||
+            input.sceneEvidence
+                .length > 200 ||
+            !Array.isArray(
+                input.actorDirectory,
+            ) ||
+            input.actorDirectory
+                .length > 64 ||
             (
-                input.extraction
-                    .schemaOperations !==
+                input.availableAppraisals !==
                     undefined &&
                 (
                     !Array.isArray(
-                        input.extraction
-                            .schemaOperations,
+                        input
+                            .availableAppraisals,
                     ) ||
-                    input.extraction
-                        .schemaOperations
-                        .length > 32 ||
-                    input.extraction
-                        .schemaOperations
-                        .some(operation =>
-                            !operation ||
-                            typeof operation !==
-                                'object' ||
-                            Array.isArray(
-                                operation,
-                            ))
+                    input
+                        .availableAppraisals
+                        .length > 1000
                 )
             ) ||
             JSON.stringify(input)

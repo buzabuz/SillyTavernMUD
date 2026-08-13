@@ -19,14 +19,6 @@ const appraisalProposalSchema =
                     .min(1)
                     .max(180),
             ).min(1).max(4),
-        sourceMessageIds:
-            z.array(
-                z.number()
-                    .int()
-                    .min(0),
-            ).min(1).max(8),
-        sceneId:
-            z.string().min(1).max(96),
         contextTags:
             z.array(
                 z.string()
@@ -53,8 +45,6 @@ const appraisalProposalJsonSchema = {
         'targetId',
         'summaryEn',
         'sourceEventIds',
-        'sourceMessageIds',
-        'sceneId',
         'contextTags',
         'confidence',
     ],
@@ -81,20 +71,6 @@ const appraisalProposalJsonSchema = {
             items: {
                 type: 'string',
             },
-        },
-        sourceMessageIds: {
-            type: 'array',
-            minItems: 1,
-            maxItems: 8,
-            items: {
-                type: 'integer',
-                minimum: 0,
-            },
-        },
-        sceneId: {
-            type: 'string',
-            minLength: 1,
-            maxLength: 96,
         },
         contextTags: {
             type: 'array',
@@ -130,9 +106,9 @@ const appraisalBatchJsonSchema = {
 const APPRAISAL_SYSTEM = `You are the local post-turn Appraisal proposer for a persistent RPG. Process every supplied observer in this single batch and return only subjective interpretations grounded in the one committed event.
 
 Rules:
-- observers contains the complete rules-authorized participant, witness, or rumor-recipient set. Use only those observer IDs.
+- observers contains the complete rules-authorized participant, witness, or reported-recipient set. Use only those observer IDs.
 - targetId must be player or one supplied target ID and must differ from observerId.
-- Copy event.eventId, event.sourceMessageIds, and event.sceneId exactly into every proposal.
+- Copy only event.eventId into sourceEventIds. Event owns Scene, message and witness provenance.
 - summaryEn is the named observer's interpretation or expectation-forming reaction. Do not copy the objective event summary and do not turn it into world fact or common knowledge.
 - Do not use a Person Schema, activation capsule, prior Appraisal, relationship score, secret, private goal, or hidden fact as evidence.
 - Different observers may interpret the same event differently. Never transfer one observer's interpretation to another observer.

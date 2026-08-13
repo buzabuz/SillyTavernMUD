@@ -1,5 +1,5 @@
-export const SOCIAL_GRAPH_VERSION = 2;
-export const SOCIAL_GRAPH_EXTRACTOR_VERSION = 6;
+export const SOCIAL_GRAPH_VERSION = 3;
+export const SOCIAL_GRAPH_EXTRACTOR_VERSION = 7;
 export const SOCIAL_RELATIONSHIP_DIMENSION_RANGES =
     Object.freeze({
         familiarity: Object.freeze({
@@ -664,13 +664,39 @@ export function normalizeEmotionAppraisals(
         .slice(0, 4);
 }
 
+export function normalizeSocialEmotionEffects(
+    values,
+) {
+    return (
+        Array.isArray(values)
+            ? values
+            : []
+    )
+        .filter(effect =>
+            effect &&
+            SOCIAL_RELATIONSHIP_EMOTION_SET
+                .has(effect.emotion) &&
+            Number.isFinite(
+                Number(effect.intensity),
+            ) &&
+            Number(effect.intensity) > 0)
+        .map(effect => ({
+            emotion: effect.emotion,
+            intensity: Math.round(
+                clampSocialNumber(
+                    effect.intensity,
+                    1,
+                    5,
+                    1,
+                ),
+            ),
+        }))
+        .slice(0, 4);
+}
+
 export function normalizeSocialRelationshipEvidence(
     evidence = {},
 ) {
-    const sourceMessageIds =
-        normalizeSocialSourceMessageIds(
-            evidence.sourceMessageIds,
-        );
     const structuralTags =
         normalizeSocialStructuralTags(
             evidence.structuralTags,
@@ -683,6 +709,12 @@ export function normalizeSocialRelationshipEvidence(
         targetActorId: String(
             evidence.targetActorId || '',
         ),
+        eventId: String(
+            evidence.eventId || '',
+        ),
+        appraisalId: String(
+            evidence.appraisalId || '',
+        ),
         eventKind:
             inferSocialEventKind({
                 ...evidence,
@@ -692,40 +724,11 @@ export function normalizeSocialRelationshipEvidence(
             normalizeSocialDimensionDeltas(
                 evidence.dimensionDeltas,
             ),
-        emotionAppraisals:
-            normalizeEmotionAppraisals(
-                evidence.emotionAppraisals,
-                sourceMessageIds,
+        emotionEffects:
+            normalizeSocialEmotionEffects(
+                evidence.emotionEffects,
             ),
         structuralTags,
-        summaryEn: String(
-            evidence.summaryEn || '',
-        ),
-        summary: String(
-            evidence.summary ||
-            evidence.summaryEn ||
-            '',
-        ),
-        witnessedBy: [
-            ...new Set(
-                (
-                    Array.isArray(
-                        evidence.witnessedBy,
-                    )
-                        ? evidence
-                            .witnessedBy
-                        : []
-                )
-                    .map(String)
-                    .filter(Boolean),
-            ),
-        ],
-        sourceMessageIds,
-        sceneId: String(
-            evidence.sceneId ||
-            evidence.scene?.id ||
-            '',
-        ),
         clock: String(
             evidence.clock || '',
         ),
@@ -737,64 +740,6 @@ export function normalizeSocialRelationshipEvidence(
             ),
         ),
     };
-    if (
-        typeof evidence.source ===
-        'string'
-    ) {
-        normalized.source =
-            evidence.source;
-    }
-    if (
-        Array.isArray(
-            evidence.sourceEventIds,
-        )
-    ) {
-        normalized.sourceEventIds = [
-            ...new Set(
-                evidence.sourceEventIds
-                    .map(String)
-                    .filter(Boolean),
-            ),
-        ];
-    }
-    if (evidence.effectiveSinceClock) {
-        normalized.effectiveSinceClock =
-            String(
-                evidence
-                    .effectiveSinceClock,
-            );
-    }
-    for (const key of [
-        'knownTo',
-        'authorizedWitnesses',
-        'authorizedAudienceIds',
-    ]) {
-        if (Array.isArray(evidence[key])) {
-            normalized[key] = [
-                ...new Set(
-                    evidence[key]
-                        .map(String)
-                        .filter(Boolean),
-                ),
-            ];
-        }
-    }
-    for (const key of [
-        'playerKnown',
-        'knownToPlayer',
-    ]) {
-        if (
-            typeof evidence[key] ===
-            'boolean'
-        ) {
-            normalized[key] =
-                evidence[key];
-        }
-    }
-    if (evidence.visibility) {
-        normalized.visibility =
-            String(evidence.visibility);
-    }
     return normalized;
 }
 
@@ -876,25 +821,15 @@ function deriveActiveSocialEmotions(
                 .flatMap(evidence =>
                     (
                         evidence
-                            .emotionAppraisals ||
+                            .emotionEffects ||
                         []
                     ).map(appraisal => ({
                         ...appraisal,
                         sourceEvidenceId:
                             evidence.id,
-                        sceneId:
-                            evidence.sceneId ||
-                            '',
                         eventKind:
                             evidence.eventKind ||
                             '',
-                        witnessedBy: [
-                            ...(
-                                evidence
-                                    .witnessedBy ||
-                                []
-                            ),
-                        ],
                         updatedTurn:
                             finiteSocialNumber(
                                 evidence.turn,
@@ -1128,4 +1063,142 @@ export function normalizeSocialRelationshipEdge(
         ),
     ];
     return normalized;
+}
+
+export const SOCIAL_RELATIONSHIP_EVIDENCE_V3_KEYS =
+    Object.freeze([
+        'id',
+        'sourceActorId',
+        'targetActorId',
+        'eventId',
+        'appraisalId',
+        'eventKind',
+        'dimensionDeltas',
+        'structuralTags',
+        'emotionEffects',
+        'clock',
+        'turn',
+    ]);
+
+function hasExactSocialKeys(
+    value,
+    keys,
+) {
+    if (
+        !value ||
+        typeof value !== 'object' ||
+        Array.isArray(value)
+    ) {
+        return false;
+    }
+    const actual = Object.keys(value);
+    const allowed = new Set(keys);
+    return actual.length === keys.length &&
+        actual.every(key =>
+            allowed.has(key));
+}
+
+export function validateSocialRelationshipEvidenceV3(
+    value,
+    {
+        eventKnowledge = [],
+        appraisals = [],
+    } = {},
+) {
+    const normalized =
+        normalizeSocialRelationshipEvidence(
+            value,
+        );
+    const errors = [];
+    const event =
+        eventKnowledge.find(candidate =>
+            candidate.eventId ===
+                normalized.eventId);
+    const authorized =
+        event?.eventKind === 'reported'
+            ? [
+                event.report?.speakerId,
+                ...(
+                    event.report
+                        ?.recipientIds ||
+                    []
+                ),
+            ].includes(
+                normalized.sourceActorId,
+            )
+            : [
+                ...(
+                    event
+                        ?.participantActorIds ||
+                    []
+                ),
+                ...(
+                    event
+                        ?.witnessActorIds ||
+                    []
+                ),
+            ].includes(
+                normalized.sourceActorId,
+            );
+    if (
+        !hasExactSocialKeys(
+            value,
+            SOCIAL_RELATIONSHIP_EVIDENCE_V3_KEYS,
+        ) ||
+        !normalized.id ||
+        !normalized.sourceActorId ||
+        !normalized.targetActorId ||
+        normalized.sourceActorId ===
+            normalized.targetActorId ||
+        !event ||
+        !authorized ||
+        !normalized.clock
+    ) {
+        errors.push(
+            'Relationship Evidence V3 contract is invalid.',
+        );
+    }
+    if (
+        normalized.dimensionDeltas
+            .some(delta =>
+                !Number.isFinite(
+                    Number(
+                        delta.appliedDelta,
+                    ),
+                ))
+    ) {
+        errors.push(
+            'Relationship Evidence V3 requires applied deltas.',
+        );
+    }
+    if (normalized.appraisalId) {
+        const appraisal =
+            appraisals.find(candidate =>
+                candidate.id ===
+                    normalized
+                        .appraisalId);
+        if (
+            !appraisal ||
+            appraisal.status !== 'accepted' ||
+            appraisal.observerId !==
+                normalized.sourceActorId ||
+            appraisal.targetId !==
+                normalized.targetActorId ||
+            !(
+                appraisal.sourceEventIds ||
+                []
+            ).includes(
+                normalized.eventId,
+            )
+        ) {
+            errors.push(
+                'Relationship Evidence Appraisal reference is invalid.',
+            );
+        }
+    }
+    return {
+        valid: errors.length === 0,
+        errors,
+        value: normalized,
+    };
 }

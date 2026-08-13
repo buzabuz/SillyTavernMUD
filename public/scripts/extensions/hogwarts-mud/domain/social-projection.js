@@ -237,6 +237,81 @@ export function isSocialEntryVisibleToAudience(
         );
 }
 
+function isEventVisibleToAudience(
+    event,
+    audienceActorId,
+) {
+    const audienceId =
+        normalizeSocialAudienceId(
+            audienceActorId,
+        );
+    if (!event || !audienceId) {
+        return false;
+    }
+    if (audienceId === 'authority') {
+        return true;
+    }
+    if (
+        event.eventKind ===
+            'reported'
+    ) {
+        return (
+            event.report?.speakerId ===
+                audienceId ||
+            (
+                event.report
+                    ?.recipientIds ||
+                []
+            ).includes(audienceId)
+        );
+    }
+    return (
+        (
+            event
+                .participantActorIds ||
+            []
+        ).includes(audienceId) ||
+        (
+            event.witnessActorIds ||
+            []
+        ).includes(audienceId) ||
+        (
+            audienceId === 'player' &&
+            event.knownToPlayer ===
+                true
+        )
+    );
+}
+
+function isReferenceEntryVisible(
+    entry,
+    audienceActorId,
+    eventsById,
+) {
+    const eventId =
+        entry?.eventId ||
+        entry?.reportedEventId ||
+        '';
+    if (eventId) {
+        return isEventVisibleToAudience(
+            eventsById.get(eventId),
+            audienceActorId,
+        );
+    }
+    if (
+        entry?.sourceKind ===
+            'authority' &&
+        entry?.subjectId ===
+            audienceActorId
+    ) {
+        return true;
+    }
+    return isSocialEntryVisibleToAudience(
+        entry,
+        audienceActorId,
+    );
+}
+
 function getSocialEvidenceOrder(
     evidence,
     fallback,
@@ -355,11 +430,21 @@ export function buildSocialAudienceProjection(
                     worldState?.turn?.count,
             },
         );
+    const eventsById =
+        new Map(
+            (
+                worldState
+                    ?.eventKnowledge ||
+                []
+            ).map(event => [
+                event.eventId,
+                event,
+            ]),
+        );
     if (!audienceId) {
         return {
             version: graph.version,
             audienceActorId: '',
-            statements: [],
             identityClaims: [],
             relationshipClaims: [],
             personReferences: [],
@@ -371,7 +456,12 @@ export function buildSocialAudienceProjection(
         buildSocialClaimsAudienceProjection(
             graph,
             audienceId,
-            isSocialEntryVisibleToAudience,
+            (entry, viewerId) =>
+                isReferenceEntryVisible(
+                    entry,
+                    viewerId,
+                    eventsById,
+                ),
         );
     const directionEvidence =
         new Map();
@@ -399,9 +489,10 @@ export function buildSocialAudienceProjection(
     const visibleEvidence =
         graph.relationshipEvidence
             .filter(evidence =>
-                isSocialEntryVisibleToAudience(
+                isReferenceEntryVisible(
                     evidence,
                     audienceId,
+                    eventsById,
                 ));
     const visibleEvidenceIds =
         new Set(
@@ -428,6 +519,11 @@ export function buildSocialAudienceProjection(
                 const sourceSelf =
                     edge.sourceActorId ===
                     audienceId;
+                const playerTargetMetaView =
+                    audienceId ===
+                        'player' &&
+                    edge.targetActorId ===
+                        'player';
                 const edgeAuthorized =
                     isSocialEntryVisibleToAudience(
                         edge,
@@ -451,17 +547,31 @@ export function buildSocialAudienceProjection(
                 if (
                     hiddenGeneratedFamily ||
                     !sourceSelf &&
+                    !playerTargetMetaView &&
                     !edgeAuthorized &&
                     !visible.length
                 ) {
                     return null;
                 }
                 const dimensions =
-                    projectSocialDimensionsForAudience(
-                        edge,
-                        evidence,
-                        audienceId,
-                    );
+                    playerTargetMetaView
+                        ? Object.fromEntries(
+                            SOCIAL_RELATIONSHIP_DIMENSIONS
+                                .map(dimension => [
+                                    dimension,
+                                    clampSocialDimension(
+                                        dimension,
+                                        edge[
+                                            dimension
+                                        ],
+                                    ),
+                                ]),
+                        )
+                        : projectSocialDimensionsForAudience(
+                            edge,
+                            evidence,
+                            audienceId,
+                        );
                 const structuralTags =
                     sourceSelf
                         ? edge.structuralTags
@@ -529,13 +639,6 @@ export function buildSocialAudienceProjection(
         version: graph.version,
         audienceActorId:
             audienceId,
-        statements:
-            graph.statements
-                .filter(statement =>
-                    isSocialEntryVisibleToAudience(
-                        statement,
-                        audienceId,
-                    )),
         identityClaims:
             claimsProjection
                 .identityClaims,

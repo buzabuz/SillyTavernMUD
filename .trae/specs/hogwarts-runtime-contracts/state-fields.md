@@ -39,7 +39,11 @@
 | `LowTierContextV1` | 普通低档 Performer 与 repair 的唯一 User Payload；顶层严格为 `playerTurn/sceneFacts/actorCards/actionOpportunities/memoryActivations/prohibitions` 六字段 | `projectLowTierContextV1()` | `turn-performance.js` 初次请求与 repair | 总量不超过 50 KiB；单 Actor Card 不超过 4 KiB；不得注入 raw Actor Library、完整 Social Graph、完整 Identity、人物记忆正文账本或全量历史 |
 | `LowTierContextV1.sceneFacts.authoritySnapshot` | 当前 revision 的 Scene、Actor、Item、Material、Room 与 open fact 权威快照 | `buildNarrativeAuthoritySnapshot()` 经 `projectLowTierContextV1()` | matching low-tier Performer、正文一致性 diagnostics | 只作为六字段结构的内部事实投影，不持久化 |
 | `LowTierContextV1.memoryActivations.common/byActorId` | 公开事实及按 observer 密封的 Schema expectation 与按需 hydrated Event | Relational Synapse retrieval 经 `projectLowTierContextV1()` | matching actor 的低档表演 | 每 actor 最多 3 个 active Schema、3 个 Event，全局最多 8 个 Event；具体旧事必须有同 actor Event/sourceRefs |
-| Knowledge V2 `records[]` | Actor Core、Event、Appraisal、Person Schema、Social Evidence、Scene、Item/Clue 的可重建检索投影 | Knowledge Projector V2 | JSON exact、Vectra/Qdrant、Planner/Synapse | 每条含 version、recordId、revision、sourceRefs、visibility、clock、checksum；不建立嵌入人物完整历史的 Actor 聚合记录，不得作为 Reducer 权威 |
+| Knowledge V2 `records[]` | Actor Core、observed/reported Event、Appraisal、Person Schema、Scene、Item/Clue 的可重建检索投影；Relationship Evidence V3 只建引用边 | Knowledge Projector V2 | JSON exact、Vectra/Qdrant、Planner/Synapse | reported actor record 只含 attributed summary/roles/subjects/clock，不含 message/parent/about refs；不建 Statement/Evidence 全文 |
+| Scene Transition proposal `globalChronicleSummaryEn` | 对已关闭 Scene timeline 的 40–80 词英文语义压缩；不是 closure、Event 或关系记忆 | medium/high Scene Transition 模型 proposal，经 validator 接受 | Scene Transition reducer | revision 4 已实现；不新增模型调用；非法值直接失败且不自动 retry；stray `relationshipUpdates/worldChanges` 在 normalizer 丢弃 |
+| Daily `recentChronicle` | 最近全局语义史书的有界只读投影 | Daily Prompt projector | medium Daily Director | revision 4 已实现；最多 3 条、序列化最多 1,400 字符，只省略完整旧条目，不截断正文 |
+| Social Director `reviewableActors/existingSocialGraph` | 当前 review cycle 的 Appraisal/MemoryRef、候选关系边与有界 receipt ID 校准 | Social Prompt projector | medium Social Director | revision 4 已批准目标总 Prompt <=220,000；同一响应可提 message-grounded reported Event/recipient Appraisal，不增加模型调用 |
+| `ActorEventKnowledgeV2.direct/witnessed/reported` | 按 actor 即时投影 observed participant、observed witness、reported recipient Event | Actor Event Knowledge projector | diagnostics/authorized lookup；Prompt 只走 bounded Event activation | 非 State；禁止整表直投 Prompt；reported 不展开 source transcript/authority-only `aboutEventId` |
 
 ## 世界根字段
 
@@ -51,6 +55,9 @@
 | `modelSlots` | role 到 Connection Profile/预算映射 | settings controller、slot migration | model adapter、workflows | `responseHeadroomVersion` 管迁移 |
 | `saveRevisionVersion` | 保存门禁 Schema 版本 | save revision migration | guarded save ports、diagnostics | 当前值 `1` |
 | `timelineEpoch` | 单条时间线稳定且不可复用的保存域 | new timeline initializer、legacy revision migration | save guard、storage head | 新时间线安全随机；旧档按 timeline key + 状态确定性生成 |
+| `timeline` | 当前生产中的最近 20 条 `clock/label` 滚动副本，混合 Scene 事件、closure 与 opening；不是完整全局历史 | turn reducer、Scene Transition reducer、initial world、legacy repair | Daily Director、lifecycle repair、Knowledge clock fallback、UI world projection | 当前 contract 缺口现已补登记；revision 4 已批准原子迁移后删除，禁止长期双读 |
+| `timelineChronicleVersion` | 全局语义史书 cutover 版本 | initial world、一次性 timeline migration | lifecycle validator | revision 4 已实现，当前值 `1` |
+| `globalChronicle.version/entries[]` | 每个已封存 Scene 一条 `sceneId/endedClock/summaryEn` 语义摘要；按 archive 顺序 append-only | Scene Transition reducer、一次性无模型迁移 | bounded Daily projection、Knowledge Scene projector | revision 4 已实现；不向前端开放，不把整表直接注入 Prompt；迁移后删除 `timeline` |
 | `stateRevision` | 当前时间线非负、单调递增 revision | guarded save commit | 所有 Hogwarts metadata/chat save | rollback 也只能增加；chat-only 不增加 |
 | `revisionHistory[]` | 最近 48 次世界变化的 source/domain 与 Item/Identity before/after | save revision commit | diagnostics、未来 event proposal | 不保存完整快照、聊天正文、secret 或 prompt |
 | `clock` | 当前权威世界时间 | turn/transition reducers | 全部导演、UI | 正文不能反写 |
@@ -76,8 +83,8 @@
 | --- | --- | --- | --- | --- |
 | `scene` | 当前场景 ID、开场摘要、起点、room、timeline、next intent | opening/transition/scene reducers | turn、UI、archive | `summary/summaryEn` 是开场快照；timeline 推进后不再作为 Performer 当前态；`startedMessageId` 绑定聊天范围 |
 | `scene.calendarEntryIds[]` | 当前 Scene 明确认领的 schedule ID | Calendar/Timeline Moment、Scene Transition reducer、lifecycle normalization | Performer、Scene Transition、archive linker、Calendar UI | Calendar Moment 新 Scene 只含所选 schedule；自由/普通 Scene 可为空；不得按时间重叠自动扩张 |
-| `scene.timelineEntries[]` | 场景内按时钟排序的已提交历史 | turn/transition reducers | performer、UI、archive | 不是同时态；后续形态、位置与物质条目覆盖早期条目 |
-| `sceneArchive[]` | 已封存场景的稳定元数据、timeline 与原消息 ID 索引 | archive projector | archive UI、Calendar 历史、knowledge | 历史只读；record 是元数据/索引权威，正文按 `messageIds` 从原 chat 消息行读取，不复制或重新生成 |
+| `scene.timelineEntries[]` | 场景内按时钟排序的已提交详细历史 | turn/transition reducers | performer、UI、archive、Scene Transition chronicle proposal | 不是同时态；后续当前状态覆盖早期条目的事实效力；revision 4 已批准提交后只追加不编辑/删除 |
+| `sceneArchive[]` | 已封存场景的稳定元数据、append-only timeline 与原消息 ID 索引 | archive projector | archive UI、Calendar 历史、knowledge | 历史只读；record 是元数据/索引权威，正文按 `messageIds` 从原 chat 消息行读取，不复制或重新生成 |
 | `sceneArchive[].calendarEntryIds[]` | 封存 Scene 当时明确认领的 schedule ID | archive projector | Calendar 场景折叠、related/beat projection | 只关联 schedule；旧记录缺失或为空时 UI 显示【未关联计划】，不得按时间、地点、人物或重叠补链 |
 | `sceneTransition` | 转场任务状态，不是转场 package | scene transition workflow/lifecycle | UI、job recovery | opening message 持久化 transition diagnostics |
 | `map` | 地图目录、当前节点与运行时差异 | map/movement/transition reducers | spatial、UI、prompts | 原著底图只读 |
@@ -90,7 +97,7 @@ Calendar UI 不登记 `attendance` 或同义持久化字段，不展示“去了
 
 | 字段路径 | 真实语义 | 唯一写入者 | 主要读取者 | 兼容/诊断 |
 | --- | --- | --- | --- | --- |
-| `actorContextVersion/memoryReferenceVersion/actorDossierProjectionVersion` | Actor Core/Runtime、引用式记忆与 Dossier 投影的联合版本门槛 | initial world、Actor Context cutover | lifecycle、Actor Context validator、UI/Prompt projectors | 当前 `1/2/1`；V1 -> V2 原子迁移后不保留双读 |
+| `actorContextVersion/memoryReferenceVersion/actorDossierProjectionVersion` | Actor Core/Runtime、引用式记忆与 Dossier 投影的联合版本门槛 | initial world、Actor Context cutover | lifecycle、Actor Context validator、UI/Prompt projectors | 当前 `1/3/1`；V2 -> V3 原子迁移后不保留双读 |
 | `npcIdentityVersion` | NPC Identity 迁移版本 | initial world、Identity migration | lifecycle、diagnostics | 当前值 `1` |
 | `actorLibrary[]` | `ActorCoreV1` 稳定人物本体；顶层严格为 `id/canonCatalogId/nameEn/aliases/roleEn/cast/publicProfile/performanceCore/identity/privateFacts` | Actor Context runtime、一次性 cutover、授权 Actor/Identity Reducer | LowTier Actor Card、Dossier、Knowledge Actor Core projector | 已完成 lifecycle cutover；不保存位置、活动、生命状态、关系、印象、人物记忆正文或 Social Graph 副本 |
 | `actorLibrary[].cast` | 唯一人物入场来源与首次被玩家认识的稳定元数据：`origin/introducedClock/introducedTurn` | initial world、Actor admission/lifecycle reducer、pacing/temporary actor reducer、一次性 cutover | Story Cast policy、人物可见性投影、Pacing/Calendar actor selection | `origin` 仅允许 `foundation/canon_catalog/preset_resident/generated_guest/scene_temporary`；不再保存通用 `source`、`playerKnown` 或 `knownToPlayer` Actor 标记 |
@@ -98,22 +105,22 @@ Calendar UI 不登记 `attendance` 或同义持久化字段，不展示“去了
 | `actorLibrary[].identity.body` | 身体本身及当前身体状态：身高、体型、自然/当前发色、发型、眼睛、特征、伤势、形态和 asOfClock | Identity/body Reducer、migration | clock-scoped prompt、dossier | 服装、帽子、首饰、穿戴/手持 Item 不属于 body |
 | `actorLibrary[].identity.body.injuryAssessment` | 最近一次有证据的伤势检查：visible_injury、no_visible_injury 或 unknown | post-turn identity observation reducer、幂等历史回放 | Identity projection、dossier | narration 必须有逐字证据；NPC 自述不构成观察；no_visible_injury 不写入 injuries[] |
 | `npcIdentityObservationVersion` | 已提交身体观察的确定性回放版本 | lifecycle identity observation migration | lifecycle、diagnostics | 当前值 `1`；不调用模型，重复运行无变化 |
-| `actorMemoryIndex.version/byActorId` | 人物记忆层级目录；每名人物只含 `firstImpressionRef/core/recent/everyday` | Actor Context runtime、一次性 cutover、turn/transition/memory/event reducers | Dossier hydration、Memory Consolidation、LowTier memory activation | 当前 version `2`；字段形状不变，禁止 tier 引用 `migrated_current_impression`；`MemoryRefV1` 仍只含 `recordType/recordId/addedClock` |
-| `memorySynapse.version/appraisals[]` | observer 对已提交 Event 的主观解释；初见与 retained memory 可保存为 Appraisal | Appraisal validator/Reducer、Actor Context runtime、一次性 cutover | Schema consolidation、Knowledge V2、Dossier、observer activation | V2 迁移删除 `migrated_current_impression`，因为无 provenance 的旧 current opinion 不是 retained memory；无 Event 的 retained migration Appraisal 固定 `historicalClaimAllowed=false` |
+| `actorMemoryIndex.version/byActorId` | 人物记忆层级目录；每名人物只含 `firstImpressionRef/core/recent/everyday` | Actor Context runtime、一次性 cutover、turn/transition/memory/event reducers | Dossier hydration、Memory Consolidation、LowTier memory activation | revision 4 已批准 version `3`：弱/过期 AppraisalRef 替换为 observed/reported EventRef；字段形状不变 |
+| `memorySynapse.version/appraisals[]` | observer 对已提交 Event 的唯一主观解释正文；V2 只存 `sourceEventIds` | Appraisal validator/Reducer、Actor Context runtime、一次性 cutover | Schema、Relationship receipt、Knowledge、Dossier、activation | revision 4 已批准：`knowledgeSource=reported` 取代 `authorized_rumor`；删除 message/Scene/witness/sourceRumor 副本 |
 | `memorySynapse.personSchemas[]` | observer-target 的 `factPatternEn/interpretationEn/expectationEn`、支持、反例和修订链 | medium boundary `schemaOperations` + Memory Synapse Reducer | Knowledge V2、Dossier currentSchema、observer activation | 至少 3 条 accepted Appraisal 且跨 2 个 Scene；每对最多 3 个 active；不成为公共事实，不物化回写人物字段 |
 | `actors[]` | `ActorRuntimeV1` 运行态；顶层严格为 `id/mapId/roomId/present/lifeStatus/lifeStatusPermanent/lifeStatusDetailEn/lifeStatusSinceClock/currentActivityEn/currentIntentEn/currentGoalEn/temporary` | Actor Context runtime、turn/transition/spatial reducers、一次性 cutover | Authority Snapshot、Dossier current、presence、Scene Transition validator | 已完成 lifecycle cutover；不复制 Actor Core、Identity、关系、Appraisal、Schema 或记忆 |
 | `actors[].lifeStatus/lifeStatusPermanent/lifeStatusDetailEn/lifeStatusSinceClock` | 人物当前生命状态、不可逆标记、公开说明和状态生效时间的唯一权威 | High Scene Transition 可首次提交不可逆状态；Medium Scene Transition 可提交可逆状态；Actor Runtime reducer 原子落盘 | admission/presence、Narrative Authority、Scene Transition、Dossier current | `alive/injured/incapacitated/missing/dead`；永久状态不可降级或复活；Core 不再复制；中文仅显示时翻译 |
 | `actors[].temporary` | 当前人物是否仍是未确认身份的临时场景人物 | turn/pacing temporary actor reducer；有叙事证据的 identity merge 原子置 `false` | Story Cast policy、Pacing、Calendar actor selection | `provisionalActorId/resolvedIdentityId/identityStatus/identityEvidenceEn` 不再持久化；稳定 ID 即 actor ID，身份依据写 `identity.provenance` source ref |
 | `ActorDossierViewModelV1` | 人物前端唯一只读投影；除 `schemaVersion` 外严格为 `actorId/header/core/identity/current/relationship/memories/items` 8 个业务顶层字段 | `buildActorDossierViewModel(state, actorId, viewerId)` | 人物列表、NPC 检查器、关系星图 | 不持久化；不得携带 raw Core/Runtime/Social/Memory State |
 | `ActorDossierViewModelV1.current` | 玩家可见当前状态：`location/activity/intent/lifeStatus/lifeStatusDetail/presentation` | Dossier projector 从 Actor Runtime、Room 与 Presentation 投影 | 人物列表、NPC 检查器 | 已完成 lifecycle projection；不暴露 `lifeStatusPermanent/lifeStatusSinceClock/temporary/cast` |
-| `ActorDossierViewModelV1.relationship.evidenceRefs` | viewer 可见的 Social Evidence 引用投影，解释关系维度变化 | relationship projector 从 Social Graph hydration | NPC 检查器、关系星图 | 不属于 Actor Memory；UI 明确标注“关系证据”；保持现有 `summary || summaryEn` 语言 fallback |
+| `ActorDossierViewModelV1.relationship.evidenceRefs` | viewer 可见的关系变化引用投影，正文/来源由 Receipt 的 Appraisal/Event 按 ACL hydration | relationship projector | NPC 检查器、关系星图 | revision 4 保持字段形状和 actor->player meta-view；reported Event 显示听闻 badge；本期不做语言统一 |
 | `ActorDossierViewModelV1.memories` | `core/recent/everyday` 三层 retained Event/Appraisal hydration | Actor Memory Index projector | NPC 检查器 | 不包含无 provenance 的旧 current impression；防御性过滤 `migrated_current_impression`，无 active Schema 时不回退旧 impression |
 | `activeInteractionActorIds[]` | 2–4 名当前互动卡司 | turn/scene settlement reducers | scene performer、快捷互动、UI | 不代表完整房间人口 |
 | `localPresence.mapId/roomId` | 当前物理占位所属房间 | presence reducer | UI、witness resolver | 必须匹配玩家当前房间 |
 | `localPresence.occupantActorIds[]` | 同室且已确认存在的已知人物 | presence reducer | current-location UI、witness | 不因退出镜头删除 |
 | `localPresence.cohortIds[]` | 同室稳定群体 | presence reducer | UI 摘要、witness | 不自动展开关系边 |
 | `cohorts[]` | class/dorm/family/scene roster | presence reducer、deterministic migration | presence、witness、UI | roster 是位置证据，library 不是 |
-| `eventKnowledge[]` | 已提交 Event 的 participant/witness/perception 与唯一事实正文 | event knowledge reducer | Social、Actor Memory Index、Knowledge、Dossier hydration | 不直接修改关系；合格公共事件只为实际 witness 幂等写同一 event ID 的 MemoryRef |
+| `eventKnowledgeVersion/eventKnowledge[]` | V2 append-only Event 权威；`observed` 为客观观测，`reported` 为带归属的传播硬事实 | centralized Event reducer、一次性 V1->V2 migration | Actor Event Knowledge、Memory、Social、Appraisal、Knowledge、Dossier | observed 用 sourceMessageIds+perception；reported 用 sourceSegmentRefs+roles，不双存 message IDs；`aboutEventId` authority-only |
 
 人物层不变量：
 
@@ -157,16 +164,20 @@ actorLibrary membership != physical presence
 
 | 字段路径 | 真实语义 | 唯一写入者 | 主要读取者 | 兼容/诊断 |
 | --- | --- | --- | --- | --- |
-| `socialGraph` | 定向关系维度、情绪、结构标签、claims 与 evidence 的唯一权威 | Social Reducer/migration | unified relationship projection、LowTier Actor Card、Dossier、graph UI、Knowledge | 不存在全局恋爱阶段；不得把 statements、relationships 或 evidence 复制进 Actor Core/Runtime |
-| `socialGraph.identityClaims[]` | 有消息证据和 witness 的 self/other 身份说法 | Social Reducer/migration | observer projection、Identity dossier | 不覆盖 authority Identity；冲突说法并存 |
-| `socialGraph.relationshipClaims[]` | 家庭等关系说法或 authority 关系确认 | Social Reducer/migration、授权 authority Reducer | audience projection、family edge projector | 模型不能写 authority claim |
+| `socialGraph` | 定向关系维度、情绪、结构标签、claims 与 applied relationship receipt 的唯一权威 | Social Reducer/migration | unified relationship projection、LowTier Actor Card、Dossier、graph UI、Knowledge | revision 4 已批准目标 version `3`；不存在全局恋爱阶段，不复制进 Actor Core/Runtime |
+| `socialGraph.relationshipEvidence[]` | V3 定向关系影响回执：required `eventId`、optional matching `appraisalId`、eventKind、实际 dimension deltas、tags、emotion effects、clock/turn | Social Reducer、一次性 V2->V3 migration | relationship edge `evidenceIds`、ACL hydrator、relational graph | 禁止保存 summary/译文/message/Scene/witness/Event-list/visibility；Appraisal 删除后 Event-only，已应用边值不回滚 |
+| `socialGraph.relationships[].evidenceIds[]` | 当前边关联的有效 V3 receipt ID | Social Reducer、V3 migration prune | Social projection、Dossier/graph | 累计 dimensions/tags 是当前状态；旧 receipt 详情删除不重算边值，禁止 dangling ID |
+| `socialGraph.statements[]` | 旧 V2 attributed prose + message/Scene/witness 副本 | 无生产写入者 | 仅一次性 cutover 删除 | revision 4 已删除；Tina 83 条结构详情不转 Event，原 chat/archive 保留；不设兼容投影 |
+| `socialGraph.identityClaims[]` | self/other 身份结构化说法，正文回源 reported Event | Social Reducer/migration | observer projection、Identity dossier | revision 4 非 authority claim 只存 `reportedEventId`；不复制 speaker/message/witness/clock，不覆盖 authority Identity |
+| `socialGraph.relationshipClaims[]` | 家庭等结构化关系说法或 authority 关系确认 | Social Reducer/migration、授权 authority Reducer | audience projection、family edge projector | 非 authority claim 只存 `reportedEventId`；authority claim 用 authority source ref；模型不能写 authority claim |
 | `socialGraph.personReferences[]` | 尚未成为 actor 的被提及人物 | Social Reducer/migration、授权 resolution Reducer | relationship claim projection | 仅 unresolved/resolved/nonexistent；unresolved/nonexistent 不进入 actor/presence/memory/cast |
 | `socialGraph.relationships[].relationshipClaimIds/relationshipKinds` | 正式关系边绑定的 authority claim 来源 | family edge projector | audience projection、graph UI | 只有 resolved reference + authority claim 可生成 family edge |
 | `dailyDirector` | 当前游戏日计划及刷新状态 | director workflow/reducer | turn prompts | 只跨日期刷新 |
 | `pacingDirector` | 单回合节奏评估、冷却、pending beat | pacing reducer/workflow | turn/transition | 不直接写正文；pending beat 不迁移、消费或覆盖 Calendar storyBeat |
 | `memoryDirector` | event-boundary consolidation 状态 | memory workflow/reducer | social memory | 不按固定回合盲目整理 |
-| `causalCollapse` | 已绑定的可显影后果 | causal reducer | pacing/directors | 只消费预写事实 |
-| `sceneEnrichment` | 转场后延迟世界变化状态 | transition/world reducers | background work | 不能覆盖已提交 scene core |
+| `causalCollapse` | 已绑定的可显影后果 | causal reducer | pacing/directors | revision 4 删除 `rumor_route` kind/`rumor` persistence target；流言知识只能由 committed reported Event 建立 |
+| `sceneEnrichment` | 转场后延迟 map/social 等 enrichment 状态 | transition/background reducers | background work | revision 4 删除不可达的 `worldChanges` 子状态；其余 enrichment 不能覆盖已提交 Scene core |
+| `gossipPacks/worldNews/worldChangeLog` | 当前旧版 Gossip/Prophet 自由文本与有界运行日志 | Scene Transition world-change reducer | knownRumors/recentWorldNews、Appraisal/Knowledge rumor ACL | 当前未登记 contract 缺口；revision 4 整体原子删除；任一非空值阻断迁移，不做文本转 Event |
 
 ## 消息级字段
 

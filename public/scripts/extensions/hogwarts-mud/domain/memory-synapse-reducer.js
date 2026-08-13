@@ -174,6 +174,11 @@ export function applyAppraisalProposals(
     const stateValidation =
         validateMemorySynapse(
             next.memorySynapse,
+            {
+                eventKnowledge:
+                    next.eventKnowledge ||
+                    [],
+            },
         );
     throwValidationErrors(
         stateValidation.errors,
@@ -525,6 +530,7 @@ export function derivePersonSchemaConfidence(
 
 export function isPersonSchemaStable(
     supportAppraisals,
+    eventById = new Map(),
 ) {
     const supports =
         Array.isArray(
@@ -539,9 +545,17 @@ export function isPersonSchemaStable(
         supports.length >=
             MIN_SCHEMA_SUPPORT_APPRAISALS &&
         new Set(
-            supports.map(
+            supports.flatMap(
                 appraisal =>
-                    appraisal.sceneId,
+                    (
+                        appraisal
+                            .sourceEventIds ||
+                        []
+                    ).map(eventId =>
+                        eventById
+                            .get(eventId)
+                            ?.sceneId)
+                        .filter(Boolean),
             ),
         ).size >=
             MIN_SCHEMA_SUPPORT_SCENES
@@ -779,6 +793,7 @@ function validateEvidence(
     if (
         !isPersonSchemaStable(
             evidence.supports,
+            eventById,
         )
     ) {
         errors.push(
@@ -1111,6 +1126,11 @@ export function applyPersonSchemaOperations(
     const validation =
         validateMemorySynapse(
             next.memorySynapse,
+            {
+                eventKnowledge:
+                    next.eventKnowledge ||
+                    [],
+            },
         );
     throwValidationErrors(
         validation.errors,

@@ -448,8 +448,6 @@ export function validateScenePerformance(
             'mapId',
             'roomId',
             'firstImpressionOfPlayerEn',
-            'impressionOfPlayerEn',
-            'memoryUpdate',
         ]);
         actorUpdates.forEach(update => {
             if (!presentActorIds.has(update.id) ||

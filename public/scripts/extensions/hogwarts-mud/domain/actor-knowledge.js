@@ -71,7 +71,6 @@ export function getActorVisibleSocialKnowledge(
     worldState,
     actorId,
     {
-        statementLimit = 16,
         evidenceLimit = 16,
         relationshipLimit = 12,
     } = {},
@@ -81,23 +80,41 @@ export function getActorVisibleSocialKnowledge(
             worldState,
             actorId,
         );
-    const statements =
-        projection.statements
-            .slice(-statementLimit);
     const relationshipEvidence =
         projection.relationshipEvidence
             .slice(-evidenceLimit);
     const relationships =
         projection.relationships
             .slice(-relationshipLimit);
+    const eventKnowledge =
+        projectActorEventKnowledge(
+            worldState,
+            actorId,
+        );
+    const reportedRoleActorIds =
+        [
+            ...eventKnowledge.direct,
+            ...eventKnowledge.reported,
+        ]
+            .filter(event =>
+                event.eventKind ===
+                    'reported')
+            .flatMap(event => [
+                event.report?.speakerId,
+                ...(
+                    event.report
+                        ?.recipientIds ||
+                    []
+                ),
+                ...(
+                    event.report
+                        ?.subjectIds ||
+                    []
+                ),
+            ]);
     const knownRelationshipActorIds = [
         ...new Set([
-            ...statements.flatMap(
-                statement => [
-                    statement.subjectId,
-                    statement.speakerId,
-                ],
-            ),
+            ...reportedRoleActorIds,
             ...relationshipEvidence.flatMap(
                 evidence => [
                     evidence.sourceActorId,
@@ -116,7 +133,6 @@ export function getActorVisibleSocialKnowledge(
             id !== actorId)),
     ];
     return {
-        statements,
         relationshipEvidence,
         relationships,
         knownRelationshipActorIds,
@@ -191,16 +207,6 @@ export function buildActorKnowledgeCapsules(
                     dailyDirectives
                         .get(actorId) ||
                     null,
-                knownRumors:
-                    getActorKnownRumors(
-                        worldState,
-                        actorId,
-                    ),
-                eventKnowledge:
-                    projectActorEventKnowledge(
-                        worldState,
-                        actorId,
-                    ),
                 socialKnowledge:
                     getActorVisibleSocialKnowledge(
                         worldState,
@@ -479,7 +485,11 @@ export function buildActorContinuityCapsules(
                     playerEdge,
                 );
             const knownActorIds =
-                new Set();
+                new Set(
+                    socialKnowledge
+                        .knownRelationshipActorIds ||
+                    [],
+                );
             actorEdges.forEach(edge => {
                 if (
                     Number(
@@ -695,61 +705,4 @@ export function migrateActorKnowledgeBoundaries(
         state: next,
         changed: true,
     };
-}
-
-export function getActorKnownRumors(
-    worldState,
-    actorId,
-) {
-    return (worldState.gossipPacks || [])
-        .filter(pack =>
-            pack.status !== 'faded')
-        .map(pack => {
-            if (
-                (pack.sourceActorIds || [])
-                    .includes(actorId)
-            ) {
-                return {
-                    id: pack.id,
-                    versionEn:
-                        pack.truthCoreEn,
-                    version:
-                        pack.truthCore ||
-                        pack.truthCoreEn,
-                    channel: 'witness',
-                    targetGroupEn:
-                        'Direct witnesses',
-                    distortionLevel: 0,
-                    truthWitness: true,
-                };
-            }
-            const received = (
-                pack.versions || []
-            )
-                .filter(version =>
-                    (
-                        version
-                            .audienceActorIds ||
-                        []
-                    ).includes(actorId))
-                .at(-1);
-            return received ? {
-                id: pack.id,
-                versionEn:
-                    received.versionEn,
-                version:
-                    received.version ||
-                    received.versionEn,
-                channel:
-                    received.channel,
-                targetGroupEn:
-                    received.targetGroupEn,
-                distortionLevel:
-                    received
-                        .distortionLevel,
-                truthWitness: false,
-            } : null;
-        })
-        .filter(Boolean)
-        .slice(-6);
 }

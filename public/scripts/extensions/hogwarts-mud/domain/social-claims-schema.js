@@ -2,6 +2,7 @@ export const SOCIAL_IDENTITY_CLAIM_SOURCE_KINDS =
     Object.freeze([
         'self',
         'other',
+        'authority',
     ]);
 export const SOCIAL_RELATIONSHIP_CLAIM_SOURCE_KINDS =
     Object.freeze([
@@ -67,35 +68,6 @@ function text(
 
 function actorId(value) {
     return text(value, 160);
-}
-
-function audienceIds(values) {
-    return [
-        ...new Set(
-            (
-                Array.isArray(values)
-                    ? values
-                    : []
-            )
-                .map(actorId)
-                .filter(Boolean),
-        ),
-    ];
-}
-
-function messageIds(values) {
-    return [
-        ...new Set(
-            (
-                Array.isArray(values)
-                    ? values
-                    : []
-            )
-                .map(Number)
-                .filter(Number.isInteger),
-        ),
-    ].sort((left, right) =>
-        left - right);
 }
 
 function claimValue(value) {
@@ -191,41 +163,40 @@ export function normalizeSocialIdentityClaim(
                 source.sourceKind,
                 40,
             ).toLocaleLowerCase(),
-        speakerId:
-            actorId(source.speakerId),
-        sourceMessageIds:
-            messageIds(
-                source.sourceMessageIds,
+        reportedEventId:
+            text(
+                source.reportedEventId,
+                200,
             ),
-        witnessedBy:
-            audienceIds(
-                source.witnessedBy,
+        authoritySourceRef:
+            text(
+                source.authoritySourceRef,
+                240,
             ),
-        clock: text(source.clock, 120),
     };
     const validKind =
         IDENTITY_SOURCE_KINDS.has(
             normalized.sourceKind,
-        ) &&
-        (
-            normalized.sourceKind ===
-                'self'
-                ? normalized.speakerId ===
-                    normalized.subjectId
-                : normalized.speakerId !==
-                    normalized.subjectId
         );
+    const hasSource =
+        normalized.sourceKind ===
+            'authority'
+            ? Boolean(
+                normalized
+                    .authoritySourceRef,
+            )
+            : Boolean(
+                normalized
+                    .reportedEventId,
+            );
     return (
         normalized.id &&
         normalized.subjectId &&
         normalized.fieldPath &&
         normalized.value !==
             undefined &&
-        normalized.speakerId &&
         validKind &&
-        normalized.sourceMessageIds
-            .length &&
-        normalized.witnessedBy.length
+        hasSource
     )
         ? normalized
         : null;
@@ -321,48 +292,28 @@ export function normalizeSocialRelationshipClaim(
                 source.sourceKind,
                 40,
             ).toLocaleLowerCase(),
-        speakerId:
-            actorId(source.speakerId),
-        sourceMessageIds:
-            messageIds(
-                source.sourceMessageIds,
+        reportedEventId:
+            text(
+                source.reportedEventId,
+                200,
             ),
-        witnessedBy:
-            audienceIds(
-                source.witnessedBy,
+        authoritySourceRef:
+            text(
+                source.authoritySourceRef,
+                240,
             ),
-        clock: text(source.clock, 120),
     };
     const validKind =
         RELATIONSHIP_SOURCE_KINDS
             .has(
                 normalized
                     .sourceKind,
-            ) &&
-        (
-            normalized.sourceKind ===
-                'authority' ||
-            (
-                normalized.sourceKind ===
-                    'self' &&
-                normalized.speakerId ===
-                    normalized.subjectId
-            ) ||
-            (
-                normalized.sourceKind ===
-                    'other' &&
-                normalized.speakerId !==
-                    normalized.subjectId
-            )
-        );
+            );
     const hasEvidence =
         normalized.sourceKind ===
             'authority' ||
-        (
-            normalized.sourceMessageIds
-                .length > 0 &&
-            normalized.witnessedBy
-                .length > 0
+        Boolean(
+            normalized.reportedEventId,
         );
     return (
         normalized.id &&
@@ -370,9 +321,14 @@ export function normalizeSocialRelationshipClaim(
         normalized
             .relationshipKind &&
         normalized.targetRefId &&
-        normalized.speakerId &&
         validKind &&
-        hasEvidence
+        hasEvidence &&
+        (
+            normalized.sourceKind !==
+                'authority' ||
+            normalized
+                .authoritySourceRef
+        )
     )
         ? normalized
         : null;

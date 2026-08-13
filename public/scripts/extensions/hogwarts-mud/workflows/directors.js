@@ -8,6 +8,25 @@ import {
     projectNarrativePromptInput,
 } from '../domain/narrative-prompt-context.js';
 
+export function selectRecentChronicle(
+    state,
+) {
+    const entries =
+        (
+            state.globalChronicle
+                ?.entries ||
+            []
+        ).slice(-3);
+    while (
+        entries.length &&
+        JSON.stringify(entries).length >
+            1400
+    ) {
+        entries.shift();
+    }
+    return entries;
+}
+
 export function createDirectorWorkflows(ports) {
     const {
         CANON_CAST_IDENTITY_CONTRACT,
@@ -274,14 +293,10 @@ Schema:
                                 clue
                                     .discovered ===
                                 true),
-                            recentTimeline:
-                            (
-                                state.timeline ||
-                                []
-                            ).slice(
-                                -contextPlan
-                                    .recentMessageLimit,
-                            ),
+                            recentChronicle:
+                                selectRecentChronicle(
+                                    state,
+                                ),
                             recentMessages:
                             getContext().chat
                                 .slice(
@@ -702,7 +717,7 @@ For intervene, intervention must be:
 
 For a bound causal fact, use kind causal_collision and causalCollapse:
 {
-  "kind": "social_edge|offscreen_event|institutional_fact|material_history|obligation|rumor_route",
+  "kind": "social_edge|offscreen_event|institutional_fact|material_history|obligation",
   "focusActorId": "existing_focus_actor_id_or_empty",
   "relatedActorIds": ["existing_actor_id"],
   "itemId": "existing_item_id_or_empty",
@@ -720,7 +735,7 @@ For a bound causal fact, use kind causal_collision and causalCollapse:
     }
   ],
   "sourceEventIds": ["existing_event_id_if_any"],
-  "persistenceTargets": ["event|social_graph|room_state|item|rumor|obligation"],
+  "persistenceTargets": ["event|social_graph|room_state|item|obligation"],
   "surfaceMode": "aftermath",
   "consequenceMode": "mixed",
   "irreversible": false,

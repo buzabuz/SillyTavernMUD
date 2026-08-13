@@ -1,4 +1,4 @@
-export const MEMORY_SYNAPSE_VERSION = 1;
+export const MEMORY_SYNAPSE_VERSION = 2;
 export const APPRAISAL_STATUS_VALUES = Object.freeze([
     'provisional',
     'accepted',
@@ -13,7 +13,7 @@ export const APPRAISAL_KNOWLEDGE_SOURCE_VALUES =
     Object.freeze([
         'participant',
         'witness',
-        'authorized_rumor',
+        'reported',
         'mixed',
     ]);
 export const MIN_SCHEMA_SUPPORT_APPRAISALS = 3;
@@ -26,12 +26,8 @@ const APPRAISAL_KEYS = new Set([
     'targetId',
     'summaryEn',
     'sourceEventIds',
-    'sourceMessageIds',
-    'sourceRumorIds',
     'activationSchemaIds',
     'derivedSchemaIds',
-    'provenance',
-    'sceneId',
     'contextTags',
     'confidence',
     'status',
@@ -46,11 +42,8 @@ const APPRAISAL_PROPOSAL_KEYS = new Set([
     'targetId',
     'summaryEn',
     'sourceEventIds',
-    'sourceMessageIds',
     'activationSchemaIds',
     'derivedSchemaIds',
-    'provenance',
-    'sceneId',
     'contextTags',
     'confidence',
     'supersedesAppraisalId',
@@ -165,46 +158,6 @@ export function getSchemaFeedbackProvenanceIds(
     ]);
 }
 
-function normalizeMessageIds(values) {
-    const normalized = [];
-    const seen = new Set();
-    for (
-        const value of Array.isArray(values)
-            ? values
-            : []
-    ) {
-        if (
-            Number.isSafeInteger(value) &&
-            value >= 0
-        ) {
-            const key = `n:${value}`;
-            if (!seen.has(key)) {
-                seen.add(key);
-                normalized.push(value);
-            }
-            continue;
-        }
-        const text = String(value || '').trim();
-        if (!text) continue;
-        const key = `s:${text}`;
-        if (!seen.has(key)) {
-            seen.add(key);
-            normalized.push(text);
-        }
-    }
-    return normalized.sort((left, right) => {
-        if (
-            typeof left === 'number' &&
-            typeof right === 'number'
-        ) {
-            return left - right;
-        }
-        if (typeof left === 'number') return -1;
-        if (typeof right === 'number') return 1;
-        return stableCompare(left, right);
-    });
-}
-
 function normalizeContextTags(values) {
     return [
         ...new Set(
@@ -265,15 +218,9 @@ function appraisalIdentity(value = {}) {
             normalizeEntityId(value.observerId),
         targetId:
             normalizeEntityId(value.targetId),
-        sceneId:
-            normalizeEntityId(value.sceneId),
         sourceEventIds:
             normalizeReferenceIds(
                 value.sourceEventIds,
-            ),
-        sourceMessageIds:
-            normalizeMessageIds(
-                value.sourceMessageIds,
             ),
     });
 }
@@ -411,14 +358,6 @@ export function normalizeAppraisal(
             normalizeReferenceIds(
                 source.sourceEventIds,
             ),
-        sourceMessageIds:
-            normalizeMessageIds(
-                source.sourceMessageIds,
-            ),
-        sourceRumorIds:
-            normalizeReferenceIds(
-                source.sourceRumorIds,
-            ),
         activationSchemaIds:
             normalizeSchemaProvenanceIds(
                 source,
@@ -429,8 +368,6 @@ export function normalizeAppraisal(
                 source,
                 'derivedSchemaIds',
             ),
-        sceneId:
-            normalizeEntityId(source.sceneId),
         contextTags:
             normalizeContextTags(
                 source.contextTags,
@@ -510,16 +447,10 @@ export function validateAppraisal(
     }
     if (
         normalized.historicalClaimAllowed &&
-        (
-            !normalized.sceneId ||
-            !normalized
-                .sourceEventIds.length ||
-            !normalized
-                .sourceMessageIds.length
-        )
+        !normalized.sourceEventIds.length
     ) {
         errors.push(
-            'Appraisal must cite a scene, event, and message.',
+            'Historical Appraisal must cite an Event.',
         );
     }
     if (
@@ -666,6 +597,7 @@ export function validatePersonSchema(
     value,
     {
         appraisals = [],
+        eventKnowledge = [],
     } = {},
 ) {
     const normalized =
@@ -762,6 +694,12 @@ export function validatePersonSchema(
             appraisal,
         ]),
     );
+    const eventById = new Map(
+        eventKnowledge.map(event => [
+            event.eventId,
+            event,
+        ]),
+    );
     if (appraisalById.size) {
         const supports =
             normalized.supportAppraisalIds
@@ -776,6 +714,11 @@ export function validatePersonSchema(
                 supports.flatMap(appraisal =>
                     appraisal.sourceEventIds),
             );
+        const supportEvents =
+            derivedSupportEventIds
+                .map(id =>
+                    eventById.get(id))
+                .filter(Boolean);
         if (
             supports.length !==
                 normalized
@@ -816,15 +759,25 @@ export function validatePersonSchema(
             );
         }
         if (
+            eventById.size &&
+            supportEvents.length !==
+                derivedSupportEventIds
+                    .length
+        ) {
+            errors.push(
+                'Person Schema cites unknown support Events.',
+            );
+        }
+        if (
             normalized.status !==
                 'superseded' &&
             (
                 supports.length <
                     MIN_SCHEMA_SUPPORT_APPRAISALS ||
                 new Set(
-                    supports.map(
-                        appraisal =>
-                            appraisal.sceneId,
+                    supportEvents.map(
+                        event =>
+                            event.sceneId,
                     ),
                 ).size <
                     MIN_SCHEMA_SUPPORT_SCENES
@@ -902,6 +855,9 @@ export function normalizeMemorySynapse(
 
 export function validateMemorySynapse(
     value,
+    {
+        eventKnowledge = [],
+    } = {},
 ) {
     const normalized =
         normalizeMemorySynapse(value);
@@ -953,6 +909,29 @@ export function validateMemorySynapse(
         const validation =
             validateAppraisal(appraisal);
         errors.push(...validation.errors);
+        if (
+            validation.value
+                .historicalClaimAllowed
+        ) {
+            const access =
+                validateAppraisalObserverAccess(
+                    validation.value,
+                    {
+                        eventKnowledge,
+                    },
+                );
+            errors.push(...access.errors);
+            if (
+                access.valid &&
+                validation.value
+                    .knowledgeSource !==
+                    access.basis
+            ) {
+                errors.push(
+                    `Appraisal ${validation.value.id} knowledge source disagrees with Event authority.`,
+                );
+            }
+        }
         if (appraisalIds.has(validation.value.id)) {
             errors.push(
                 `Duplicate Appraisal ID ${validation.value.id}.`,
@@ -974,6 +953,7 @@ export function validateMemorySynapse(
                 {
                     appraisals:
                         normalized.appraisals,
+                    eventKnowledge,
                 },
             );
         errors.push(...validation.errors);
@@ -1150,159 +1130,32 @@ export function initializeMemorySynapseState(
 export const migrateMemorySynapseState =
     initializeMemorySynapseState;
 
-function normalizeAuthorizedRumors(
-    worldState,
-    extraRumors,
-) {
-    const records = [];
-    for (const rumor of (
-        Array.isArray(extraRumors)
-            ? extraRumors
-            : []
-    )) {
-        if (isRecord(rumor)) {
-            records.push(rumor);
-        }
-    }
-    for (const pack of (
-        worldState?.gossipPacks || []
-    )) {
-        const packSources =
-            normalizeReferenceIds([
-                ...(pack.sourceEventIds || []),
-                pack.eventId,
-            ]);
-        const packMessages =
-            normalizeMessageIds(
-                pack.sourceMessageIds,
-            );
-        for (const version of (
-            pack.versions || []
-        )) {
-            records.push({
-                id:
-                    version.id ||
-                    pack.id,
-                sourceEventIds:
-                    version.sourceEventIds ||
-                    packSources,
-                sourceMessageIds:
-                    version.sourceMessageIds ||
-                    packMessages,
-                audienceActorIds:
-                    version.audienceActorIds,
-                sourceActorIds:
-                    version.sourceActorIds ||
-                    pack.sourceActorIds,
-                status: pack.status,
-            });
-        }
-    }
-    return records
-        .filter(rumor =>
-            rumor.status !== 'faded')
-        .map(rumor => ({
-            id:
-                normalizeRecordId(rumor.id),
-            sourceEventIds:
-                normalizeReferenceIds([
-                    ...(rumor.sourceEventIds || []),
-                    rumor.eventId,
-                ]),
-            sourceMessageIds:
-                normalizeMessageIds(
-                    rumor.sourceMessageIds,
-                ),
-            audienceActorIds:
-                normalizeReferenceIds(
-                    rumor.audienceActorIds,
-                )
-                    .map(normalizeEntityId),
-            sourceActorIds:
-                normalizeReferenceIds(
-                    rumor.sourceActorIds,
-                )
-                    .map(normalizeEntityId),
-        }));
-}
-
-function rumorAuthorizesEvent(
-    rumor,
-    observerId,
-    event,
-    citedMessageIds,
-) {
-    const isAuthorized =
-        rumor.audienceActorIds
-            .includes(observerId) ||
-        rumor.sourceActorIds
-            .includes(observerId);
-    if (
-        !isAuthorized ||
-        !rumor.sourceEventIds
-            .includes(event.eventId)
-    ) {
-        return false;
-    }
-    const rumorMessages =
-        new Set(rumor.sourceMessageIds);
-    const eventMessages =
-        new Set(
-            normalizeMessageIds(
-                event.sourceMessageIds,
-            ),
-        );
-    return citedMessageIds
-        .filter(messageId =>
-            eventMessages.has(messageId))
-        .every(messageId =>
-            rumorMessages.has(messageId));
-}
-
 export function getLegalAppraisalObserverIds(
     worldState,
     event,
-    {
-        authorizedRumors = [],
-    } = {},
 ) {
     if (!isRecord(event)) {
         return [];
     }
     const actorIds =
         knownActorIds(worldState);
-    const legal = new Set([
-        ...(event.participantActorIds ||
-            []),
-        ...(event.witnessActorIds ||
-            []),
-    ].map(normalizeEntityId));
-    const rumors =
-        normalizeAuthorizedRumors(
-            worldState,
-            authorizedRumors,
-        );
-    const citedMessageIds =
-        normalizeMessageIds(
-            event.sourceMessageIds,
-        );
-    for (const rumor of rumors) {
-        for (const observerId of [
-            ...rumor.audienceActorIds,
-            ...rumor.sourceActorIds,
-        ]) {
-            if (
-                rumorAuthorizesEvent(
-                    rumor,
-                    observerId,
-                    event,
-                    citedMessageIds,
-                )
-            ) {
-                legal.add(observerId);
-            }
-        }
-    }
+    const legal =
+        event.eventKind === 'reported'
+            ? new Set([
+                event.report?.speakerId,
+                ...(
+                    event.report
+                        ?.recipientIds ||
+                    []
+                ),
+            ].map(normalizeEntityId))
+            : new Set([
+                ...(event
+                    .participantActorIds ||
+                    []),
+                ...(event.witnessActorIds ||
+                    []),
+            ].map(normalizeEntityId));
     return [...legal]
         .filter(actorId =>
             actorIds.has(actorId))
@@ -1312,9 +1165,6 @@ export function getLegalAppraisalObserverIds(
 export function validateAppraisalObserverAccess(
     appraisal,
     worldState = {},
-    {
-        authorizedRumors = [],
-    } = {},
 ) {
     const normalized =
         normalizeAppraisal(appraisal);
@@ -1344,48 +1194,41 @@ export function validateAppraisalObserverAccess(
             'Appraisal cites an uncommitted event.',
         );
     }
-    const citedMessages =
-        new Set(normalized.sourceMessageIds);
-    const eventMessageUnion = new Set(
-        events.flatMap(event =>
-            normalizeMessageIds(
-                event.sourceMessageIds,
-            )),
-    );
-    if (
-        normalized.sourceMessageIds
-            .some(messageId =>
-                !eventMessageUnion.has(
-                    messageId,
-                )) ||
-        events.some(event =>
-            !normalizeMessageIds(
-                event.sourceMessageIds,
-            ).some(messageId =>
-                citedMessages.has(messageId)))
-    ) {
-        errors.push(
-            'Appraisal message provenance does not match its events.',
-        );
-    }
-    if (
-        events.some(event =>
-            normalizeEntityId(
-                event.sceneId,
-            ) !== normalized.sceneId)
-    ) {
-        errors.push(
-            'Appraisal scene does not match its events.',
-        );
-    }
-    const rumors =
-        normalizeAuthorizedRumors(
-            worldState,
-            authorizedRumors,
-        );
     const bases = [];
-    const sourceRumorIds = new Set();
     for (const event of events) {
+        if (
+            event.eventKind ===
+                'reported'
+        ) {
+            if (
+                event.report
+                    ?.speakerId ===
+                    normalized.observerId
+            ) {
+                bases.push(
+                    'participant',
+                );
+                continue;
+            }
+            if (
+                (
+                    event.report
+                        ?.recipientIds ||
+                    []
+                )
+                    .map(normalizeEntityId)
+                    .includes(
+                        normalized.observerId,
+                    )
+            ) {
+                bases.push('reported');
+                continue;
+            }
+            errors.push(
+                `Observer ${normalized.observerId || '?'} did not receive reported Event ${event.eventId || '?'}.`,
+            );
+            continue;
+        }
         if (
             (
                 event.participantActorIds ||
@@ -1412,24 +1255,6 @@ export function validateAppraisalObserverAccess(
             bases.push('witness');
             continue;
         }
-        const authorized = rumors.find(rumor =>
-            rumorAuthorizesEvent(
-                rumor,
-                normalized.observerId,
-                event,
-                normalized.sourceMessageIds,
-            ));
-        if (authorized) {
-            bases.push(
-                'authorized_rumor',
-            );
-            if (authorized.id) {
-                sourceRumorIds.add(
-                    authorized.id,
-                );
-            }
-            continue;
-        }
         errors.push(
             `Observer ${normalized.observerId || '?'} has no authorized access to event ${event.eventId || '?'}.`,
         );
@@ -1444,9 +1269,6 @@ export function validateAppraisalObserverAccess(
                 : uniqueBases.length > 1
                     ? 'mixed'
                     : '',
-        sourceRumorIds:
-            [...sourceRumorIds]
-                .sort(stableCompare),
         events,
     };
 }
@@ -1520,7 +1342,6 @@ export function validateAppraisalProposal(
         validateAppraisalObserverAccess(
             normalized,
             worldState,
-            options,
         );
     errors.push(...access.errors);
     if (
@@ -1541,8 +1362,6 @@ export function validateAppraisalProposal(
         status: 'accepted',
         knowledgeSource:
             access.basis,
-        sourceRumorIds:
-            access.sourceRumorIds,
         activationSchemaIds: [
             ...normalized
                 .activationSchemaIds,

@@ -90,6 +90,17 @@ function getLegacyRecordSourceRefs(record) {
             ],
         );
     }
+    add(
+        'appraisal',
+        (
+            record.data
+                ?.relationshipReceiptRefs ||
+            []
+        )
+            .map(reference =>
+                reference.appraisalId)
+            .filter(Boolean),
+    );
     return sourceRefs;
 }
 
@@ -227,6 +238,13 @@ function getLegacyRecordVisibility(
                 ...getLegalAppraisalObserverIds(
                     state,
                     event,
+                ),
+                ...(
+                    event
+                        .knownToPlayer ===
+                    true
+                        ? ['player']
+                        : []
                 ),
             ]),
         ];
@@ -470,6 +488,19 @@ export function buildKnowledgeRecords(state, chat = []) {
             isCurrentScene: true,
         }] : []),
     ];
+    const chronicleBySceneId =
+        new Map(
+            (
+                state.globalChronicle
+                    ?.entries ||
+                []
+            ).map(entry => [
+                normalizeId(
+                    entry.sceneId,
+                ),
+                entry,
+            ]),
+        );
     for (const descriptor of sceneDescriptors) {
         const {
             sceneId,
@@ -552,6 +583,10 @@ export function buildKnowledgeRecords(state, chat = []) {
                 : archivedScene
                     ?.events ||
                     [];
+        const chronicle =
+            chronicleBySceneId
+                .get(sceneId) ||
+            null;
         const participantActorIds = [
             ...new Set(
                 events.flatMap(event =>
@@ -585,6 +620,7 @@ export function buildKnowledgeRecords(state, chat = []) {
                 `Summary: ${scene?.summaryEn || scene?.summary || ''}`,
                 `Exploration hook: ${scene?.explorationHookEn || scene?.explorationHook || ''}`,
                 `Closure: ${archivedScene?.closureSummaryEn || ''}`,
+                `Chronicle: ${chronicle?.summaryEn || ''}`,
                 `Time: ${archivedScene
                     ? `${archivedScene.startedClock || ''} to ${archivedScene.endedClock || ''}`
                     : state.scene?.startedClock || state.clock}`,
@@ -611,6 +647,7 @@ export function buildKnowledgeRecords(state, chat = []) {
                 witnessActorIds,
                 witnessCohortIds,
                 events,
+                chronicle,
             },
             [
                 sceneId,
@@ -630,18 +667,24 @@ export function buildKnowledgeRecords(state, chat = []) {
         const event
         of state.eventKnowledge || []
     ) {
+        const reported =
+            event.eventKind ===
+                'reported';
         const sourceMessages =
-            (
-                event.sourceMessageIds ||
-                []
-            )
-                .map(messageId => ({
-                    messageId,
-                    message:
-                        chat[messageId],
-                }))
-                .filter(entry =>
-                    entry.message);
+            reported
+                ? []
+                : (
+                    event
+                        .sourceMessageIds ||
+                    []
+                )
+                    .map(messageId => ({
+                        messageId,
+                        message:
+                            chat[messageId],
+                    }))
+                    .filter(entry =>
+                        entry.message);
         const transaction =
             sourceMessages
                 .map(entry =>
@@ -650,33 +693,158 @@ export function buildKnowledgeRecords(state, chat = []) {
                         ?.turnTransaction)
                 .find(Boolean) ||
             null;
+        const relationshipReceiptRefs =
+            (
+                state.socialGraph
+                    ?.relationshipEvidence ||
+                []
+            )
+                .filter(receipt =>
+                    receipt.eventId ===
+                        event.eventId)
+                .map(receipt => ({
+                    receiptId:
+                        receipt.id,
+                    sourceActorId:
+                        receipt
+                            .sourceActorId,
+                    targetActorId:
+                        receipt
+                            .targetActorId,
+                    appraisalId:
+                        receipt
+                            .appraisalId,
+                }));
+        const socialClaimRefs = [
+            ...(
+                state.socialGraph
+                    ?.identityClaims ||
+                []
+            ).filter(claim =>
+                claim
+                    .reportedEventId ===
+                event.eventId)
+                .map(claim => ({
+                    claimId:
+                        claim.id,
+                    kind:
+                        'identity',
+                    subjectId:
+                        claim.subjectId,
+                })),
+            ...(
+                state.socialGraph
+                    ?.relationshipClaims ||
+                []
+            ).filter(claim =>
+                claim
+                    .reportedEventId ===
+                event.eventId)
+                .map(claim => ({
+                    claimId:
+                        claim.id,
+                    kind:
+                        'relationship',
+                    subjectId:
+                        claim.subjectId,
+                    targetRefId:
+                        claim
+                            .targetRefId,
+                })),
+        ];
         records.push(makeRecord(
             'events',
             event.eventId,
             event.summaryEn ||
                 event.eventId,
             [
-                `Clock: ${transaction?.committedClock || state.timeline?.at(-1)?.clock || state.clock}`,
-                `Event: ${event.summaryEn || ''}`,
+                `Clock: ${event.clock || transaction?.committedClock || state.clock}`,
+                `${reported ? 'Reported communication' : 'Event'}: ${event.summaryEn || ''}`,
+                `Speaker: ${reported ? event.report?.speakerId || '' : ''}`,
+                `Recipients: ${reported ? (event.report?.recipientIds || []).join(', ') : ''}`,
+                `Subjects: ${reported ? (event.report?.subjectIds || []).join(', ') : ''}`,
                 `Participants: ${(event.participantActorIds || []).join(', ')}`,
                 `Witnesses: ${(event.witnessActorIds || []).join(', ')}`,
                 `Witness cohorts: ${(event.witnessCohortIds || []).join(', ')}`,
-                `Transcript: ${sourceMessages.flatMap(entry =>
-                    entry.message.is_user
-                        ? [entry.message.mes]
-                        : (
-                            entry.message.extra
-                                ?.hogwartsMud
-                                ?.segments ||
-                            []
-                        ).map(segment =>
-                            segment.textEn)).filter(Boolean).join(' | ')}`,
+                ...(
+                    reported
+                        ? []
+                        : [
+                            `Transcript: ${sourceMessages.flatMap(entry =>
+                                entry.message.is_user
+                                    ? [entry.message.mes]
+                                    : (
+                                        entry.message.extra
+                                            ?.hogwartsMud
+                                            ?.segments ||
+                                        []
+                                    ).map(segment =>
+                                        segment.textEn)).filter(Boolean).join(' | ')}`,
+                        ]
+                ),
             ].join('\n'),
             {
-                eventKnowledge: event,
+                eventKnowledge:
+                    reported
+                        ? {
+                            version:
+                                event.version,
+                            eventKind:
+                                event.eventKind,
+                            eventId:
+                                event.eventId,
+                            sceneId:
+                                event.sceneId,
+                            clock:
+                                event.clock,
+                            summaryEn:
+                                event.summaryEn,
+                            participantActorIds:
+                                event
+                                    .participantActorIds,
+                            witnessActorIds:
+                                event
+                                    .witnessActorIds,
+                            witnessCohortIds:
+                                event
+                                    .witnessCohortIds,
+                            witnessBasis:
+                                event
+                                    .witnessBasis,
+                            knownToPlayer:
+                                event
+                                    .knownToPlayer,
+                            source:
+                                event.source,
+                            report: {
+                                statementKind:
+                                    event.report
+                                        ?.statementKind,
+                                speakerId:
+                                    event.report
+                                        ?.speakerId,
+                                recipientIds:
+                                    event.report
+                                        ?.recipientIds ||
+                                    [],
+                                subjectIds:
+                                    event.report
+                                        ?.subjectIds ||
+                                    [],
+                                distortionLevel:
+                                    event.report
+                                        ?.distortionLevel,
+                            },
+                        }
+                        : event,
                 sourceMessageIds:
-                    event.sourceMessageIds ||
-                    [],
+                    reported
+                        ? []
+                        : event
+                            .sourceMessageIds ||
+                            [],
+                relationshipReceiptRefs,
+                socialClaimRefs,
                 transaction,
             },
             [
@@ -696,10 +864,16 @@ export function buildKnowledgeRecords(state, chat = []) {
                         .witnessCohortIds ||
                     []
                 ),
+                ...(
+                    event.report
+                        ?.subjectIds ||
+                    []
+                ),
             ],
             [
                 'event',
                 event.sceneId,
+                event.eventKind,
                 event.perception
                     ?.salience,
             ],
@@ -809,10 +983,6 @@ export function buildKnowledgeRecords(state, chat = []) {
             ].join('\n'),
             {
                 appraisal,
-                sourceMessageIds:
-                    appraisal
-                        .sourceMessageIds ||
-                    [],
                 sourceEventIds:
                     appraisal
                         .sourceEventIds ||
@@ -821,7 +991,6 @@ export function buildKnowledgeRecords(state, chat = []) {
             [
                 appraisal.observerId,
                 appraisal.targetId,
-                appraisal.sceneId,
             ].filter(Boolean),
             [
                 'appraisal',
@@ -868,106 +1037,6 @@ export function buildKnowledgeRecords(state, chat = []) {
                 ...(schema.contextTags || []),
             ].filter(Boolean),
         ));
-    }
-
-    const socialRecordGroups = [
-        [
-            'relationship_evidence',
-            state.socialGraph
-                ?.relationshipEvidence ||
-                [],
-        ],
-        [
-            'statement',
-            state.socialGraph
-                ?.statements ||
-                [],
-        ],
-        [
-            'identity_claim',
-            state.socialGraph
-                ?.identityClaims ||
-                [],
-        ],
-        [
-            'relationship_claim',
-            state.socialGraph
-                ?.relationshipClaims ||
-                [],
-        ],
-    ];
-    for (const [
-        kind,
-        entries,
-    ] of socialRecordGroups) {
-        entries.forEach(
-            (
-                entry,
-                index,
-            ) => {
-                const stableId =
-                    entry.id ||
-                    entry.evidenceId ||
-                    entry.statementId ||
-                    entry.claimId ||
-                    [
-                        kind,
-                        entry.sourceActorId,
-                        entry.targetActorId,
-                        entry.subjectId,
-                        (
-                            entry
-                                .sourceMessageIds ||
-                            []
-                        ).join('_'),
-                        index,
-                    ]
-                        .filter(value =>
-                            value !==
-                            undefined)
-                        .join('_');
-                records.push(
-                    makeRecord(
-                        'social_evidence',
-                        stableId,
-                        entry.summaryEn ||
-                            entry.textEn ||
-                            stableId,
-                        [
-                            `Kind: ${kind}`,
-                            `Source actor: ${entry.sourceActorId || ''}`,
-                            `Target actor: ${entry.targetActorId || entry.subjectId || ''}`,
-                            `Evidence: ${entry.summaryEn || entry.textEn || ''}`,
-                            `Scene: ${entry.sceneId || ''}`,
-                        ].join('\n'),
-                        {
-                            socialEvidence: {
-                                ...entry,
-                                kind,
-                            },
-                            sourceMessageIds:
-                                entry
-                                    .sourceMessageIds ||
-                                [],
-                            sourceEventIds:
-                                entry
-                                    .sourceEventIds ||
-                                [],
-                        },
-                        [
-                            entry.sourceActorId,
-                            entry.targetActorId,
-                            entry.subjectId,
-                            entry.sceneId,
-                        ].filter(Boolean),
-                        [
-                            'social_evidence',
-                            kind,
-                        ],
-                    ),
-                );
-            },
-        );
     }
 
     return projectLegacyRecordsV2(

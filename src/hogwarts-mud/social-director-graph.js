@@ -1,5 +1,10 @@
-import { createHash } from 'node:crypto';
+/*
+Removed by compact-timeline-appraisal-lifecycle Revision 4.
 
+The former Statement/prose-Evidence LangGraph is intentionally non-executable.
+Production uses social-director-v3-graph.js.
+
+import { createHash } from 'node:crypto';
 import {
     END,
     START,
@@ -1818,3 +1823,6 @@ export async function runSocialDirectorGraph(
         );
     return result.output;
 }
+*/
+
+export {};

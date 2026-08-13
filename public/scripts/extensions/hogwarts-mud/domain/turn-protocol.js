@@ -192,23 +192,6 @@ function mergeActorUpdate(
         ...previous,
         ...patch,
         id: actorId,
-        ...(previous.memoryUpdate ||
-            patch.memoryUpdate
-            ? {
-                memoryUpdate: {
-                    ...(
-                        previous
-                            .memoryUpdate ||
-                        {}
-                    ),
-                    ...(
-                        patch
-                            .memoryUpdate ||
-                        {}
-                    ),
-                },
-            }
-            : {}),
     });
 }
 
@@ -395,11 +378,6 @@ export function foldNarrativeTurnProposals(
                         firstImpressionOfPlayerEn:
                             proposal
                                 .firstImpressionOfPlayerEn,
-                        impressionOfPlayerEn:
-                            proposal
-                                .impressionOfPlayerEn,
-                        memoryUpdate:
-                            proposal.memoryUpdate,
                     },
                 );
             } else if (
@@ -545,8 +523,6 @@ function sanitizeNarrativeActorUpdates(
         'mapId',
         'roomId',
         'firstImpressionOfPlayerEn',
-        'impressionOfPlayerEn',
-        'memoryUpdate',
     ]);
     const merged = new Map();
     (

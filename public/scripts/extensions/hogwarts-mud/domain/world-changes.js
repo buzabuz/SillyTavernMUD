@@ -1,4 +1,8 @@
-// Extracted from the helpers compatibility facade for Task 4.
+/*
+Removed by compact-timeline-appraisal-lifecycle Revision 4.
+
+The former GossipPack/Prophet writer is intentionally left non-executable so
+old direct test imports cannot restore a second world-fact authority.
 
 import {
     countTextWords,
@@ -144,7 +148,11 @@ export function normalizeTransitionWorldChanges(
                 })),
     };
 }
+*/
 
+export {};
+
+/*
 function getGossipKnownActorIds(pack) {
     return new Set([
         ...(pack?.sourceActorIds || []),
@@ -617,3 +625,4 @@ export function applyTransitionWorldChanges(
     ].slice(-12);
     return entry;
 }
+*/

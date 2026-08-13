@@ -7,7 +7,6 @@ export const CAUSAL_COLLAPSE_KINDS = new Set([
     'institutional_fact',
     'material_history',
     'obligation',
-    'rumor_route',
 ]);
 export const CAUSAL_COLLAPSE_PERSISTENCE_TARGETS =
     new Set([
@@ -15,7 +14,6 @@ export const CAUSAL_COLLAPSE_PERSISTENCE_TARGETS =
         'social_graph',
         'room_state',
         'item',
-        'rumor',
         'obligation',
     ]);
 export const CAUSAL_COLLAPSE_KEYS =

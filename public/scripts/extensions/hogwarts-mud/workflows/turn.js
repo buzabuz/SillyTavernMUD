@@ -196,10 +196,7 @@ export function createTurnWorkflow(ports) {
 
     async function repairLegacyGenericTurnSummaries() {
         const context = getContext();
-        const state = getMudState();
         let chatChanged = false;
-        let metadataChanged = false;
-        const replacements = new Map();
 
         context.chat.forEach((message, messageId) => {
             const transactions = [
@@ -223,26 +220,11 @@ export function createTurnWorkflow(ports) {
             transactions.forEach(transaction => {
                 transaction.publicEventEn = `Legacy player action: ${action}`;
                 transaction.publicEvent = action;
-                if (transaction.committedClock) {
-                    replacements.set(transaction.committedClock, action);
-                }
             });
             chatChanged = true;
         });
 
-        if (replacements.size) {
-            state.timeline = (state.timeline || []).map(entry =>
-                replacements.has(entry.clock) &&
-                /玩家完成规定的动作|player completes|characters respond/i.test(
-                    String(entry.label || ''),
-                )
-                    ? { ...entry, label: replacements.get(entry.clock) }
-                    : entry,
-            );
-            metadataChanged = true;
-        }
         if (chatChanged) await context.saveChat();
-        if (metadataChanged) await context.saveMetadata();
     }
 
     async function repairLegacySyntheticSceneOpeningSegments() {
@@ -1218,7 +1200,14 @@ export function createTurnWorkflow(ports) {
                     transaction
                         .eventKnowledge =
                     normalizeEventKnowledge({
+                        version: 2,
+                        eventKind:
+                            'observed',
                         sceneId,
+                        clock:
+                            transaction
+                                .committedClock ||
+                            state.clock,
                         sourceMessageIds: [
                             ...(
                                 playerMessageId >=

@@ -3,6 +3,9 @@
 import {
     applyWitnessedEventMemories,
 } from './event-memory.js';
+import {
+    expireEverydayAppraisalsAtSceneTransition,
+} from './appraisal-lifecycle.js';
 
 import {
     markCommittedMessageEventsKnownToPlayer,
@@ -46,19 +49,15 @@ import {
 } from './spatial-foundation.js';
 
 import {
-    getWorldClockGapMinutes,
     TEMPORAL_STATE_VERSION,
-    WORLD_CHANGE_MIN_DAYS,
 } from './time-environment.js';
 
 import {
     projectSceneTransitionPresence,
 } from './transition-presence.js';
-
 import {
-    applyTransitionWorldChanges,
-    normalizeTransitionWorldChanges,
-} from './world-changes.js';
+    appendGlobalChronicleEntry,
+} from './timeline-chronicle.js';
 
 export function settleSceneCloseMemoryBoundary(
     memoryDirector = {},
@@ -216,9 +215,11 @@ export function applyCommittedSceneOpeningExperience(
         }_${messageId}`;
     const event =
         normalizeEventKnowledge({
-            version: 1,
+            version: 2,
+            eventKind: 'observed',
             eventId,
             sceneId,
+            clock,
             sourceMessageIds: [
                 messageId,
             ],
@@ -376,6 +377,22 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
         next.calendar =
             archivedState.calendar;
     }
+    next.globalChronicle =
+        appendGlobalChronicleEntry(
+            next.globalChronicle,
+            {
+                sceneId:
+                    committedArchiveEntry
+                        .id,
+                endedClock:
+                    committedArchiveEntry
+                        .endedClock ||
+                    worldState.clock,
+                summaryEn:
+                    payload
+                        .globalChronicleSummaryEn,
+            },
+        );
     next.clock = nextClock;
     if (next.calendar) {
         next =
@@ -384,73 +401,10 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
                 nextClock,
             );
     }
-    const normalizedWorldChanges =
-        normalizeTransitionWorldChanges(
-            payload.worldChanges,
-        );
-    const worldChangePending =
-        options.deferWorldChanges ===
-            true &&
-        Number(
-            getWorldClockGapMinutes(
-                worldState.clock,
-                nextClock,
-            ),
-        ) >=
-            WORLD_CHANGE_MIN_DAYS *
-            1440 &&
-        !normalizedWorldChanges
-            .prophetBriefs.length &&
-        !normalizedWorldChanges
-            .gossipUpdates.length;
-    const worldChangeEntry =
-        worldChangePending
-            ? null
-            : applyTransitionWorldChanges(
-                next,
-                worldState,
-                payload,
-            );
     const currentTurn = Math.max(
         0,
         Number(next.turn?.count || 0),
     );
-    for (const update of (
-        payload.relationshipUpdates ||
-        []
-    )) {
-        recordActorAppraisalV1(
-            next,
-            {
-                actorId: update.id,
-                summaryEn:
-                    update
-                        .impressionOfPlayerEn,
-                kind:
-                    `transition_impression_${currentTurn}`,
-                tier: 'recent',
-                clock: nextClock,
-                sceneId:
-                    worldState.scene?.id ||
-                    '',
-            },
-        );
-        recordActorAppraisalV1(
-            next,
-            {
-                actorId: update.id,
-                summaryEn:
-                    update.sceneMemoryEn,
-                kind:
-                    `transition_memory_${currentTurn}`,
-                tier: 'recent',
-                clock: nextClock,
-                sceneId:
-                    worldState.scene?.id ||
-                    '',
-            },
-        );
-    }
     next.chapter = nextScene.chapter || nextScene.chapterEn;
     next.location = room.name || nextScene.name || nextScene.nameEn;
     next.scene = {
@@ -476,8 +430,6 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
             nextScene.temporalFactsEn,
         temporalGroundingVersion:
             TEMPORAL_STATE_VERSION,
-        worldChangeId:
-            worldChangeEntry?.id || '',
         startedClock: nextClock,
         startedMessageId: Number(options.startedMessageId || 0),
         timelineEntries: [{
@@ -720,42 +672,12 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
                     nextScene.roomId,
             },
         );
-    next.timeline = [
-        ...(next.timeline || []),
-        closureTimelineEntry,
-        next.scene.timelineEntries[0],
-    ].slice(-20);
     next.sceneTransition = {
         status: 'idle',
         tier: options.tier || 'medium',
         error: '',
         requestedAt: null,
         settledAt: new Date().toISOString(),
-    };
-    next.sceneEnrichment = {
-        ...(next.sceneEnrichment || {}),
-        worldChanges:
-            worldChangePending
-                ? {
-                    status: 'pending',
-                    sceneId:
-                        nextScene.id,
-                    fromClock:
-                        worldState.clock,
-                    toClock:
-                        nextClock,
-                    error: '',
-                }
-                : {
-                    status: 'ready',
-                    sceneId:
-                        nextScene.id,
-                    fromClock:
-                        worldState.clock,
-                    toClock:
-                        nextClock,
-                    error: '',
-                },
     };
     next.pacingDirector = {
         ...(next.pacingDirector || {}),
@@ -803,6 +725,10 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
         },
         lastMovement: null,
     };
+    next =
+        expireEverydayAppraisalsAtSceneTransition(
+            next,
+        ).state;
     return assertActorContextStateV1(
         next,
     );

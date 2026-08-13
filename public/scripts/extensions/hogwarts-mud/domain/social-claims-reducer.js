@@ -1,6 +1,5 @@
 import {
     normalizeSocialRelationshipEdge,
-    normalizeSocialSourceMessageIds,
     normalizeSocialStructuralTags,
 } from './social-schema.js';
 import {
@@ -218,24 +217,6 @@ export function normalizeLegacySocialStatements(
 export function migrateLegacyFamilyEdges(
     value = {},
 ) {
-    const evidenceById =
-        new Map(
-            (
-                Array.isArray(
-                    value
-                        .relationshipEvidence,
-                )
-                    ? value
-                        .relationshipEvidence
-                    : []
-            )
-                .filter(evidence =>
-                    evidence?.id)
-                .map(evidence => [
-                    String(evidence.id),
-                    evidence,
-                ]),
-        );
     const personReferences = [];
     const relationshipClaims = [];
     (
@@ -261,14 +242,6 @@ export function migrateLegacyFamilyEdges(
         }
         const referenceId =
             `legacy-person:${edge.targetActorId}`;
-        const evidence = (
-            edge.evidenceIds || []
-        )
-            .map(id =>
-                evidenceById.get(
-                    String(id),
-                ))
-            .filter(Boolean);
         personReferences.push({
             id: referenceId,
             label:
@@ -294,34 +267,9 @@ export function migrateLegacyFamilyEdges(
                 referenceId,
             sourceKind:
                 'authority',
-            speakerId: 'authority',
-            sourceMessageIds:
-                normalizeSocialSourceMessageIds(
-                    evidence.flatMap(
-                        item =>
-                            item
-                                .sourceMessageIds ||
-                            [],
-                    ),
-                ),
-            witnessedBy: [
-                ...new Set(
-                    evidence
-                        .flatMap(item =>
-                            item
-                                .witnessedBy ||
-                            [])
-                        .map(String)
-                        .filter(Boolean),
-                ),
-            ],
-            clock:
-                String(
-                    edge.updatedClock ||
-                    evidence.at(-1)
-                        ?.clock ||
-                    '',
-                ),
+            reportedEventId: '',
+            authoritySourceRef:
+                `legacy_relationship_edge:${edge.id || `${edge.sourceActorId}->${edge.targetActorId}`}`,
         });
     });
     if (
@@ -455,7 +403,11 @@ export function getSocialAuthorityFamilyRelations(
                 ...new Set([
                     ...relation
                         .witnessedBy,
-                    ...claim.witnessedBy,
+                    ...(
+                        claim
+                            .witnessedBy ||
+                        []
+                    ),
                 ]),
             ];
             byDirection.set(

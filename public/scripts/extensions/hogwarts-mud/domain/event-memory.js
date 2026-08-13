@@ -42,6 +42,8 @@ export function isPublicWitnessMemoryEvent(
 ) {
     return Boolean(
         eventKnowledge?.eventId &&
+        eventKnowledge?.eventKind ===
+            'observed' &&
         String(
             eventKnowledge.summaryEn ||
             '',
@@ -139,6 +141,74 @@ export function applyWitnessedEventMemories(
                     canonicalEvent
                         .eventId,
                 addedClock: clock,
+            },
+        );
+    }
+    return assertActorContextStateV1(
+        next,
+    );
+}
+
+export function applyReportedEventMemories(
+    worldState,
+    eventKnowledge,
+) {
+    const next =
+        structuredClone(
+            worldState,
+        );
+    next.eventKnowledge =
+        reduceEventKnowledge(
+            next,
+            eventKnowledge,
+        );
+    const event =
+        next.eventKnowledge
+            .find(candidate =>
+                candidate.eventId ===
+                    eventKnowledge
+                        ?.eventId);
+    if (
+        event?.eventKind !==
+            'reported'
+    ) {
+        throw new TypeError(
+            'Reported Event memory requires a committed reported Event.',
+        );
+    }
+    const actorIds =
+        new Set(
+            (
+                next.actorLibrary ||
+                []
+            ).map(actor =>
+                actor.id),
+        );
+    for (const actorId of [
+        event.report?.speakerId,
+        ...(
+            event.report
+                ?.recipientIds ||
+            []
+        ),
+    ]) {
+        if (
+            actorId === 'player' ||
+            !actorIds.has(actorId)
+        ) {
+            continue;
+        }
+        addActorMemoryRefV1(
+            next,
+            actorId,
+            'everyday',
+            {
+                recordType:
+                    'event',
+                recordId:
+                    event.eventId,
+                addedClock:
+                    event.clock,
             },
         );
     }

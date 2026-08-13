@@ -1259,6 +1259,11 @@ export function validateActorContextStateV1(
     const synapseValidation =
         validateMemorySynapse(
             state.memorySynapse,
+            {
+                eventKnowledge:
+                    state.eventKnowledge ||
+                    [],
+            },
         );
     errors.push(
         ...synapseValidation.errors.map(error =>

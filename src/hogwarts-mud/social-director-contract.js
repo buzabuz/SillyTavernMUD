@@ -1,5 +1,5 @@
-export const SOCIAL_GRAPH_VERSION = 2;
-export const SOCIAL_GRAPH_EXTRACTOR_VERSION = 6;
+export const SOCIAL_GRAPH_VERSION = 3;
+export const SOCIAL_GRAPH_EXTRACTOR_VERSION = 7;
 
 export const STATEMENT_CATEGORIES = new Set([
     'family',
@@ -138,31 +138,26 @@ export const MODEL_RELATIONSHIP_EVIDENCE_FIELDS =
     new Set([
         'sourceActorId',
         'targetActorId',
-        'sceneId',
+        'eventRef',
+        'appraisalRef',
         'eventKind',
         'dimensionDeltas',
         'structuralTags',
-        'emotionAppraisals',
-        'summaryEn',
-        'summary',
-        'witnessedBy',
-        'sourceMessageIds',
+        'emotionEffects',
     ]);
 export const PERSISTED_RELATIONSHIP_EVIDENCE_FIELDS =
     new Set([
         'id',
-        ...MODEL_RELATIONSHIP_EVIDENCE_FIELDS,
+        'sourceActorId',
+        'targetActorId',
+        'eventId',
+        'appraisalId',
+        'eventKind',
+        'dimensionDeltas',
+        'structuralTags',
+        'emotionEffects',
         'clock',
         'turn',
-        'source',
-        'sourceEventIds',
-        'effectiveSinceClock',
-        'knownTo',
-        'authorizedWitnesses',
-        'authorizedAudienceIds',
-        'playerKnown',
-        'knownToPlayer',
-        'visibility',
     ]);
 export const PERSISTED_RELATIONSHIP_EDGE_FIELDS =
     new Set([

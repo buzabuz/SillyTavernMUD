@@ -151,7 +151,7 @@ import {
     projectActorSocialRelationships,
 } from './domain/social-migration.js';
 import { buildSocialAudienceProjection } from './domain/social-projection.js';
-import { applySocialDirectorResult, validateSocialDirectorResult } from './domain/social-reducer.js';
+import { applySocialDirectorResult, validateSocialDirectorResult } from './domain/social-v3-reducer.js';
 import { SOCIAL_GRAPH_EXTRACTOR_VERSION } from './domain/social-schema.js';
 import {
     buildSpatialContext,
@@ -231,7 +231,7 @@ import { createJobRegistry } from './runtime/job-registry.js';
 import { createActionPorts } from './runtime/action-ports.js';
 import { createGuardedSavePorts } from './runtime/guarded-save-ports.js?v=0.1.1';
 import {
-    canOpenCurrentV2SaveReadOnly,
+    canOpenCurrentSocialSaveReadOnly,
     shouldTranslateRenderedMessage,
 } from './runtime/read-only-policy.js';
 import { createWorkflowApplication } from './workflows/application.js';
@@ -365,7 +365,7 @@ const platform = {
     buildStructuredPlayerTurnSequence,
     buildSystemPrompt,
     buildTemporaryActorPromotionPolicy,
-    canOpenCurrentV2SaveReadOnly,
+    canOpenCurrentSocialSaveReadOnly,
     consumePacingBeat,
     createContextBudgetPlan,
     createDefaultCampaign,
@@ -587,7 +587,7 @@ async function initialize() {
     application.renderAll();
 }
 export {
-    canOpenCurrentV2SaveReadOnly,
+    canOpenCurrentSocialSaveReadOnly,
     shouldTranslateRenderedMessage,
 };
 export const {
