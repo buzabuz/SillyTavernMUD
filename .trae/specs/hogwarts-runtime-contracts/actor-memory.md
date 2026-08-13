@@ -11,7 +11,7 @@ memorySynapse.personSchemas[schemaId]  跨事件形成的行为预期
 actorMemoryIndex.byActorId[actorId]    Event/Appraisal 的分层引用
 ```
 
-`ActorMemoryIndexV1` 的人物条目只允许：
+`ActorMemoryIndex` 的人物条目只允许：
 
 ```text
 firstImpressionRef
@@ -21,6 +21,8 @@ everyday[]
 ```
 
 每个 `MemoryRefV1` 只含 `recordType/recordId/addedClock`。人物层级不保存摘要正文；同一 Event 可被多个 witness 引用，但事实只在 `eventKnowledge` 保存一次。模型可以提议人物视角解释，无权用场景 recap 批量填充人物，也不能让 Appraisal 或 Schema 反写 Event。
+
+当前生产 version 为 `2`。字段形状不变，只收紧引用语义：旧可变 `impressionOfPlayerEn` 不是 retained memory，不得进入 `core/recent/everyday`。
 
 ## 普通回合
 
@@ -55,7 +57,7 @@ eventKnowledge
 
 Person Schema 只由既有中档 event-boundary/Memory Consolidation 调用中的 `schemaOperations` 整理，不增加第二次中档调用。稳定 Schema 至少需要同一 observer-target 的 3 条 accepted Appraisal，且跨至少 2 个 Scene；每对最多保留 3 个 active Schema。反例保存在 `counterAppraisalIds`，会降低 confidence 或把状态改为 `contested`；旧解释通过 supersede 保留来源，不能静默重写。单一事件只能形成 Appraisal，不能固化人格。
 
-当前看法只由 active/contested Person Schema 在读取时投影。初见印象由 `firstImpressionRef` 指向不可覆盖的 Appraisal；二者不物化回写 Actor Core 或 Actor Runtime。
+当前看法只由 active/contested Person Schema 在读取时投影。初见印象由 `firstImpressionRef` 指向不可覆盖的 Appraisal；二者不物化回写 Actor Core 或 Actor Runtime。`migrated_current_impression` 既不是当前 Schema，也不是保留经历；V2 删除其 MemoryRef 与迁移 Appraisal。
 
 ## 场景转场
 
@@ -99,12 +101,14 @@ timelineEpoch + stateRevision + boundaryId
 1. 在克隆 State 上构造严格 `ActorCoreV1`、`ActorRuntimeV1`、`ActorMemoryIndexV1`。
 2. 有合法 Event ID 的旧人物记忆转换为 Event MemoryRef。
 3. 有合法 Appraisal ID 的旧人物记忆转换为 Appraisal MemoryRef。
-4. 只有文本的旧人物记忆和旧印象创建 migrated Appraisal；其 `historicalClaimAllowed=false`，不能授权具体历史。
-5. 初见文本创建 Appraisal，并把 ID 写入 `firstImpressionRef`。
+4. 只有文本的旧 retained memory 创建 migrated Appraisal；其 `historicalClaimAllowed=false`，不能授权具体历史。
+5. 初见文本创建 Appraisal，并把 ID 写入 `firstImpressionRef`；旧 mutable current impression 直接删除，不创建 Appraisal、MemoryRef 或 Schema。
 6. 删除人物档案和运行态中的旧记忆、印象、稳定字段、Identity 副本与 Social Graph 副本。
 7. 校验所有字段白名单、Actor Core/Runtime 配对、MemoryRef、Appraisal、Schema 与 Event 引用；全部通过后才一次替换原 State。
 
 任一步失败都不修改调用方 State，也不触发保存。三项 V1 version 已成立后，lifecycle 不再运行旧人物迁移或 Social Graph copy projector。迁移不调用模型，第二次运行必须 `changed=false`。
+
+V1 -> Memory Reference V2 迁移只删除 `contextTags=migrated_current_impression` 的 tier refs 与 Appraisal。若该 Appraisal 被 first impression、Schema 或 supersede 链引用则原子失败；成功后设置 root/index version 为 `2`，不保留双读或 fallback。
 
 ## 禁止事项
 

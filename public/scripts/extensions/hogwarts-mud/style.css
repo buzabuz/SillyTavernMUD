@@ -6397,6 +6397,17 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
     line-height: var(--hp-leading-ui);
 }
 
+.hpmud-relationship-subsection {
+    margin-top: 12px;
+}
+
+.hpmud-relationship-subsection h4 {
+    margin: 0 0 7px;
+    color: var(--hp-text-3);
+    font-size: var(--hp-type-caption);
+    letter-spacing: .06em;
+}
+
 .hpmud-impression {
     padding: 15px 14px 13px 31px;
 }

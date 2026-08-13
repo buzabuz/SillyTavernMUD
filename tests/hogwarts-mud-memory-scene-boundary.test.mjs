@@ -780,7 +780,7 @@ test('[defect-probing] memory consolidation keeps active Schema authoritative wi
     );
 });
 
-test('memory consolidation preserves migrated current opinion only as an Appraisal when no active Schema exists', () => {
+test('memory consolidation does not recreate a discarded legacy current opinion', () => {
     const committed =
         applyMemoryConsolidation(
             createBoundaryWorld(),
@@ -809,11 +809,32 @@ test('memory consolidation preserves migrated current opinion only as an Apprais
             .appraisals
             .some(appraisal =>
                 appraisal.summaryEn ===
-                    'A difficult classmate.' &&
-                appraisal
-                    .historicalClaimAllowed ===
-                    false),
-        true,
+                    'A difficult classmate.'),
+        false,
+    );
+    assert.equal(
+        Object.values(
+            committed.actorMemoryIndex
+                .byActorId,
+        ).some(entry =>
+            [
+                'core',
+                'recent',
+                'everyday',
+            ].some(tier =>
+                entry[tier].some(
+                    reference =>
+                        committed
+                            .memorySynapse
+                            .appraisals
+                            .find(appraisal =>
+                                appraisal.id ===
+                                    reference
+                                        .recordId)
+                            ?.summaryEn ===
+                            'A difficult classmate.',
+                ))),
+        false,
     );
 });
 

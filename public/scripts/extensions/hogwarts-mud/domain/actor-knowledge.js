@@ -381,6 +381,20 @@ export function buildActorContinuityCapsules(
                         if (!record) {
                             return null;
                         }
+                        if (
+                            reference
+                                .recordType ===
+                                'appraisal' &&
+                            (
+                                record
+                                    .contextTags ||
+                                []
+                            ).includes(
+                                'migrated_current_impression',
+                            )
+                        ) {
+                            return null;
+                        }
                         return {
                             recordId:
                                 reference

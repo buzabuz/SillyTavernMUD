@@ -24,6 +24,11 @@ import {
     validateActorContextStateV1,
 } from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js';
 import {
+    actorContextVersion,
+    actorDossierProjectionVersion,
+    memoryReferenceVersion,
+} from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-schema.js';
+import {
     getCanonicalPerformanceCore,
     isPlaceholderSpeechStyle,
 } from '../public/scripts/extensions/hogwarts-mud/domain/actor-core-canon.js';
@@ -585,6 +590,252 @@ function runMigrationEvidence(
                 memoryRefs:
                     memoryRefCount(
                         first.state,
+                    ),
+            },
+        },
+    };
+}
+
+function currentImpressionAppraisals(
+    state,
+) {
+    return (
+        state.memorySynapse
+            ?.appraisals ||
+        []
+    ).filter(appraisal =>
+        (
+            appraisal.contextTags ||
+            []
+        ).includes(
+            'migrated_current_impression',
+        ));
+}
+
+function runMemoryReferenceUpgradeEvidence(
+    sourceState,
+    chat,
+) {
+    const sourceBytes =
+        Buffer.from(
+            json(sourceState),
+        );
+    const candidateAppraisals =
+        currentImpressionAppraisals(
+            sourceState,
+        );
+    const candidateIds =
+        new Set(
+            candidateAppraisals
+                .map(appraisal =>
+                    appraisal.id),
+        );
+    const first =
+        migrateActorContextV1(
+            sourceState,
+        );
+    const second =
+        migrateActorContextV1(
+            first.state,
+        );
+    const validation =
+        validateActorContextStateV1(
+            first.state,
+        );
+    assert.equal(
+        validation.valid,
+        true,
+        validation.errors.join('\n'),
+    );
+    assert.equal(
+        json(sourceState),
+        sourceBytes.toString(
+            'utf8',
+        ),
+    );
+    assert.equal(
+        second.changed,
+        false,
+    );
+    assert.equal(
+        currentImpressionAppraisals(
+            first.state,
+        ).length,
+        0,
+    );
+    assert.equal(
+        Object.values(
+            first.state.actorMemoryIndex
+                .byActorId,
+        ).some(entry =>
+            [
+                'core',
+                'recent',
+                'everyday',
+            ].some(tier =>
+                entry[tier].some(
+                    reference =>
+                        candidateIds.has(
+                            reference
+                                .recordId,
+                        )))),
+        false,
+    );
+
+    let failure = '';
+    let failureStateBytesUnchanged =
+        true;
+    if (
+        sourceState
+            .memoryReferenceVersion ===
+            1 &&
+        candidateAppraisals.length
+    ) {
+        const failed =
+            structuredClone(
+                sourceState,
+            );
+        const candidateId =
+            candidateAppraisals[0].id;
+        const owner =
+            Object.values(
+                failed.actorMemoryIndex
+                    .byActorId,
+            ).find(entry =>
+                [
+                    'core',
+                    'recent',
+                    'everyday',
+                ].some(tier =>
+                    entry[tier].some(
+                        reference =>
+                            reference
+                                .recordId ===
+                                candidateId,
+                    )));
+        assert.ok(
+            owner,
+            'V1 current impression must have a MemoryRef owner.',
+        );
+        owner.firstImpressionRef =
+            candidateId;
+        const failedBefore =
+            Buffer.from(
+                json(failed),
+            );
+        try {
+            migrateActorContextV1(
+                failed,
+            );
+        } catch (error) {
+            failure =
+                String(error.message);
+        }
+        assert.match(
+            failure,
+            /canonical dependants/u,
+        );
+        failureStateBytesUnchanged =
+            Buffer.from(
+                json(failed),
+            ).equals(
+                failedBefore,
+            );
+        assert.equal(
+            failureStateBytesUnchanged,
+            true,
+        );
+    }
+
+    const lifecycleState =
+        structuredClone(
+            sourceState,
+        );
+    let saveRequests = 0;
+    const lifecycle =
+        createLifecycle(
+            lifecycleState,
+            chat,
+            {
+                saveMetadataDebounced:
+                    () => {
+                        saveRequests += 1;
+                    },
+            },
+        );
+    const lifecycleFirst =
+        lifecycle
+            .ensureSceneLifecycleState(
+                lifecycleState,
+            );
+    const lifecycleFirstBytes =
+        Buffer.from(
+            json(lifecycleState),
+        );
+    const lifecycleSecond =
+        lifecycle
+            .ensureSceneLifecycleState(
+                lifecycleState,
+            );
+    assert.equal(
+        lifecycleSecond,
+        false,
+    );
+    assert.deepEqual(
+        Buffer.from(
+            json(lifecycleState),
+        ),
+        lifecycleFirstBytes,
+    );
+    return {
+        migratedState:
+            first.state,
+        lifecycleState,
+        forbiddenTexts:
+            candidateAppraisals
+                .map(appraisal =>
+                    appraisal.summaryEn)
+                .filter(Boolean),
+        report: {
+            sourceVersion:
+                sourceState
+                    .memoryReferenceVersion,
+            targetVersion:
+                memoryReferenceVersion,
+            firstChanged:
+                first.changed,
+            secondChanged:
+                second.changed,
+            sourceStateBytesUnchanged:
+                Buffer.from(
+                    json(sourceState),
+                ).equals(
+                    sourceBytes,
+                ),
+            candidateAppraisalCount:
+                candidateAppraisals
+                    .length,
+            remainingCandidateCount:
+                currentImpressionAppraisals(
+                    first.state,
+                ).length,
+            stats:
+                first.stats,
+            failure,
+            failureStateBytesUnchanged,
+            lifecycle: {
+                firstChanged:
+                    lifecycleFirst,
+                secondChanged:
+                    lifecycleSecond,
+                saveRequests,
+                idempotentBytes:
+                    Buffer.from(
+                        json(
+                            lifecycleState,
+                        ),
+                    ).equals(
+                        lifecycleFirstBytes,
                     ),
             },
         },
@@ -1397,16 +1648,13 @@ function memoryReconciliation(
         hydratedEvents
             .map(factSignature);
     const legacySubjectiveFacts =
-        [
-            ...legacySubjectiveMemories
-                .map(memory => ({
+        legacySubjectiveMemories
+            .map(memory =>
+                factSignature({
                     ...memory,
                     recordType:
                         'appraisal',
-                })),
-            ...legacyCurrentOpinions,
-        ].map(record =>
-            factSignature(record));
+                }));
     const hydratedSubjectiveFacts =
         hydratedAppraisals
             .map(record =>
@@ -1482,29 +1730,14 @@ function memoryReconciliation(
             [...referencedEventIds]
                 .sort(),
         );
-    const currentOpinionsAreRecent =
-        currentOpinionRefs.every(
-            reference =>
-                reference.tier ===
-                'recent',
-        );
-    const currentOpinionsDenyHistory =
+    const currentOpinionsDiscarded =
         currentOpinionAppraisals
-            .every(appraisal =>
-                appraisal
-                    .historicalClaimAllowed ===
-                    false);
-    const currentOpinionsOutsideSchema =
-        currentOpinionAppraisals
-            .every(appraisal =>
-                !schemaAppraisalIds.has(
-                    appraisal.id,
-                ) &&
-                (
-                    appraisal
-                        .derivedSchemaIds ||
-                    []
-                ).length === 0);
+            .length === 0 &&
+        currentOpinionRefs.length === 0 &&
+        [...schemaAppraisalIds]
+            .every(id =>
+                !currentOpinionIds
+                    .has(id));
     return {
         pass:
             legacyMemories.length ===
@@ -1513,22 +1746,20 @@ function memoryReconciliation(
                 31 &&
             legacySubjectiveMemories
                 .length === 60 &&
-            references.length === 115 &&
+            references.length === 93 &&
             eventRefs.length === 31 &&
-            appraisalRefs.length === 84 &&
+            appraisalRefs.length === 62 &&
             playerVisibleAppraisalRefs
-                .length === 82 &&
+                .length === 60 &&
             temporaryAppraisals.length ===
                 2 &&
             legacyCurrentOpinions
                 .length === 22 &&
             currentOpinionAppraisals
-                .length === 22 &&
+                .length === 0 &&
             currentOpinionRefs.length ===
-                22 &&
-            currentOpinionsAreRecent &&
-            currentOpinionsDenyHistory &&
-            currentOpinionsOutsideSchema &&
+                0 &&
+            currentOpinionsDiscarded &&
             referencedEventIds.size ===
                 5 &&
             knownEventIds.length === 5 &&
@@ -1536,7 +1767,7 @@ function memoryReconciliation(
             hydratedEvents.length ===
                 31 &&
             hydratedAppraisals.length ===
-                82 &&
+                60 &&
             eventTextCopyCount === 0 &&
             eventFactsEqual &&
             subjectiveFactsEqual,
@@ -1598,9 +1829,11 @@ function memoryReconciliation(
             exactTextMatch:
                 subjectiveFactsEqual,
             historicalClaimAllowedFalse:
-                currentOpinionsDenyHistory,
+                true,
             excludedFromSchema:
-                currentOpinionsOutsideSchema,
+                true,
+            discarded:
+                currentOpinionsDiscarded,
         },
     };
 }
@@ -1864,6 +2097,7 @@ function countKeys(
 function promptReport(
     prompt,
     slot,
+    forbiddenCurrentImpressions = [],
 ) {
     const system =
         String(
@@ -2067,6 +2301,12 @@ function promptReport(
                         'prohibitions',
                     ].includes(key))
                 .length,
+        forbiddenCurrentImpressionCount:
+            forbiddenCurrentImpressions
+                .filter(value =>
+                    value &&
+                    user.includes(value))
+                .length,
         contextTrimmed:
             system !==
                 limitedSystem ||
@@ -2115,6 +2355,7 @@ function promptReport(
 async function buildPromptEvidence(
     state,
     chat,
+    forbiddenCurrentImpressions = [],
 ) {
     const playerAction =
         findLatestPlayerAction(
@@ -2330,12 +2571,24 @@ async function buildPromptEvidence(
         promptReport(
             prompts[0],
             slot,
+            forbiddenCurrentImpressions,
         );
     const repair =
         promptReport(
             prompts[1],
             slot,
+            forbiddenCurrentImpressions,
         );
+    assert.equal(
+        initial
+            .forbiddenCurrentImpressionCount,
+        0,
+    );
+    assert.equal(
+        repair
+            .forbiddenCurrentImpressionCount,
+        0,
+    );
     return {
         playerAction: {
             characters:
@@ -2398,12 +2651,19 @@ export async function runTask6Acceptance(
         await readArchive(
             resolved,
         );
-    const currentValidation =
-        validateActorContextStateV1(
-            before.state,
+    const activeHasActorContext =
+        before.state
+            .actorContextVersion ===
+            actorContextVersion &&
+        before.state
+            .actorDossierProjectionVersion ===
+            actorDossierProjectionVersion &&
+        Boolean(
+            before.state
+                .actorMemoryIndex,
         );
     const migrationArchive =
-        currentValidation.valid &&
+        activeHasActorContext &&
         resolved ===
             DEFAULT_TINA_FILE
             ? await readArchive(
@@ -2420,12 +2680,47 @@ export async function runTask6Acceptance(
             migrationArchive.state,
             migration.migratedState,
         );
+    const memoryReferenceUpgrade =
+        activeHasActorContext
+            ? runMemoryReferenceUpgradeEvidence(
+                before.state,
+                before.chat,
+            )
+            : null;
+    const forbiddenCurrentImpressions =
+        memoryReferenceUpgrade
+            ?.forbiddenTexts
+            ?.length
+            ? memoryReferenceUpgrade
+                .forbiddenTexts
+            : [
+                ...(
+                    migrationArchive
+                        .state
+                        .actorLibrary ||
+                    []
+                ),
+                ...(
+                    migrationArchive
+                        .state
+                        .actors ||
+                    []
+                ),
+            ]
+                .flatMap(actor => [
+                    actor
+                        .impressionOfPlayerEn,
+                    actor
+                        .impressionOfPlayer,
+                ])
+                .filter(Boolean);
     const prompt =
         await buildPromptEvidence(
-            currentValidation.valid
-                ? before.state
-                : migration.lifecycleState,
+            memoryReferenceUpgrade
+                ?.lifecycleState ||
+                migration.lifecycleState,
             before.chat,
+            forbiddenCurrentImpressions,
         );
     const after =
         await readArchive(
@@ -2450,7 +2745,7 @@ export async function runTask6Acceptance(
         migrationArchive === before
             ? after
             : await readArchive(
-                DEFAULT_TINA_LEGACY_FILE,
+                migrationArchive.path,
             );
     const migrationFileBefore =
         fileMetric(
@@ -2469,7 +2764,7 @@ export async function runTask6Acceptance(
         'Dry-run changed the Tina legacy evidence archive.',
     );
     return {
-        version: 1,
+        version: 2,
         mode: 'build-only',
         archive: {
             path: resolved,
@@ -2505,6 +2800,10 @@ export async function runTask6Acceptance(
         },
         migration:
             migration.report,
+        memoryReferenceUpgrade:
+            memoryReferenceUpgrade
+                ?.report ||
+            null,
         playerVisibleSnapshots:
             snapshots,
         prompt,

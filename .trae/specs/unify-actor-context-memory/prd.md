@@ -6,11 +6,11 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 状态 | Approved · Actor Lifecycle Authority Completion · No Compatibility Layer |
+| 状态 | Approved · Memory Semantics Projection Correction · No Compatibility Layer |
 | 日期 | 2026-08-13 |
-| 当前修订 | Actor Lifecycle Authority Completion · 2026-08-13 |
-| 修订批准 | 用户于 2026-08-13 明确批准本 revision，并要求继续收尾 V1 |
-| 目标版本 | Actor Context V1 / Memory Reference V1 / Actor Dossier V1 |
+| 当前修订 | Memory Semantics Projection Correction · 2026-08-13 |
+| 修订批准 | 用户于 2026-08-13 明确批准 Memory Reference V2，并在语言调研后确认本期完全不改语言架构 |
+| 目标版本 | Actor Context V1 / Memory Reference V2 / Actor Dossier V1 |
 | 产品目标 | 一个权威事实底本，一次记录，到处引用；先统一字段并精简 Prompt，再单独设计初级导演编排 |
 | 本期性质 | 数据模型、投影和前端收敛，不重写叙事 Prompt 文案 |
 
@@ -1500,3 +1500,174 @@ Character Core
 当前 `Actor Lifecycle Authority Completion · 2026-08-13` revision 状态：**Approved**。
 
 批准决策：Core 10 字段、Runtime 12 字段、Dossier 8 个业务顶层字段、LowTier 6 个顶层字段；一次性原子迁移，不增加兼容层。
+
+## 21. Memory Semantics Projection Correction · 2026-08-13
+
+### 21.1 问题与真实证据
+
+Tina 当前 V1 存档中，哈利人物侧边栏连续展示两组外观相似、语义不同的历史文本：
+
+1. `dossier.relationship.evidenceRefs`
+   - 权威来源：`socialGraph.relationshipEvidence`
+   - 示例：早餐签名施压、哈利恐慌、魔咒课避开蒂娜
+   - 语义：解释关系维度为什么变化，不是人物记忆层级
+2. `dossier.memories.recent`
+   - 权威来源：`actorMemoryIndex -> memorySynapse.appraisals`
+   - 示例：羽毛笔爆炸、逃离公共休息室
+   - 语义：人物保留的主观 Appraisal
+
+两个字段都属于 Actor Dossier V1，但当前 UI 将关系证据作为无标题列表直接放在关系区末尾，紧接着显示“共同经历”，导致玩家无法判断两组数据边界。
+
+同时存在两个确定缺陷：
+
+- `relationshipEvidenceView()` 优先读取中文 `summary`，Memory hydration 只读取英文 `summaryEn`，同一侧边栏出现无规则的中英混排。
+- cutover 将旧可变缓存 `impressionOfPlayerEn` 创建为 `migrated_current_impression` Appraisal，并错误追加到 `actorMemoryIndex.recent`。Tina 中 `Glad she is focused on annoying Hermione instead.` 因此被标成“近期大事”，且真实 `buildActorContinuityCapsules()` 会把它作为人物记忆继续送入 Prompt。
+
+这与已登记运行契约冲突：当前看法只能由 active/contested Person Schema 投影，旧 current impression 既不是 Event、保留记忆，也不是 Schema。
+
+### 21.2 Before
+
+```text
+socialGraph.relationshipEvidence
+-> Dossier relationship.evidenceRefs
+-> 无分组标题的关系区列表
+
+legacy impressionOfPlayerEn
+-> migrated_current_impression Appraisal
+-> actorMemoryIndex.recent
+-> Dossier“近期大事” + Actor continuity Prompt + Knowledge V2
+```
+
+Tina 当前证据：
+
+- 哈利 `recent` 为 3 条，其中 1 条是 `migrated_current_impression`
+- `buildActorContinuityCapsules()` 将该记录作为 `tier=recent` 输出
+- 关系证据显示中文，人物记忆显示英文
+
+### 21.3 After
+
+```text
+Social Evidence
+-> 只解释关系维度变化
+-> Dossier“关系证据”明确分组
+
+Event/Appraisal MemoryRef
+-> 只表达人物真正保留的经历
+-> core/recent/everyday
+
+active/contested Person Schema
+-> 唯一当前看法
+```
+
+硬规则：
+
+- Social Evidence 与 Actor Memory 不合并；它们是不同语义、不同 writer 的权威记录。
+- 关系区必须显式显示“印象与预期 / 关系维度 / 当前情绪 / 关系证据”四个子标题。
+- 本修订不改变现有语言选择：Social Evidence 继续使用已有 `summary || summaryEn` 显示规则，Event/Appraisal 继续使用 `summaryEn`。语言统一另立 PRD。
+- `migrated_current_impression` 不得存在于 `firstImpressionRef/core/recent/everyday`，不得进入 continuity capsule、LowTier Prompt 或 Knowledge V2。
+- 旧 current impression 是已删除字段的可变缓存，不迁成 Event、保留记忆或 Schema。
+
+### 21.4 迁移与兼容
+
+采用一次性原子 `Memory Reference V2` 迁移，不增加兼容层：
+
+1. 旧 Schema 直接 cutover 时，不再创建 `migrated_current_impression`。
+2. 已完成 V1 的 State：
+   - 找出 `contextTags` 含 `migrated_current_impression` 的 Appraisal。
+   - 验证它们未被 `firstImpressionRef`、Schema support/counter 或 supersede 链引用。
+   - 从所有 Actor Memory tier 删除对应 ref。
+   - 删除对应迁移 Appraisal。
+   - 设置 `memoryReferenceVersion=2` 与 `actorMemoryIndex.version=2`。
+3. 全量校验通过后才原子替换；冲突或孤儿引用时保持原 State 不变。
+4. V2 第二次运行必须 `changed=false`；不保留 V1/V2 双读、fallback projector 或长期迁移窗口。
+
+### 21.5 Prompt 预算
+
+批准前真实基线仍为：
+
+| 指标 | Before | After 目标 | 门禁 |
+| --- | ---: | ---: | ---: |
+| Initial System | 27,221 chars | 27,221 chars | 不得增长 |
+| 总 Prompt | 58,916 chars | 小于或等于 58,916 chars | 不得超过 298,080 |
+| User Payload | 33,294 bytes | 小于或等于 33,294 bytes | 不得超过 50 KB |
+| LowTier 顶层字段 | 6 | 6 | 严格等于 6 |
+| 旧 payload 重复 | 0 | 0 | 必须为 0 |
+
+本修订不新增 Prompt 字段，只删除错误的 migrated current-impression memory activation。System、output Schema、player action、Authority Snapshot 与 actor capsule contract 继续受保护。
+
+### 21.6 前端白名单
+
+顶层仍严格为 8 个业务字段，不增加字段：
+
+- `relationship.evidenceRefs` 保留，明确标注为关系证据。
+- `memories.core/recent/everyday` 保留，只 hydration 合法 Event/Appraisal MemoryRef。
+- 不向前端暴露 raw Social Graph、raw Appraisal、`contextTags` 或迁移诊断字段。
+
+### 21.7 验收标准
+
+- Tina 哈利 `recent` 从 3 条变为 2 条，`Glad she...` 不再显示或进入 Prompt。
+- Tina 中全部 `migrated_current_impression` Appraisal 与 MemoryRef 数量为 0。
+- 早餐签名、恐慌和避让仍保留为关系证据，并显示在明确的“关系证据”子区。
+- 本修订前后各 Store 的语言字段与显示选择保持不变；只用明确分组避免把不同记录误认为同一字段。
+- 当前看法无 active/contested Schema 时明确显示“尚未形成稳定看法”，不回退旧 current impression。
+- Memory Reference V2 迁移原子、幂等、零模型调用，不推进 clock/turn/revision。
+- 真实 Prompt 不增长，不新增第七个 LowTier 字段，不重新引入 raw actor/social/history。
+
+### 21.8 非目标
+
+- 不把 Social Evidence 合并为人物记忆。
+- 不新增 `currentAppraisalRef` 或第二套当前印象字段。
+- 不新增、删除或重排任何语言字段，不改变翻译调用、缓存或 fallback。
+- 不在本修订决定 Event/Appraisal 的中文显示缓存应位于 State、chat 还是 UI session。
+- 不修改关系维度、evidence 计算、Schema 晋升门槛或 System Prompt。
+
+### 21.9 Approval
+
+该修订改变旧 current impression 的迁移语义、Memory Reference 版本和 Prompt 输入，必须重新批准。
+
+当前状态：**Approved**。
+
+批准决策：升级 Memory Reference V2，一次性删除错误 current-impression Appraisal/MemoryRef，明确关系证据分组；本期不改任何语言字段、翻译调用或显示 fallback。
+
+### 21.10 V1 漏检复盘
+
+V1 漏检不是单点测试遗漏，而是迁移和验收共同采用了错误目标：
+
+1. 把“旧文本不丢”置于语义分类之前，将 mutable current impression 错当 retained memory。
+2. Validator 只验证 MemoryRef 的形状和目标存在，不验证 Appraisal `contextTags` 是否允许进入对应 tier。
+3. Tina dry-run 将 22 条 current opinion 迁入 recent 写成通过条件，验证了文本守恒，却没有验证权威层正确。
+4. UI 测试只验证 8 字段/6 展示区/evidence 数量，没有验证关系区子标题和真实内容边界。
+5. Prompt 测试只验证预算、字段数和重复 payload，没有禁止 current-impression cache 进入 continuity。
+6. 没有跨 Dossier 区域的 canonical language 选择规则。
+
+防复发要求：
+
+- 每个 legacy 字段必须在迁移矩阵中明确标为 `retain / discard / project`，不得因“可能有用”改造成其他权威类型。
+- 引用 validator 必须同时验证目标存在与目标语义可进入该 ref slot/tier。
+- 真实存档验收必须按 Event/Appraisal/Schema/Social Evidence 分区计数并含禁止项，不能只比总文本。
+- Prompt 验收必须检查禁止 record/tag 不出现，不能只检查字节预算。
+- UI 验收必须使用真实人物内容检查分组标题、记录类型和语言规则。
+
+### 21.11 语言架构调研
+
+Tina 当前与旧档统计：
+
+| Store | 数量 | 仅英文 | 中英双字段 |
+| --- | ---: | ---: | ---: |
+| Event Knowledge | 9 | 9 | 0 |
+| Appraisal | 94 | 94 | 0 |
+| Social Evidence | 105 | 0 | 105 |
+| Social Statement | 83 | 0 | 83 |
+| 旧 shared memory | 91 | 0 | 91 |
+| chat transaction memory update | 154 | 0 | 154 |
+
+已确认生产规则：
+
+- 模型、Prompt、状态提取以英文为权威；中文不得回流模型。
+- narrative message 使用 `sourceEn/translatedZh` chat cache。
+- Scene、Calendar、Social Evidence/Statement 在同一 State record 保存英文权威与中文显示字段。
+- Event/Appraisal/Person Schema Schema 只允许英文。
+- Social Memory 与 Turn workflow 会生成 memory/impression 中文译文，但 Actor Context/Appraisal reducer 不保存该显示字段。
+- Dossier 当前没有 Event/Appraisal 的 record-level translation cache。
+
+因此“统一显示语言”不是调整一个 fallback，而是新的跨 Store 显示缓存设计。它不属于本次 Memory Reference 语义修正。

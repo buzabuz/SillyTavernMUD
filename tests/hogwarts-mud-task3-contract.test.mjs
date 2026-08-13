@@ -1265,7 +1265,18 @@ test('Knowledge V2 indexes independent Actor Core and Social Evidence records', 
             }],
         },
         memorySynapse: {
-            appraisals: [],
+            appraisals: [{
+                id:
+                    'appraisal_current_cache',
+                observerId:
+                    'hermione',
+                targetId: 'player',
+                summaryEn:
+                    'Mutable current cache.',
+                contextTags: [
+                    'migrated_current_impression',
+                ],
+            }],
             personSchemas: [],
         },
         causalCollapse: {
@@ -1304,6 +1315,12 @@ test('Knowledge V2 indexes independent Actor Core and Social Evidence records', 
     assert.equal(
         social.recordId,
         'social_evidence_evidence_help',
+    );
+    assert.equal(
+        records.some(record =>
+            record.recordId ===
+                'appraisals_appraisal_current_cache'),
+        false,
     );
 });
 

@@ -97,7 +97,7 @@
 ## 一次性迁移
 
 - [x] `actorContextVersion=1`
-- [x] `memoryReferenceVersion=1`
+- [x] `memoryReferenceVersion=2`
 - [x] `actorDossierProjectionVersion=1`
 - [x] 迁移不调用低、中、高档模型
 - [x] 迁移不推进 turn、cursor、clock 或 Scene
@@ -117,7 +117,52 @@
 - [x] 关系标签实现从至少 2 套收敛为 1 套
 - [x] 普通成功回合 low/medium/high 调用预算不增加
 - [x] Tina 迁移前后玩家可见事实保持一致
-- [ ] 全部 Hogwarts 自动化测试通过：646/648；Calendar overlap 与既有 2038 行文件门禁失败不属于本变更
+- [ ] 全部 Hogwarts 自动化测试通过：649/651；Calendar overlap 与既有 2038 行文件门禁失败不属于本变更
 - [x] ESLint、git diff check、模块边界测试通过
 - [ ] 文件尺寸全量门禁通过：既有 `presence-witness-contract.js` 为 2038 行，门禁要求 <2000
 - [x] runtime contract、state-fields、actor-memory、knowledge-runtime、README 已同步
+
+## Memory Semantics Projection Correction
+
+当前 revision：`Memory Semantics Projection Correction · 2026-08-13`。用户已批准 Memory V2，并确认本期不改语言。
+
+### 权威边界
+
+- [x] Social Evidence 只解释关系变化，不进入 Actor Memory tier
+- [x] Actor Memory tier 只引用 retained Event/Appraisal
+- [x] 当前稳定看法只来自 active/contested Person Schema
+- [x] 不新增 `currentAppraisalRef`、profile impression 或其他当前看法副本
+- [x] MemoryRef validator 同时验证引用存在与 Appraisal 语义可进入 tier
+- [x] legacy 字段迁移矩阵明确 `retain/discard/project`，current impression 固定为 discard
+
+### V2 迁移
+
+- [x] `memoryReferenceVersion=2`
+- [x] `actorMemoryIndex.version=2`
+- [x] 旧 Schema cutover 不创建 `migrated_current_impression`
+- [x] 现有 V1 的 migrated current-impression refs 与 Appraisals 一次性删除
+- [x] firstImpression/Schema/supersede 冲突时迁移原子失败
+- [x] 失败时原 State 字节不变且不保存
+- [x] 第二次运行 `changed=false`
+- [x] 无 V1/V2 双读、fallback projector 或长期兼容层
+
+### 前端与 Prompt
+
+- [x] 关系卡明确显示“印象与预期 / 关系维度 / 当前情绪 / 关系证据”
+- [x] 人物卡仍严格为 6 个展示区、Dossier 仍为 8 个业务顶层字段
+- [x] Social Evidence 保持 `summary || summaryEn`，Event/Appraisal 保持 `summaryEn`
+- [x] 本期不修改任何语言 Schema、翻译 writer、cache 或 fallback
+- [x] Tina 哈利 relation evidence 保留 3 条，recent 从 3 条变 2 条
+- [x] `Glad she is focused on annoying Hermione instead.` 不再进入 Dossier、continuity 或 Prompt
+- [x] Knowledge V2 不再索引 `migrated_current_impression`
+- [x] Prompt 验收明确禁止 `migrated_current_impression` record/tag
+- [x] LowTier 仍严格 6 字段，旧 payload 重复仍为 0
+- [x] System 仍为 27,221 chars，总 Prompt <=58,916 chars，User Payload <=33,294 bytes
+
+### 回归
+
+- [x] Tina V1 -> V2 dry-run 不修改真实 JSONL
+- [x] Memory/Dossier/Prompt/Knowledge 专项测试通过
+- [x] 真实哈利 Dossier 验证关系证据标题与 record type，语言行为相对 Before 不变
+- [x] monolith、全量 Hogwarts、ESLint、diff、模块边界通过或仅保留已登记无关基线
+- [x] runtime contract、actor-memory、README、progress 已同步

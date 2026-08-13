@@ -52,6 +52,24 @@
   - [x] 9.4: 运行全部 Hogwarts 测试、ESLint、diff check、模块边界、文件尺寸与非 Calendar E2E
   - [x] 9.5: 同步最终 checklist/progress/runtime contracts/README
 
+- [x] Task 10: 审计人物侧边栏记忆语义（completed）
+  - [x] 10.1: 用 Tina 当前存档证明顶部三条来自 Social Evidence，底部三条来自 Actor Memory
+  - [x] 10.2: 证明 `migrated_current_impression` 被错误写入 recent 并进入 continuity Prompt
+  - [x] 10.3: 记录 Before/After、V2 原子迁移、前端白名单和 Prompt 负增量预算
+
+- [x] Task 11: 实施 Memory Reference V2（completed）
+  - [x] 11.1: 旧 Schema 直接 cutover 时丢弃 mutable current impression，不创建 Appraisal/MemoryRef
+  - [x] 11.2: V1 -> V2 原子删除 `migrated_current_impression` refs/Appraisals，冲突时失败
+  - [x] 11.3: 更新 lifecycle、Schema、validator、Knowledge rebuild 与严格迁移测试
+  - [x] 11.4: 不增加双读、fallback projector 或 `currentAppraisalRef`
+
+- [x] Task 12: 修正 Dossier 分组并完成验收（completed；两项无关基线失败保留）
+  - [x] 12.1: 关系卡增加四个子标题，关系证据与人物记忆保持独立
+  - [x] 12.2: 保持各 Store 现有语言字段与 fallback，不修改翻译链
+  - [x] 12.3: Tina Dossier/Prompt/Knowledge build-only 验证错误 current impression 数量为 0
+  - [x] 12.4: 运行专项、monolith、全量 Hogwarts、ESLint、diff 与 Prompt 门禁
+  - [x] 12.5: 同步 runtime contract、README、checklist 和 progress
+
 # Task Dependencies
 
 - Task 2 depends on Task 1.
@@ -62,6 +80,8 @@
 - Task 7 depends on Task 6.
 - Task 8 depends on Tasks 6-7.
 - Task 9 depends on Tasks 6-8.
+- Task 11 depends on Task 10 and explicit approval of `Memory Semantics Projection Correction`.
+- Task 12 depends on Task 11.
 
 # Parallel Work
 

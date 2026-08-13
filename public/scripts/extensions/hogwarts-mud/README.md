@@ -355,12 +355,15 @@ node scripts/dry-run-hogwarts-save-revision-identity.mjs \
 
 ### Actor Context V1 原子切换
 
-- `actorContextVersion=1`、`memoryReferenceVersion=1`、`actorDossierProjectionVersion=1` 共同定义已完成切换的 State。
+- `actorContextVersion=1`、`memoryReferenceVersion=2`、`actorDossierProjectionVersion=1` 共同定义已完成切换的 State。
 - lifecycle 先在克隆 State 上构造并校验严格 `ActorCoreV1`、`ActorRuntimeV1`、`ActorMemoryIndexV1` 与 Appraisal 引用；全部成功后才一次替换并保存。
 - `ActorCoreV1.cast` 是来源与首次认识的唯一权威；`ActorRuntimeV1` 的 `lifeStatus/lifeStatusPermanent/lifeStatusDetailEn/lifeStatusSinceClock` 是生命状态唯一权威。
-- 有 Event/Appraisal ID 的旧人物记忆转为 MemoryRef；只有文本的旧记忆和印象转为不授权具体历史的 migrated Appraisal；初见单独写 `firstImpressionRef`。
+- 有 Event/Appraisal ID 的旧人物记忆转为 MemoryRef；只有文本的 retained memory 转为不授权具体历史的 migrated Appraisal；初见单独写 `firstImpressionRef`。
+- 旧 Actor current-impression 是可变显示缓存，不是 retained memory 或 Person Schema。V2 直接丢弃该字段，并从已完成 V1 的 State 原子删除 `migrated_current_impression` Appraisal/MemoryRef；若它已被初见、Schema 或 supersede 链引用则迁移失败。
 - 成功后删除人物档案和运行态中的旧 `source/introduced*`、生命状态副本、记忆正文、印象、稳定字段、Identity 与 Social Graph 副本。失败时原 State 不变，也不触发保存。
 - 人物 Inspector 与关系星图共同消费 `ActorDossierViewModelV1`：除 `schemaVersion` 外固定八个业务顶层字段，并只展示六个区块。
+- Inspector 的关系卡把“印象与预期 / 关系维度 / 当前情绪 / 关系证据”明确分组；Social Evidence 与“最深刻的 / 近期大事 / 日常小事”Actor Memory 不合并。
+- V2 不修改语言架构：Social Evidence 继续使用既有双语 State 字段，Event/Appraisal 继续使用英文权威字段，翻译 writer、cache 与 fallback 均保持原样。
 
 ### Calendar V2
 

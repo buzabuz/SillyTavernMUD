@@ -784,6 +784,16 @@ export function buildKnowledgeRecords(state, chat = []) {
         state.appraisals ||
         [];
     for (const appraisal of appraisals) {
+        if (
+            (
+                appraisal.contextTags ||
+                []
+            ).includes(
+                'migrated_current_impression',
+            )
+        ) {
+            continue;
+        }
         records.push(makeRecord(
             'appraisals',
             appraisal.id,

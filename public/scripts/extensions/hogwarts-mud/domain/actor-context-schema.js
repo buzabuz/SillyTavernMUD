@@ -4,7 +4,7 @@ import {
 } from './npc-identity-schema.js';
 
 export const actorContextVersion = 1;
-export const memoryReferenceVersion = 1;
+export const memoryReferenceVersion = 2;
 export const actorDossierProjectionVersion = 1;
 
 export const MEMORY_REF_RECORD_TYPE_VALUES =
@@ -927,7 +927,7 @@ export function validateActorMemoryIndex(
         memoryReferenceVersion
     ) {
         errors.push(
-            'Actor Memory Index version must be 1.',
+            `Actor Memory Index version must be ${memoryReferenceVersion}.`,
         );
     }
     if (!isRecord(source?.byActorId)) {

@@ -2,9 +2,9 @@
 
 关联文档：[PRD](./prd.md) · [任务](./tasks.md) · [验收 Checklist](./checklist.md) · [进度](./progress.md) · [Living State Contract](../hogwarts-runtime-contracts/state-fields.md)
 
-当前 revision：`Actor Lifecycle Authority Completion · 2026-08-13`。
+当前 revision：`Memory Semantics Projection Correction · 2026-08-13`。
 
-状态：用户于 2026-08-13 明确批准本 revision；按 Core 10 / Runtime 12 / Dossier 8 / LowTier 6 的边界继续实现。
+状态：用户已明确批准 Memory Reference V2，并确认本期完全不改语言架构。Core 10 / Runtime 12 / Dossier 8 / LowTier 6 边界不变。
 
 ## Why
 
@@ -547,3 +547,118 @@ Context budget SHALL 优先裁剪可重建的 memory activation 与 opportunity�
 **Reason**: Actor 聚合记录重复嵌入人物全部记忆、关系和运行状态，使 Qdrant 索引重复事实。
 
 **Migration**: 删除旧 Actor 聚合索引，重建独立 canonical records。
+
+## Memory Semantics Projection Correction
+
+### Production Call Graph
+
+```text
+socialGraph.relationshipEvidence
+-> buildSocialAudienceProjection()
+-> buildRelationshipProjection()
+-> dossier.relationship.evidenceRefs
+-> inspector renderRelationship()
+
+actorMemoryIndex.byActorId
+-> buildMemories() / buildActorContinuityCapsules()
+-> dossier.memories / Prompt continuity
+
+legacy impressionOfPlayerEn
+-> migrateActorContextV1()
+-> migrated_current_impression Appraisal
+-> actorMemoryIndex.recent  // defect
+-> Dossier + Prompt + Knowledge V2
+```
+
+### Writer 与 Reader Ownership
+
+| 语义 | 唯一 writer | 合法 reader | 禁止 |
+| --- | --- | --- | --- |
+| 关系变化证据 | Social Reducer | relationship projection、关系星图、Dossier relationship | Actor Memory tier、Schema fast path |
+| 保留人物记忆 | Event/Appraisal reducer + Actor Memory Index | Dossier memories、continuity、Memory Consolidation | profile/runtime 副本 |
+| 当前看法 | Person Schema Reducer | Dossier currentSchema、Prompt expectation | `migrated_current_impression`、profile impression fallback |
+
+### Memory Reference V2
+
+`ActorMemoryIndexV2` 字段形状不变：
+
+```ts
+interface ActorMemoryEntryV2 {
+    firstImpressionRef: string;
+    core: MemoryRefV1[];
+    recent: MemoryRefV1[];
+    everyday: MemoryRefV1[];
+}
+```
+
+版本升级只收紧语义：
+
+- `firstImpressionRef` 只允许 first-impression Appraisal。
+- tier 只允许 retained Event 或 retained Appraisal。
+- `contextTags` 含 `migrated_current_impression` 的 Appraisal 不得被任何 MemoryRef 引用。
+- 当前看法只由 active/contested Person Schema 投影。
+
+### V1 -> V2 原子迁移
+
+```text
+clone State
+-> collect migrated_current_impression Appraisal IDs
+-> assert not referenced by firstImpression/Schema/supersede
+-> remove their tier refs
+-> delete those Appraisals
+-> set memoryReferenceVersion=2
+-> set actorMemoryIndex.version=2
+-> validate all Actor/Memory/Appraisal/Schema/Event links
+-> atomic replace and one save
+```
+
+旧 Schema 直接 cutover 到 V2 时不得创建 current-impression Appraisal。只有旧 first impression 和合法 shared memory 文本可进入 Appraisal/MemoryRef。
+
+失败语义：
+
+- 任何 current-impression Appraisal 被 Schema、first impression 或 supersede 链引用时迁移失败。
+- 失败保持调用方 State 字节不变，不保存、不推进 clock/turn/revision。
+- 已是 V2 时不执行 V1 reader 或 repair fallback。
+
+### Dossier Projection
+
+顶层与字段白名单不变。
+
+`relationship.evidenceRefs`：
+
+- 只投影 Social Evidence。
+- 保持现有 `summary || summaryEn` 语言选择，不改变 bilingual display cache。
+- UI 在同一卡内增加“印象与预期 / 关系维度 / 当前情绪 / 关系证据”子标题。
+
+`memories`：
+
+- 只 hydration Actor Memory tier 中合法 Event/Appraisal。
+- projector 防御性拒绝 `migrated_current_impression`，但权威迁移完成后该分支计数必须为 0。
+- `sourceBadge` 继续区分“共同事件”和“人物感受”。
+
+### Prompt 与 Knowledge
+
+- `buildActorContinuityCapsules()` 不再读取 migrated current-impression ref。
+- Knowledge V2 重建后不再包含对应 Appraisal record。
+- 不新增 Prompt 字段、Schema 或调用。
+- 最终 Prompt 必须相对 58,916 chars / 33,294 bytes 非增长。
+
+### Verification
+
+- Tina V1 -> V2 dry-run、failure atomicity、second-run idempotency。
+- Harry Dossier fixture：关系证据仍为 3 条，recent 从 3 变 2。
+- UI source/DOM 测试：四个关系子标题存在，人物卡仍为 6 个展示区。
+- continuity capsule 与 build-only Prompt 不含 `Glad she is focused on annoying Hermione instead.`。
+- Knowledge V2 rebuild 不包含 `migrated_current_impression`。
+- LowTier 仍为 6 字段，System 27,221 chars 不变。
+
+### Language Boundary
+
+本 revision 对语言字段影响为 `None`：
+
+- 不修改 Event/Appraisal/Social Evidence/Schema 的语言 Schema。
+- 不修改 `translateOpeningValues()`、message translation cache 或 structured-state translation writer。
+- 不修改 Dossier 当前的 per-store language fallback。
+- 关系区新增标题只解释记录类型，不承诺统一正文语言。
+
+Event/Appraisal 的中文显示需要独立设计 record-level UI translation cache；在 State 同记录双写中文、从 chat source ref hydration、或使用 UI session cache 的取舍均不在本 revision 决定。
