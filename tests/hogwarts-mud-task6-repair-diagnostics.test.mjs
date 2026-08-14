@@ -367,7 +367,7 @@ function createTurnPorts(
     sendModelTaskRequest,
     validateScenePerformance,
     recordTurnDiagnostic =
-        () => {},
+    () => {},
 ) {
     return {
         CANON_CAST_IDENTITY_CONTRACT:
@@ -533,33 +533,33 @@ test('[defect-probing] ordinary Performer reports the first validation error wit
     await assert.rejects(
         () => withSettlementFetch(
             () =>
-            workflow.generateScenePerformance(
-                {
-                    profileId: 'low',
-                    tier: 'low',
-                },
-                createState(),
-                'Pick up the quill.',
-                {
-                    elapsedMinutes: 15,
-                    minimumWords: 1,
-                    maximumWords: 100,
-                    minimumSegments: 1,
-                    maximumSegments: 4,
-                },
-                createRetrievalResult(),
-                null,
-                null,
-                null,
-                {
-                    valid: true,
-                    actorIds: [
-                        'hermione',
-                    ],
-                },
-                [],
-                createContextPlan(),
-            ),
+                workflow.generateScenePerformance(
+                    {
+                        profileId: 'low',
+                        tier: 'low',
+                    },
+                    createState(),
+                    'Pick up the quill.',
+                    {
+                        elapsedMinutes: 15,
+                        minimumWords: 1,
+                        maximumWords: 100,
+                        minimumSegments: 1,
+                        maximumSegments: 4,
+                    },
+                    createRetrievalResult(),
+                    null,
+                    null,
+                    null,
+                    {
+                        valid: true,
+                        actorIds: [
+                            'hermione',
+                        ],
+                    },
+                    [],
+                    createContextPlan(),
+                ),
         ),
         /Item vanished_quill is physically absent/u,
     );
@@ -661,33 +661,33 @@ test('[defect-probing] production Performer reports an extreme invalid output af
     await assert.rejects(
         () => withSettlementFetch(
             () =>
-            workflow.generateScenePerformance(
-                {
-                    profileId: 'low',
-                    tier: 'low',
-                },
-                createState(),
-                'Pick up the vanished quill.',
-                {
-                    elapsedMinutes: 15,
-                    minimumWords: 1,
-                    maximumWords: 100,
-                    minimumSegments: 1,
-                    maximumSegments: 4,
-                },
-                createPrivateMemoryRetrieval(),
-                null,
-                null,
-                null,
-                {
-                    valid: true,
-                    actorIds: [
-                        'hermione',
-                    ],
-                },
-                [],
-                createContextPlan(),
-            ),
+                workflow.generateScenePerformance(
+                    {
+                        profileId: 'low',
+                        tier: 'low',
+                    },
+                    createState(),
+                    'Pick up the vanished quill.',
+                    {
+                        elapsedMinutes: 15,
+                        minimumWords: 1,
+                        maximumWords: 100,
+                        minimumSegments: 1,
+                        maximumSegments: 4,
+                    },
+                    createPrivateMemoryRetrieval(),
+                    null,
+                    null,
+                    null,
+                    {
+                        valid: true,
+                        actorIds: [
+                            'hermione',
+                        ],
+                    },
+                    [],
+                    createContextPlan(),
+                ),
         ),
         /不得写入字段：disposable/u,
     );
@@ -1433,20 +1433,20 @@ test('[Task 12] production Performer reports narrator and cross-actor private Ev
     const narratorPrompts = [];
     await assert.rejects(
         () => runTask12Performance(
-        [{
-            segments: [{
-                type: 'narration',
-                textEn:
+            [{
+                segments: [{
+                    type: 'narration',
+                    textEn:
                     'Yesterday in the rain corridor, Tina hid Hermione\'s umbrella behind the armour.',
-            }],
-        }, {
-            segments: [{
-                type: 'narration',
-                textEn:
+                }],
+            }, {
+                segments: [{
+                    type: 'narration',
+                    textEn:
                     'Hermione stands beside a spare umbrella.',
+                }],
             }],
-        }],
-        narratorPrompts,
+            narratorPrompts,
         ),
         /unsupported_historical_detail/u,
     );
@@ -1477,21 +1477,21 @@ test('[Task 12] production Performer reports narrator and cross-actor private Ev
     const crossActorPrompts = [];
     await assert.rejects(
         () => runTask12Performance(
-        [{
-            segments: [{
-                ...supportedUmbrellaSegment(),
-                actorId: 'ron',
-            }],
-        }, {
-            segments: [{
-                type: 'dialogue',
-                actorId: 'ron',
-                textEn:
+            [{
+                segments: [{
+                    ...supportedUmbrellaSegment(),
+                    actorId: 'ron',
+                }],
+            }, {
+                segments: [{
+                    type: 'dialogue',
+                    actorId: 'ron',
+                    textEn:
                     'You two are being oddly careful with that umbrella.',
+                }],
             }],
-        }],
-        crossActorPrompts,
-        state,
+            crossActorPrompts,
+            state,
         ),
         /actor ron cannot access supporting Event\(s\) event_umbrella/u,
     );
@@ -2132,6 +2132,64 @@ test('[Task 15] concrete-history detection excludes pure expectation, gist, curr
     );
 });
 
+test('[Task 15] current participle adjectives stay distinct from finite and auxiliary historical actions', () => {
+    const capsules =
+        createTask14MemoryActivationCapsules();
+    for (const textEn of [
+        'The first part is finding something that is actually broken.',
+        'Finish the written lesson.',
+        'Inspect the hidden latch.',
+        'Use the given name.',
+        'Replace the broken bottle.',
+    ]) {
+        assert.deepEqual(
+            validateHistoricalClaimProvenance(
+                [{
+                    type: 'dialogue',
+                    actorId:
+                        'hermione',
+                    textEn,
+                }],
+                capsules,
+            ),
+            {
+                valid: true,
+                errors: [],
+            },
+            textEn,
+        );
+    }
+    for (const textEn of [
+        'You broke my quill at breakfast.',
+        'You wrote the note in the library.',
+        'You had hidden my quill.',
+        'We had gone to the station.',
+        'Yesterday you replaced the bottle.',
+        'Remember when you hid the key.',
+    ]) {
+        const validation =
+            validateHistoricalClaimProvenance(
+                [{
+                    type: 'dialogue',
+                    actorId:
+                        'hermione',
+                    textEn,
+                }],
+                capsules,
+            );
+        assert.equal(
+            validation.valid,
+            false,
+            textEn,
+        );
+        assert.match(
+            validation.errors
+                .join(' '),
+            /without claim-level Event provenance/u,
+        );
+    }
+});
+
 test('[Task 14.1] actor-only Event provenance remains private and text-anchored for unmarked history', () => {
     const claimTextEn =
         'Hermione hid my umbrella behind the armour.';
@@ -2380,9 +2438,9 @@ test('[Task 14.1] production Performer reports unmarked history with missing or 
             () =>
                 runTask12Performance(
                     [{
-                    segments: [
-                        scenario.invalidSegment,
-                    ],
+                        segments: [
+                            scenario.invalidSegment,
+                        ],
                     }],
                     prompts,
                     state,

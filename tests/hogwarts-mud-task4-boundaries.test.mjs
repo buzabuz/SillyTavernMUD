@@ -22,7 +22,6 @@ import * as turnReducer from '../public/scripts/extensions/hogwarts-mud/domain/t
 import * as turnRollback from '../public/scripts/extensions/hogwarts-mud/domain/turn-rollback.js';
 import * as turnTime from '../public/scripts/extensions/hogwarts-mud/domain/turn-time.js';
 import * as turnValidation from '../public/scripts/extensions/hogwarts-mud/domain/turn-validation.js';
-import * as worldChanges from '../public/scripts/extensions/hogwarts-mud/domain/world-changes.js';
 import * as helpers from '../public/scripts/extensions/hogwarts-mud/helpers.js';
 
 const DOMAIN_ROOT = new URL(
@@ -62,7 +61,6 @@ const TASK4_MODULE_NAMES = [
     'turn-rollback',
     'turn-time',
     'turn-validation',
-    'world-changes',
 ];
 const PUBLIC_MODULES = [
     archiveProjection,
@@ -84,7 +82,6 @@ const PUBLIC_MODULES = [
     turnRollback,
     turnTime,
     turnValidation,
-    worldChanges,
 ];
 const INTERNAL_EXPORTS = new Set([
     'EXPLICIT_MOVEMENT_DIRECTIVE_PATTERN',

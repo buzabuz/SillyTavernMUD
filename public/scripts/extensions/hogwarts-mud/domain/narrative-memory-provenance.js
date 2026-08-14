@@ -19,12 +19,18 @@ const EXPLICIT_CURRENT_ACTION_PATTERN =
 const CONCRETE_PAST_SUBJECT =
     String.raw`(?:i|you|we|he|she|they|the\s+[\p{L}'’-]+|[\p{L}][\p{L}'’-]*(?:\s+[\p{L}][\p{L}'’-]*){0,3})`;
 
-const CONCRETE_PAST_ACTION =
-    String.raw`(?:hid|hidden|put|taught|cast|left|gave|given|took|taken|broke|broken|found|met|helped|refused|lied|saved|ran|went|gone|came|was|were|did|done|stole|stolen|returned|brought|kept|made|sent|showed|held|wrote|written|heard|saw|seen|spoke|spoken|told|said|whispered|waited|packed)`;
+const CONCRETE_FINITE_PAST_ACTION =
+    String.raw`(?:hid|put|taught|cast|left|gave|took|broke|found|met|helped|refused|lied|saved|ran|went|came|was|were|did|stole|returned|brought|kept|made|sent|showed|held|wrote|heard|saw|spoke|told|said|whispered|waited|packed)`;
+
+const CONCRETE_PAST_PARTICIPLE =
+    String.raw`(?:hidden|given|taken|broken|gone|done|stolen|written|seen|spoken)`;
+
+const CONCRETE_HISTORICAL_ACTION =
+    String.raw`(?:(?:had|has)\s+(?:${CONCRETE_FINITE_PAST_ACTION}|${CONCRETE_PAST_PARTICIPLE})|${CONCRETE_FINITE_PAST_ACTION})`;
 
 const CONCRETE_PAST_ACTION_PATTERN =
     new RegExp(
-        String.raw`\b${CONCRETE_PAST_SUBJECT}\s+(?:(?:had|has)\s+)?${CONCRETE_PAST_ACTION}\b`,
+        String.raw`\b${CONCRETE_PAST_SUBJECT}\s+${CONCRETE_HISTORICAL_ACTION}\b`,
         'iu',
     );
 
@@ -159,7 +165,7 @@ function concreteClaimSubjectTokens(
 ) {
     const pattern =
         new RegExp(
-            String.raw`(?:^|[.!?;,]\s*)(${CONCRETE_PAST_SUBJECT})\s+(?:(?:had|has)\s+)?${CONCRETE_PAST_ACTION}\b`,
+            String.raw`(?:^|[.!?;,]\s*)(${CONCRETE_PAST_SUBJECT})\s+${CONCRETE_HISTORICAL_ACTION}\b`,
             'giu',
         );
     const tokens = new Set();
