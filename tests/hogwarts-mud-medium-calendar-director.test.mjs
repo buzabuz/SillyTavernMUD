@@ -18,8 +18,8 @@ import {
     normalizeNpcIdentity,
 } from '../public/scripts/extensions/hogwarts-mud/domain/npc-identity-schema.js';
 import {
-    createDirectorWorkflows,
-} from '../public/scripts/extensions/hogwarts-mud/workflows/directors.js';
+    getDeterministicTimePolicy,
+} from '../public/scripts/extensions/hogwarts-mud/domain/turn-time.js';
 import {
     createMediumCalendarDirectorPrompt,
     createMediumCalendarDirectorWorkflow,
@@ -219,11 +219,6 @@ function createState(
                 CURRENT_CLOCK,
         },
         modelSlots: {},
-        dailyDirector: {
-            date: '',
-            status: 'idle',
-            plan: null,
-        },
         actorLibrary: [{
             id: HARRY_ID,
             name:
@@ -531,7 +526,7 @@ function createPlanningHarness(
                             'medium_profile',
                     },
                 }),
-            async sendRoleRequest(
+            async sendModelTaskRequest(
                 roleSlot,
                 prompt,
             ) {
@@ -604,7 +599,7 @@ function createOrdinaryTagEntries() {
     );
 }
 
-test('Medium trigger detection covers horizon, day rollover, successful high planning and conservative explicit commitments', () => {
+test('Medium trigger detection covers horizon, successful high planning and conservative explicit commitments without day rollover', () => {
     const adequate =
         createState(
             [],
@@ -662,9 +657,7 @@ test('Medium trigger detection covers horizon, day rollover, successful high pla
                     '1991-09-02 · 23:59',
             },
         ).reasons,
-        [
-            'day_changed',
-        ],
+        [],
     );
     assert.deepEqual(
         evaluateMediumCalendarTriggers(
@@ -758,7 +751,7 @@ test('Medium prompt and proposal exclude temporary, provisional, and Identity-in
             },
         );
     assert.deepEqual(
-        context.admittedActorStates
+        context.admittedActorDirectory
             .map(actor => actor.id),
         [
             HARRY_ID,
@@ -780,7 +773,7 @@ test('Medium prompt and proposal exclude temporary, provisional, and Identity-in
         );
     assert.deepEqual(
         promptContext
-            .admittedActorStates
+            .admittedActorDirectory
             .map(actor => actor.id),
         [
             HARRY_ID,
@@ -938,18 +931,12 @@ test('Medium expands active or planned beats into four stable slots and keeps or
         ],
     );
     assert.equal(
-        context
-            .dailyScheduleGuidance
-            .coverage[0]
-            .date,
-        '1991-09-03',
-    );
-    assert.equal(
-        context
-            .dailyScheduleGuidance
-            .coverage.at(-1)
-            .date,
-        '1991-09-17',
+        Object.hasOwn(
+            context
+                .dailyScheduleGuidance,
+            'coverage',
+        ),
+        false,
     );
 
     const plannedState =
@@ -1369,14 +1356,8 @@ test('Medium planning reads all required authority and atomically advances horiz
                 .content,
         );
     assert.deepEqual(
-        promptContext.highEntries
-            .map(entry =>
-                entry.id),
-        [],
-    );
-    assert.deepEqual(
         promptContext
-            .currentAndFutureMediumEntries
+            .existingSchedules
             .map(entry =>
                 entry.id),
         [
@@ -1391,27 +1372,19 @@ test('Medium planning reads all required authority and atomically advances horiz
     );
     assert.deepEqual(
         promptContext
-            .admittedActorStates
-            .map(actor => [
-                actor.id,
-                actor.present,
-                actor.roomId,
-            ]),
+            .admittedActorDirectory
+            .map(actor =>
+                actor.id),
         [
-            [
-                HARRY_ID,
-                true,
-                'charms_classroom',
-            ],
-            [
-                HERMIONE_ID,
-                false,
-                'three_broomsticks',
-            ],
+            HARRY_ID,
+            HERMIONE_ID,
         ],
     );
     assert.ok(
-        promptContext.mapAuthority,
+        promptContext
+            .locationDirectory
+            .length >
+            0,
     );
     assert.deepEqual(
         {
@@ -1656,227 +1629,16 @@ test('all ordinary schedule tags, including canon, use identical Medium validati
     );
 });
 
-function createDailyHarness(
-    state,
-) {
-    const calls = [];
-    const context = {
-        chat: [{
-            is_user: true,
-            mes:
-                'I keep writing.',
-        }],
-        chatMetadata: {
-            hogwartsMud:
-                state,
+test('retired Daily Director is replaced by one deterministic time policy', () => {
+    assert.deepEqual(
+        getDeterministicTimePolicy(),
+        {
+            defaultMinutes: 15,
+            movementMinutes: 15,
+            investigationMinutes: 30,
+            extendedActionMinutes: 60,
+            instantaneousMagicMinutes: 1,
         },
-        async saveMetadata() {},
-    };
-    const workflow =
-        createDirectorWorkflows({
-            CONTEXT_SIZE_PRESETS: {
-                rich: 120000,
-            },
-            DEFAULT_MODEL_SLOTS: {
-                medium: {
-                    maxResponseLength:
-                        12000,
-                },
-            },
-            applySystemPrompt() {},
-            buildActorSelectionPolicy:
-                () => ({}),
-            buildMapAuthorityContext:
-                () => ({}),
-            createContextBudgetPlan:
-                () => ({
-                    recentMessageLimit:
-                        10,
-                    memoryLimits: {},
-                    ragLimit: 4,
-                }),
-            extractRoleResponseText:
-                response =>
-                    response.content,
-            formatRetrievedKnowledge:
-                () => '',
-            getContext:
-                () => context,
-            getMudState:
-                () =>
-                    context
-                        .chatMetadata
-                        .hogwartsMud,
-            getWorldDate:
-                clock =>
-                    clock.slice(
-                        0,
-                        10,
-                    ),
-            isDailyDirectorPlanCurrent:
-                () => false,
-            jobRegistry: {},
-            normalizeActorMemoryProfile:
-                actor => ({
-                    ...actor,
-                    sharedMemories: {},
-                    knowledgeEn: [],
-                }),
-            normalizePacingAssessmentPayload:
-                value => value,
-            parseJsonObject:
-                value =>
-                    JSON.parse(value),
-            projectNpcRuntimeActorsForPrompt:
-                current =>
-                    current.actors,
-            renderAll() {},
-            resolveRoleSlots:
-                () => ({
-                    medium: {
-                        profileId:
-                            'medium',
-                        contextSize:
-                            120000,
-                        maxResponseLength:
-                            12000,
-                    },
-                }),
-            retrieveLocalKnowledge:
-                async () => [],
-            selectSharedMemoriesForContext:
-                () => ({}),
-            async sendRoleRequest(
-                _slot,
-                prompt,
-            ) {
-                calls.push(prompt);
-                return {
-                    content:
-                        JSON.stringify({
-                            date:
-                                '1991-09-03',
-                            actorDirectives: [{
-                                id:
-                                    HARRY_ID,
-                                goalEn:
-                                    'Finish both pressures.',
-                                moodEn:
-                                    'Concentrated.',
-                                guidanceEn:
-                                    'Balance the simultaneous obligations.',
-                            }],
-                            revealedClueIds: [],
-                            timePolicy: {
-                                defaultMinutes:
-                                    15,
-                                movementMinutes:
-                                    15,
-                                investigationMinutes:
-                                    30,
-                                extendedActionMinutes:
-                                    60,
-                                instantaneousMagicMinutes:
-                                    1,
-                            },
-                        }),
-                };
-            },
-            syncLocalKnowledge:
-                async () => {},
-            validatePacingAssessment:
-                () => ({
-                    valid: true,
-                    errors: [],
-                }),
-        });
-    return {
-        calls,
-        context,
-        workflow,
-    };
-}
-
-test('Daily Director reads today, upcoming and every current overlap without writing Calendar', async () => {
-    const state =
-        createState(
-            createOverlapEntries(),
-        );
-    state.actors =
-        state.actors.filter(actor =>
-            actor.id ===
-            HARRY_ID);
-    const harness =
-        createDailyHarness(
-            state,
-        );
-    const before =
-        structuredClone(
-            state.calendar,
-        );
-
-    await harness.workflow
-        .ensureDailyDirectorPlan();
-
-    assert.deepEqual(
-        harness.context
-            .chatMetadata
-            .hogwartsMud
-            .calendar,
-        before,
-    );
-    const payload =
-        JSON.parse(
-            harness.calls[0][1]
-                .content,
-        );
-    const expectedEntries =
-        state.calendar.entries;
-    assert.deepEqual(
-        payload.calendar
-            .currentMoment,
-        expectedEntries,
-        'an absent participant and different suggested location do not filter the date',
-    );
-    assert.deepEqual(
-        payload.calendar.today,
-        expectedEntries,
-    );
-    assert.deepEqual(
-        payload.calendar.upcoming,
-        expectedEntries,
-    );
-    payload.calendar
-        .currentMoment
-        .forEach(entry => {
-            assert.deepEqual(
-                Object.keys(entry),
-                CALENDAR_ENTRY_FIELDS,
-            );
-        });
-    const forbidden =
-        harness.workflow
-            .validateDailyDirectorPlan(
-                {
-                    date:
-                        '1991-09-03',
-                    calendarProposal: {
-                        entries: [],
-                    },
-                    actorDirectives: [],
-                    revealedClueIds: [],
-                    timePolicy: {},
-                },
-                state,
-            );
-    assert.equal(
-        forbidden.valid,
-        false,
-    );
-    assert.match(
-        forbidden.errors
-            .join('；'),
-        /不得输出 Calendar/u,
     );
 });
 
@@ -1992,7 +1754,7 @@ function createTransitionWorkflow() {
     });
 }
 
-test('Daily keeps both overlaps while Performer and Scene Transition receive only the Scene claim and public sources', () => {
+test('Performer and Scene Transition receive only the Scene Calendar claim and public sources', () => {
     const state =
         createState(
             createOverlapEntries(),
@@ -2016,10 +1778,12 @@ test('Daily keeps both overlaps while Performer and Scene Transition receive onl
                 'charms_exam');
     assert.deepEqual(
         performerPayload
+            .sceneFacts
             .calendarEntries,
         expectedEntries,
     );
     performerPayload
+        .sceneFacts
         .calendarEntries
         .forEach(entry => {
             assert.deepEqual(
@@ -2029,25 +1793,28 @@ test('Daily keeps both overlaps while Performer and Scene Transition receive onl
         });
     assert.equal(
         performerPayload
+            .sceneFacts
             .calendarStorySources[0]
             .scheduleId,
         'charms_exam',
     );
     assert.equal(
         performerPayload
+            .sceneFacts
             .calendarStorySources[0]
             .storyBeat.id,
         'first_term_exam_beat',
     );
     assert.equal(
         performerPayload
+            .sceneFacts
             .calendarStorySources[0]
             .storyline.id,
         'first_year_trials',
     );
     assert.match(
         performer[0].content,
-        /only schedules explicitly claimed by currentScene\.calendarEntryIds/u,
+        /sceneFacts contains only schedules explicitly claimed by the current scene/u,
     );
 
     const workflow =
@@ -2096,6 +1863,7 @@ test('Daily keeps both overlaps while Performer and Scene Transition receive onl
             payload
                 .calendarStorySources,
             performerPayload
+                .sceneFacts
                 .calendarStorySources,
         );
         assert.match(
@@ -2173,7 +1941,7 @@ test('context limiting preserves complete Calendar prompt authority under overfl
     );
 });
 
-test('application wiring schedules Medium after successful high planning and committed turns while index stays within its boundary', async () => {
+test('application wiring schedules Medium after high planning but not every ordinary turn', async () => {
     const application =
         await readFile(
             new URL(
@@ -2209,7 +1977,7 @@ test('application wiring schedules Medium after successful high planning and com
 
     assert.match(
         application,
-        /runHighCalendarDirectorSafely\(\{[\s\S]{0,120}?trigger: 'foundation'[\s\S]{0,500}?highPlanningAllowsMedium\([\s\S]{0,100}?highPlanningResult[\s\S]{0,180}?runMediumCalendarDirectorSafely\(\{[\s\S]{0,80}?highPlanningResult/u,
+        /runHighCalendarDirectorSafely\(\{[\s\S]{0,120}?trigger:[\s\S]{0,80}?'opening_world'[\s\S]{0,500}?highPlanningAllowsMedium\([\s\S]{0,100}?highPlanningResult[\s\S]{0,180}?runMediumCalendarDirectorSafely\(\{[\s\S]{0,80}?highPlanningResult/u,
     );
     assert.match(
         application,
@@ -2223,9 +1991,13 @@ test('application wiring schedules Medium after successful high planning and com
         application,
         /runTimelineMoment,/u,
     );
+    assert.doesNotMatch(
+        turn,
+        /runMediumCalendarDirectorSafely/u,
+    );
     assert.match(
         turn,
-        /await runMediumCalendarDirectorSafely\(\{[\s\S]{0,100}?previousClock,[\s\S]{0,100}?playerAction,[\s\S]{0,100}?\}\);[\s\S]{0,100}?state = getMudState\(\);[\s\S]{0,200}?ensureDailyDirectorPlan/u,
+        /await ensureSocialDirectorForAction\(\)/u,
     );
     assert.ok(
         index.split('\n')

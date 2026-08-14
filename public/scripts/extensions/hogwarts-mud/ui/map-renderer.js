@@ -1,3 +1,11 @@
+import {
+    getInteriorMount,
+    listMapsByMountHierarchy,
+} from '../domain/interior-mount.js';
+import {
+    getMapRooms,
+} from '../domain/map-access.js';
+
 export function createMapRenderer(ports) {
     const {
         refs,
@@ -5,7 +13,6 @@ export function createMapRenderer(ports) {
     } = ports;
 
     const {
-        LOCAL_MAP_CATALOG,
         MAP_DIRECTOR_TRIGGERS,
         PRESET_WORLD_MAP,
         applyMapProposal,
@@ -22,7 +29,7 @@ export function createMapRenderer(ports) {
         resolveLocalMapId,
         resolveRoleSlots,
         saveMetadataDebounced,
-        sendRoleRequest,
+        sendMapExpansionRequest,
         validateMapProposal,
     } = ports;
 
@@ -311,11 +318,53 @@ export function createMapRenderer(ports) {
             select.add(new Option('跟随当前位置', 'auto'));
         }
         select.add(new Option('英国魔法世界总览', 'world'));
-        LOCAL_MAP_CATALOG.forEach(item => {
-            select.add(new Option(`${item.name} · ${item.nodeCount} 节点`, item.id));
-        });
-        (mapState.customLocalMaps || []).forEach(map => {
-            select.add(new Option(`${map.name} · ${map.nodes.length} 个固化房间`, map.id));
+        const hierarchy =
+            listMapsByMountHierarchy(
+                mapState,
+            );
+        const mapsById =
+            new Map(
+                hierarchy.map(entry => [
+                    entry.map.id,
+                    entry.map,
+                ]),
+            );
+        hierarchy.forEach(({
+            map,
+            depth,
+        }) => {
+            const mount =
+                getInteriorMount(map);
+            const parentRoom =
+                mount
+                    ? getMapRooms(
+                        mapsById.get(
+                            mount.parentMapId,
+                        ),
+                        mapState,
+                    ).find(room =>
+                        room.id ===
+                            mount.parentRoomId)
+                    : null;
+            const label = [
+                depth
+                    ? `${'  '.repeat(depth)}↳`
+                    : '',
+                parentRoom
+                    ? `${parentRoom.name || parentRoom.nameEn || mount.parentRoomId} /`
+                    : '',
+                map.name ||
+                    map.nameEn ||
+                    map.id,
+                `· ${(map.nodes || []).length} 节点`,
+            ].filter(Boolean)
+                .join(' ');
+            select.add(
+                new Option(
+                    label,
+                    map.id,
+                ),
+            );
         });
         select.value = selectedValue;
         if (!select.value) {
@@ -405,7 +454,7 @@ export function createMapRenderer(ports) {
             button.textContent = '世界演算中…';
         }
         try {
-            const response = await sendRoleRequest(roleSlot, [
+            const response = await sendMapExpansionRequest(roleSlot, [
                 {
                     role: 'system',
                     content: `You are the World Director for a persistent Harry Potter RPG. First search the supplied preset world and local-map catalog. Propose a new top-level location only when no preset room or location can represent the physical place created by the event. Output one JSON object and no prose:
@@ -419,7 +468,6 @@ Never delete or rename a preset location. Ordinary movement and scene descriptio
                         currentLocation: state.location,
                         character: state.character,
                         mapAuthority: buildMapAuthorityContext(state),
-                        currentMapState: state.map,
                     }),
                 },
             ], { json: true });

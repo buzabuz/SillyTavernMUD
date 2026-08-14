@@ -14,7 +14,7 @@ import {
 
 const HIGH_CALENDAR_TRIGGERS =
     new Set([
-        'foundation',
+        'opening_world',
         'high_transition',
     ]);
 const TERMINAL_STORYLINE_STATUSES =
@@ -291,7 +291,7 @@ function currentOrFutureStoryState(
     };
 }
 
-function hasFoundationStoryPlan(
+function hasOpeningWorldStoryPlan(
     worldState,
 ) {
     const storylines =
@@ -420,7 +420,7 @@ function validateHighTransitionScope(
 export function projectHighCalendarDirectorContext(
     worldState,
     {
-        trigger = 'foundation',
+        trigger = 'opening_world',
     } = {},
 ) {
     if (
@@ -428,7 +428,7 @@ export function projectHighCalendarDirectorContext(
             .has(trigger)
     ) {
         throw new TypeError(
-            'High Calendar trigger 必须是 foundation 或 high_transition。',
+            'High Calendar trigger 必须是 opening_world 或 high_transition。',
         );
     }
     const admittedActors =
@@ -506,7 +506,7 @@ export function validateHighCalendarDirectorProposal(
     proposal,
     worldState,
     {
-        trigger = 'foundation',
+        trigger = 'opening_world',
     } = {},
 ) {
     const validation =
@@ -527,7 +527,7 @@ export function validateHighCalendarDirectorProposal(
     }
     if (
         trigger ===
-            'foundation' &&
+            'opening_world' &&
         (
             validation.storylines
                 .length === 0 ||
@@ -536,7 +536,7 @@ export function validateHighCalendarDirectorProposal(
         )
     ) {
         errors.push(
-            'Foundation High Calendar proposal 必须提交 storyline 及其 storyBeat 学期节奏。',
+            'Opening World High Calendar proposal 必须提交 storyline 及其 storyBeat 学期节奏。',
         );
     }
     validation.storylines
@@ -572,7 +572,7 @@ export function validateHighCalendarDirectorProposal(
     }
     if (
         trigger ===
-        'foundation'
+        'opening_world'
     ) {
         const incomingStorylineIds =
             new Set(
@@ -591,7 +591,7 @@ export function validateHighCalendarDirectorProposal(
                             storylineId)
                 ) {
                     errors.push(
-                        `Foundation High Calendar storyline ${storylineId} 缺少学期 storyBeat。`,
+                        `Opening World High Calendar storyline ${storylineId} 缺少学期 storyBeat。`,
                     );
                 }
             });
@@ -617,7 +617,7 @@ export function validateHighCalendarDirectorProposal(
 export function createHighCalendarDirectorPrompt(
     worldState,
     {
-        trigger = 'foundation',
+        trigger = 'opening_world',
     } = {},
 ) {
     const context =
@@ -628,7 +628,7 @@ export function createHighCalendarDirectorPrompt(
             },
         );
     const triggerInstruction =
-        trigger === 'foundation'
+        trigger === 'opening_world'
             ? 'Create at least one long-span storyline and one ordered storyBeat for every academic term it spans. A four-school-year storyline has eight term beats.'
             : 'Refresh only current or future storylines and storyBeats supplied in context. Keep past, realized, resolved and cancelled records untouched. If no change is needed, return storylines: [] and storyBeats: [].';
     return [
@@ -721,7 +721,7 @@ export function createHighCalendarDirectorWorkflow(
         renderAll =
         () => {},
         resolveRoleSlots,
-        sendRoleRequest,
+        sendModelTaskRequest,
     } = ports;
 
     async function generateHighCalendarProposal(
@@ -744,7 +744,7 @@ export function createHighCalendarDirectorWorkflow(
             attempt++
         ) {
             const response =
-                await sendRoleRequest(
+                await sendModelTaskRequest(
                     roleSlot,
                     attempt === 0
                         ? prompt
@@ -771,9 +771,6 @@ export function createHighCalendarDirectorWorkflow(
                                             prompt[1]
                                                 .content,
                                         ),
-                                    requiredSchema:
-                                        prompt[0]
-                                            .content,
                                 }),
                         }],
                     {
@@ -820,7 +817,7 @@ export function createHighCalendarDirectorWorkflow(
 
     async function runHighCalendarDirector(
         {
-            trigger = 'foundation',
+            trigger = 'opening_world',
             force = false,
         } = {},
     ) {
@@ -829,15 +826,15 @@ export function createHighCalendarDirectorWorkflow(
                 .has(trigger)
         ) {
             throw new TypeError(
-                'High Calendar trigger 必须是 foundation 或 high_transition。',
+                'High Calendar trigger 必须是 opening_world 或 high_transition。',
             );
         }
         const initialState =
             getMudState();
         if (
-            trigger === 'foundation' &&
+            trigger === 'opening_world' &&
             !force &&
-            hasFoundationStoryPlan(
+            hasOpeningWorldStoryPlan(
                 initialState,
             )
         ) {
@@ -845,7 +842,7 @@ export function createHighCalendarDirectorWorkflow(
                 status:
                     'skipped',
                 reason:
-                    'foundation_already_planned',
+                    'opening_world_already_planned',
                 state:
                     initialState,
             };

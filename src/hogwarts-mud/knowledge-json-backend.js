@@ -4,7 +4,12 @@ import path from 'node:path';
 import { sync as writeFileAtomicSync } from 'write-file-atomic';
 
 import {
+    KNOWLEDGE_API_CONTRACT_VERSION,
     KNOWLEDGE_CATEGORIES,
+    KNOWLEDGE_INDEX_FORMAT_VERSION,
+    KNOWLEDGE_PROJECTOR_VERSION,
+    KNOWLEDGE_REVISION_POLICIES,
+    computeKnowledgeProjectionFingerprint,
     hydrateKnowledgeRecords,
     normalizeKnowledgeId,
 } from '../../public/scripts/extensions/hogwarts-mud/domain/knowledge-projector-v2.js';
@@ -173,7 +178,21 @@ export class JsonKnowledgeBackend {
             readJson(indexPath, null);
         return (
             index &&
-            Number(index.version) === 2 &&
+            Number(index.version) ===
+                KNOWLEDGE_INDEX_FORMAT_VERSION &&
+            Number(
+                index.projectorVersion,
+            ) ===
+                KNOWLEDGE_PROJECTOR_VERSION &&
+            Number(
+                index
+                    .knowledgeApiContractVersion,
+            ) ===
+                KNOWLEDGE_API_CONTRACT_VERSION &&
+            typeof index
+                .projectionFingerprint ===
+                'string' &&
+            index.projectionFingerprint &&
             index.records &&
             typeof index.records ===
                 'object'
@@ -225,6 +244,20 @@ export class JsonKnowledgeBackend {
                 !indexMissing,
             backend: this.name,
             indexMissing,
+            knowledgeApiContractVersion:
+                index
+                    ?.knowledgeApiContractVersion ??
+                null,
+            indexFormatVersion:
+                index?.version ??
+                null,
+            projectorVersion:
+                index?.projectorVersion ??
+                null,
+            projectionFingerprint:
+                index
+                    ?.projectionFingerprint ||
+                '',
             stateRevision:
                 index?.stateRevision ??
                 null,
@@ -261,11 +294,19 @@ export class JsonKnowledgeBackend {
         stateRevision,
     ) {
         return {
-            version: 2,
-            projectorVersion: 2,
+            version:
+                KNOWLEDGE_INDEX_FORMAT_VERSION,
+            projectorVersion:
+                KNOWLEDGE_PROJECTOR_VERSION,
+            knowledgeApiContractVersion:
+                KNOWLEDGE_API_CONTRACT_VERSION,
             timelineId,
             timelineEpoch,
             stateRevision,
+            projectionFingerprint:
+                computeKnowledgeProjectionFingerprint(
+                    [],
+                ),
             records: {},
         };
     }
@@ -409,6 +450,12 @@ export class JsonKnowledgeBackend {
             timelineEpoch;
         index.stateRevision =
             stateRevision;
+        index.projectionFingerprint =
+            computeKnowledgeProjectionFingerprint(
+                Object.values(
+                    index.records,
+                ),
+            );
         writeFileAtomicSync(
             this.indexPath(timelineId),
             JSON.stringify(
@@ -420,6 +467,17 @@ export class JsonKnowledgeBackend {
         );
         return {
             backend: this.name,
+            knowledgeApiContractVersion:
+                KNOWLEDGE_API_CONTRACT_VERSION,
+            indexFormatVersion:
+                KNOWLEDGE_INDEX_FORMAT_VERSION,
+            projectorVersion:
+                KNOWLEDGE_PROJECTOR_VERSION,
+            projectionFingerprint:
+                index
+                    .projectionFingerprint,
+            stateRevision:
+                index.stateRevision,
             records: saved,
             removed,
             root: timelineRoot,
@@ -580,7 +638,12 @@ export class JsonKnowledgeBackend {
         const hydrated =
             hydrateKnowledgeRecords(
                 records,
-                filters,
+                {
+                    ...filters,
+                    revisionPolicy:
+                        KNOWLEDGE_REVISION_POLICIES
+                            .NOT_FUTURE,
+                },
             );
         const ranked =
             hydrated.records

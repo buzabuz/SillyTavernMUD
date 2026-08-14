@@ -15,6 +15,12 @@ import {
 import {
     migrateTimelineAppraisalLifecycleV4,
 } from '../domain/timeline-appraisal-cutover.js';
+import {
+    normalizeModelTaskRuntime,
+} from '../domain/model-task-runtime.js';
+import {
+    migrateInteriorMountAuthority,
+} from '../domain/interior-mount.js';
 
 export function createLifecycleRuntime(ports) {
     const {
@@ -89,9 +95,16 @@ export function createLifecycleRuntime(ports) {
             );
         state =
             actorContextMigration.state;
+        const interiorMountMigration =
+            migrateInteriorMountAuthority(
+                state,
+            );
+        state =
+            interiorMountMigration.state;
         let changed =
             lifecycleCutover.changed ||
-            actorContextMigration.changed;
+            actorContextMigration.changed ||
+            interiorMountMigration.changed;
         let saveOptions;
         const actorContextV1 =
             state.actorContextVersion ===
@@ -116,6 +129,41 @@ export function createLifecycleRuntime(ports) {
             state.modelSlots =
             normalizedModelSlots;
             changed = true;
+        }
+        const normalizedTaskRuntime =
+            normalizeModelTaskRuntime(
+                state
+                    .modelTaskRuntime,
+            );
+        if (
+            JSON.stringify(
+                state
+                    .modelTaskRuntime ||
+                {},
+            ) !==
+            JSON.stringify(
+                normalizedTaskRuntime,
+            )
+        ) {
+            state.modelTaskRuntime =
+                normalizedTaskRuntime;
+            changed = true;
+        }
+        for (const retiredField of [
+            'dailyDirector',
+            'directorFoundation',
+        ]) {
+            if (
+                Object.hasOwn(
+                    state,
+                    retiredField,
+                )
+            ) {
+                delete state[
+                    retiredField
+                ];
+                changed = true;
+            }
         }
         if (!actorContextV1) {
             const relationshipMigration =

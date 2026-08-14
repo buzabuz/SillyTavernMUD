@@ -1,10 +1,6 @@
 // Extracted from the helpers compatibility facade for Task 4.
 
 import {
-    CANON_SETTING_TAG_VALUES,
-} from '../canon-characters.js';
-
-import {
     LOCAL_MAP_SCHEMA_VERSION,
 } from '../map-pack.js';
 
@@ -33,13 +29,18 @@ import {
 import {
     assertActorContextStateV1,
     recordActorAppraisalV1,
-    removeActorV1,
     upsertActorV1,
 } from './actor-context-runtime.js';
 
 import {
     getCanonicalPerformanceCore,
 } from './actor-core-canon.js';
+
+import {
+    projectActorCreationCore,
+    projectActorCreationRuntime,
+    validateActorCreationProposal,
+} from './actor-creation-proposal.js';
 
 import {
     ACTOR_KNOWLEDGE_VERSION,
@@ -107,6 +108,10 @@ import {
 import {
     normalizeSocialGraph,
 } from './social-migration.js';
+
+import {
+    createDefaultModelTaskRuntime,
+} from './model-task-runtime.js';
 
 import {
     inferActorRoomId,
@@ -240,45 +245,6 @@ function actorCoreSource(
     };
 }
 
-function openingRuntimeSource(
-    actor,
-    mapId,
-    roomId,
-) {
-    return {
-        mapId,
-        roomId,
-        present:
-            actor?.present !== false,
-        lifeStatus:
-            actor?.lifeStatus ||
-            'alive',
-        lifeStatusPermanent:
-            actor
-                ?.lifeStatusPermanent ===
-            true,
-        lifeStatusDetailEn:
-            actor
-                ?.lifeStatusDetailEn ||
-            'Alive.',
-        lifeStatusSinceClock:
-            actor
-                ?.lifeStatusSinceClock ||
-            '',
-        currentActivityEn:
-            actor
-                ?.currentActivityEn ||
-            '',
-        currentIntentEn:
-            actor?.currentIntentEn ||
-            '',
-        currentGoalEn:
-            actor?.currentGoalEn ||
-            '',
-        temporary: false,
-    };
-}
-
 function recordOpeningAppraisals(
     state,
     actor,
@@ -317,7 +283,7 @@ function openingRelationshipEdge(
     const relationship =
         String(
             actor
-                ?.relationshipToPlayerEn ||
+                ?.initialRelationshipToPlayerEn ||
             '',
         )
             .normalize('NFKC')
@@ -441,7 +407,6 @@ export function createInitialWorldState(character, modelSlots, campaign = create
             customLocalMaps: [],
             generatedLocalNodes: [],
             generatedLocalExits: [],
-            interiorMapBindings: {},
             nodeOverrides: {},
             roomStates: {},
             exitStates: {},
@@ -477,13 +442,6 @@ export function createInitialWorldState(character, modelSlots, campaign = create
             lastElapsedMinutes: 0,
             lastResolvedAt: null,
         },
-        dailyDirector: {
-            date: '',
-            status: 'pending',
-            error: '',
-            plan: null,
-            settledAt: null,
-        },
         pacingDirector: {
             status: 'idle',
             error: '',
@@ -493,6 +451,8 @@ export function createInitialWorldState(character, modelSlots, campaign = create
             assessment: null,
             pendingBeat: null,
         },
+        modelTaskRuntime:
+            createDefaultModelTaskRuntime(),
         causalCollapse:
             normalizeCausalCollapseState(),
         actorContextVersion,
@@ -548,11 +508,6 @@ export function createInitialWorldState(character, modelSlots, campaign = create
             categories: {},
             lastSyncedAt: null,
         },
-        directorFoundation: {
-            status: 'pending',
-            error: '',
-            committedAt: null,
-        },
         opening: {
             status: 'pending',
             attempt: 0,
@@ -583,143 +538,156 @@ export function createInitialWorldState(character, modelSlots, campaign = create
     };
 }
 
-export function validateDirectorFoundation(foundation, presentActors = []) {
+function validateOpeningStoryArc(
+    storyArc,
+    actorIds,
+) {
     const errors = [];
-    if (!foundation || typeof foundation !== 'object' || Array.isArray(foundation)) {
-        return { valid: false, errors: ['导演基础包必须是对象。'] };
+    if (
+        !storyArc ||
+        typeof storyArc !== 'object' ||
+        Array.isArray(storyArc)
+    ) {
+        return [
+            '导演必须预写一条隐藏探索故事线。',
+        ];
     }
-
-    const actorLibrary = Array.isArray(foundation.actorLibrary) ? foundation.actorLibrary : [];
-    if (actorLibrary.length < 3 || actorLibrary.length > 24) {
-        errors.push('出场角色库必须包含 3–24 名角色。');
-    }
-    const actorIds = new Set();
-    actorLibrary.forEach(actor => {
-        if (!OPENING_ID_PATTERN.test(String(actor.id || '')) || actorIds.has(actor.id)) {
-            errors.push('出场角色库 ID 无效或重复。');
-        }
-        actorIds.add(actor.id);
-        for (const key of [
-            'nameEn',
-            'roleEn',
-            'relationshipToPlayerEn',
-            'impressionOfPlayerEn',
-            'publicDescriptionEn',
-            'publicBackgroundEn',
-            'personalityEn',
-            'speechStyleEn',
-            'privateGoalEn',
-            'fearEn',
-            'secretEn',
-        ]) {
-            if (!String(actor[key] || '').trim()) {
-                errors.push(`角色 ${actor.id || '?'} 缺少 ${key}。`);
-            }
-        }
-        if (!Array.isArray(actor.knowledgeEn) || actor.knowledgeEn.length < 1) {
-            errors.push(`角色 ${actor.id || '?'} 必须有独立知识边界。`);
-        }
+    for (const key of [
+        'id',
+        'titleEn',
+        'hookEn',
+        'hiddenTruthEn',
+        'stakesEn',
+    ]) {
         if (
-            !/^\d{4}-\d{2}-\d{2}$/
-                .test(
-                    String(
-                        actor.birthDate ||
-                        '',
-                    ),
-                )
+            !String(
+                storyArc[key] || '',
+            ).trim()
         ) {
             errors.push(
-                `角色 ${actor.id || '?'} 必须固化出生日期。`,
+                `隐藏探索线缺少 ${key}。`,
             );
         }
-        if (
-            !Array.isArray(
-                actor.settingTags,
-            ) ||
-            actor.settingTags.length < 2 ||
-            actor.settingTags.length > 5 ||
-            actor.settingTags.some(
-                tag =>
-                    !CANON_SETTING_TAG_VALUES
-                        .includes(tag))
-        ) {
-            errors.push(
-                `角色 ${actor.id || '?'} 必须有 2–5 个固定设定标签。`,
-            );
-        }
-    });
-
-    const presentIds = (presentActors || []).map(actor => actor.id).filter(Boolean);
-    presentIds.forEach(actorId => {
-        if (!actorIds.has(actorId)) {
-            errors.push(`在场人物 ${actorId} 不存在于出场角色库。`);
-        }
-        const profile = actorLibrary.find(
-            actor =>
-                actor.id === actorId,
+    }
+    if (
+        storyArc.id &&
+        !OPENING_ID_PATTERN.test(
+            String(storyArc.id),
+        )
+    ) {
+        errors.push(
+            '隐藏探索线 ID 必须是 snake_case。',
         );
-        if (!isValidFirstImpression(
-            profile
-                ?.firstImpressionOfPlayerEn,
-        )) {
-            errors.push(
-                `在场人物 ${actorId} 必须有基于玩家可见特征的初见印象。`,
-            );
-        }
-    });
-
-    const storyArc = foundation.storyArc;
-    if (!storyArc || typeof storyArc !== 'object' || Array.isArray(storyArc)) {
-        errors.push('导演必须预写一条隐藏探索故事线。');
-        return { valid: false, errors };
     }
-    for (const key of ['id', 'titleEn', 'hookEn', 'hiddenTruthEn', 'stakesEn']) {
-        if (!String(storyArc[key] || '').trim()) {
-            errors.push(`隐藏探索线缺少 ${key}。`);
-        }
+    const involvedActorIds =
+        Array.isArray(
+            storyArc.involvedActorIds,
+        )
+            ? storyArc.involvedActorIds
+            : [];
+    if (
+        involvedActorIds.length < 2 ||
+        involvedActorIds.some(actorId =>
+            !actorIds.has(actorId))
+    ) {
+        errors.push(
+            '隐藏探索线必须引用角色库中的至少两名角色。',
+        );
     }
-    if (storyArc.id && !OPENING_ID_PATTERN.test(String(storyArc.id))) {
-        errors.push('隐藏探索线 ID 必须是 snake_case。');
-    }
-    const involvedActorIds = Array.isArray(storyArc.involvedActorIds) ? storyArc.involvedActorIds : [];
-    if (involvedActorIds.length < 2 || involvedActorIds.some(actorId => !actorIds.has(actorId))) {
-        errors.push('隐藏探索线必须引用角色库中的至少两名角色。');
-    }
-
-    const cluePlan = Array.isArray(storyArc.cluePlan) ? storyArc.cluePlan : [];
-    if (cluePlan.length < 3 || cluePlan.length > 8) {
-        errors.push('隐藏探索线必须预写 3–8 个线索节点。');
+    const cluePlan =
+        Array.isArray(
+            storyArc.cluePlan,
+        )
+            ? storyArc.cluePlan
+            : [];
+    if (
+        cluePlan.length < 3 ||
+        cluePlan.length > 8
+    ) {
+        errors.push(
+            '隐藏探索线必须预写 3–8 个线索节点。',
+        );
     }
     const clueIds = new Set();
     const clueSources = new Set();
     cluePlan.forEach(clue => {
-        if (!OPENING_ID_PATTERN.test(String(clue.id || '')) || clueIds.has(clue.id)) {
-            errors.push('隐藏线索 ID 无效或重复。');
+        if (
+            !OPENING_ID_PATTERN.test(
+                String(clue.id || ''),
+            ) ||
+            clueIds.has(clue.id)
+        ) {
+            errors.push(
+                '隐藏线索 ID 无效或重复。',
+            );
         }
         clueIds.add(clue.id);
-        for (const key of ['labelEn', 'hiddenFactEn', 'playerFacingDiscoveryEn', 'unlockConditionEn']) {
-            if (!String(clue[key] || '').trim()) {
-                errors.push(`隐藏线索 ${clue.id || '?'} 缺少 ${key}。`);
+        for (const key of [
+            'labelEn',
+            'hiddenFactEn',
+            'playerFacingDiscoveryEn',
+            'unlockConditionEn',
+        ]) {
+            if (
+                !String(
+                    clue[key] || '',
+                ).trim()
+            ) {
+                errors.push(
+                    `隐藏线索 ${clue.id || '?'} 缺少 ${key}。`,
+                );
             }
         }
-        const sourceActorIds = Array.isArray(clue.sourceActorIds) ? clue.sourceActorIds : [];
-        const sourceLocationIds = Array.isArray(clue.sourceLocationIds) ? clue.sourceLocationIds : [];
-        if (!sourceActorIds.length && !sourceLocationIds.length && !String(clue.sourceItemId || '').trim()) {
-            errors.push(`隐藏线索 ${clue.id || '?'} 必须绑定人物、地点或物品来源。`);
+        const sourceActorIds =
+            Array.isArray(
+                clue.sourceActorIds,
+            )
+                ? clue.sourceActorIds
+                : [];
+        const sourceLocationIds =
+            Array.isArray(
+                clue.sourceLocationIds,
+            )
+                ? clue.sourceLocationIds
+                : [];
+        if (
+            !sourceActorIds.length &&
+            !sourceLocationIds.length &&
+            !String(
+                clue.sourceItemId || '',
+            ).trim()
+        ) {
+            errors.push(
+                `隐藏线索 ${clue.id || '?'} 必须绑定人物、地点或物品来源。`,
+            );
         }
         sourceActorIds.forEach(actorId => {
-            clueSources.add(`actor:${actorId}`);
+            clueSources.add(
+                `actor:${actorId}`,
+            );
             if (!actorIds.has(actorId)) {
-                errors.push(`隐藏线索 ${clue.id || '?'} 引用了不存在的角色。`);
+                errors.push(
+                    `隐藏线索 ${clue.id || '?'} 引用了不存在的角色。`,
+                );
             }
         });
-        sourceLocationIds.forEach(locationId => clueSources.add(`location:${locationId}`));
-        if (clue.sourceItemId) clueSources.add(`item:${clue.sourceItemId}`);
+        sourceLocationIds
+            .forEach(locationId =>
+                clueSources.add(
+                    `location:${locationId}`,
+                ));
+        if (clue.sourceItemId) {
+            clueSources.add(
+                `item:${clue.sourceItemId}`,
+            );
+        }
     });
     if (clueSources.size < 3) {
-        errors.push('隐藏探索线的线索必须分布在至少三个不同来源。');
+        errors.push(
+            '隐藏探索线的线索必须分布在至少三个不同来源。',
+        );
     }
-    return { valid: errors.length === 0, errors };
+    return errors;
 }
 
 export function validateOpeningWorldPackage(opening, character, campaign) {
@@ -768,6 +736,8 @@ export function validateOpeningWorldPackage(opening, character, campaign) {
     }
 
     const map = opening.scene?.map;
+    const openingRoomIds =
+        new Set();
     if (!map || typeof map !== 'object') {
         errors.push('scene.map 不能为空。');
     } else {
@@ -785,12 +755,11 @@ export function validateOpeningWorldPackage(opening, character, campaign) {
             }
             levelIds.add(level.id);
         });
-        const roomIds = new Set();
         rooms.forEach(room => {
-            if (!OPENING_ID_PATTERN.test(String(room.id || '')) || roomIds.has(room.id)) {
+            if (!OPENING_ID_PATTERN.test(String(room.id || '')) || openingRoomIds.has(room.id)) {
                 errors.push('房间 ID 无效或重复。');
             }
-            roomIds.add(room.id);
+            openingRoomIds.add(room.id);
             if (!levelIds.has(room.levelId)) errors.push(`房间 ${room.id || '?'} 引用了不存在的分区。`);
             if (!String(room.nameEn || '').trim()) errors.push(`房间 ${room.id || '?'} 缺少名称。`);
             if (!Number.isFinite(room.x) || room.x < 5 || room.x > 95 ||
@@ -798,9 +767,9 @@ export function validateOpeningWorldPackage(opening, character, campaign) {
                 errors.push(`房间 ${room.id || '?'} 坐标必须在 5–95。`);
             }
         });
-        if (!roomIds.has(map.currentRoomId)) errors.push('currentRoomId 必须引用地图中的房间。');
+        if (!openingRoomIds.has(map.currentRoomId)) errors.push('currentRoomId 必须引用地图中的房间。');
         exits.forEach(route => {
-            if (!roomIds.has(route.from) || !roomIds.has(route.to) || route.from === route.to) {
+            if (!openingRoomIds.has(route.from) || !openingRoomIds.has(route.to) || route.from === route.to) {
                 errors.push('地图出口引用了不存在或相同的房间。');
             }
         });
@@ -812,7 +781,7 @@ export function validateOpeningWorldPackage(opening, character, campaign) {
                 }
             }
             if (intent?.mapId !== map.id ||
-                !roomIds.has(intent?.roomId)) {
+                !openingRoomIds.has(intent?.roomId)) {
                 errors.push('nextSceneIntent 必须引用开场地图中的已有房间。');
             }
             if (!['medium', 'high'].includes(intent?.tier)) {
@@ -821,37 +790,86 @@ export function validateOpeningWorldPackage(opening, character, campaign) {
         }
     }
 
-    const actors = Array.isArray(opening.actors) ? opening.actors : [];
-    if (actors.length < 1 || actors.length > 8) errors.push('开场必须包含 1–8 名在场 NPC。');
+    const actorProposals =
+        Array.isArray(
+            opening.actorProposals,
+        )
+            ? opening.actorProposals
+            : [];
+    if (
+        actorProposals.length < 3 ||
+        actorProposals.length > 8
+    ) {
+        errors.push(
+            '开场必须包含 3–8 名 Actor proposal。',
+        );
+    }
     const actorIds = new Set();
-    actors.forEach(actor => {
-        if (!OPENING_ID_PATTERN.test(String(actor.id || '')) || actorIds.has(actor.id)) {
-            errors.push('在场人物 ID 无效或重复。');
-        }
-        actorIds.add(actor.id);
-        for (const key of ['nameEn', 'roleEn', 'relationshipToPlayerEn', 'firstImpressionOfPlayerEn', 'impressionOfPlayerEn', 'currentActivityEn', 'currentIntentEn']) {
-            if (!String(actor[key] || '').trim()) errors.push(`人物 ${actor.id || '?'} 缺少 ${key}。`);
-        }
-        if (!isValidFirstImpression(
-            actor.firstImpressionOfPlayerEn,
-        )) {
+    let presentActorCount = 0;
+    actorProposals.forEach(proposal => {
+        const validation =
+            validateActorCreationProposal(
+                proposal,
+                {
+                    mode: 'opening',
+                },
+            );
+        errors.push(
+            ...validation.errors.map(error =>
+                `${proposal?.id || '?'}: ${error}`),
+        );
+        if (actorIds.has(validation.value.id)) {
             errors.push(
-                `人物 ${actor.id || '?'} 的初见印象必须是非占位的 1–${FIRST_IMPRESSION_MAX_WORDS} 词主观观察。`,
+                'Actor proposal ID 不能重复。',
+            );
+        }
+        actorIds.add(validation.value.id);
+        if (validation.value.runtime.present) {
+            presentActorCount += 1;
+            if (
+                !openingRoomIds.has(
+                    validation.value
+                        .runtime.roomId,
+                )
+            ) {
+                errors.push(
+                    `在场人物 ${validation.value.id} 引用了不存在的开场房间。`,
+                );
+            }
+        }
+        if (
+            validation.value.runtime.present &&
+            !isValidFirstImpression(
+                validation.value
+                    .firstImpressionOfPlayerEn,
+            )
+        ) {
+            errors.push(
+                `人物 ${validation.value.id || '?'} 的初见印象必须是非占位的 1–${FIRST_IMPRESSION_MAX_WORDS} 词主观观察。`,
             );
         }
     });
+    if (
+        presentActorCount < 1 ||
+        presentActorCount > 8
+    ) {
+        errors.push(
+            '开场必须包含 1–8 名在场 NPC。',
+        );
+    }
     const playerName = String(character?.identity?.name || '').trim().toLocaleLowerCase();
-    if (actors.some(actor => String(actor.nameEn || '').trim().toLocaleLowerCase() === playerName)) {
+    if (actorProposals.some(actor => String(actor.nameEn || '').trim().toLocaleLowerCase() === playerName)) {
         errors.push('玩家角色不能被重复列为 NPC。');
     }
-    if (actors.some(actor => /hogwarts world director|world narrator|storage narrator/i.test(String(actor.nameEn || '')))) {
+    if (actorProposals.some(actor => /hogwarts world director|world narrator|storage narrator/i.test(String(actor.nameEn || '')))) {
         errors.push('后台存档叙事者不能作为在场人物。');
     }
-    const foundationValidation = validateDirectorFoundation({
-        actorLibrary: opening.actorLibrary,
-        storyArc: opening.storyArc,
-    }, actors);
-    errors.push(...foundationValidation.errors);
+    errors.push(
+        ...validateOpeningStoryArc(
+            opening.storyArc,
+            actorIds,
+        ),
+    );
     return { valid: errors.length === 0, errors };
 }
 
@@ -862,7 +880,10 @@ export function applyOpeningWorldPackage(worldState, opening) {
     const sceneName = display.sceneName || opening.scene.nameEn;
     const customMap = {
         id: map.id,
-        parentWorldNodeId: opening.scene.worldAnchorId || '',
+        worldAnchorId:
+            opening.scene
+                .worldAnchorId ||
+            '',
         name: display.mapName || map.nameEn,
         nameEn: map.nameEn,
         coordinateSystem: 'abstract-grid-100',
@@ -935,80 +956,93 @@ export function applyOpeningWorldPackage(worldState, opening) {
     };
     next.memorySynapse =
         createDefaultMemorySynapse();
-    const openingActors =
-        new Map(
-            (opening.actors || [])
-                .map(actor => [
-                    actor.id,
-                    actor,
-                ]),
-        );
-    for (const profile of (
-        opening.actorLibrary ||
-        []
-    )) {
-        const actor =
-            openingActors.get(
-                profile.id,
-            );
-        const actorRoomId = actor
-            ? (
-                customMap.nodes.some(
-                    room =>
-                        room.id ===
-                        actor.roomId,
-                )
-                    ? actor.roomId
-                    : inferActorRoomId(
-                        actor,
-                        customMap,
-                        map.currentRoomId,
+    const actorProposals =
+        (opening.actorProposals || [])
+            .map(proposal =>
+                validateActorCreationProposal(
+                    proposal,
+                    {
+                        mode: 'opening',
+                    },
+                ).value);
+    for (const proposal of actorProposals) {
+        const actorRoomId =
+            proposal.runtime.present
+                ? (
+                    customMap.nodes.some(
+                        room =>
+                            room.id ===
+                            proposal.runtime
+                                .roomId,
                     )
-            )
-            : '';
+                        ? proposal.runtime
+                            .roomId
+                        : inferActorRoomId(
+                            proposal.runtime,
+                            customMap,
+                            map.currentRoomId,
+                        )
+                )
+                : '';
+        const cast = {
+            origin: 'foundation',
+            introducedClock:
+                proposal.runtime.present
+                    ? opening.clock
+                    : '',
+            introducedTurn:
+                proposal.runtime.present
+                    ? Number(
+                        next.turn
+                            ?.count ||
+                        0,
+                    )
+                    : null,
+        };
         upsertActorV1(
             next,
             {
                 actorId:
-                    profile.id,
+                    proposal.id,
                 coreSource:
                     actorCoreSource(
-                        profile,
-                        {
-                            origin:
-                                profile
-                                    .canonCatalogId
-                                    ? 'canon_catalog'
-                                    : 'foundation',
-                            introducedClock:
-                                actor
-                                    ? opening.clock
-                                    : '',
-                            introducedTurn:
-                                actor
-                                    ? Number(
-                                        next.turn
-                                            ?.count ||
-                                        0,
-                                    )
-                                    : null,
-                        },
+                        projectActorCreationCore(
+                            proposal,
+                            {
+                                cast,
+                            },
+                        ),
+                        cast,
                     ),
                 runtimeSource:
-                    openingRuntimeSource(
-                        actor || {},
-                        actor
-                            ? customMap.id
-                            : '',
-                        actorRoomId,
-                    ),
+                    {
+                        ...projectActorCreationRuntime(
+                            {
+                                ...proposal,
+                                runtime: {
+                                    ...proposal.runtime,
+                                    roomId:
+                                        actorRoomId,
+                                },
+                            },
+                            {
+                                mapId:
+                                    proposal
+                                        .runtime
+                                        .present
+                                        ? customMap.id
+                                        : '',
+                            },
+                        ),
+                        temporary: false,
+                    },
             },
         );
-        if (actor) {
+        if (proposal.runtime.present) {
             recordOpeningAppraisals(
                 next,
-                actor,
-                profile,
+                proposal,
+                proposal,
             );
         }
     }
@@ -1022,9 +1056,12 @@ export function applyOpeningWorldPackage(worldState, opening) {
                     []
                 ),
                 ...(
-                    opening.actors ||
-                    []
-                ).map(
+                    actorProposals
+                )
+                    .filter(proposal =>
+                        proposal.runtime
+                            .present)
+                    .map(
                     openingRelationshipEdge,
                 ),
             ],
@@ -1080,159 +1117,6 @@ export function applyOpeningWorldPackage(worldState, opening) {
         attempt: Number(next.opening?.attempt || 0),
         error: '',
         package: openingPackage,
-        committedAt: new Date().toISOString(),
-    };
-    next.directorFoundation = {
-        status: 'ready',
-        error: '',
-        committedAt: new Date().toISOString(),
-    };
-    return assertActorContextStateV1(
-        next,
-    );
-}
-
-export function applyDirectorFoundation(worldState, foundation) {
-    const validation = validateDirectorFoundation(foundation, worldState.actors);
-    if (!validation.valid) {
-        throw new Error(validation.errors.join('；'));
-    }
-    const next = structuredClone(worldState);
-    const foundationIds =
-        new Set(
-            foundation.actorLibrary
-                .map(actor =>
-                    actor.id),
-        );
-    for (const core of [
-        ...(next.actorLibrary || []),
-    ]) {
-        if (
-            !foundationIds.has(
-                core.id,
-            )
-        ) {
-            removeActorV1(
-                next,
-                core.id,
-            );
-        }
-    }
-    const currentActors =
-        new Map(
-            (next.actors || [])
-                .map(actor => [
-                    actor.id,
-                    actor,
-                ]),
-        );
-    const currentCores =
-        new Map(
-            (next.actorLibrary || [])
-                .map(actor => [
-                    actor.id,
-                    actor,
-                ]),
-        );
-    for (const profile of (
-        foundation.actorLibrary
-    )) {
-        const runtime =
-            currentActors.get(
-                profile.id,
-            ) || {};
-        upsertActorV1(
-            next,
-            {
-                actorId:
-                    profile.id,
-                coreSource:
-                    actorCoreSource(
-                        profile,
-                        currentCores.get(
-                            profile.id,
-                        )?.cast || {
-                            origin:
-                                profile
-                                    .canonCatalogId
-                                    ? 'canon_catalog'
-                                    : 'foundation',
-                            introducedClock:
-                                runtime.present
-                                    ? next.clock
-                                    : '',
-                            introducedTurn:
-                                runtime.present
-                                    ? Number(
-                                        next.turn
-                                            ?.count ||
-                                        0,
-                                    )
-                                    : null,
-                        },
-                    ),
-                runtimeSource: {
-                    mapId:
-                        runtime.mapId ||
-                        '',
-                    roomId:
-                        runtime.roomId ||
-                        '',
-                    present:
-                        runtime.present ===
-                        true,
-                    lifeStatus:
-                        runtime.lifeStatus ||
-                        'alive',
-                    lifeStatusPermanent:
-                        runtime
-                            .lifeStatusPermanent ===
-                        true,
-                    lifeStatusDetailEn:
-                        runtime
-                            .lifeStatusDetailEn ||
-                        'Alive.',
-                    lifeStatusSinceClock:
-                        runtime
-                            .lifeStatusSinceClock ||
-                        '',
-                    currentActivityEn:
-                        runtime
-                            .currentActivityEn ||
-                        '',
-                    currentIntentEn:
-                        runtime
-                            .currentIntentEn ||
-                        '',
-                    currentGoalEn:
-                        runtime
-                            .currentGoalEn ||
-                        '',
-                    temporary:
-                        runtime.temporary ===
-                        true,
-                },
-            },
-        );
-        if (runtime.present === true) {
-            recordOpeningAppraisals(
-                next,
-                runtime,
-                profile,
-            );
-        }
-    }
-    next.storyArcs = [{
-        ...structuredClone(foundation.storyArc),
-        status: foundation.storyArc.status || 'active',
-        revealedClueIds: Array.isArray(foundation.storyArc.revealedClueIds)
-            ? foundation.storyArc.revealedClueIds
-            : [],
-    }];
-    next.clues = (next.clues || []).filter(clue => clue.discovered === true);
-    next.directorFoundation = {
-        status: 'ready',
-        error: '',
         committedAt: new Date().toISOString(),
     };
     return assertActorContextStateV1(

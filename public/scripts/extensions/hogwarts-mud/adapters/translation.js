@@ -11,6 +11,12 @@ export function createTranslationAdapter(ports) {
         normalizeTranslationProvider,
         protectTranslationTerms,
         restoreTranslationTerms,
+        runLocalModelTask =
+        async (
+            _taskId,
+            invoke,
+        ) =>
+            invoke(),
         splitTranslationChunks,
     } = ports;
 
@@ -259,20 +265,35 @@ export function createTranslationAdapter(ports) {
             'local'
             ? '/api/hogwarts-mud/local/translate'
             : `/api/translate/${resolvedProvider}`;
-        const response = await fetch(
-            endpoint,
-            {
-                method: 'POST',
-                headers: getRequestHeaders(),
-                body: JSON.stringify({
-                    text,
-                    lang: getSettings().targetLanguage,
-                    source: 'en',
-                    unload,
-                    glossary,
-                }),
-            },
-        );
+        const response =
+            await runLocalModelTask(
+                'local_translation',
+                () =>
+                    fetch(
+                        endpoint,
+                        {
+                            method: 'POST',
+                            headers:
+                                getRequestHeaders(),
+                            body:
+                                JSON.stringify({
+                                    text,
+                                    lang:
+                                        getSettings()
+                                            .targetLanguage,
+                                    source: 'en',
+                                    unload,
+                                    glossary,
+                                }),
+                        },
+                    ),
+                {
+                    eventType:
+                        'translation.requested',
+                    emittedBy:
+                        'translation.adapter',
+                },
+            );
         if (!response.ok) {
             throw new Error(
                 `${resolvedProvider} translation returned ${response.status}`,

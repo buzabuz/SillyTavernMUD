@@ -163,19 +163,13 @@ export function createAppController(ports) {
         const mandatorySceneState = state?.scene
             ? buildMandatorySceneState(state)
             : null;
-        const mapContext = mandatorySceneState
-            ? `\n\nCURRENT AUTHORITATIVE POSITION:
-${JSON.stringify(mandatorySceneState.playerPosition)}
-
-Detailed topology is supplied only to role requests that need it. Never invent or rename a map or room.`
-            : '';
         const sceneContext = state?.scene ? `CURRENT COMMITTED SCENE (binding JSON):
 ${JSON.stringify(mandatorySceneState)}
 
-Continue from this exact state. Perform present NPCs using the supplied personality, speech style, private goal, fear, and knowledge boundary. behavioralEnvironment is binding current context: embody materially relevant time, daylight, fatigue, curfew, weather, clothing, shelter, and activity effects without reciting it as a checklist. Current scene, location, and environment override stale daily directives. Detailed memories, map topology, hidden arcs, and locked clues are supplied only to role requests authorized to use them. Never invent or disclose absent private state. The SillyTavern storage character is infrastructure and never exists inside the story.` : '';
+Continue from this exact state. actorCards contain the only shared NPC performance guidance. behavioralEnvironment is binding current context: embody materially relevant time, daylight, fatigue, curfew, weather, clothing, shelter, and activity effects without reciting it as a checklist. Current scene, location, and environment override stale guidance. Detailed memories, map topology, private facts, hidden arcs, and locked clues are supplied only to role requests authorized to use them. Never invent or disclose absent private state. The SillyTavern storage character is infrastructure and never exists inside the story.` : '';
         setExtensionPrompt(
             PROMPT_KEY,
-            `${buildSystemPrompt(settings.worldPrompt)}${campaignContext ? `\n\n${campaignContext}` : ''}${characterContext ? `\n\n${characterContext}` : ''}${mapContext}${sceneContext ? `\n\n${sceneContext}` : ''}`,
+            `${buildSystemPrompt(settings.worldPrompt)}${campaignContext ? `\n\n${campaignContext}` : ''}${characterContext ? `\n\n${characterContext}` : ''}${sceneContext ? `\n\n${sceneContext}` : ''}`,
             extension_prompt_types.IN_PROMPT,
             0,
             false,
@@ -332,7 +326,6 @@ Continue from this exact state. Perform present NPCs using the supplied personal
             storyArcs: Array.isArray(state.storyArcs) ? state.storyArcs : [],
             conflict: state.conflict || null,
             turn: state.turn || null,
-            dailyDirector: state.dailyDirector || null,
             pacingDirector: state.pacingDirector || null,
             causalCollapse:
                 state.causalCollapse ||
@@ -355,7 +348,6 @@ Continue from this exact state. Perform present NPCs using the supplied personal
             sceneTransition: state.sceneTransition || null,
             spatial: state.spatial || null,
             knowledgeBase: state.knowledgeBase || null,
-            directorFoundation: state.directorFoundation || null,
             opening: state.opening || null,
             clues: Array.isArray(state.clues) ? state.clues : [],
             items: Array.isArray(state.items) ? state.items : [],

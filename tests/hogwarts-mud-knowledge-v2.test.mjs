@@ -16,7 +16,10 @@ import {
 import express from 'express';
 
 import {
+    KNOWLEDGE_API_CONTRACT_VERSION,
+    KNOWLEDGE_REVISION_POLICIES,
     chunkKnowledgeText,
+    computeKnowledgeProjectionFingerprint,
     createChunkedKnowledgeRecords,
     createKnowledgeRecordV2,
     hydrateKnowledgeRecords,
@@ -179,6 +182,98 @@ test('Knowledge V2 records are stable and content-addressed', () => {
                 'The wreckage remained.',
         }).contentChecksum,
         first.contentChecksum,
+    );
+});
+
+test('Knowledge projection identity ignores save revision while query policy rejects only future candidates', () => {
+    const revisionFour =
+        record({
+            stateRevision: 4,
+        });
+    const revisionFive =
+        record({
+            stateRevision: 5,
+        });
+    assert.equal(
+        computeKnowledgeProjectionFingerprint(
+            [revisionFour],
+        ),
+        computeKnowledgeProjectionFingerprint(
+            [revisionFive],
+        ),
+    );
+    assert.notEqual(
+        computeKnowledgeProjectionFingerprint(
+            [revisionFour],
+        ),
+        computeKnowledgeProjectionFingerprint([
+            record({
+                stateRevision: 5,
+                text:
+                    'The wreckage remained.',
+            }),
+        ]),
+    );
+    const result =
+        hydrateKnowledgeRecords(
+            [
+                record({
+                    recordId:
+                        'events_older',
+                    stateRevision: 3,
+                    visibility: {
+                        scope: 'public',
+                        actorIds: [],
+                    },
+                }),
+                record({
+                    recordId:
+                        'events_current',
+                    stateRevision: 4,
+                    visibility: {
+                        scope: 'public',
+                        actorIds: [],
+                    },
+                }),
+                record({
+                    recordId:
+                        'events_future',
+                    stateRevision: 5,
+                    visibility: {
+                        scope: 'public',
+                        actorIds: [],
+                    },
+                }),
+            ],
+            {
+                timelineEpoch:
+                    'epoch_a',
+                stateRevision: 4,
+                revisionPolicy:
+                    KNOWLEDGE_REVISION_POLICIES
+                        .NOT_FUTURE,
+                audience: {
+                    actorIds: [],
+                },
+            },
+        );
+    assert.deepEqual(
+        result.records.map(item =>
+            item.recordId),
+        [
+            'events_older',
+            'events_current',
+        ],
+    );
+    assert.deepEqual(
+        result.diagnostics
+            .suppressed,
+        [{
+            recordId:
+                'events_future',
+            reason:
+                'future_revision',
+        }],
     );
 });
 
@@ -587,6 +682,140 @@ test('JSON backend rejects stale sync and rebuilds after index loss', async t =>
             )
         ).recordCount,
         3,
+    );
+});
+
+test('JSON backend replaces a legacy V1 directory with one current-contract index', async t => {
+    const root =
+        await mkdtemp(
+            path.join(
+                os.tmpdir(),
+                'hpmud-knowledge-v1-',
+            ),
+        );
+    t.after(() =>
+        rm(
+            root,
+            {
+                recursive: true,
+                force: true,
+            },
+        ));
+    const timelineId =
+        'timeline_legacy';
+    const timelineRoot =
+        path.join(
+            root,
+            timelineId,
+        );
+    const eventRoot =
+        path.join(
+            timelineRoot,
+            'events',
+        );
+    fs.mkdirSync(
+        eventRoot,
+        {
+            recursive: true,
+        },
+    );
+    fs.writeFileSync(
+        path.join(
+            timelineRoot,
+            'index.json',
+        ),
+        JSON.stringify({
+            version: 1,
+            records: [{
+                category: 'events',
+                id: 'legacy_event',
+                path:
+                    '/legacy/event.json',
+            }],
+        }),
+        'utf8',
+    );
+    fs.writeFileSync(
+        path.join(
+            eventRoot,
+            'legacy_event.json',
+        ),
+        JSON.stringify({
+            category: 'events',
+            id: 'legacy_event',
+            text: 'legacy',
+        }),
+        'utf8',
+    );
+    const backend =
+        createJsonKnowledgeBackend({
+            root,
+        });
+    assert.equal(
+        (
+            await backend.health({
+                timelineId,
+            })
+        ).indexMissing,
+        true,
+    );
+    const rebuilt =
+        await backend.upsert({
+            timelineId,
+            timelineEpoch:
+                'epoch_current',
+            stateRevision: 9,
+            records: [
+                record({
+                    stateRevision: 9,
+                    timelineEpoch:
+                        'epoch_current',
+                    visibility: {
+                        scope: 'public',
+                        actorIds: [],
+                    },
+                }),
+            ],
+            replace: true,
+        });
+    assert.equal(
+        rebuilt.rebuilt,
+        true,
+    );
+    const index =
+        backend.readIndex(
+            timelineId,
+        );
+    assert.equal(
+        index.version,
+        2,
+    );
+    assert.equal(
+        index
+            .knowledgeApiContractVersion,
+        KNOWLEDGE_API_CONTRACT_VERSION,
+    );
+    assert.match(
+        index
+            .projectionFingerprint,
+        /^cyrb53-[0-9a-f]+$/u,
+    );
+    assert.deepEqual(
+        Object.keys(
+            index.records,
+        ),
+        [
+            'events_quill_vanished',
+        ],
+    );
+    assert.equal(
+        fs.existsSync(
+            path.join(
+                eventRoot,
+                'legacy_event.json',
+            ),
+        ),
+        false,
     );
 });
 
@@ -1234,6 +1463,29 @@ test('Qdrant REST adapter uses generations, deterministic IDs and payload filter
             filters,
         ),
     );
+    assert.deepEqual(
+        queryCall.body.filter
+            .must.find(entry =>
+                entry.key ===
+                    'stateRevision'),
+        {
+            key: 'stateRevision',
+            range: {
+                lte: 4,
+            },
+        },
+    );
+    assert.equal(
+        calls.find(call =>
+            call.pathname.endsWith(
+                '/points',
+            ) &&
+            call.method === 'PUT')
+            .body.points[0]
+            .payload
+            .knowledgeApiContractVersion,
+        KNOWLEDGE_API_CONTRACT_VERSION,
+    );
     await backend.delete({
         ...input,
         recordIds: [
@@ -1350,6 +1602,13 @@ test('knowledge API reports stale revisions and audience-filtered diagnostics', 
                         ),
                 },
             };
+            request.user
+                .directories
+                .root =
+                path.relative(
+                    process.cwd(),
+                    root,
+                );
             next();
         },
     );
@@ -1372,6 +1631,55 @@ test('knowledge API reports stale revisions and audience-filtered diagnostics', 
         server.address();
     const base =
         `http://127.0.0.1:${address.port}/api/hogwarts-mud/knowledge`;
+    const staleClientHealth =
+        await fetch(
+            `${base}/health`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type':
+                        'application/json',
+                },
+                body:
+                    JSON.stringify({
+                        timelineId:
+                            'timeline_api',
+                    }),
+            },
+        );
+    assert.equal(
+        staleClientHealth.status,
+        400,
+    );
+    const currentClientHealth =
+        await fetch(
+            `${base}/health`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type':
+                        'application/json',
+                },
+                body:
+                    JSON.stringify({
+                        knowledgeApiContractVersion:
+                            KNOWLEDGE_API_CONTRACT_VERSION,
+                        timelineId:
+                            'timeline_api',
+                    }),
+            },
+        );
+    assert.equal(
+        currentClientHealth.status,
+        200,
+    );
+    assert.equal(
+        (
+            await currentClientHealth
+                .json()
+        ).knowledgeApiContractVersion,
+        KNOWLEDGE_API_CONTRACT_VERSION,
+    );
     const sync = async input =>
         fetch(
             `${base}/sync`,
@@ -1388,6 +1696,8 @@ test('knowledge API reports stale revisions and audience-filtered diagnostics', 
             },
         );
     const input = {
+        knowledgeApiContractVersion:
+            KNOWLEDGE_API_CONTRACT_VERSION,
         timelineId: 'timeline_api',
         timelineEpoch: 'epoch_a',
         stateRevision: 4,
@@ -1476,6 +1786,8 @@ test('knowledge API reports stale revisions and audience-filtered diagnostics', 
                 },
                 body:
                     JSON.stringify({
+                        knowledgeApiContractVersion:
+                            KNOWLEDGE_API_CONTRACT_VERSION,
                         timelineId:
                             'timeline_api',
                         timelineEpoch:
@@ -1532,6 +1844,8 @@ test('knowledge API reports stale revisions and audience-filtered diagnostics', 
                         },
                         body:
                             JSON.stringify({
+                                knowledgeApiContractVersion:
+                                    KNOWLEDGE_API_CONTRACT_VERSION,
                                 timelineId:
                                     'timeline_api',
                                 timelineEpoch:
@@ -1806,6 +2120,8 @@ test('knowledge API reports stale revisions and audience-filtered diagnostics', 
                     },
                     body:
                         JSON.stringify({
+                            knowledgeApiContractVersion:
+                                KNOWLEDGE_API_CONTRACT_VERSION,
                             timelineId:
                                 'timeline_api',
                             timelineEpoch:

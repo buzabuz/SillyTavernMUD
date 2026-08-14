@@ -1,6 +1,9 @@
 import {
     getLegalAppraisalObserverIds,
 } from '../domain/memory-synapse-schema.js';
+import {
+    getDeterministicTimePolicy,
+} from '../domain/turn-time.js';
 
 export function createLocalSemanticAdapter(ports) {
     const {
@@ -17,6 +20,12 @@ export function createLocalSemanticAdapter(ports) {
         ) =>
             observed ||
             fallback,
+        runLocalModelTask =
+        async (
+            _taskId,
+            invoke,
+        ) =>
+            invoke(),
         validatePerceptionContract,
     } = ports;
     const OBSERVED_ACTOR_DEPARTURE_PATTERN =
@@ -231,14 +240,17 @@ export function createLocalSemanticAdapter(ports) {
     ) {
         try {
             const response =
-            await fetch(
-                '/api/hogwarts-mud/local/adjudicate',
-                {
-                    method: 'POST',
-                    headers:
-                        getRequestHeaders(),
-                    body:
-                        JSON.stringify({
+            await runLocalModelTask(
+                'local_pre_turn_adjudicator',
+                () =>
+                    fetch(
+                        '/api/hogwarts-mud/local/adjudicate',
+                        {
+                            method: 'POST',
+                            headers:
+                                getRequestHeaders(),
+                            body:
+                                JSON.stringify({
                             input: {
                                 playerTurnSequence:
                                     buildStructuredPlayerTurnSequence(
@@ -264,7 +276,7 @@ export function createLocalSemanticAdapter(ports) {
                                         state.scene
                                             ?.nextSceneIntent ||
                                         null,
-                                    recentTimeline:
+                                    recentSceneEvents:
                                         (
                                             state.scene
                                                 ?.timelineEntries ||
@@ -283,13 +295,16 @@ export function createLocalSemanticAdapter(ports) {
                                     movementResolution ||
                                     null,
                                 timePolicy:
-                                    state
-                                        .dailyDirector
-                                        ?.plan
-                                        ?.timePolicy ||
-                                    {},
-                            },
-                        }),
+                                    getDeterministicTimePolicy(),
+                                    },
+                                }),
+                        },
+                    ),
+                {
+                    eventType:
+                        'turn.pre_generation',
+                    emittedBy:
+                        'turn.local_adjudication',
                 },
             );
             if (!response.ok) {
@@ -1389,14 +1404,17 @@ export function createLocalSemanticAdapter(ports) {
             });
         try {
             const response =
-            await fetch(
-                '/api/hogwarts-mud/local/observe',
-                {
-                    method: 'POST',
-                    headers:
-                        getRequestHeaders(),
-                    body:
-                        JSON.stringify({
+            await runLocalModelTask(
+                'local_post_turn_observer',
+                () =>
+                    fetch(
+                        '/api/hogwarts-mud/local/observe',
+                        {
+                            method: 'POST',
+                            headers:
+                                getRequestHeaders(),
+                            body:
+                                JSON.stringify({
                             input: {
                                 clock:
                                     state.clock,
@@ -1408,7 +1426,6 @@ export function createLocalSemanticAdapter(ports) {
                                 playerTurnSequence,
                                 targetActorIds,
                                 narrativeSegments,
-                                narrativeText,
                                 room:
                                     buildLocalSemanticRoomContext(
                                         state,
@@ -1487,8 +1504,15 @@ export function createLocalSemanticAdapter(ports) {
                                     transaction
                                         .actorPresence ||
                                     null,
-                            },
-                        }),
+                                    },
+                                }),
+                        },
+                    ),
+                {
+                    eventType:
+                        'turn.post_commit',
+                    emittedBy:
+                        'turn.local_observation',
                 },
             );
             if (!response.ok) {
@@ -1729,14 +1753,17 @@ export function createLocalSemanticAdapter(ports) {
         ];
         try {
             const response =
-                await fetch(
-                    '/api/hogwarts-mud/local/appraise',
-                    {
-                        method: 'POST',
-                        headers:
-                            getRequestHeaders(),
-                        body:
-                            JSON.stringify({
+                await runLocalModelTask(
+                    'local_appraisal_proposer',
+                    () =>
+                        fetch(
+                            '/api/hogwarts-mud/local/appraise',
+                            {
+                                method: 'POST',
+                                headers:
+                                    getRequestHeaders(),
+                                body:
+                                    JSON.stringify({
                                 input: {
                                     clock:
                                         state.clock,
@@ -1751,8 +1778,15 @@ export function createLocalSemanticAdapter(ports) {
                                     },
                                     observers,
                                     targetActorIds,
-                                },
-                            }),
+                                        },
+                                    }),
+                            },
+                        ),
+                    {
+                        eventType:
+                            'memory.event_boundary_committed',
+                        emittedBy:
+                            'turn.local_appraisal',
                     },
                 );
             if (!response.ok) {

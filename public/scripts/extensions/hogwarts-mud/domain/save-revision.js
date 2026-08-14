@@ -754,6 +754,92 @@ export function hasWorldStateChanges(
     );
 }
 
+export function isStateRevisionCurrentOrModelTaskRuntimeOnly(
+    worldState,
+    expectedRevision,
+) {
+    const expected =
+        normalizeRevision(
+            expectedRevision,
+        );
+    const current =
+        normalizeRevision(
+            worldState
+                ?.stateRevision,
+        );
+    if (current === expected) {
+        return true;
+    }
+    if (current < expected) {
+        return false;
+    }
+    const entries =
+        (
+            Array.isArray(
+                worldState
+                    ?.revisionHistory,
+            )
+                ? worldState
+                    .revisionHistory
+                : []
+        )
+            .filter(entry =>
+                Number(
+                    entry?.revision,
+                ) > expected &&
+                Number(
+                    entry?.revision,
+                ) <= current)
+            .sort((
+                left,
+                right,
+            ) =>
+                Number(
+                    left.revision,
+                ) -
+                Number(
+                    right.revision,
+                ));
+    if (
+        entries.length !==
+            current - expected
+    ) {
+        return false;
+    }
+    let previous = expected;
+    for (const entry of entries) {
+        const domains =
+            Array.isArray(
+                entry
+                    ?.changedDomains,
+            )
+                ? entry
+                    .changedDomains
+                : [];
+        if (
+            Number(
+                entry
+                    ?.baseRevision,
+            ) !== previous ||
+            Number(
+                entry?.revision,
+            ) !== previous + 1 ||
+            entry?.source !==
+                'model_task_runtime' ||
+            domains.length !== 1 ||
+            domains[0] !==
+                'model_task_runtime'
+        ) {
+            return false;
+        }
+        previous =
+            Number(
+                entry.revision,
+            );
+    }
+    return previous === current;
+}
+
 function withoutTrackedDomains(state) {
     const source =
         withoutRevisionFields(state);
@@ -764,6 +850,7 @@ function withoutTrackedDomains(state) {
         ...source,
     };
     delete result.items;
+    delete result.modelTaskRuntime;
     result.actorLibrary =
         (
             result.actorLibrary || []

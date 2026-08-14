@@ -285,14 +285,35 @@ export function createKnowledgeAdapter(ports) {
         const state = getMudState();
         if (!state?.character?.confirmed) return;
         try {
-            await syncKnowledgeBase(context, state);
+            const previousError =
+                String(
+                    state.knowledgeBase
+                        ?.lastError ||
+                    '',
+                );
+            const result =
+                await syncKnowledgeBase(
+                    context,
+                    state,
+                );
             state.knowledgeBase.lastError = '';
+            if (
+                result?.skipped ===
+                    true &&
+                result.metadataChanged !==
+                    true &&
+                !previousError
+            ) {
+                return result;
+            }
             await context.saveMetadata();
+            return result;
         } catch (error) {
             state.knowledgeBase ??= {};
             state.knowledgeBase.lastError = String(error?.message || error);
             console.error('[Hogwarts MUD] Local knowledge sync failed', error);
             await context.saveMetadata();
+            throw error;
         }
     }
 
@@ -351,6 +372,13 @@ export function createKnowledgeAdapter(ports) {
             records.activationCapsules =
                 result
                     ?.activationCapsules;
+            records
+                .retainedEventIdsByActorId =
+                structuredClone(
+                    options
+                        .retainedEventIdsByActorId ||
+                    {},
+                );
             records.diagnostics =
                 diagnostics;
             recordTurnDiagnostic(
@@ -378,7 +406,23 @@ export function createKnowledgeAdapter(ports) {
             return records;
         } catch (error) {
             console.warn('[Hogwarts MUD] Local knowledge retrieval failed', error);
-            return [];
+            recordTurnDiagnostic(
+                'knowledge_retrieval_failure',
+                {
+                    code:
+                        String(
+                            error?.code ||
+                            'KNOWLEDGE_RETRIEVAL_FAILED',
+                        ),
+                    error:
+                        String(
+                            error?.message ||
+                            error,
+                        ).slice(0, 1_000),
+                    willRetry: false,
+                },
+            );
+            throw error;
         }
     }
 

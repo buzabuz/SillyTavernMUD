@@ -29,6 +29,9 @@ import {
     createTurnWorkflow,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/turn.js';
 import {
+    normalizeEventKnowledge as normalizeEventKnowledgeV2,
+} from '../public/scripts/extensions/hogwarts-mud/presence-witness-contract.js';
+import {
     FakeVectorBackend,
 } from '../src/hogwarts-mud/knowledge-vector-backend.js';
 import {
@@ -399,7 +402,7 @@ test('ordinary successful Performer keeps the paid budget at one low call', asyn
                 }),
             resolveTemporaryActorRevealedName:
                 actor => actor,
-            sendRoleRequest:
+            sendModelTaskRequest:
                 model.sendRoleRequest,
             setLiveSceneStreamPhase:
                 () => {},
@@ -479,9 +482,16 @@ test('event-boundary schema consolidation uses one existing medium call', async 
             recorder,
             [{
                 scanComplete: true,
+                processedThroughMessageId:
+                    10,
                 reviewAfterTurns: 10,
                 reviews: [],
-                statements: [],
+                reportedEvents: [],
+                recipientAppraisals:
+                    [],
+                identityClaims: [],
+                relationshipClaims: [],
+                personReferences: [],
                 relationshipEvidence:
                     [],
                 schemaOperations: [],
@@ -527,7 +537,7 @@ test('event-boundary schema consolidation uses one existing medium call', async 
                 }),
             selectSharedMemoriesForContext:
                 memories => memories,
-            sendRoleRequest:
+            sendModelTaskRequest:
                 model.sendRoleRequest,
             validateMemoryConsolidation:
                 () => ({
@@ -567,8 +577,23 @@ test('event-boundary schema consolidation uses one existing medium call', async 
             },
             {
                 backfill: false,
-                messages: [],
-                allowedMessageIds: [],
+                messages: [{
+                    id: 10,
+                    sceneId:
+                        'scene_task8',
+                    isUser: false,
+                    text:
+                        'The event boundary closes.',
+                    segments: [{
+                        type:
+                            'narration',
+                        textEn:
+                            'The event boundary closes.',
+                    }],
+                }],
+                allowedMessageIds: [
+                    10,
+                ],
             },
             {},
         );
@@ -598,6 +623,7 @@ function createBoundaryTurnHarness({
     appraisalFailure = false,
     staleAppraisal = false,
     activationSchemaIds = [],
+    retrievalFailure = false,
 } = {}) {
     const recorder =
         createRecorder();
@@ -622,6 +648,7 @@ function createBoundaryTurnHarness({
         timelineEpoch:
             'task8_appraisal_epoch',
         stateRevision: 7,
+        revisionHistory: [],
         phase: 'playing',
         clock:
             '1991-09-04 · 09:30',
@@ -744,6 +771,17 @@ function createBoundaryTurnHarness({
                 },
             attachTurnDiagnostics,
             ...recorder,
+            buildActorMemoryKnowledgeSeeds:
+                () => ({
+                    recordIds: [
+                        'events_event_task8_memory',
+                    ],
+                    retainedEventIdsByActorId: {
+                        hermione: [
+                            'event_task8_memory',
+                        ],
+                    },
+                }),
             buildLocalSemanticRoomContext:
                 () => ({
                     rooms: [],
@@ -800,11 +838,9 @@ function createBoundaryTurnHarness({
                         ),
                     ...checkpoint,
                 }),
-            ensureDailyDirectorPlan:
-                async () => {},
-            ensureDirectorFoundation:
-                async () => {},
-            ensureMemoryConsolidation:
+            assertWorldFoundationReady:
+                () => true,
+            ensureSocialDirectorForAction:
                 async () => {
                     if (!eventBoundary) {
                         return null;
@@ -869,11 +905,68 @@ function createBoundaryTurnHarness({
                 async transaction =>
                     transaction,
             normalizeEventKnowledge:
-                event => ({
-                    eventId:
-                        'event_task8_appraisal',
-                    ...event,
-                }),
+                event =>
+                    normalizeEventKnowledgeV2({
+                        ...event,
+                        version: 2,
+                        eventKind:
+                            'observed',
+                        eventId:
+                            'event_task8_appraisal',
+                        clock:
+                            '1991-09-04 · 09:45',
+                        summaryEn:
+                            'Hermione directly witnessed Tina wait by the classroom door.',
+                        participantActorIds: [
+                            'hermione',
+                        ],
+                        witnessActorIds: [
+                            'hermione',
+                        ],
+                        witnessCohortIds:
+                            [],
+                        witnessBasis: {
+                            hermione:
+                                'direct',
+                        },
+                        perception: {
+                            version: 1,
+                            visualScope:
+                                'room',
+                            audibleScope:
+                                'none',
+                            salience:
+                                'normal',
+                            attribution:
+                                'clear',
+                            concealment:
+                                'none',
+                            directParticipantActorIds: [
+                                'hermione',
+                            ],
+                            evidenceText:
+                                'Tina waits by the door.',
+                            confidence:
+                                0.95,
+                            source:
+                                'post_turn_observer',
+                        },
+                        knownToPlayer:
+                            false,
+                        source:
+                            'post_turn_observer',
+                    }, {
+                        actors: [{
+                            id:
+                                'hermione',
+                        }],
+                        knownActorIds: [
+                            'hermione',
+                        ],
+                        sourceTexts: [
+                            'Tina waits by the door.',
+                        ],
+                    }),
             parseSpellCastDirectives:
                 () => [],
             parseItemOperationDirectives:
@@ -937,13 +1030,112 @@ function createBoundaryTurnHarness({
                         current,
                         event,
                     });
+                    const liveState =
+                        context
+                            .chatMetadata
+                            .hogwartsMud;
+                    const nextRevision =
+                        liveState
+                            .stateRevision +
+                        1;
+                    const modelTaskRuntime =
+                        structuredClone(
+                            liveState
+                                .modelTaskRuntime,
+                        );
+                    const appraisalRow =
+                        modelTaskRuntime
+                            .byTaskId
+                            .local_appraisal_proposer;
+                    appraisalRow.attempted +=
+                        1;
+                    if (
+                        appraisalFailure
+                    ) {
+                        appraisalRow.failed +=
+                            1;
+                    } else {
+                        appraisalRow.succeeded +=
+                            1;
+                    }
                     if (staleAppraisal) {
                         context.chatMetadata
                             .hogwartsMud = {
-                                ...context
-                                    .chatMetadata
-                                    .hogwartsMud,
-                                stateRevision: 8,
+                                ...liveState,
+                                stateRevision:
+                                    nextRevision,
+                                turn: {
+                                    ...liveState
+                                        .turn,
+                                    count:
+                                        liveState
+                                            .turn
+                                            .count +
+                                        1,
+                                },
+                                revisionHistory: [
+                                    ...(
+                                        liveState
+                                            .revisionHistory ||
+                                        []
+                                    ),
+                                    {
+                                        id:
+                                            `revision_task8_${nextRevision}`,
+                                        baseRevision:
+                                            liveState
+                                                .stateRevision,
+                                        revision:
+                                            nextRevision,
+                                        source:
+                                            'metadata',
+                                        committedAt:
+                                            '1991-09-04T09:30:00.000Z',
+                                        changedDomains: [
+                                            'world',
+                                        ],
+                                        itemChanges:
+                                            [],
+                                        identityChanges:
+                                            [],
+                                    },
+                                ],
+                                modelTaskRuntime,
+                            };
+                    } else {
+                        context.chatMetadata
+                            .hogwartsMud = {
+                                ...liveState,
+                                stateRevision:
+                                    nextRevision,
+                                revisionHistory: [
+                                    ...(
+                                        liveState
+                                            .revisionHistory ||
+                                        []
+                                    ),
+                                    {
+                                        id:
+                                            `revision_task8_${nextRevision}`,
+                                        baseRevision:
+                                            liveState
+                                                .stateRevision,
+                                        revision:
+                                            nextRevision,
+                                        source:
+                                            'model_task_runtime',
+                                        committedAt:
+                                            '1991-09-04T09:30:00.000Z',
+                                        changedDomains: [
+                                            'model_task_runtime',
+                                        ],
+                                        itemChanges:
+                                            [],
+                                        identityChanges:
+                                            [],
+                                    },
+                                ],
+                                modelTaskRuntime,
                             };
                     }
                     if (appraisalFailure) {
@@ -963,11 +1155,6 @@ function createBoundaryTurnHarness({
                                 sourceEventIds: [
                                     event.eventId,
                                 ],
-                                sourceMessageIds:
-                                    event
-                                        .sourceMessageIds,
-                                sceneId:
-                                    event.sceneId,
                                 contextTags: [
                                     'patience',
                                 ],
@@ -983,11 +1170,6 @@ function createBoundaryTurnHarness({
                                 sourceEventIds: [
                                     event.eventId,
                                 ],
-                                sourceMessageIds:
-                                    event
-                                        .sourceMessageIds,
-                                sceneId:
-                                    event.sceneId,
                                 contextTags: [
                                     'attention',
                                 ],
@@ -1039,6 +1221,13 @@ function createBoundaryTurnHarness({
                     retrievalCalls.push(
                         args,
                     );
+                    if (
+                        retrievalFailure
+                    ) {
+                        throw new Error(
+                            'Knowledge exact retrieval unavailable.',
+                        );
+                    }
                     const records = [];
                     records.activationCapsules = {
                         version: 1,
@@ -1138,6 +1327,28 @@ test('ordinary successful turn keeps high and medium at zero while preserving on
             'luna',
         ],
     );
+    assert.ok(
+        harness.retrievalCalls[0][1]
+            .includes(
+                'events_event_task8_memory',
+            ),
+    );
+    assert.deepEqual(
+        harness.retrievalCalls[0][2]
+            .retainedEventIdsByActorId,
+        {
+            hermione: [
+                'event_task8_memory',
+            ],
+        },
+    );
+    assert.deepEqual(
+        harness.retrievalCalls[0][2]
+            .seedRecordIds,
+        [
+            'events_event_task8_memory',
+        ],
+    );
     assert.deepEqual(
         harness.context.chatMetadata
             .hogwartsMud
@@ -1146,6 +1357,24 @@ test('ordinary successful turn keeps high and medium at zero while preserving on
             .map(appraisal =>
                 appraisal.observerId),
         ['hermione'],
+        JSON.stringify(
+            harness.context.chat[1]
+                .extra.hogwartsMud
+                .turnDiagnostics.events
+                .filter(event =>
+                    event.stage ===
+                        'appraisal_proposal_validation'),
+        ),
+    );
+    assert.equal(
+        harness.context.chatMetadata
+            .hogwartsMud
+            .modelTaskRuntime
+            .byTaskId
+            .local_appraisal_proposer
+            .succeeded,
+        1,
+        'turn commit must preserve the latest live scheduler outcome',
     );
     const appraisalValidation =
         harness.context.chat[1]
@@ -1172,6 +1401,34 @@ test('ordinary successful turn keeps high and medium at zero while preserving on
                 'observer_not_authorized',
             count: 1,
         }],
+    );
+});
+
+test('Knowledge infrastructure failure stops the turn before its only Low request', async () => {
+    const harness =
+        createBoundaryTurnHarness({
+            eventBoundary: false,
+            retrievalFailure: true,
+        });
+    await assert.rejects(
+        harness.workflow
+            .runStructuredTurn(
+                harness.playerAction,
+            ),
+        /Knowledge exact retrieval unavailable/u,
+    );
+    assert.deepEqual(
+        harness.modelCalls,
+        {
+            high: 0,
+            medium: 0,
+            low: 0,
+        },
+    );
+    assert.equal(
+        harness.retrievalCalls
+            .length,
+        1,
     );
 });
 
@@ -1263,6 +1520,15 @@ test('[defect-probing] local Appraisal failure falls back without blocking the c
             .memorySynapse
             .appraisals,
         [],
+    );
+    assert.equal(
+        harness.context.chatMetadata
+            .hogwartsMud
+            .modelTaskRuntime
+            .byTaskId
+            .local_appraisal_proposer
+            .failed,
+        1,
     );
     const diagnostics =
         harness.context.chat[1]
@@ -1450,6 +1716,38 @@ function createTransitionHarness() {
             },
         },
     };
+    const sendSceneRequest =
+        async slot => {
+            paidCalls[
+                slot
+                    .diagnosticTier
+            ]++;
+            return {
+                content:
+                    slot
+                        .diagnosticTier ===
+                        'low'
+                        ? JSON.stringify({
+                            segments: [
+                                {
+                                    type:
+                                        'narration',
+                                    textEn:
+                                        'The Library settles into view.',
+                                },
+                                {
+                                    type:
+                                        'narration',
+                                    textEn:
+                                        'Rain taps against the high windows.',
+                                },
+                            ],
+                        })
+                        : JSON.stringify(
+                            transitionPayload,
+                        ),
+            };
+        };
     const workflow =
         createSceneTransitionWorkflow({
             CANON_CAST_IDENTITY_CONTRACT:
@@ -1618,30 +1916,10 @@ function createTransitionHarness() {
                 }),
             retrieveLocalKnowledge:
                 async () => [],
-            sendRoleRequest:
-                async slot => {
-                    paidCalls[
-                        slot
-                            .diagnosticTier
-                    ]++;
-                    return {
-                        content:
-                            slot
-                                .diagnosticTier ===
-                                'low'
-                                ? JSON.stringify({
-                                    segments: [{
-                                        type:
-                                            'narration',
-                                        textEn:
-                                            'The Library settles into view.',
-                                    }],
-                                })
-                                : JSON.stringify(
-                                    transitionPayload,
-                                ),
-                    };
-                },
+            sendSceneOpeningRequest:
+                sendSceneRequest,
+            sendSceneTransitionRequest:
+                sendSceneRequest,
             stripSyntheticSceneOpeningActorSegments:
                 segments => segments,
             synchronizeHeldItemLocations:

@@ -406,8 +406,6 @@ export function admitMentionedKnownActors(
                             .minutes,
                     requireReaction:
                         true,
-                    requireEverydayMemory:
-                        true,
                 }),
             ),
     };

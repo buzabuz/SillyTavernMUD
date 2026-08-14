@@ -294,13 +294,6 @@ export function validateScenePerformance(
         payload.sceneProgression?.summaryEn,
         ...segments.map(segment =>
             segment.textEn),
-        ...(payload.actorUpdates || [])
-            .flatMap(update => [
-                update.memoryUpdate
-                    ?.summaryEn,
-                update.memoryUpdate
-                    ?.lastingImpactEn,
-            ]),
     ].filter(Boolean).join(' ');
     errors.push(...validateItemUpdates(
         payload.itemUpdates ?? [],
@@ -351,8 +344,7 @@ export function validateScenePerformance(
     }
 
     if (
-        momentumDirective?.required &&
-        !narrativeFirst
+        momentumDirective?.required
     ) {
         const progression = payload.sceneProgression;
         const allowedProgressionTypes = new Set([
@@ -545,138 +537,6 @@ export function validateScenePerformance(
                     );
                 }
             }
-            if (
-                update.impressionOfPlayerEn != null ||
-                update.memoryUpdate != null
-            ) {
-                if (
-                    temporaryActorIds.has(
-                        update.id,
-                    )
-                ) {
-                    if (
-                        update
-                            .impressionOfPlayerEn !=
-                        null
-                    ) {
-                        errors.push(
-                            `临时人物 ${update.id} 不得形成正式玩家印象。`,
-                        );
-                    }
-                } else {
-                    let spatial =
-                    initialSpatialActors.get(update.id);
-                    if (
-                        !spatial?.canSeePlayer &&
-                    !spatial?.canHearPlayer &&
-                    (update.mapId || update.roomId)
-                    ) {
-                        const projectedState = {
-                            ...worldState,
-                            actors: (worldState.actors || [])
-                                .map(actor =>
-                                    actor.id === update.id
-                                        ? {
-                                            ...actor,
-                                            mapId:
-                                            update.mapId ||
-                                            actor.mapId,
-                                            roomId:
-                                            update.roomId ||
-                                            actor.roomId,
-                                        }
-                                        : actor),
-                        };
-                        spatial = buildSpatialContext(
-                            projectedState,
-                        ).actors.find(actor =>
-                            actor.id === update.id);
-                    }
-                    if (
-                        !spatial?.canSeePlayer &&
-                    !spatial?.canHearPlayer
-                    ) {
-                        errors.push(
-                            `现场人物 ${update.id || '?'} 无法看见或听见玩家，不得形成玩家印象或共同记忆。`,
-                        );
-                    }
-                }
-            }
-            if (update.impressionOfPlayerEn != null) {
-                const impression = String(
-                    update.impressionOfPlayerEn || '',
-                ).trim();
-                if (!isValidImpressionShorthand(
-                    impression,
-                )) {
-                    errors.push(
-                        `现场人物 ${update.id || '?'} 的玩家印象必须是 1–${IMPRESSION_MAX_WORDS} 词的主观 shorthand，不能复述本轮动作。`,
-                    );
-                }
-            }
-            if (update.memoryUpdate != null) {
-                const memory = update.memoryUpdate;
-                if (!memory ||
-                    typeof memory !== 'object' ||
-                    Array.isArray(memory)) {
-                    errors.push(
-                        `现场人物 ${update.id || '?'} 的 memoryUpdate 必须是对象。`,
-                    );
-                } else {
-                    const summary = String(
-                        memory.summaryEn || '',
-                    ).trim();
-                    const wordCount = summary
-                        .split(/\s+/)
-                        .filter(Boolean)
-                        .length;
-                    if (!summary || wordCount > 40) {
-                        errors.push(
-                            `现场人物 ${update.id || '?'} 的共同记忆必须具体且不超过 40 词。`,
-                        );
-                    }
-                    if (![
-                        'everyday',
-                        'notable',
-                    ].includes(memory.significance)) {
-                        errors.push(
-                            `现场人物 ${update.id || '?'} 的共同记忆显著度无效。`,
-                        );
-                    }
-                    const lastingImpactEn =
-                        String(
-                            memory
-                                .lastingImpactEn ||
-                            '',
-                        ).trim();
-                    if (
-                        memory.significance ===
-                            'notable' &&
-                        (
-                            !lastingImpactEn ||
-                            countTextWords(
-                                lastingImpactEn,
-                            ) > 24
-                        )
-                    ) {
-                        errors.push(
-                            `现场人物 ${update.id || '?'} 的 notable 记忆必须说明 24 词内的长期影响。`,
-                        );
-                    }
-                    const unauthorizedMemoryKeys =
-                        Object.keys(memory).filter(key =>
-                            ![
-                                'summaryEn',
-                                'significance',
-                                'lastingImpactEn',
-                            ].includes(key));
-                    if (unauthorizedMemoryKeys.length) {
-                        errors.push(
-                            `低档不得直接写入共同记忆字段：${unauthorizedMemoryKeys.join(', ')}。`,
-                        );
-                    }
-                }
-            }
             const unauthorizedKeys = Object.keys(update)
                 .filter(key => !allowedUpdateKeys.has(key));
             if (unauthorizedKeys.length) {
@@ -703,7 +563,6 @@ export function validateScenePerformance(
     const pacingBeat = worldState.pacingDirector?.pendingBeat;
     if (pacingBeat?.status === 'pending') {
         if (
-            !narrativeFirst &&
             payload.pacingBeatRealized !==
                 true
         ) {

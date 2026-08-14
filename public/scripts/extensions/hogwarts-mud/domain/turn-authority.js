@@ -20,9 +20,8 @@ import {
 } from './item-schema.js';
 
 import {
-    LOCALIZED_TEMPORARY_ACTOR_KEYS,
-    PACING_TEMPORARY_ACTOR_KEYS,
-} from './pacing-validation.js';
+    validateActorCreationProposal,
+} from './actor-creation-proposal.js';
 
 export function validateItemUpdates(
     itemUpdates,
@@ -366,10 +365,7 @@ export function validateActorPresenceResolution(
 export function validateTemporaryActorEntrances(
     entrances,
     worldState,
-    {
-        allowLocalizedDisplayFields =
-        false,
-    } = {},
+    _options = {},
 ) {
     const errors = [];
     if (!Array.isArray(entrances)) {
@@ -404,32 +400,21 @@ export function validateTemporaryActorEntrances(
                 `临时入场人物 ${actor?.id || '?'} 的 ID 无效、重复或已存在。`,
             );
         }
-        PACING_TEMPORARY_ACTOR_KEYS
-            .forEach(key => {
-                if (!String(
-                    actor?.[key] || '',
-                ).trim()) {
-                    errors.push(
-                        `临时入场人物 ${actor?.id || '?'} 缺少 ${key}。`,
-                    );
-                }
-            });
-        const unauthorized =
-            Object.keys(actor || {})
-                .filter(key =>
-                    !PACING_TEMPORARY_ACTOR_KEYS
-                        .has(key) &&
-                    (
-                        !allowLocalizedDisplayFields ||
-                        !LOCALIZED_TEMPORARY_ACTOR_KEYS
-                            .has(key)
-                    ));
-        if (unauthorized.length) {
-            errors.push(
-                `临时入场人物不得写入字段：${unauthorized.join(', ')}。`,
+        const validation =
+            validateActorCreationProposal(
+                actor,
+                {
+                    mode:
+                        'temporary',
+                },
             );
-        }
-        ids.add(actor?.id);
+        errors.push(
+            ...validation.errors.map(error =>
+                `临时入场人物 ${actor?.id || '?'}：${error}`),
+        );
+        ids.add(
+            validation.value.id,
+        );
     });
     return {
         valid: errors.length === 0,

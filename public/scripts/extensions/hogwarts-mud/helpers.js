@@ -21,7 +21,7 @@ export {
 } from './domain/actor-identity.js';
 
 export {
-    buildActorContinuityCapsules, buildActorKnowledgeCapsules, filterKnowledgeForAudience,
+    buildActorContinuityCapsules, buildActorKnowledgeCapsules, buildActorMemoryKnowledgeSeeds, filterKnowledgeForAudience,
     getActorVisibleSocialKnowledge, migrateActorKnowledgeBoundaries,
 } from './domain/actor-knowledge.js';
 
@@ -84,8 +84,8 @@ export {
 } from './domain/checks.js';
 
 export {
-    applyDirectorFoundation, applyOpeningWorldPackage, buildMandatorySceneState, createInitialWorldState,
-    validateDirectorFoundation, validateOpeningWorldPackage,
+    applyOpeningWorldPackage, buildMandatorySceneState, createInitialWorldState,
+    validateOpeningWorldPackage,
 } from './domain/initial-world.js';
 
 export {
@@ -172,7 +172,7 @@ export {
 } from './domain/spatial-foundation.js';
 
 export {
-    ensureMentionedKnownActorMemories, normalizeScenePerformanceActorLocations, sanitizeScenePerformanceActorMetadata,
+    normalizeScenePerformanceActorLocations, sanitizeScenePerformanceActorMetadata,
 } from './domain/spatial-performance.js';
 
 export {
@@ -193,7 +193,7 @@ export {
 export {
     BEHAVIORAL_ENVIRONMENT_VERSION, TEMPORAL_STATE_VERSION,
     advanceWorldClock, buildBehavioralEnvironment, getWorldClockGapMinutes,
-    getWorldDate, isDailyDirectorPlanCurrent, reconcileTemporalState,
+    getWorldDate, reconcileTemporalState,
 } from './domain/time-environment.js';
 
 export {
@@ -221,7 +221,7 @@ export {
 } from './domain/turn-rollback.js';
 
 export {
-    createTurnPerformanceBudget, estimateTurnMinutes, resolveTurnElapsedMinutes, validateSceneTemporalConsistency,
+    DETERMINISTIC_TIME_POLICY, createTurnPerformanceBudget, estimateTurnMinutes, getDeterministicTimePolicy, resolveTurnElapsedMinutes, validateSceneTemporalConsistency,
 } from './domain/turn-time.js';
 
 export {

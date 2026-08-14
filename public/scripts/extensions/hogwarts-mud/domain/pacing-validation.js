@@ -25,6 +25,15 @@ import {
     getRelativeAgeProfile,
 } from './character.js';
 
+import {
+    ACTOR_CREATION_PROPOSAL_KEYS,
+    validateActorCreationProposal,
+} from './actor-creation-proposal.js';
+import {
+    normalizePacingAssessmentPayload as normalizeCausalPacingAssessmentPayload,
+    validatePacingAssessment as validateCausalPacingAssessment,
+} from './causal-pacing-contract.js';
+
 const PACING_INTERVENTION_KINDS = new Set([
     'new_actor',
     'causal_collision',
@@ -53,25 +62,9 @@ const PACING_GUEST_ACTOR_KEYS = new Set([
 ]);
 
 export const PACING_TEMPORARY_ACTOR_KEYS =
-    new Set([
-        'id',
-        'nameEn',
-        'roleEn',
-        'publicDescriptionEn',
-        'personalityEn',
-        'speechStyleEn',
-        'currentActivityEn',
-    ]);
-
-export const LOCALIZED_TEMPORARY_ACTOR_KEYS =
-    new Set([
-        'name',
-        'role',
-        'publicDescription',
-        'personality',
-        'speechStyle',
-        'currentActivity',
-    ]);
+    new Set(
+        ACTOR_CREATION_PROPOSAL_KEYS,
+    );
 
 export function buildTemporaryActorPromotionPolicy(
     worldState = {},
@@ -105,7 +98,7 @@ export function buildTemporaryActorPromotionPolicy(
     };
 }
 
-export function normalizePacingAssessmentPayload(
+function normalizeLegacyPacingAssessmentPayload(
     payload,
     worldState = {},
     canonCandidates = [],
@@ -316,7 +309,7 @@ export function normalizePacingAssessmentPayload(
     return normalized;
 }
 
-export function validatePacingAssessment(
+function validateLegacyPacingAssessment(
     payload,
     worldState = {},
     signals = {},
@@ -830,26 +823,18 @@ export function validatePacingAssessment(
                 `临时人物 ${actor.id || '?'} 的 ID 无效、重复或已经在场。`,
             );
         }
-        PACING_TEMPORARY_ACTOR_KEYS
-            .forEach(key => {
-                if (!String(
-                    actor[key] || '',
-                ).trim()) {
-                    errors.push(
-                        `临时人物 ${actor.id || '?'} 缺少 ${key}。`,
-                    );
-                }
-            });
-        const unauthorized =
-            Object.keys(actor)
-                .filter(key =>
-                    !PACING_TEMPORARY_ACTOR_KEYS
-                        .has(key));
-        if (unauthorized.length) {
-            errors.push(
-                `临时人物不得写入字段：${unauthorized.join(', ')}。`,
+        const validation =
+            validateActorCreationProposal(
+                actor,
+                {
+                    mode:
+                        'temporary',
+                },
             );
-        }
+        errors.push(
+            ...validation.errors.map(error =>
+                `临时人物 ${actor.id || '?'}：${error}`),
+        );
         temporaryIds.add(actor.id);
     });
 
@@ -1123,3 +1108,8 @@ export function validatePacingAssessment(
     }
     return { valid: errors.length === 0, errors };
 }
+
+export {
+    normalizeCausalPacingAssessmentPayload as normalizePacingAssessmentPayload,
+    validateCausalPacingAssessment as validatePacingAssessment,
+};

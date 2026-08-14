@@ -11,12 +11,12 @@ import {
     worldClockToEpochMinutes,
 } from '../domain/time-environment.js';
 import {
-    LOCAL_MAP_CATALOG,
-} from '../map-pack.js';
-import {
-    getLocalMapDefinition,
     getMapRooms,
 } from '../domain/map-access.js';
+import {
+    getInteriorMount,
+    listMapsByMountHierarchy,
+} from '../domain/interior-mount.js';
 import {
     calculateCalendarDayGrid,
     calculateCalendarWeekGrid,
@@ -514,14 +514,35 @@ function createStorylineViews(worldState) {
 
 export function buildCalendarLocationOptions(worldState) {
     const mapState = worldState?.map || {};
-    const mapIds = [
-        ...LOCAL_MAP_CATALOG.map(map => map.id),
-        ...asArray(mapState.customLocalMaps).map(map => map.id),
-    ];
-    return [...new Set(mapIds)]
-        .map(mapId => getLocalMapDefinition(mapId, mapState))
-        .filter(Boolean)
-        .map(map => {
+    const hierarchy =
+        listMapsByMountHierarchy(
+            mapState,
+        );
+    const mapsById =
+        new Map(
+            hierarchy.map(entry => [
+                entry.map.id,
+                entry.map,
+            ]),
+        );
+    return hierarchy
+        .map(({
+            map,
+            depth,
+        }) => {
+            const mount =
+                getInteriorMount(map);
+            const parentRoom =
+                mount
+                    ? getMapRooms(
+                        mapsById.get(
+                            mount.parentMapId,
+                        ),
+                        mapState,
+                    ).find(room =>
+                        room.id ===
+                            mount.parentRoomId)
+                    : null;
             const levelNames = new Map(
                 asArray(map.levels).map(level => [
                     level.id,
@@ -545,14 +566,24 @@ export function buildCalendarLocationOptions(worldState) {
                     left.id.localeCompare(right.id));
             return {
                 id: map.id,
-                name: firstText(map.name, map.nameEn, map.id),
+                name: [
+                    depth
+                        ? `${'  '.repeat(depth)}↳`
+                        : '',
+                    parentRoom
+                        ? `${firstText(parentRoom.name, parentRoom.nameEn, mount.parentRoomId)} /`
+                        : '',
+                    firstText(map.name, map.nameEn, map.id),
+                ].filter(Boolean)
+                    .join(' '),
+                depth,
+                mount,
                 rooms,
             };
         })
-        .filter(map => map.id && map.rooms.length)
-        .sort((left, right) =>
-            left.name.localeCompare(right.name, 'zh-CN') ||
-            left.id.localeCompare(right.id));
+        .filter(map =>
+            map.id &&
+            map.rooms.length);
 }
 
 export function validateCalendarTimelineMoment(

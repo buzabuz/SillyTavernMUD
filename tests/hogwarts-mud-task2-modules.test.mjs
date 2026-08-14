@@ -412,7 +412,27 @@ test('Campaign and Character defaults retain exact key order and errors', () => 
 
 test('mandatory projection preserves dependency use and top-level field order', () => {
     const materialState = {
-        roomEffects: ['floating dust'],
+        mapId: 'hogwarts_castle',
+        roomId:
+            'charms_classroom',
+        roomEffects: [{
+            id: 'floating_dust',
+            type: 'scene_soiled',
+            operation: 'soil',
+            actorId: '',
+            objectText: 'dust',
+            targetText:
+                'classroom',
+            resultText:
+                'floating dust',
+            persistence:
+                'until_changed',
+            committedClock:
+                '1991-09-01 · 10:00',
+            sourceText:
+                'duplicate source',
+        }],
+        actorPresentations: {},
     };
     const project =
         createMandatorySceneStateProjector({
@@ -451,26 +471,47 @@ test('mandatory projection preserves dependency use and top-level field order', 
             'scene',
             'playerPosition',
             'currentMaterialState',
-            'presentActors',
-            'actorPerformance',
+            'actorCards',
             'behavioralEnvironment',
-            'dailyDirectives',
             'pacingDirective',
-            'recentWorldNews',
             'publicConflict',
             'discoveredClues',
-            'items',
+            'currentItems',
             'knownSpells',
         ],
     );
-    assert.equal(
+    assert.deepEqual(
         projected.currentMaterialState,
-        materialState,
+        {
+            mapId:
+                'hogwarts_castle',
+            roomId:
+                'charms_classroom',
+            roomEffects: [{
+                id: 'floating_dust',
+                type: 'scene_soiled',
+                operation: 'soil',
+                actorId: '',
+                objectText: 'dust',
+                targetText:
+                    'classroom',
+                resultText:
+                    'floating dust',
+                persistence:
+                    'until_changed',
+                committedClock:
+                    '1991-09-01 · 10:00',
+            }],
+            actorPresentations: {},
+        },
     );
     assert.equal(
-        projected.playerPosition
-            .materialEffects,
-        materialState.roomEffects,
+        Object.hasOwn(
+            projected
+                .playerPosition,
+            'materialEffects',
+        ),
+        false,
     );
 });
 

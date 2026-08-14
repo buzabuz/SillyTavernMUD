@@ -61,6 +61,7 @@ import {
 import {
     buildActorContinuityCapsules,
     buildActorKnowledgeCapsules,
+    buildActorMemoryKnowledgeSeeds,
     filterKnowledgeForAudience,
     migrateActorKnowledgeBoundaries,
 } from './domain/actor-knowledge.js';
@@ -96,7 +97,7 @@ import { migrateNpcIdentityObservations } from './domain/npc-identity-observatio
 import { NPC_IDENTITY_PROMPT_BOUNDARY, buildNpcIdentityPromptProjection, projectNpcRuntimeActorsForPrompt } from './domain/npc-identity-prompt-projection.js';
 import { buildCharacterContext, createDefaultCharacterDraft, validateCharacterDraft } from './domain/character.js';
 import { resolveActionCheck } from './domain/checks.js';
-import { applyDirectorFoundation, applyOpeningWorldPackage, buildMandatorySceneState, createInitialWorldState, validateDirectorFoundation, validateOpeningWorldPackage } from './domain/initial-world.js';
+import { applyOpeningWorldPackage, buildMandatorySceneState, createInitialWorldState, validateOpeningWorldPackage } from './domain/initial-world.js';
 import {
     applyGeneratedInteriorMap,
     enterBoundInteriorMap,
@@ -164,8 +165,6 @@ import { migrateSpellbookState } from './domain/spell-state.js';
 import * as spellProposalPorts from './domain/spell-proposals.js';
 import {
     buildBehavioralEnvironment,
-    getWorldDate,
-    isDailyDirectorPlanCurrent,
 } from './domain/time-environment.js';
 import { projectSceneTransitionPresence } from './domain/transition-presence.js';
 import {
@@ -332,7 +331,6 @@ const platform = {
     allowPresetScripts,
     analyzeMemoryConsolidation,
     analyzePacingSignals,
-    applyDirectorFoundation,
     applyGeneratedInteriorMap,
     applyMapProposal,
     applyOpeningWorldPackage,
@@ -347,6 +345,7 @@ const platform = {
     buildActorAppearanceView,
     buildActorContinuityCapsules,
     buildActorKnowledgeCapsules,
+    buildActorMemoryKnowledgeSeeds,
     buildActorSelectionPolicy,
     buildActorTranslationTerms,
     buildBehavioralEnvironment,
@@ -410,8 +409,6 @@ const platform = {
     getSpellDefinition,
     getSpellDefinitions,
     getSpellProficiency,
-    getWorldDate,
-    isDailyDirectorPlanCurrent,
     isMemoryBoundaryGuardCurrent,
     limitMessagesToContext,
     migrateActorContextState:
@@ -490,7 +487,6 @@ const platform = {
     updateMessageBlock,
     uuidv4,
     validateCharacterDraft,
-    validateDirectorFoundation,
     validateGeneratedInteriorMap,
     validateMapProposal,
     validateMemoryConsolidation,

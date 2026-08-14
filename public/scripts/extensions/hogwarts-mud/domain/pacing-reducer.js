@@ -127,7 +127,7 @@ export function applyPacingAssessment(
                     intervention
                         ?.causalCollapse
                         ? 'bound'
-                        : 'immediate_incident',
+                        : 'no_compatible_fact',
             },
         ].slice(-100);
     }

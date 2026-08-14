@@ -7,9 +7,12 @@ import {
     projectActorCore,
 } from './domain/actor-context-schema.js';
 import {
+    KNOWLEDGE_API_CONTRACT_VERSION,
     KNOWLEDGE_CATEGORIES as V2_KNOWLEDGE_CATEGORIES,
+    computeKnowledgeProjectionFingerprint,
     createChunkedKnowledgeRecords,
     createKnowledgeRecordV2,
+    hydrateCanonicalKnowledgeCandidates,
     hydrateKnowledgeRecords,
     isKnowledgeRecordVisible,
     normalizeKnowledgeId,
@@ -21,6 +24,47 @@ import {
 export const KNOWLEDGE_CATEGORIES = V2_KNOWLEDGE_CATEGORIES;
 const VECTOR_SOURCE = 'transformers';
 const VECTOR_PREFIX = 'HPMUD_KB_RECORD ';
+
+export class KnowledgeApiContractError
+    extends Error {
+    constructor(actualVersion) {
+        super(
+            `Knowledge API contract mismatch: expected ${KNOWLEDGE_API_CONTRACT_VERSION}, received ${
+                actualVersion ??
+                'missing'
+            }. Restart the SillyTavern server before continuing.`,
+        );
+        this.name =
+            'KnowledgeApiContractError';
+        this.code =
+            'KNOWLEDGE_API_CONTRACT_MISMATCH';
+        this.expectedVersion =
+            KNOWLEDGE_API_CONTRACT_VERSION;
+        this.actualVersion =
+            actualVersion ??
+            null;
+    }
+}
+
+function assertKnowledgeApiContract(
+    payload,
+) {
+    const actualVersion =
+        Number(
+            payload
+                ?.knowledgeApiContractVersion,
+        );
+    if (
+        actualVersion !==
+        KNOWLEDGE_API_CONTRACT_VERSION
+    ) {
+        throw new KnowledgeApiContractError(
+            Number.isFinite(actualVersion)
+                ? actualVersion
+                : null,
+        );
+    }
+}
 
 function normalizeId(value, fallback = 'unknown') {
     return normalizeKnowledgeId(
@@ -1173,6 +1217,10 @@ export async function syncKnowledgeBase(context, state) {
         record.recordId,
         record.contentChecksum,
     ]));
+    const projectionFingerprint =
+        computeKnowledgeProjectionFingerprint(
+            records,
+        );
     const changedRecords = records.filter(record => {
         return previousHashes[
             record.recordId
@@ -1181,10 +1229,126 @@ export async function syncKnowledgeBase(context, state) {
                 record.recordId
             ];
     });
+    const healthResponse =
+        await fetch(
+            '/api/hogwarts-mud/knowledge/health',
+            {
+                method: 'POST',
+                headers:
+                    getRequestHeaders(),
+                body: JSON.stringify({
+                    knowledgeApiContractVersion:
+                        KNOWLEDGE_API_CONTRACT_VERSION,
+                    timelineId,
+                }),
+            },
+        );
+    if (!healthResponse.ok) {
+        throw new Error(
+            `Local knowledge health check failed with ${healthResponse.status}`,
+        );
+    }
+    const health =
+        await healthResponse.json();
+    assertKnowledgeApiContract(
+        health,
+    );
+    if (
+        health.exact?.ok === true &&
+        health.exact
+            .projectionFingerprint ===
+            projectionFingerprint &&
+        (
+            health.preferred
+                ?.configured !==
+                true ||
+            health.preferred?.ok ===
+                true
+        )
+    ) {
+        const metadataBefore =
+            JSON.stringify(
+                state.knowledgeBase,
+            );
+        state.knowledgeBase
+            .knowledgeApiContractVersion =
+            KNOWLEDGE_API_CONTRACT_VERSION;
+        state.knowledgeBase
+            .projectionFingerprint =
+            projectionFingerprint;
+        state.knowledgeBase
+            .indexFormatVersion =
+            Number(
+                health.exact
+                    .indexFormatVersion,
+            ) || 0;
+        state.knowledgeBase
+            .projectorVersion =
+            Number(
+                health.exact
+                    .projectorVersion,
+            ) || 0;
+        state.knowledgeBase
+            .categories =
+            Object.fromEntries(
+                KNOWLEDGE_CATEGORIES
+                    .map(category => [
+                        category,
+                        records.filter(
+                            record =>
+                                record.category ===
+                                category,
+                        ).length,
+                    ]),
+            );
+        state.knowledgeBase
+            .vectorStatus =
+            'ready';
+        state.knowledgeBase
+            .vectorError =
+            '';
+        state.knowledgeBase
+            .recordHashes =
+            nextHashes;
+        state.knowledgeBase
+            .diagnostics = {
+                backend:
+                    health.preferred
+                        ?.configured
+                        ? health
+                            .preferred
+                            .backend
+                        : health
+                            .exact
+                            .backend,
+                preferredBackend:
+                    health.preferred
+                        ?.backend ||
+                    'none',
+                degraded: false,
+                projectionFingerprint,
+                syncSkipped:
+                    'content_unchanged',
+            };
+        return {
+            timelineId,
+            records,
+            projectionFingerprint,
+            skipped: true,
+            metadataChanged:
+                JSON.stringify(
+                    state
+                        .knowledgeBase,
+                ) !==
+                metadataBefore,
+        };
+    }
     const response = await fetch('/api/hogwarts-mud/knowledge/sync', {
         method: 'POST',
         headers: getRequestHeaders(),
         body: JSON.stringify({
+            knowledgeApiContractVersion:
+                KNOWLEDGE_API_CONTRACT_VERSION,
             timelineId,
             timelineEpoch:
                 String(
@@ -1207,9 +1371,34 @@ export async function syncKnowledgeBase(context, state) {
         throw new Error(`Local knowledge sync failed with ${response.status}`);
     }
     const result = await response.json();
+    assertKnowledgeApiContract(
+        result,
+    );
     state.knowledgeBase.rootPath = result.root;
     state.knowledgeBase.diagnostics =
         result.diagnostics || {};
+    state.knowledgeBase
+        .knowledgeApiContractVersion =
+        KNOWLEDGE_API_CONTRACT_VERSION;
+    state.knowledgeBase
+        .projectionFingerprint =
+        String(
+            result.diagnostics
+                ?.projectionFingerprint ||
+            '',
+        );
+    state.knowledgeBase
+        .indexFormatVersion =
+        Number(
+            result.diagnostics
+                ?.indexFormatVersion,
+        ) || 0;
+    state.knowledgeBase
+        .projectorVersion =
+        Number(
+            result.diagnostics
+                ?.projectorVersion,
+        ) || 0;
     state.knowledgeBase.lastSyncedAt = new Date().toISOString();
     state.knowledgeBase.categories = Object.fromEntries(
         KNOWLEDGE_CATEGORIES.map(category => [
@@ -1275,6 +1464,7 @@ export async function retrieveKnowledge(
         includeLockedClues = false,
         audienceActorIds = ['player'],
         nodeTypes = [],
+        seedRecordIds = [],
     } = {},
 ) {
     const timelineId =
@@ -1320,6 +1510,8 @@ export async function retrieveKnowledge(
         method: 'POST',
         headers: getRequestHeaders(),
         body: JSON.stringify({
+            knowledgeApiContractVersion:
+                KNOWLEDGE_API_CONTRACT_VERSION,
             timelineId,
             timelineEpoch,
             stateRevision,
@@ -1335,21 +1527,23 @@ export async function retrieveKnowledge(
                     .supersededSourceRefs,
         }),
     });
+    if (!exactResponse.ok) {
+        throw new Error(
+            `Local knowledge search failed with ${exactResponse.status}`,
+        );
+    }
     const exactResult =
-        exactResponse.ok
-            ? await exactResponse.json()
-            : {
-                records: [],
-                diagnostics: {
-                    backend: 'json',
-                    degraded: true,
-                },
-            };
+        await exactResponse.json();
+    assertKnowledgeApiContract(
+        exactResult,
+    );
     const canExpose = record =>
         record &&
         record.timelineEpoch ===
             timelineEpoch &&
-        record.stateRevision ===
+        Number(
+            record.stateRevision,
+        ) <=
             stateRevision &&
         isKnowledgeRecordVisible(
             record,
@@ -1396,57 +1590,19 @@ export async function retrieveKnowledge(
             merged.set(key, createSceneSafeRecord(record, includeLockedClues));
         }
     });
-    const canonicalById =
-        new Map(
-            buildKnowledgeRecords(
-                state,
-                context.chat || [],
-            ).map(record => [
-                record.recordId,
-                record,
-            ]),
-        );
-    const canonicalCandidates = [];
-    const canonicalSuppressed = [];
-    for (const hit of merged.values()) {
-        const canonical =
-            canonicalById.get(
-                hit.recordId,
-            );
-        const hitRefs =
-            JSON.stringify(
-                hit.sourceRefs ||
-                [],
-            );
-        const canonicalRefs =
-            JSON.stringify(
-                canonical
-                    ?.sourceRefs ||
-                [],
-            );
-        if (
-            !canonical ||
-            hitRefs !== canonicalRefs
-        ) {
-            canonicalSuppressed.push({
-                recordId:
-                    hit.recordId,
-                reason:
-                    canonical
-                        ? 'source_refs_mismatch'
-                        : 'canonical_missing',
-            });
-            continue;
-        }
-        canonicalCandidates.push(
-            canonical,
-        );
-    }
     const hydration =
-        hydrateKnowledgeRecords(
-            canonicalCandidates,
+        hydrateCanonicalKnowledgeCandidates({
+            candidateRecords:
+                [...merged.values()],
+            seedRecordIds,
+            canonicalRecords:
+                buildKnowledgeRecords(
+                    state,
+                    context.chat ||
+                    [],
+                ),
             filters,
-        );
+        });
     const records =
         hydration.records
             .slice(0, limit)
@@ -1465,9 +1621,6 @@ export async function retrieveKnowledge(
                             : 'HISTORICAL',
                 };
             });
-    records.activationCapsules =
-        exactResult
-            .activationCapsules;
     records.diagnostics = {
         ...(
             exactResult
@@ -1487,7 +1640,6 @@ export async function retrieveKnowledge(
                     ?.suppressed ||
                 []
             ),
-            ...canonicalSuppressed,
         ],
     };
     return records;

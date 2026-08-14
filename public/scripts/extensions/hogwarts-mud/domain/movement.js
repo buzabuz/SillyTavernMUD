@@ -10,6 +10,9 @@ import {
     getLocalMapDefinition,
     getMapRooms,
 } from './map-access.js';
+import {
+    getInteriorMount,
+} from './interior-mount.js';
 
 import {
     findLocalRoomPath,
@@ -402,32 +405,31 @@ export function applyPlayerMovement(
         destination.roomName ||
         destination.roomId;
     if (destination.mapId !== mapId) {
-        const bindings =
-            worldState.map
-                ?.interiorMapBindings ||
-            {};
+        const sourceMount =
+            getInteriorMount(
+                sourceMap,
+            );
+        const destinationMount =
+            getInteriorMount(
+                destinationMap,
+            );
         const exitsBoundInterior =
             Boolean(
-                sourceMap
-                    ?.sourceContainerKey,
+                sourceMount,
             ) &&
-            sourceMap.parentMapId ===
+            sourceMount.parentMapId ===
                 destination.mapId &&
-            bindings[
-                sourceMap
-                    .sourceContainerKey
-            ] === mapId;
+            sourceMap.id ===
+                mapId;
         const entersBoundInterior =
             Boolean(
-                destinationMap
-                    ?.sourceContainerKey,
+                destinationMount,
             ) &&
-            destinationMap.parentMapId ===
+            destinationMount
+                .parentMapId ===
                 mapId &&
-            bindings[
-                destinationMap
-                    .sourceContainerKey
-            ] === destination.mapId;
+            destinationMap.id ===
+                destination.mapId;
         const bridgeMapId =
             exitsBoundInterior
                 ? destination.mapId
@@ -436,12 +438,13 @@ export function applyPlayerMovement(
                     : '';
         const bridgeFromRoomId =
             exitsBoundInterior
-                ? sourceMap.parentRoomId
+                ? sourceMount
+                    .parentRoomId
                 : fromRoomId;
         const bridgeToRoomId =
             exitsBoundInterior
                 ? destination.roomId
-                : destinationMap
+                : destinationMount
                     ?.parentRoomId;
         const bridgePath =
             bridgeMapId &&

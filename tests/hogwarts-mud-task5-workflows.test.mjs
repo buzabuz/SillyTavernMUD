@@ -55,7 +55,7 @@ function createOpeningHarness(responses) {
             response.content,
         parseJsonObject: value =>
             JSON.parse(value),
-        sendRoleRequest: async (...args) => {
+        sendOpeningWorldRequest: async (...args) => {
             calls.push(args);
             return {
                 content: responses.shift(),
@@ -477,10 +477,10 @@ function createTurnHarness({
             baseState: structuredClone(current),
             ...checkpoint,
         }),
-        ensureDailyDirectorPlan: async () => {},
-        ensureDirectorFoundation: async () => {},
-        ensureMemoryConsolidation: async () => {},
+        assertWorldFoundationReady:
+            () => true,
         ensurePacingDirectorAssessment: async () => {},
+        ensureSocialDirectorForAction: async () => {},
         ensureSocialDirectorCatchup: async () => {},
         filterKnowledgeForAudience: values =>
             values,
@@ -1032,7 +1032,7 @@ test('[defect-probing] scene transition projects only physical items and preserv
                 JSON.parse(value),
             projectActorLibraryForContext:
                 () => [],
-            sendRoleRequest:
+            sendSceneOpeningRequest:
                 async (
                     roleSlot,
                     prompt,
@@ -1089,25 +1089,29 @@ test('[defect-probing] scene transition projects only physical items and preserv
         );
     assert.equal(
         directorPayload
-            .authoritativeItems[0]
+            .authoritySnapshot
+            .currentItems[0]
             .holderId,
         'player',
     );
     assert.equal(
         directorPayload
-            .authoritativeItems[0]
+            .authoritySnapshot
+            .currentItems[0]
             .state,
         'destroyed',
     );
     assert.equal(
         directorPayload
-            .authoritativeItems[0]
+            .authoritySnapshot
+            .currentItems[0]
             .physicalForm,
         'remains',
     );
     assert.deepEqual(
         directorPayload
-            .authoritativeItems
+            .authoritySnapshot
+            .currentItems
             .map(item =>
                 item.id),
         [
@@ -1166,7 +1170,8 @@ test('[defect-probing] scene transition projects only physical items and preserv
         );
     const quill =
         openingPayload
-            .authoritativeItems[0];
+            .authoritySnapshot
+            .currentItems[0];
     assert.equal(
         quill.ownerId,
         'canon_harry_james_potter',

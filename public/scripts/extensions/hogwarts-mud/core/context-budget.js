@@ -230,7 +230,6 @@ const STRUCTURED_CONTEXT_PRESERVE_KEYS =
         'itemDirectives',
         'authoritativeItems',
         'actorKnowledge',
-        'addressedActorKnowledge',
         'actorContinuityCapsules',
         'memoryActivationCapsules',
         'behavioralEnvironment',
@@ -243,9 +242,6 @@ const STRUCTURED_CONTEXT_PRESERVE_KEYS =
 
 const STRUCTURED_CONTEXT_DEGRADE_KEYS =
     Object.freeze([
-        // Legacy alias of actorKnowledge. Keeping both can duplicate
-        // the largest actor-scoped context block.
-        'addressedActorKnowledge',
         // These snapshots are already represented in authoritySnapshot.
         'currentMaterialState',
         'currentRoomState',

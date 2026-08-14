@@ -9,6 +9,10 @@ import {
     getLocalMapDefinition,
     getMapRooms,
 } from './map-access.js';
+import {
+    findMountedInteriorMap,
+    getInteriorMount,
+} from './interior-mount.js';
 
 import {
     OPENING_ID_PATTERN,
@@ -41,7 +45,9 @@ export function getInteriorMapRequest(
         );
     if (
         !parentMap ||
-        parentMap.sourceContainerKey ||
+        getInteriorMount(
+            parentMap,
+        ) ||
         !parentRoomId
     ) {
         return null;
@@ -65,20 +71,39 @@ export function getInteriorMapRequest(
     }
     const bindingKey =
         `${parentMapId}:${parentRoomId}`;
-    const boundMapId =
-        mapState.interiorMapBindings
-            ?.[bindingKey] || '';
-    const boundMap = boundMapId
-        ? getLocalMapDefinition(
-            boundMapId,
+    const boundMap =
+        findMountedInteriorMap(
             mapState,
-        )
-        : null;
+            parentMapId,
+            parentRoomId,
+        );
+    const presetInteriorMapId =
+        (room.tags || [])
+            .find(tag =>
+                String(tag)
+                    .startsWith(
+                        'preset_interior_map:',
+                    ))
+            ?.slice(
+                'preset_interior_map:'
+                    .length,
+            ) ||
+        '';
+    const presetInteriorMap =
+        presetInteriorMapId
+            ? getLocalMapDefinition(
+                presetInteriorMapId,
+                mapState,
+            )
+            : null;
     return {
         bindingKey,
-        status: boundMap
+        status: boundMap ||
+            presetInteriorMap
             ? 'ready'
-            : 'missing',
+            : presetInteriorMapId
+                ? 'preset_missing'
+                : 'missing',
         parentMapId,
         parentRoomId,
         parentMapName:
@@ -89,10 +114,12 @@ export function getInteriorMapRequest(
             parentMap.nameEn ||
             parentMap.name ||
             parentMapId,
-        parentWorldNodeId:
+        worldAnchorId:
+            parentMap
+                .worldAnchorId ||
             parentMap
                 .parentWorldNodeId ||
-            parentMapId,
+            '',
         parentRoomName:
             room.name ||
             room.nameEn ||
@@ -115,7 +142,11 @@ export function getInteriorMapRequest(
                 )
                 .slice(0, 63),
         boundMapId:
-            boundMap?.id || '',
+            boundMap?.id ||
+            presetInteriorMap
+                ?.id ||
+            '',
+        presetInteriorMapId,
     };
 }
 
@@ -128,17 +159,20 @@ export function normalizeGeneratedInteriorMapLabels(
     next.map.customLocalMaps =
         (next.map.customLocalMaps || [])
             .map(map => {
+                const mount =
+                    getInteriorMount(
+                        map,
+                    );
                 if (
                     map.generatedBy !==
                         'medium-scene-director' ||
-                    !map.parentMapId ||
-                    !map.parentRoomId
+                    !mount
                 ) {
                     return map;
                 }
                 const parentMap =
                     getLocalMapDefinition(
-                        map.parentMapId,
+                        mount.parentMapId,
                         next.map,
                     );
                 const parentRoom =
@@ -147,7 +181,8 @@ export function normalizeGeneratedInteriorMapLabels(
                         next.map,
                     ).find(room =>
                         room.id ===
-                            map.parentRoomId);
+                            mount
+                                .parentRoomId);
                 const isTrain =
                     parentRoom?.kind ===
                         'train';
@@ -510,14 +545,6 @@ function enterInteriorMap(
             node.id ===
                 displayMap.defaultRoomId) ||
         displayMap.nodes[0];
-    next.map.interiorMapBindings = {
-        ...(
-            next.map
-                .interiorMapBindings || {}
-        ),
-        [request.bindingKey]:
-            displayMap.id,
-    };
     next.map.activeMapId =
         displayMap.id;
     next.map.currentLocalNodeId =
@@ -642,14 +669,15 @@ export function applyGeneratedInteriorMap(
         generatedMap.display || {};
     const customMap = {
         id: generatedMap.id,
-        parentWorldNodeId:
-            request.parentWorldNodeId,
-        parentMapId:
-            request.parentMapId,
-        parentRoomId:
-            request.parentRoomId,
-        sourceContainerKey:
-            request.bindingKey,
+        worldAnchorId:
+            request.worldAnchorId ||
+            '',
+        mount: {
+            parentMapId:
+                request.parentMapId,
+            parentRoomId:
+                request.parentRoomId,
+        },
         generatedBy:
             'medium-scene-director',
         generatedAt:
@@ -771,10 +799,31 @@ export function enterBoundInteriorMap(
             request.boundMapId,
             worldState.map,
         );
-    return customMap
+    const mountedMap =
+        customMap &&
+        !getInteriorMount(
+            customMap,
+        )
+            ? {
+                ...customMap,
+                worldAnchorId:
+                    request
+                        .worldAnchorId ||
+                    '',
+                mount: {
+                    parentMapId:
+                        request
+                            .parentMapId,
+                    parentRoomId:
+                        request
+                            .parentRoomId,
+                },
+            }
+            : customMap;
+    return mountedMap
         ? enterInteriorMap(
             worldState,
-            customMap,
+            mountedMap,
             request,
         )
         : worldState;

@@ -7,6 +7,9 @@ import {
 } from 'node:url';
 import { z } from 'zod';
 
+import {
+    getModelTaskDefinition,
+} from '../../public/scripts/extensions/hogwarts-mud/domain/model-task-registry.js';
 import { getConfigValue } from '../util.js';
 import { IDENTITY_OBSERVATION_JSON_SCHEMA, IDENTITY_OBSERVATION_RESULT_SCHEMA, IDENTITY_OBSERVATION_SYSTEM_RULES } from './identity-observation-contract.js';
 
@@ -1198,6 +1201,7 @@ export function enqueueLocalSemanticOperation(operation) {
 }
 
 export async function callStructuredModel({
+    taskId,
     system,
     input,
     jsonSchema,
@@ -1206,6 +1210,25 @@ export async function callStructuredModel({
     modelOverride = '',
     contextSizeOverride = 0,
 }) {
+    const taskDefinition =
+        getModelTaskDefinition(
+            taskId,
+        );
+    if (
+        !taskDefinition ||
+        !taskDefinition.allowedTiers
+            .includes('local') ||
+        ![
+            'local_observer',
+            'utility',
+        ].includes(
+            taskDefinition.kind,
+        )
+    ) {
+        throw new TypeError(
+            `Unknown local model task ${taskId || '?'}.`,
+        );
+    }
     const settings = getSettings();
     if (!settings.enabled) {
         throw new Error(
@@ -1245,7 +1268,7 @@ export async function callStructuredModel({
                                 role:
                                     'system',
                                 content:
-                                    `${system}\n\nReturn only data matching this JSON Schema:\n${JSON.stringify(jsonSchema)}`,
+                                    system,
                             },
                             {
                                 role:
@@ -1311,6 +1334,7 @@ export async function callStructuredModel({
         return {
             result: parsed,
             diagnostics: {
+                taskId,
                 schemaVersion:
                     SCHEMA_VERSION,
                 model:
@@ -1407,7 +1431,7 @@ Event boundary rules:
 - ended is true only when the bounded interaction or procedure visibly closes, such as the focal actor leaving, the task completing, or the parties disengaging.
 - A focal actor walking out of the current interaction sets ended true.
 - Completing one ordinary physical action, changing clothes, placing an item, or finishing a sentence does not by itself end the surrounding event.
-- evidenceText must be an exact substring of narrativeText. Use an empty string when ended is false.
+- evidenceText must be an exact substring of one narrativeSegments[].textEn value. Use an empty string when ended is false.
 - Boundary evidence must be one concise sentence no longer than 500 characters.
 
 Actor rules:
@@ -1631,6 +1655,8 @@ export function translateText(
             ].sort();
         const translated =
             await callStructuredModel({
+                taskId:
+                    'local_translation',
                 system:
                     TRANSLATION_SYSTEM,
                 input: {
@@ -1719,6 +1745,8 @@ export function adjudicateTurn(
 ) {
     return enqueueLocalSemanticOperation(() =>
         callStructuredModel({
+            taskId:
+                'local_pre_turn_adjudicator',
             system:
                 PRE_TURN_SYSTEM,
             input,
@@ -1820,12 +1848,34 @@ export function observeTurn(
     } = {},
 ) {
     return enqueueLocalSemanticOperation(async () => {
+        const narrativeText =
+            (
+                input
+                    ?.narrativeSegments ||
+                []
+            )
+                .map(segment =>
+                    String(
+                        segment
+                            ?.textEn ||
+                        '',
+                    ))
+                .filter(Boolean)
+                .join('\n');
+        const normalizedInput = {
+            ...(input || {}),
+            narrativeText,
+        };
         const {
             inventory = [],
+            narrativeText:
+                _narrativeText,
             ...coreInput
-        } = input || {};
+        } = normalizedInput;
         const core =
             await callStructuredModel({
+                taskId:
+                    'local_post_turn_observer',
                 system:
                     POST_TURN_SYSTEM,
                 input:
@@ -1853,7 +1903,7 @@ export function observeTurn(
             null;
         if (
             shouldObserveInventory(
-                input,
+                normalizedInput,
             )
         ) {
             try {
@@ -1861,21 +1911,19 @@ export function observeTurn(
                     getSettings();
                 const inventoryResult =
                     await callStructuredModel({
+                        taskId:
+                            'local_inventory_observer',
                         system:
                             INVENTORY_TURN_SYSTEM,
                         input: {
                             playerAction:
                                 String(
-                                    input
+                                    normalizedInput
                                         ?.playerAction ||
                                     '',
                                 ),
                             narrativeText:
-                                String(
-                                    input
-                                        ?.narrativeText ||
-                                    '',
-                                ),
+                                narrativeText,
                             inventory,
                         },
                         jsonSchema:
@@ -1923,6 +1971,10 @@ export function observeTurn(
                     inventoryDiagnostics
                         ?.totalDuration ||
                     0,
+                inventoryTaskId:
+                    inventoryDiagnostics
+                        ?.taskId ||
+                    '',
             },
         };
     });

@@ -1,32 +1,22 @@
 // Extracted from the helpers compatibility facade for Task 4.
 
 import {
-    getPresetLocalMap,
-    LOCAL_MAP_CATALOG,
-} from '../map-pack.js';
-
-import {
     getLocalMapDefinition,
     getMapRooms,
 } from './map-access.js';
+import {
+    listMapsByMountHierarchy,
+} from './interior-mount.js';
 
 import {
     normalizeSpatialText,
 } from './spatial-foundation.js';
 
 function getSceneMapDefinitions(mapState = {}) {
-    const maps = [];
-    const seen = new Set();
-    const add = map => {
-        if (map?.id && !seen.has(map.id)) {
-            maps.push(map);
-            seen.add(map.id);
-        }
-    };
-    add(getLocalMapDefinition(mapState.activeMapId, mapState));
-    (mapState.customLocalMaps || []).forEach(add);
-    LOCAL_MAP_CATALOG.forEach(entry => add(getPresetLocalMap(entry.id)));
-    return maps;
+    return listMapsByMountHierarchy(
+        mapState,
+    ).map(entry =>
+        entry.map);
 }
 
 export function findSceneDestination(text, worldState) {

@@ -14,6 +14,13 @@ import {
 import {
     validateHistoricalClaimProvenance,
 } from '../domain/narrative-memory-provenance.js';
+import {
+    getMapRooms,
+} from '../domain/map-access.js';
+import {
+    getInteriorMount,
+    listMapsByMountHierarchy,
+} from '../domain/interior-mount.js';
 
 function isFixedMomentContext(
     transitionContext,
@@ -73,6 +80,381 @@ function getTransitionCalendarContext(
     return projectCalendarSceneContext(
         state,
     );
+}
+
+function projectTransitionLocationDirectory(
+    state,
+) {
+    return listMapsByMountHierarchy(
+        state.map || {},
+    ).map(({
+        map,
+        depth,
+    }) => ({
+        id: map.id,
+        nameEn:
+            map.nameEn ||
+            map.name ||
+            map.id,
+        depth,
+        mount:
+            getInteriorMount(map),
+        rooms:
+            getMapRooms(
+                map,
+                state.map,
+            ).map(room => ({
+                id: room.id,
+                nameEn:
+                    room.nameEn ||
+                    room.name ||
+                    room.id,
+                levelId:
+                    room.levelId ||
+                    '',
+                kind:
+                    room.kind ||
+                    'room',
+                access:
+                    room.access ||
+                    '',
+            })),
+    }));
+}
+
+function collectTransitionActorIds(
+    state,
+    sceneCastPolicy,
+    calendarEntries,
+    expectedDestination,
+) {
+    const destinationMapId =
+        expectedDestination
+            ?.mapId ||
+        '';
+    const destinationRoomId =
+        expectedDestination
+            ?.roomId ||
+        '';
+    return [
+        ...new Set([
+            ...(
+                sceneCastPolicy
+                    .currentActiveActorIds ||
+                []
+            ),
+            ...(
+                state
+                    .activeInteractionActorIds ||
+                []
+            ),
+            ...calendarEntries
+                .flatMap(entry =>
+                    entry
+                        .participantIds ||
+                    []),
+            ...(
+                state.actors ||
+                []
+            )
+                .filter(actor =>
+                    destinationMapId &&
+                    (
+                        actor.mapId ===
+                            destinationMapId ||
+                        (
+                            actor.mapId ===
+                                undefined &&
+                            state.map
+                                ?.activeMapId ===
+                                destinationMapId
+                        )
+                    ) &&
+                    (
+                        !destinationRoomId ||
+                        actor.roomId ===
+                            destinationRoomId
+                    ))
+                .map(actor =>
+                    actor.id),
+        ].filter(Boolean)),
+    ].slice(0, 12);
+}
+
+function projectTransitionActorCards(
+    state,
+    actorIds,
+    {
+        includePrivate = false,
+    } = {},
+) {
+    const allowedIds =
+        new Set(actorIds);
+    const runtimeById =
+        new Map(
+            (
+                state.actors ||
+                []
+            ).map(actor => [
+                actor.id,
+                actor,
+            ]),
+        );
+    return (
+        state.actorLibrary ||
+        []
+    )
+        .filter(actor =>
+            allowedIds.has(actor.id))
+        .map(actor => {
+            const runtime =
+                runtimeById.get(
+                    actor.id,
+                ) || {};
+            return {
+                id: actor.id,
+                nameEn:
+                    actor.nameEn ||
+                    actor.id,
+                aliases:
+                    actor.aliases ||
+                    [],
+                roleEn:
+                    actor.roleEn ||
+                    '',
+                publicProfile:
+                    actor
+                        .publicProfile ||
+                    {},
+                performanceCore:
+                    actor
+                        .performanceCore ||
+                    {},
+                runtime: {
+                    mapId:
+                        runtime.mapId ||
+                        '',
+                    roomId:
+                        runtime.roomId ||
+                        '',
+                    present:
+                        runtime.present ===
+                        true,
+                    lifeStatus:
+                        runtime
+                            .lifeStatus ||
+                        'alive',
+                    lifeStatusPermanent:
+                        runtime
+                            .lifeStatusPermanent ===
+                        true,
+                    lifeStatusDetailEn:
+                        runtime
+                            .lifeStatusDetailEn ||
+                        '',
+                    currentActivityEn:
+                        runtime
+                            .currentActivityEn ||
+                        '',
+                    currentIntentEn:
+                        runtime
+                            .currentIntentEn ||
+                        '',
+                    currentGoalEn:
+                        runtime
+                            .currentGoalEn ||
+                        '',
+                },
+                ...(includePrivate
+                    ? {
+                        identity:
+                            actor.identity,
+                        privateFacts:
+                            actor
+                                .privateFacts,
+                    }
+                    : {}),
+            };
+        });
+}
+
+export function validateLowSceneOpeningOutput(
+    payload,
+    presentActorIds = new Set(),
+) {
+    const errors = [];
+    if (
+        !payload ||
+        typeof payload !==
+            'object' ||
+        Array.isArray(payload)
+    ) {
+        return {
+            valid: false,
+            errors: [
+                '低档场景开场必须是对象。',
+            ],
+        };
+    }
+    const unknownRootKeys =
+        Object.keys(payload)
+            .filter(key =>
+                key !== 'segments');
+    if (unknownRootKeys.length) {
+        errors.push(
+            `低档场景开场不得写入字段：${unknownRootKeys.join(', ')}。`,
+        );
+    }
+    const segments =
+        Array.isArray(
+            payload.segments,
+        )
+            ? payload.segments
+            : [];
+    if (
+        segments.length < 2 ||
+        segments.length > 6
+    ) {
+        errors.push(
+            '低档场景开场必须包含 2–6 个分段。',
+        );
+    }
+    let narrationCount = 0;
+    segments.forEach((
+        segment,
+        index,
+    ) => {
+        const allowedKeys =
+            segment?.type ===
+                'narration'
+                ? new Set([
+                    'type',
+                    'textEn',
+                ])
+                : segment?.type ===
+                    'dialogue'
+                    ? new Set([
+                        'type',
+                        'actorId',
+                        'textEn',
+                        'historicalClaims',
+                    ])
+                    : null;
+        if (!allowedKeys) {
+            errors.push(
+                `低档场景开场第 ${index + 1} 段类型无效。`,
+            );
+            return;
+        }
+        const unknown =
+            Object.keys(segment)
+                .filter(key =>
+                    !allowedKeys.has(key));
+        if (unknown.length) {
+            errors.push(
+                `低档场景开场第 ${index + 1} 段不得写入字段：${unknown.join(', ')}。`,
+            );
+        }
+        if (
+            segment.type ===
+                'dialogue' &&
+            segment.historicalClaims !==
+                undefined
+        ) {
+            if (
+                !Array.isArray(
+                    segment
+                        .historicalClaims,
+                )
+            ) {
+                errors.push(
+                    `低档场景开场第 ${index + 1} 段 historicalClaims 必须是数组。`,
+                );
+            } else {
+                segment
+                    .historicalClaims
+                    .forEach((
+                        claim,
+                        claimIndex,
+                    ) => {
+                        const claimKeys =
+                            claim &&
+                            typeof claim ===
+                                'object' &&
+                            !Array.isArray(
+                                claim,
+                            )
+                                ? Object.keys(
+                                    claim,
+                                )
+                                : [];
+                        const unknownClaimKeys =
+                            claimKeys
+                                .filter(key =>
+                                    ![
+                                        'claimTextEn',
+                                        'sourceEventIds',
+                                    ].includes(
+                                        key,
+                                    ));
+                        if (
+                            claimKeys.length !==
+                                2 ||
+                            unknownClaimKeys
+                                .length ||
+                            !String(
+                                claim
+                                    ?.claimTextEn ||
+                                '',
+                            ).trim() ||
+                            !Array.isArray(
+                                claim
+                                    ?.sourceEventIds,
+                            )
+                        ) {
+                            errors.push(
+                                `低档场景开场第 ${index + 1} 段 historicalClaims[${claimIndex}] 无效。`,
+                            );
+                        }
+                    });
+            }
+        }
+        const textEn =
+            String(
+                segment.textEn ||
+                '',
+            ).trim();
+        if (!textEn) {
+            errors.push(
+                `低档场景开场第 ${index + 1} 段为空。`,
+            );
+        }
+        if (
+            segment.type ===
+                'narration'
+        ) {
+            narrationCount += 1;
+        } else if (
+            !presentActorIds.has(
+                segment.actorId,
+            )
+        ) {
+            errors.push(
+                `低档场景开场第 ${index + 1} 段引用了不在场人物 ${segment.actorId || '?'}。`,
+            );
+        }
+    });
+    if (!narrationCount) {
+        errors.push(
+            '低档场景开场至少需要一个 narration 分段。',
+        );
+    }
+    return {
+        valid:
+            errors.length === 0,
+        errors,
+        segments,
+    };
 }
 
 export function projectAuthoritativeSceneItems(
@@ -169,8 +551,6 @@ export function createSceneTransitionWorkflow(ports) {
         applySystemPrompt,
         buildActorContinuityCapsules,
         buildBehavioralEnvironment,
-        buildCurrentMaterialState,
-        buildMapAuthorityContext,
         buildSceneCastRotationPolicy,
         composeSceneSegments,
         createContextBudgetPlan,
@@ -189,23 +569,13 @@ export function createSceneTransitionWorkflow(ports) {
         parseJsonObject,
         projectActorLibraryForContext,
         projectSceneArchivePresence,
-        projectNpcRuntimeActorsForPrompt =
-        current => (
-            current?.actors ||
-            []
-        ).map(actor =>
-            Object.fromEntries(
-                Object.entries(actor)
-                    .filter(([key]) =>
-                        key !== 'identity'),
-            )),
         recordTurnDiagnostic =
         () => {},
         renderAll,
         resolveRoleSlots,
         retrieveLocalKnowledge,
-        sendRoleRequest,
-        stripSyntheticSceneOpeningActorSegments,
+        sendSceneOpeningRequest,
+        sendSceneTransitionRequest,
         synchronizeHeldItemLocations,
         syncLocalKnowledge,
         translateOpeningValues,
@@ -247,6 +617,19 @@ export function createSceneTransitionWorkflow(ports) {
             calendarContext.entries;
         const calendarStorySources =
             calendarContext.storySources;
+        const sceneCastPolicy =
+            buildSceneCastRotationPolicy(
+                state,
+                expectedDestination ||
+                {},
+            );
+        const transitionActorIds =
+            collectTransitionActorIds(
+                state,
+                sceneCastPolicy,
+                calendarEntries,
+                expectedDestination,
+            );
         const calendarMomentGuidance =
             transitionContext.kind ===
                 'calendar_moment'
@@ -276,6 +659,12 @@ export function createSceneTransitionWorkflow(ports) {
                 {
                     actorIds:
                         presentActorIds,
+                    access:
+                        isHighTier
+                            ? NARRATIVE_PROMPT_ACCESS
+                                .DEDICATED_HIGH
+                            : NARRATIVE_PROMPT_ACCESS
+                                .MEDIUM,
                 },
             );
         const actorKnowledge =
@@ -297,13 +686,13 @@ Authority and boundaries:
 - The Author's Quill is funny rather than lyrical or therapeutic. It may tease the player's tactics and running bits, but never insult the real player, speak as an NPC, reveal hidden truths, locked clues, private motives, future events, exact hidden rolls, or information absent from the observed transcript.
 - Do not merely summarize the chapter. Treat it like a sharp British humour column written by an omniscient editor who has seen the player's chaos but is contractually forbidden to spoil the plot.
 - Realize committedNextSceneIntent by default. If userOverride.changed is true, honor the user's edited direction while preserving committed facts.
-- The next scene must use an existing mapId and roomId from mapAuthority. Never invent or rename a room.
+- The next scene must use an existing mapId and roomId from locationDirectory. Never invent or rename a room.
 - If explicitDestination is supplied, nextScene.mapId and nextScene.roomId must match it exactly.
 - If explicitDestination is supplied, rewrite every destination-sensitive field for that room. nextScene.nameEn and nextScene.summaryEn must each literally name explicitDestination.roomNameEn. Stale state from the old room makes the entire package invalid.
 - ${isHighTier
         ? 'You may settle a major causal turn using only already committed hidden-story facts, but may not reveal a locked clue without its prewritten condition.'
         : 'Handle an ordinary scene close and location transition. Do not create hidden facts, clues, relationships, items, spells, or permanent consequences.'}
-- actorStates is private structured state, not prose. It may reference only the supplied actorLibrary. Record each actor's exact existing mapId and roomId; actors may remain visible from another room when a sightline exists. Omitted actors leave the visible scene.
+- actorStates is private structured state, not prose. It may reference only the supplied transitionActorCards. Record each actor's exact existing mapId and roomId; actors may remain visible from another room when a sightline exists. Omitted actors leave the visible scene.
 - Every active actor in actorStates must explicitly submit currentIntentEn or explicitly clear currentIntentEn with an empty string.
 - Follow sceneCastPolicy. In crowded scenes prefer 2-4 active named actors, prioritize the actor who drives the scene procedure plus the player's immediate relationship focus, and rotate overexposed actors out. Other students are anonymous crowd texture.
 - Any named actor required to speak or drive the next scene must be present in actorStates. Do not use actorStates to enumerate everyone who could plausibly occupy a classroom or hall.
@@ -315,7 +704,7 @@ Authority and boundaries:
 - behavioralEnvironment describes the closing clock. Compute the opening clock from currentClock plus transitionMinutes instead of carrying the closing period forward.
 - Choose transitionMinutes freely according to the time that naturally passes in the fiction. Sleep, travel, waiting, holidays, and deliberate time skips may advance as long as needed. If asleep characters wake in the next scene, allow a plausible rest unless an already established alarm, emergency, departure, or other observable cause wakes them early.
 - Materially embody the opening time's daylight, sleep pressure, curfew, weather, exposure, clothing, shelter, noise, and activity implications. Do not recite them as a checklist.
-- authoritativeItems is the binding visible tracked-Item state before transition. ownerId is social ownership, while holderId alone controls physical possession. Do not transfer, restore, repair, damage, destroy, relocate, or otherwise change an Item in nextScene prose or actor activities.
+- authoritySnapshot.currentItems is the binding visible tracked-Item state before transition. ownerId is social ownership, while holderId alone controls physical possession. Do not transfer, restore, repair, damage, destroy, relocate, or otherwise change an Item in nextScene prose or actor activities.
 - Do not output openingSegments or any public opening prose. The low-tier performer will render actorStates, summaryEn, explorationHookEn, crowdDirectionEn, and the environment into a concrete opening that requires the player's response.
 - calendarEntries contains only schedules explicitly claimed by the current Scene, or by the selected schedule for a Calendar Moment. calendarStorySources contains their public beat/storyline sources. Never infer attendance from time overlap, and never write, cancel, reschedule or settle Calendar state.
 - While creating nextScene, also prewrite followingSceneIntent for the scene after it. Keep that intent player-facing and free of spoilers.
@@ -419,21 +808,13 @@ ${CANON_WIT_TONE_CONTRACT}`,
                             calendarStorySources,
                         }
                         : null,
-                        currentActors:
-                    projectNpcRuntimeActorsForPrompt(
+                        transitionActorCards:
+                    projectTransitionActorCards(
                         state,
-                    ),
-                        actorLibrary:
-                    projectActorLibraryForContext(
-                        state.actorLibrary,
-                        contextPlan,
+                        transitionActorIds,
                         {
-                            includePrivate: isHighTier,
-                            includeMemories: isHighTier,
-                            identityObserver:
-                                'self',
-                            worldState:
-                                state,
+                            includePrivate:
+                                isHighTier,
                         },
                     ),
                         actorContinuityCapsules:
@@ -441,20 +822,10 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         memoryActivationCapsules:
                     narrativeContext
                         .memoryActivationCapsules,
-                        sceneCastPolicy:
-                    buildSceneCastRotationPolicy(
-                        state,
-                        expectedDestination ||
-                        {},
-                    ),
+                        sceneCastPolicy,
                         behavioralEnvironment:
                     buildBehavioralEnvironment(
                         state,
-                    ),
-                        authoritativeItems:
-                    projectAuthoritativeSceneItems(
-                        state,
-                        synchronizeHeldItemLocations,
                     ),
                         currentConflict: state.conflict,
                         discoveredClues:
@@ -469,7 +840,10 @@ ${CANON_WIT_TONE_CONTRACT}`,
                                 state.storyArcs,
                             }
                             : {}),
-                        mapAuthority: buildMapAuthorityContext(state),
+                        locationDirectory:
+                    projectTransitionLocationDirectory(
+                        state,
+                    ),
                         recentMessages: getContext().chat
                             .slice(Math.max(0, Number(state.scene?.startedMessageId || 0)))
                             .slice(
@@ -524,7 +898,14 @@ ${CANON_WIT_TONE_CONTRACT}`,
             contextPlan,
             transitionContext,
         );
-        let response = await sendRoleRequest(roleSlot, prompt, { json: true });
+        let response = await sendSceneTransitionRequest(
+            roleSlot,
+            prompt,
+            {
+                json: true,
+                tier,
+            },
+        );
         let raw = extractRoleResponseText(response);
         let lastError = null;
         const destinationAuthority = expectedDestination
@@ -611,7 +992,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 ) {
                     break;
                 }
-                response = await sendRoleRequest(roleSlot, [
+                response = await sendSceneTransitionRequest(roleSlot, [
                     {
                         role: 'system',
                         content: `Rewrite the invalid scene-transition JSON as one complete replacement object. Preserve only the observed closure facts, committed intent or explicit user override, existing actor IDs, and world facts. Include globalChronicleSummaryEn as a 40-80 word, at most 640-character semantic chronicle of the closed Scene; it must use only supplied committed facts and must not copy closureSummaryEn. Include authorQuillEn as a 180-280 word OOC comic review with specific callbacks, affectionate roasting, mock awards or deadpan asides, and at least three jokes based only on observed player choices. It must not reveal hidden facts, private motives, locked clues, future events, or hidden roll details.
@@ -629,10 +1010,12 @@ Do not output openingSegments or public opening prose. Return only valid structu
                             invalidOutput: raw,
                             originalRequest: JSON.parse(prompt[1].content),
                             destinationAuthority,
-                            requiredSchema: prompt[0].content,
                         }),
                     },
-                ], { json: true });
+                ], {
+                    json: true,
+                    tier,
+                });
                 raw = extractRoleResponseText(response);
             }
         }
@@ -720,11 +1103,6 @@ Do not output openingSegments or public opening prose. Return only valid structu
             ),
             ...actor,
         }));
-        const authoritativeItems =
-        projectAuthoritativeSceneItems(
-            projectedState,
-            synchronizeHeldItemLocations,
-        );
         const calendarContext =
             getTransitionCalendarContext(
                 projectedState,
@@ -737,14 +1115,6 @@ Do not output openingSegments or public opening prose. Return only valid structu
             calendarContext.entries;
         const calendarStorySources =
             calendarContext.storySources;
-        const actorKnowledge =
-            buildActorContinuityCapsules(
-                state,
-                [
-                    ...presentActorIds,
-                ],
-                contextPlan,
-            );
         const narrativeContext =
             buildNarrativePromptContext(
                 projectedState,
@@ -784,7 +1154,7 @@ Boundaries:
 - Use explorationHookEn as an optional concrete detail, not an instruction label. Use crowdDirectionEn as background motion, not an attendance list.
 - Preserve actor-specific continuity. One actor cannot use another actor's memories or private knowledge.
 - Scene Opening may depict only already committed Actor/Scene observable state and safe opening prose. Do not create or reveal a promise, secret, hidden truth, relationship declaration or mutation, or any gift, loan, return, theft, or other Item transfer.
-- authoritativeItems is the exhaustive visible tracked-Item projection for this opening. holderId, not ownerId, controls who physically possesses an Item. A destroyed Item may appear only as remains and must never become damaged, intact, usable, repaired, or replaced. Do not give an actor an implicit generic prop that could be mistaken for a tracked Item whose state, holder, or location contradicts it.
+- authoritySnapshot.currentItems is the exhaustive visible tracked-Item projection for this opening. holderId, not ownerId, controls who physically possesses an Item. A destroyed Item may appear only as remains and must never become damaged, intact, usable, repaired, or replaced. Do not give an actor an implicit generic prop that could be mistaken for a tracked Item whose state, holder, or location contradicts it.
 - calendarEntries contains only schedules explicitly claimed by this new Scene. calendarStorySources contains their public beat/storyline sources. Never infer another schedule from the clock, participant, location, tag, or director tier.
 - The first narration segment should identify destinationAuthority.roomNameEn naturally.
 - Write 2-6 ordered segments, including at least one narration segment, totalling roughly 180-420 English words.
@@ -871,14 +1241,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         openingSegments:
                             undefined,
                     },
-                    presentActorStates:
-                        (
-                            nextScene
-                                .actorStates ||
-                            []
-                        ).filter(actor =>
-                            actor.present ===
-                                true),
                     actorProfiles:
                         projectActorLibraryForContext(
                             (
@@ -902,8 +1264,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                                     projectedState,
                             },
                         ),
-                    actorContinuityCapsules:
-                        actorKnowledge,
                     memoryActivationCapsules:
                         narrativeContext
                             .memoryActivationCapsules,
@@ -911,11 +1271,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         buildBehavioralEnvironment(
                             projectedState,
                         ),
-                    currentMaterialState:
-                        buildCurrentMaterialState(
-                            projectedState,
-                        ),
-                    authoritativeItems,
                     historicalKnowledgeEvidence:
                         formatRetrievedKnowledge(
                             getHistoricalKnowledgeRecords(
@@ -973,94 +1328,47 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 },
             },
         );
-        let raw = '';
-        let lastError = null;
-        const maximumAttempts =
-            transitionContext
-                .noModelRetry
-                ? 1
-                : 2;
-        for (
-            let attempt = 0;
-            attempt <
-                maximumAttempts;
-            attempt++
-        ) {
-            try {
-                const response =
-                await sendRoleRequest(
+        try {
+            const response =
+                await sendSceneOpeningRequest(
                     roleSlot,
-                    attempt === 0
-                        ? prompt
-                        : [
-                            {
-                                role:
-                                    'system',
-                                content:
-                                    'Repair the scene-opening performance. Return only a JSON object with 2-6 ordered segments. Keep all committed state unchanged. Use only supplied present actor IDs for dialogue. Do not enumerate the cast, restate actorStates, use "remains visible in the scene", or act for the player. For a concrete prior time, place, action, or quotation, retain it only in the matching actor dialogue and add historicalClaims with an exact claimTextEn substring plus sourceEventIds from that actor supportingEvents; otherwise remove the unsupported detail. The narrator and other actors cannot consume that Event. Depict only committed Actor/Scene observable state and safe opening prose; do not create or reveal promises, secrets, hidden truths, relationship declarations or mutations, gifts, loans, returns, thefts, or other Item transfers.',
-                            },
-                            {
-                                role: 'user',
-                                content:
-                                    JSON.stringify({
-                                        authoritySnapshot:
-                                            originalRequest
-                                                .authoritySnapshot,
-                                        memoryActivationCapsules:
-                                            originalRequest
-                                                .memoryActivationCapsules,
-                                        validationConflict: {
-                                            stage:
-                                                'scene_opening_validation',
-                                            errors:
-                                                String(
-                                                    lastError
-                                                        ?.message ||
-                                                    lastError ||
-                                                    '',
-                                                )
-                                                    .split('；')
-                                                    .map(value =>
-                                                        value.trim())
-                                                    .filter(Boolean)
-                                                    .slice(0, 16),
-                                        },
-                                        validationError:
-                                            String(
-                                                lastError
-                                                    ?.message ||
-                                                lastError ||
-                                                '',
-                                            ),
-                                        invalidOutput:
-                                            raw,
-                                        originalRequest:
-                                            originalRequest,
-                                    }),
-                            },
-                        ],
+                    prompt,
                     {
                         json: true,
                     },
                 );
-                raw =
+            const raw =
                 extractRoleResponseText(
                     response,
                 );
-                const parsed =
+            const parsed =
                 parseJsonObject(raw);
-                const segments =
-                stripSyntheticSceneOpeningActorSegments(
-                    parsed.segments,
+            const outputValidation =
+                validateLowSceneOpeningOutput(
+                    parsed,
+                    presentActorIds,
                 );
-                const candidate =
+            if (
+                !outputValidation
+                    .valid
+            ) {
+                throw new Error(
+                    outputValidation
+                        .errors
+                        .join('；'),
+                );
+            }
+            const segments =
+                outputValidation
+                    .segments;
+            const candidate =
                 structuredClone(
                     payload,
                 );
-                candidate.nextScene
-                    .openingSegments =
-                segments;
-                const validation =
+            candidate.nextScene
+                .openingSegments =
+            segments;
+            const validation =
                 validateSceneTransitionPackage(
                     candidate,
                     state,
@@ -1075,44 +1383,32 @@ ${CANON_WIT_TONE_CONTRACT}`,
                             ),
                     },
                 );
-                const historicalClaimValidation =
-                    validateHistoricalClaimProvenance(
-                        segments,
-                        originalRequest
-                            .memoryActivationCapsules,
-                    );
-                validation.errors.push(
-                    ...historicalClaimValidation
-                        .errors,
+            const historicalClaimValidation =
+                validateHistoricalClaimProvenance(
+                    segments,
+                    originalRequest
+                        .memoryActivationCapsules,
                 );
-                validation.valid =
-                    validation
-                        .errors
-                        .length === 0;
-                if (!validation.valid) {
-                    throw new Error(
-                        validation.errors
-                            .join('；'),
-                    );
-                }
-                return candidate;
-            } catch (error) {
-                lastError = error;
+            validation.errors.push(
+                ...historicalClaimValidation
+                    .errors,
+            );
+            validation.valid =
+                validation
+                    .errors
+                    .length === 0;
+            if (!validation.valid) {
+                throw new Error(
+                    validation.errors
+                        .join('；'),
+                );
             }
-        }
-        if (
-            transitionContext
-                .noModelRetry
-        ) {
+            return candidate;
+        } catch (error) {
             throw new Error(
-                `低档场景开场生成失败：${String(lastError?.message || lastError)}`,
+                `低档场景开场无效：${String(error?.message || error)}`,
             );
         }
-        console.warn(
-            '[Hogwarts MUD] Low-tier scene opening failed; using the deterministic short opening',
-            lastError,
-        );
-        return payload;
     }
 
     async function localizeSceneTransitionPackage(payload) {

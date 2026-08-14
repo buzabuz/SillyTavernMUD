@@ -1,4 +1,5 @@
 import {
+    KNOWLEDGE_REVISION_POLICIES,
     hydrateKnowledgeRecords,
 } from '../../public/scripts/extensions/hogwarts-mud/domain/knowledge-projector-v2.js';
 import {
@@ -124,6 +125,10 @@ function filtersForSubquery(
             subquery.timelineEpoch,
         stateRevision:
             subquery.stateRevision,
+        revisionPolicy:
+            input.revisionPolicy ||
+            KNOWLEDGE_REVISION_POLICIES
+                .NOT_FUTURE,
         audience:
             subquery.audience,
         clock:
@@ -150,6 +155,10 @@ function filtersForPlan(
         stateRevision:
             plan.constraints
                 .stateRevision,
+        revisionPolicy:
+            input.revisionPolicy ||
+            KNOWLEDGE_REVISION_POLICIES
+                .NOT_FUTURE,
         audience:
             plan.constraints
                 .audience,

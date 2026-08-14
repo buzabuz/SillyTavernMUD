@@ -332,6 +332,10 @@ export function buildNarrativePromptContext(
     retrieval,
     {
         actorIds = [],
+        queryAnchors = [],
+        access =
+        NARRATIVE_PROMPT_ACCESS
+            .MEDIUM,
     } = {},
 ) {
     const normalizedActorIds =
@@ -372,12 +376,20 @@ export function buildNarrativePromptContext(
                                 ?.clock ||
                             '',
                         ),
+                    retainedEventIdsByActorId:
+                        retrieval
+                            ?.retainedEventIdsByActorId ||
+                        {},
+                    queryAnchors,
                 },
             );
     return deepFreeze({
         authoritySnapshot:
             buildNarrativeAuthoritySnapshot(
                 worldState,
+                {
+                    access,
+                },
             ),
         memoryActivationCapsules:
             projectActivationCapsules(
