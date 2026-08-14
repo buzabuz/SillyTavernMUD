@@ -312,6 +312,99 @@ No compatibility export, fallback reader or production behavior was restored
 to make those retired tests pass. These failures do not execute the Knowledge
 root-fix paths and are not used as acceptance evidence.
 
+## 2026-08-14 - Post-Closeout Knowledge Loading Latency
+
+A real Tina turn after commit `d89217659` exposed a production latency defect
+that was not covered by the Revision 1 acceptance evidence. This section
+records the incident only. No loading, persistence or indexing behavior has
+been approved for implementation.
+
+Sanitized turn diagnostics:
+
+```text
+traceId:
+turn-3800de86-42e2-4efb-94c2-d83a6c4e21d6
+
+turn started:
+2026-08-14T05:39:58.402Z
+
+Low response received:
+2026-08-14T05:40:13.608Z
+
+message commit recorded:
+2026-08-14T05:40:52.793Z
+
+Knowledge lastSyncedAt:
+2026-08-14T05:44:45.702Z
+
+turn final recorded:
+2026-08-14T05:44:46.233Z
+```
+
+Observed latency:
+
+- total turn duration was approximately 4 minutes 48 seconds;
+- the paid Low response completed in approximately 12.6 seconds;
+- local observation and Appraisal work reached `commit` by 05:40:52.793Z;
+- the post-commit interval before `final` was approximately 233.4 seconds;
+- `knowledgeBase.lastSyncedAt` landed 0.5 seconds before `final`, attributing
+  almost the entire post-commit interval to `syncLocalKnowledge()`;
+- `social_director` attempts remained zero, so Social extraction did not cause
+  this delay.
+
+The same run also contained two secondary failures that did not explain the
+233-second interval:
+
+- local pre-turn adjudication received an Ollama socket hang-up and used its
+  deterministic fallback;
+- local Appraisal returned three `confidence > 1` values, failed Zod
+  validation and produced an empty fallback batch after approximately
+  7.2 seconds.
+
+Persisted Knowledge evidence:
+
+- before this synchronization, the save had 47 legacy record hashes using
+  colon-form IDs such as `actors:canon_hermione_jean_granger` and no stored
+  contract/index/projector/fingerprint fields;
+- after synchronization, it had 143 current record hashes using stable
+  underscore-form IDs, contract 3, index 2, projector 2 and projection
+  fingerprint `cyrb53-1c9fded13a8022`;
+- the resulting category counts were 23 Actors, 69 Scenes, 12 Events, 4 Clues
+  and 35 Appraisals.
+
+Production call-path evidence:
+
+1. `workflows/turn.js` sets the visible phase to `committing` and does not
+   finalize or clear the loading card until after `await syncLocalKnowledge()`.
+2. `knowledge.js` computes `changedRecords`, but a fingerprint mismatch sends
+   the complete canonical `records` array to `/knowledge/sync` with
+   `replace=true`.
+3. `knowledge-vector-service.js` passes that complete array to the preferred
+   Qdrant backend even when the exact index is not being rebuilt.
+4. `knowledge-qdrant-backend.js` calls `embedTexts()` for every supplied record
+   before upsert.
+5. `vectors/embedding.js` batches ten texts at a time and retains only the
+   loaded pipeline; it has no text-to-vector result cache.
+
+This means the legacy cutover made this run especially large, but the risk is
+not limited to first startup. A normal committed turn changes Scene/Event
+content and therefore the projection fingerprint. The current Qdrant path can
+then re-embed the full projection instead of only changed records.
+
+Future loading strategy must be revised under a new approved artifact revision.
+That revision must decide, rather than assume:
+
+- when the player-visible turn is considered durable and may leave the
+  `committing` state;
+- whether Knowledge projection/index maintenance is blocking, background or
+  represented by a distinct progress phase;
+- how Qdrant receives only changed and removed records during ordinary turns;
+- how an intentional full migration/rebuild is surfaced separately from a
+  normal turn;
+- real-save latency and embedded-record-count acceptance thresholds.
+
+No code, save or Knowledge index was changed during this investigation.
+
 ## Completion
 
 KAR-1 through KAR-7 are complete. No Tina Item fact, language contract,

@@ -77,6 +77,22 @@
 - [x] Per-actor capsule contents recorded without private leakage.
 - [x] Archive remains byte-identical during read-only verification.
 
+## Post-Closeout Finding
+
+- Production trace
+  `turn-3800de86-42e2-4efb-94c2-d83a6c4e21d6` recorded a 233.4-second
+  `commit -> final` interval attributable to blocking Knowledge sync.
+- Evidence and the full call-path attribution are recorded in
+  [progress.md](./progress.md#2026-08-14---post-closeout-knowledge-loading-latency).
+- Revision 1 did not verify player-visible commit latency, ordinary-turn
+  Qdrant embedded-record count, or separation of narrative completion from
+  index maintenance.
+- A future approved artifact revision must define the loading boundary,
+  incremental Qdrant synchronization, explicit full-rebuild presentation and
+  real-save latency acceptance criteria before implementation.
+- This is an evidence record, not approval to change loading, persistence,
+  migration or indexing behavior.
+
 ## Closeout
 
 - [x] Living Knowledge contract updated.

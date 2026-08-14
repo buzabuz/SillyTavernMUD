@@ -45,6 +45,15 @@ Their authority is distinct:
 
 Never use task status or `progress.md` as a substitute for the long-lived PRD. Never make a scattered debug note, ad hoc root document, chat transcript, browser evidence report, or test report authoritative. Supporting evidence may live under `.trae/specs/<change-id>/` and must be linked from `checklist.md` or `progress.md`; authority remains with the five files above and the living runtime contract.
 
+The cross-change technical-debt and feature-count authority is:
+
+```text
+.trae/specs/TECH_DEBT.md
+```
+
+It is a project ledger rather than a change artifact and therefore does not
+require its own five-file directory.
+
 ## Mandatory Workflow
 
 Follow these gates in order. Do not skip or reorder them.
@@ -144,6 +153,67 @@ hydration, capsule, or composition-root change:
    insufficient evidence; the final model-visible capsule must contain the
    authorized Event.
 
+### Permanent Test Ownership Gate
+
+Apply these rules whenever adding, moving, deleting or repairing Hogwarts
+tests:
+
+1. Put a new test in the smallest existing domain-owned test file. If no
+   focused owner exists, create a domain-named `hogwarts-mud-*.test.mjs` file.
+   Do not add tests to a generic monolith, historical `taskN` catch-all or
+   unrelated large file for convenience.
+2. Prefer direct imports from the focused production module. Do not use
+   `helpers.js` or another compatibility facade as a general test dependency.
+3. Keep new topic files below 2,000 lines and shared fixture support below
+   1,000 lines. If an existing owner is already large, split by production
+   ownership instead of making it larger.
+4. Test fixtures must use the current production contract. Never copy a stale
+   fixture that reconstructs retired writers, fields, compatibility aliases or
+   model response shapes.
+5. A retired behavior test may be deleted only when the current approved PRD
+   or living contract marks the behavior retired, the production call graph
+   has no active caller and replacement coverage exists where applicable.
+   Failure, inconvenience or duplicate-looking coverage is not deletion
+   evidence.
+6. Never restore a retired export, caller, field, reducer, fallback or
+   compatibility layer to make an old test pass. Migrate an active assertion
+   to its current owner or delete the retired behavior with an explicit
+   manifest row.
+7. A decomposition must leave a durable per-test manifest stating what was
+   deleted, what moved, where it moved and the retirement evidence.
+8. Every migrated file must run independently and reach its intended business
+   assertion. Setup errors, stale imports, `skip` and `todo` do not count as
+   successful migration.
+
+### Permanent Technical Debt Closeout
+
+For every Hogwarts change:
+
+1. The PRD declares exactly one `Change kind` from
+   `feature|fix|refactor|governance`, a `Feature delta` and whether it is a
+   `Core change`.
+2. `kind=feature` has `feature_delta=1`; every other kind has `0`. Append one
+   and only one row to `.trae/specs/TECH_DEBT.md` when the change completes,
+   then verify its header counters equal the ledger-derived totals.
+3. Before closeout, the assistant must ask itself and answer:
+
+   > 这次为了快，有没有留下什么以后要还的账？比如塞进了不该塞的大文件、跳过了哪些测试、临时 hack 了哪里？
+
+   Report that self-audit to the user and record the assistant's answer in the
+   Change Ledger even when the answer is `无`. The user may correct or add
+   debt, but must not be asked to author the assistant's self-report.
+4. Treat composition-root/scheduler, persistence/migration,
+   Prompt/Schema/Validator/Reducer, Knowledge backend and living runtime
+   contract changes as `core_change=yes`.
+5. After a core change, report the cumulative feature count and ask the user
+   whether to re-inventory technical debt before declaring completion. Record
+   `reinventory` or `defer`; silence is not a decision.
+6. A re-inventory reviews every open debt against current code/runtime
+   evidence and marks it open, accepted, resolved or superseded. Do not copy
+   stale unchecked checklist prose into the ledger as fact.
+7. Do not mark a change complete until its debt question, ledger row and any
+   required core-change re-inventory decision are recorded.
+
 ### Gate 3: Reconcile The Living Runtime Contract
 
 Before drafting or revising the PRD, inspect:
@@ -182,6 +252,9 @@ Do not invent meaningless contract edits. If the change touches no runtime field
 11. `Acceptance Criteria`
 12. `Risks and Rollback`
 13. `Approval`
+
+It must also state `Change kind`, `Feature delta` and `Core change` near the
+artifact status.
 
 Requirements for key sections:
 
@@ -246,6 +319,9 @@ After approval:
 14. Record deviations and blockers immediately; do not silently widen scope.
 15. Keep `prd.md` focused on durable product truth. Change it only when product intent or acceptance changes.
 16. Keep `spec.md` synchronized with approved technical decisions and runtime-contract ownership.
+17. Add new tests under the Permanent Test Ownership Gate. Test placement and
+    stale fixture cleanup are part of implementation, not optional closeout
+    polish.
 
 ### Gate 8: Run Blind Model Simulation
 
@@ -273,6 +349,9 @@ validator, reducer contract, retry, repair, or fallback behavior.
    model-generated fallback was captured. A hand-written fixture, an
    author-corrected response, or direct construction of the expected object is
    not blind-model evidence.
+   Synthetic responses and fixtures remain supplemental even when they cover
+   the same Schema. They never replace a fresh context-free sub-agent receiving
+   the exact production request.
 6. If the response fails, the gate fails. Fix the Prompt or contract, rebuild
    the real production request, and rerun with another new context-free
    sub-agent. Never edit the response into a passing fixture.
@@ -318,6 +397,10 @@ A change is complete only when:
 14. Every migration/repair field transition matches the approved semantic
     before/after matrix, and real-save verification proves unrelated facts were
     not rewritten to support an inferred interpretation.
+15. The standardized technical-debt question is answered and recorded in
+    `.trae/specs/TECH_DEBT.md`.
+16. The change ledger and feature-count header are consistent. A core change
+    has a recorded user decision on technical-debt re-inventory.
 
 ## Incident-Derived Non-Negotiable Lesson
 

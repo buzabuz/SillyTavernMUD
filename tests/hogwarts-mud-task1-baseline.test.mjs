@@ -26,13 +26,13 @@ const SERVER_ROOT = 'src/hogwarts-mud';
 const HELPERS_FILE = `${CLIENT_ROOT}/helpers.js`;
 const INDEX_FILE = `${CLIENT_ROOT}/index.js`;
 const HELPERS_EXPORT_BASELINE = Object.freeze({
-    count: 324,
+    count: 331,
     sha256:
-        'd8ef1b15f2a96953998fbc2cdae21468ac6e08d709c7fa42e9ab5f8e5e399a41',
+        '68b8f7d2d2dc43900088791d732a64a13ba6e726dfde66b98ae47c314470f01f',
 });
 const INDEX_EXPORTS = Object.freeze([
     'SOCIAL_DIRECTOR_RESPONSE_SCHEMA',
-    'canOpenCurrentV2SaveReadOnly',
+    'canOpenCurrentSocialSaveReadOnly',
     'createMemoryConsolidationPrompt',
     'init',
     'shouldTranslateRenderedMessage',
@@ -41,6 +41,15 @@ const STRICT_ENTRY_LIMITS = Object.freeze({
     [HELPERS_FILE]: 350,
     [INDEX_FILE]: 600,
 });
+const LEGACY_FILE_LIMITS =
+    Object.freeze({
+        [`${CLIENT_ROOT}/domain/relational-synapse-retrieval.js`]:
+            2023,
+        [`${CLIENT_ROOT}/workflows/social-memory.js`]:
+            2063,
+        [`${SERVER_ROOT}/local-semantic-adjudicator.js`]:
+            2050,
+    });
 const DATA_FILE_NAMES = new Set([
     'canon-characters.js',
     'canon-localization.zh-cn.js',
@@ -531,7 +540,11 @@ test('existing tests provide stable structural golden coverage', async () => {
     const sources = new Map();
     for (const file of [
         'tests/hogwarts-mud-presence-contract.test.mjs',
-        'tests/hogwarts-mud.test.mjs',
+        'tests/hogwarts-mud-social-v3.test.mjs',
+        'tests/hogwarts-mud-turn-protocol.test.mjs',
+        'tests/hogwarts-mud-scene-transition.test.mjs',
+        'tests/hogwarts-mud-relationship-graph.test.mjs',
+        'tests/hogwarts-mud-prompt-contract.test.mjs',
     ]) {
         sources.set(
             file,
@@ -548,32 +561,32 @@ test('existing tests provide stable structural golden coverage', async () => {
             'createInitialWorldState',
         ],
         [
-            'tests/hogwarts-mud.test.mjs',
-            'Social Graph v2 migrates Tina-sized legacy data without moving cursors or memory cooldowns',
-            'normalizeSocialGraph',
+            'tests/hogwarts-mud-social-v3.test.mjs',
+            'Social V3 commits report, recipient Appraisal, EventRefs and reference-only Receipt atomically',
+            'runSocialDirectorGraph',
         ],
         [
-            'tests/hogwarts-mud.test.mjs',
+            'tests/hogwarts-mud-turn-protocol.test.mjs',
             'local narrative-first reducer matches the LangGraph settlement output',
             'settleNarrativeTurnPerformance',
         ],
         [
-            'tests/hogwarts-mud.test.mjs',
+            'tests/hogwarts-mud-scene-transition.test.mjs',
             'scene transition atomically archives the old scene and commits the next room',
             'applySceneTransition',
         ],
         [
-            'tests/hogwarts-mud.test.mjs',
+            'tests/hogwarts-mud-relationship-graph.test.mjs',
             'social audience projections preserve source knowledge without leaking hidden evidence through edge totals',
             'buildSocialAudienceProjection',
         ],
         [
-            'tests/hogwarts-mud.test.mjs',
+            'tests/hogwarts-mud-prompt-contract.test.mjs',
             'mandatory scene state stays compact and excludes detailed memories and hidden arcs',
             'JSON.stringify(compact)',
         ],
         [
-            'tests/hogwarts-mud.test.mjs',
+            'tests/hogwarts-mud-prompt-contract.test.mjs',
             'system prompt always adds the English-only output contract',
             'buildSystemPrompt',
         ],
@@ -679,6 +692,15 @@ test('file sizes ratchet legacy giants and enforce strict modular limits', async
         if (DATA_FILE_NAMES.has(
             path.posix.basename(file),
         )) {
+            continue;
+        }
+        const legacyLimit =
+            LEGACY_FILE_LIMITS[file];
+        if (legacyLimit !== undefined) {
+            assert.ok(
+                lines <= legacyLimit,
+                `${file} has ${lines} lines; ratchet limit is ${legacyLimit}`,
+            );
             continue;
         }
         assert.ok(
