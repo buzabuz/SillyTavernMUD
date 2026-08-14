@@ -15,6 +15,9 @@ import {
     projectLowTierContextV1,
 } from '../public/scripts/extensions/hogwarts-mud/domain/low-tier-context-v1.js';
 import {
+    memoryReferenceVersion,
+} from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-schema.js';
+import {
     DEFAULT_TINA_FILE,
     runTask6Acceptance,
 } from '../scripts/dry-run-hogwarts-actor-context-task6.mjs';
@@ -146,6 +149,11 @@ test(
             true,
         );
         assert.equal(
+            report.lifecycleArchive
+                .shaAndMtimeUnchanged,
+            true,
+        );
+        assert.equal(
             report.migration
                 .sourceStateBytesUnchanged,
             true,
@@ -200,8 +208,10 @@ test(
                         .remainingCandidateCount,
             },
             {
-                sourceVersion: 2,
-                targetVersion: 2,
+                sourceVersion:
+                    memoryReferenceVersion,
+                targetVersion:
+                    memoryReferenceVersion,
                 firstChanged: false,
                 secondChanged: false,
                 candidateAppraisalCount:
@@ -328,7 +338,6 @@ test(
 
         for (const prompt of [
             report.prompt.initial,
-            report.prompt.repair,
         ]) {
             assert.deepEqual(
                 prompt.topLevelKeys,
@@ -376,6 +385,19 @@ test(
                 true,
             );
         }
+        assert.equal(
+            report.prompt
+                .buildOnly
+                .promptCaptures,
+            1,
+        );
+        assert.equal(
+            Object.hasOwn(
+                report.prompt,
+                'repair',
+            ),
+            false,
+        );
         assert.equal(
             report.prompt
                 .buildOnly

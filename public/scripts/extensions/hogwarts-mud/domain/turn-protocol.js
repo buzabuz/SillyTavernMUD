@@ -5,6 +5,10 @@ import {
 } from '../canon-characters.js';
 
 import {
+    normalizeActorCreationProposal,
+} from './actor-creation-proposal.js';
+
+import {
     DURABLE_ACQUISITION_PATTERN,
     IMPORTANT_ITEM_PATTERN,
 } from './inventory.js';
@@ -14,7 +18,6 @@ import {
 } from './pathfinding.js';
 
 import {
-    ensureMentionedKnownActorMemories,
     normalizeScenePerformanceActorLocations,
 } from './spatial-performance.js';
 
@@ -40,7 +43,6 @@ const NARRATIVE_STATE_PROPOSAL_TYPES =
         'social_hint',
         'item_update',
         'temporary_actor',
-        'clue_reveal',
     ]);
 
 function appendSettlementWarning(
@@ -91,8 +93,6 @@ function deriveNarrativePublicEvent(
     const progression = String(
         payload?.signals
             ?.sceneProgression
-            ?.summaryEn ||
-        payload?.sceneProgression
             ?.summaryEn ||
         '',
     ).trim();
@@ -205,62 +205,8 @@ export function foldNarrativeTurnProposals(
     const warnings =
         payload.settlementWarnings;
     const actorUpdates = new Map();
-    if (
-        payload.actorUpdates !==
-            undefined &&
-        !Array.isArray(
-            payload.actorUpdates,
-        )
-    ) {
-        appendSettlementWarning(
-            warnings,
-            'invalid_legacy_actor_updates',
-            'actorUpdates was not an array and was ignored.',
-        );
-    }
-    (
-        Array.isArray(
-            payload.actorUpdates,
-        )
-            ? payload.actorUpdates
-            : []
-    ).forEach(update => {
-        if (
-            update &&
-            typeof update ===
-                'object' &&
-            !Array.isArray(update) &&
-            update.id
-        ) {
-            mergeActorUpdate(
-                actorUpdates,
-                String(update.id),
-                update,
-            );
-        }
-    });
-    const itemUpdates =
-        Array.isArray(
-            payload.itemUpdates,
-        )
-            ? [...payload.itemUpdates]
-            : [];
-    const entrances =
-        Array.isArray(
-            payload
-                .temporaryActorEntrances,
-        )
-            ? [
-                ...payload
-                    .temporaryActorEntrances,
-            ]
-            : [];
-    const revealedClues =
-        Array.isArray(
-            payload.revealedClues,
-        )
-            ? [...payload.revealedClues]
-            : [];
+    const itemUpdates = [];
+    const entrances = [];
 
     (
         payload.stateProposals ||
@@ -375,6 +321,9 @@ export function foldNarrativeTurnProposals(
                     actorUpdates,
                     actorId,
                     {
+                        currentActivityEn:
+                            proposal
+                                .currentActivityEn,
                         firstImpressionOfPlayerEn:
                             proposal
                                 .firstImpressionOfPlayerEn,
@@ -395,9 +344,7 @@ export function foldNarrativeTurnProposals(
                     const operation =
                         normalizeItemOperation(
                             proposal.item
-                                .operation ||
-                            proposal.item
-                                .action,
+                                .operation,
                         );
                     itemUpdates.push(
                         {
@@ -439,10 +386,9 @@ export function foldNarrativeTurnProposals(
                         {
                             present: true,
                             currentActivityEn:
-                                proposal
-                                    .currentActivityEn ||
                                 actor
-                                    .currentActivityEn,
+                                    .runtime
+                                    ?.currentActivityEn,
                         },
                     );
                 } else {
@@ -450,22 +396,6 @@ export function foldNarrativeTurnProposals(
                         warnings,
                         'proposal_missing_temporary_actor',
                         'temporary_actor',
-                    );
-                }
-            } else if (
-                proposal.type ===
-                    'clue_reveal'
-            ) {
-                if (
-                    proposal.clue &&
-                    typeof proposal.clue ===
-                        'object' &&
-                    !Array.isArray(
-                        proposal.clue,
-                    )
-                ) {
-                    revealedClues.push(
-                        proposal.clue,
                     );
                 }
             }
@@ -477,8 +407,7 @@ export function foldNarrativeTurnProposals(
         itemUpdates;
     payload.temporaryActorEntrances =
         entrances;
-    payload.revealedClues =
-        revealedClues;
+    payload.revealedClues = [];
     delete payload.stateProposals;
     return payload;
 }
@@ -750,7 +679,11 @@ function sanitizeNarrativeTemporaryActors(
             );
             return;
         }
-        accepted.push(actor);
+        accepted.push(
+            normalizeActorCreationProposal(
+                actor,
+            ),
+        );
     });
     payload.temporaryActorEntrances =
         accepted;
@@ -907,11 +840,10 @@ export function reconcileNarrativeTurnAuthority(
     worldState,
     {
         playerAction = '',
-        admittedActors = [],
     } = {},
 ) {
     let payload =
-        foldNarrativeTurnProposals(
+        normalizeNarrativeTurnCore(
             source,
         );
     payload.publicEventEn =
@@ -973,12 +905,6 @@ export function reconcileNarrativeTurnAuthority(
             payload,
             worldState,
         );
-    payload =
-        ensureMentionedKnownActorMemories(
-            payload,
-            worldState,
-            admittedActors,
-        );
     return payload;
 }
 
@@ -1004,22 +930,18 @@ export function finalizeNarrativeTurnPerformance(
         typeof signals.eventEnded ===
             'boolean'
             ? signals.eventEnded
-            : payload.eventEnded ===
-                true;
+            : false;
     payload.pacingBeatRealized =
         typeof signals
             .pacingBeatRealized ===
             'boolean'
             ? signals
                 .pacingBeatRealized
-            : payload
-                .pacingBeatRealized ===
-                true;
+            : false;
     payload.checkApplied =
         Boolean(checkResolution);
     const proposedProgression =
-        signals.sceneProgression ||
-        payload.sceneProgression;
+        signals.sceneProgression;
     const progressionTypes =
         new Set([
             'npc_initiative',
@@ -1121,10 +1043,6 @@ export function settleNarrativeTurnPerformance(
             {
                 playerAction:
                     options.playerAction,
-                admittedActors:
-                    options
-                        .admittedActors ||
-                    [],
             },
         );
     return finalizeNarrativeTurnPerformance(

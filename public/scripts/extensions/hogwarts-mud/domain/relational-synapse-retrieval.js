@@ -1684,6 +1684,7 @@ function observerCapsule(
     entries,
     constraints,
     queryAnchors,
+    retainedEventIds,
 ) {
     const allowedIds =
         hydratedRecordIds(
@@ -1829,6 +1830,30 @@ function observerCapsule(
             break;
         }
     }
+    for (const eventId of
+        retainedEventIds || []) {
+        const eventRecord =
+            eventById.get(
+                eventId,
+            );
+        if (
+            eventMatchesAnchors(
+                eventRecord || {},
+                queryAnchors,
+            )
+        ) {
+            addEvent(
+                eventRecord,
+                supportingEvents,
+            );
+        }
+        if (
+            supportingEvents.length >=
+                3
+        ) {
+            break;
+        }
+    }
     const sourceIds =
         stableUnique([
             ...schemaRecords.flatMap(
@@ -1896,6 +1921,8 @@ export function buildSealedActivationCapsules(
         clock = '',
         commonFactLimit = 6,
         queryAnchors = [],
+        retainedEventIdsByActorId =
+            {},
     } = {},
 ) {
     const entries =
@@ -1980,6 +2007,10 @@ export function buildSealedActivationCapsules(
                         anchorTokens(
                             queryAnchors,
                         ),
+                        retainedEventIdsByActorId[
+                            actorId
+                        ] ||
+                        [],
                     ),
                 ]),
         );

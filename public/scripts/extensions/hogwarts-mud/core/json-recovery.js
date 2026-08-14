@@ -129,36 +129,6 @@ function extractStreamingJsonStringField(raw, key) {
     );
 }
 
-function extractStreamingLooseJsonStringField(
-    raw,
-    key,
-    nextKeys,
-) {
-    const match = new RegExp(
-        `"${key}"\\s*:\\s*`,
-    ).exec(raw);
-    if (!match) return '';
-    const start = match.index + match[0].length;
-    const boundary = new RegExp(
-        `,\\s*"(?:${nextKeys.join('|')})"\\s*:`,
-    ).exec(raw.slice(start));
-    if (!boundary) return '';
-    let encoded = raw.slice(
-        start,
-        start + boundary.index,
-    ).trim();
-    if (encoded.startsWith('"')) {
-        encoded = encoded.slice(1);
-    }
-    if (encoded.endsWith('"')) {
-        encoded = encoded.slice(0, -1);
-    }
-    return decodeStreamingJsonString(
-        encoded,
-        true,
-    );
-}
-
 function extractBalancedJsonObject(raw, start) {
     if (start < 0 || raw[start] !== '{') return null;
     let depth = 0;
@@ -430,113 +400,37 @@ function extractStreamingJsonObjectField(raw, key) {
         null;
 }
 
-function extractStreamingActorUpdates(raw) {
-    const match = /"actorUpdates"\s*:\s*\[/.exec(raw);
-    if (!match) return [];
-    const updates = [];
-    let cursor = match.index + match[0].length;
-    while (cursor < raw.length && updates.length < 24) {
-        const start = raw.indexOf('{', cursor);
-        if (start < 0) break;
-        const object = extractBalancedJsonObject(raw, start);
-        if (!object) {
-            const fragment = raw.slice(start);
-            const id =
-                extractStreamingJsonStringField(
-                    fragment,
-                    'id',
-                );
-            const currentActivityEn =
-                extractStreamingJsonStringField(
-                    fragment,
-                    'currentActivityEn',
-                );
-            if (id && currentActivityEn) {
-                const mapId =
-                    extractStreamingJsonStringField(
-                        fragment,
-                        'mapId',
-                    );
-                const roomId =
-                    extractStreamingJsonStringField(
-                        fragment,
-                        'roomId',
-                    );
-                const present =
-                    /"present"\s*:\s*(true|false)/
-                        .exec(fragment)?.[1];
-                updates.push({
-                    id,
-                    ...(present
-                        ? {
-                            present:
-                                present === 'true',
-                        }
-                        : {}),
-                    currentActivityEn,
-                    ...(mapId ? { mapId } : {}),
-                    ...(roomId ? { roomId } : {}),
-                });
-            }
-            break;
-        }
-        if (object.value?.id &&
-            object.value?.currentActivityEn) {
-            updates.push(object.value);
-        }
-        cursor = object.end;
-    }
-    return updates;
-}
-
 export function recoverScenePerformancePayload(rawText) {
     const raw = String(rawText || '');
-    const publicEventEn =
-        extractStreamingJsonStringField(
-            raw,
-            'publicEventEn',
-        ) ||
-        extractStreamingLooseJsonStringField(
-            raw,
-            'publicEventEn',
-            [
-                'eventEnded',
-                'pacingBeatRealized',
-                'checkApplied',
-                'sceneProgression',
-                'segments',
-            ],
-        );
     const segments = extractStreamingSceneSegments(raw)
         .filter(segment => !segment.partial)
         .map(({ partial, ...segment }) => segment);
     if (!segments.length) {
         return null;
     }
-    const booleanField = key => new RegExp(
-        `"${key}"\\s*:\\s*(true|false)`,
-    ).exec(raw)?.[1] === 'true';
+    const stateProposals =
+        extractStreamingJsonArrayField(
+            raw,
+            'stateProposals',
+        );
+    const signals =
+        extractStreamingJsonObjectField(
+            raw,
+            'signals',
+        );
     return {
-        ...(publicEventEn
-            ? { publicEventEn }
-            : {}),
-        eventEnded:
-            booleanField('eventEnded'),
-        pacingBeatRealized:
-            booleanField('pacingBeatRealized'),
-        checkApplied: booleanField('checkApplied'),
-        sceneProgression:
-            extractStreamingJsonObjectField(
-                raw,
-                'sceneProgression',
-            ),
-        actorPresence:
-            extractStreamingJsonObjectField(
-                raw,
-                'actorPresence',
-            ),
         segments,
-        actorUpdates:
-            extractStreamingActorUpdates(raw),
+        ...(Array.isArray(
+            stateProposals,
+        )
+            ? {
+                stateProposals,
+            }
+            : {}),
+        ...(signals
+            ? {
+                signals,
+            }
+            : {}),
     };
 }

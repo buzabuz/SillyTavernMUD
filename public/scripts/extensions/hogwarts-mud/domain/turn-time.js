@@ -12,6 +12,21 @@ import {
     WORLD_CLOCK_PATTERN,
 } from './time-environment.js';
 
+export const DETERMINISTIC_TIME_POLICY =
+    Object.freeze({
+        defaultMinutes: 15,
+        movementMinutes: 15,
+        investigationMinutes: 30,
+        extendedActionMinutes: 60,
+        instantaneousMagicMinutes: 1,
+    });
+
+export function getDeterministicTimePolicy() {
+    return {
+        ...DETERMINISTIC_TIME_POLICY,
+    };
+}
+
 export function estimateTurnMinutes(playerAction, timePolicy = {}) {
     const action = String(playerAction || '');
     const policy = {

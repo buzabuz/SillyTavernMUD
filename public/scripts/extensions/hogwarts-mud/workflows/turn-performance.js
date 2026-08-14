@@ -23,6 +23,394 @@ const LOW_TIER_NARRATIVE_AUTHORITY_PROMPT_CONTRACT =
             'memoryActivations',
         );
 
+const LOW_OUTPUT_KEYS =
+    new Set([
+        'segments',
+        'stateProposals',
+        'signals',
+    ]);
+const LOW_SEGMENT_KEYS = {
+    narration:
+        new Set([
+            'type',
+            'textEn',
+        ]),
+    dialogue:
+        new Set([
+            'type',
+            'actorId',
+            'textEn',
+            'historicalClaims',
+        ]),
+};
+const LOW_PROPOSAL_KEYS = {
+    actor_activity:
+        new Set([
+            'type',
+            'actorId',
+            'currentActivityEn',
+        ]),
+    actor_move:
+        new Set([
+            'type',
+            'actorId',
+            'currentActivityEn',
+            'mapId',
+            'roomId',
+        ]),
+    actor_enter:
+        new Set([
+            'type',
+            'actorId',
+            'currentActivityEn',
+            'mapId',
+            'roomId',
+        ]),
+    actor_exit:
+        new Set([
+            'type',
+            'actorId',
+            'currentActivityEn',
+            'mapId',
+            'roomId',
+        ]),
+    social_hint:
+        new Set([
+            'type',
+            'actorId',
+            'currentActivityEn',
+            'firstImpressionOfPlayerEn',
+        ]),
+    item_update:
+        new Set([
+            'type',
+            'item',
+        ]),
+    temporary_actor:
+        new Set([
+            'type',
+            'actor',
+        ]),
+};
+const LOW_ITEM_PROPOSAL_KEYS =
+    new Set([
+        'id',
+        'operation',
+        'type',
+        'labelEn',
+        'appearanceEn',
+        'ownerId',
+        'holderId',
+        'targetHolderId',
+        'transferMode',
+        'storyRoles',
+        'visibility',
+        'isEquipped',
+        'held',
+        'evidenceText',
+    ]);
+const LOW_PROGRESSION_TYPES =
+    new Set([
+        'npc_initiative',
+        'access_change',
+        'practical_step',
+        'new_information',
+        'social_shift',
+    ]);
+
+function appendUnknownKeyErrors(
+    value,
+    allowedKeys,
+    label,
+    errors,
+) {
+    if (
+        !value ||
+        typeof value !==
+            'object' ||
+        Array.isArray(value)
+    ) {
+        errors.push(
+            `${label} 必须是对象。`,
+        );
+        return;
+    }
+    const unknown =
+        Object.keys(value)
+            .filter(key =>
+                !allowedKeys.has(key));
+    if (unknown.length) {
+        errors.push(
+            `${label} 不得写入字段：${unknown.join(', ')}。`,
+        );
+    }
+}
+
+export function validateLowScenePerformanceOutputContract(
+    payload,
+    {
+        requireSceneProgression =
+            false,
+        requirePacingBeatRealized =
+            false,
+    } = {},
+) {
+    const errors = [];
+    appendUnknownKeyErrors(
+        payload,
+        LOW_OUTPUT_KEYS,
+        '低档输出',
+        errors,
+    );
+    if (!Array.isArray(
+        payload?.segments,
+    )) {
+        errors.push(
+            '低档输出 segments 必须是数组。',
+        );
+    } else {
+        payload.segments
+            .forEach((
+                segment,
+                index,
+            ) => {
+                const allowed =
+                    LOW_SEGMENT_KEYS[
+                        segment?.type
+                    ];
+                if (!allowed) {
+                    errors.push(
+                        `segments[${index}].type 无效。`,
+                    );
+                    return;
+                }
+                appendUnknownKeyErrors(
+                    segment,
+                    allowed,
+                    `segments[${index}]`,
+                    errors,
+                );
+                (
+                    segment
+                        .historicalClaims ||
+                    []
+                ).forEach((
+                    claim,
+                    claimIndex,
+                ) =>
+                    appendUnknownKeyErrors(
+                        claim,
+                        new Set([
+                            'claimTextEn',
+                            'sourceEventIds',
+                        ]),
+                        `segments[${index}].historicalClaims[${claimIndex}]`,
+                        errors,
+                    ));
+            });
+    }
+    if (
+        payload?.stateProposals !==
+            undefined &&
+        !Array.isArray(
+            payload.stateProposals,
+        )
+    ) {
+        errors.push(
+            '低档输出 stateProposals 必须是数组。',
+        );
+    } else {
+        (
+            payload
+                ?.stateProposals ||
+            []
+        ).forEach((
+            proposal,
+            index,
+        ) => {
+            const allowed =
+                LOW_PROPOSAL_KEYS[
+                    proposal?.type
+                ];
+            if (!allowed) {
+                errors.push(
+                    `stateProposals[${index}].type 无效。`,
+                );
+                return;
+            }
+            appendUnknownKeyErrors(
+                proposal,
+                allowed,
+                `stateProposals[${index}]`,
+                errors,
+            );
+            if (
+                [
+                    'actor_activity',
+                    'actor_move',
+                    'actor_enter',
+                    'actor_exit',
+                    'social_hint',
+                ].includes(
+                    proposal.type,
+                ) &&
+                (
+                    !String(
+                        proposal.actorId ||
+                        '',
+                    ).trim() ||
+                    !String(
+                        proposal
+                            .currentActivityEn ||
+                        '',
+                    ).trim()
+                )
+            ) {
+                errors.push(
+                    `stateProposals[${index}] 缺少 actorId 或 currentActivityEn。`,
+                );
+            }
+            if (
+                proposal.type ===
+                    'social_hint' &&
+                !String(
+                    proposal
+                        .firstImpressionOfPlayerEn ||
+                    '',
+                ).trim()
+            ) {
+                errors.push(
+                    `stateProposals[${index}] 缺少 firstImpressionOfPlayerEn。`,
+                );
+            }
+            if (
+                proposal.type ===
+                    'item_update'
+            ) {
+                appendUnknownKeyErrors(
+                    proposal.item,
+                    LOW_ITEM_PROPOSAL_KEYS,
+                    `stateProposals[${index}].item`,
+                    errors,
+                );
+            }
+        });
+    }
+    const signals =
+        payload?.signals &&
+        typeof payload.signals ===
+            'object' &&
+        !Array.isArray(
+            payload.signals,
+        )
+            ? payload.signals
+            : null;
+    if (payload?.signals !== undefined) {
+        appendUnknownKeyErrors(
+            payload.signals,
+            new Set([
+                'eventEnded',
+                'pacingBeatRealized',
+                'sceneProgression',
+            ]),
+            'signals',
+            errors,
+        );
+        for (const key of [
+            'eventEnded',
+            'pacingBeatRealized',
+        ]) {
+            if (
+                signals?.[key] !==
+                    undefined &&
+                typeof signals[key] !==
+                    'boolean'
+            ) {
+                errors.push(
+                    `signals.${key} 必须是布尔值。`,
+                );
+            }
+        }
+        if (
+            signals
+                ?.sceneProgression !==
+                undefined
+        ) {
+            appendUnknownKeyErrors(
+                signals
+                    .sceneProgression,
+                new Set([
+                    'type',
+                    'summaryEn',
+                    'completedRequestedStep',
+                ]),
+                'signals.sceneProgression',
+                errors,
+            );
+            const progression =
+                signals
+                    .sceneProgression;
+            if (
+                !LOW_PROGRESSION_TYPES
+                    .has(
+                        progression
+                            ?.type,
+                    )
+            ) {
+                errors.push(
+                    'signals.sceneProgression.type 无效。',
+                );
+            }
+            if (
+                !String(
+                    progression
+                        ?.summaryEn ||
+                    '',
+                ).trim()
+            ) {
+                errors.push(
+                    'signals.sceneProgression.summaryEn 不能为空。',
+                );
+            }
+            if (
+                progression
+                    ?.completedRequestedStep !==
+                    undefined &&
+                typeof progression
+                    .completedRequestedStep !==
+                    'boolean'
+            ) {
+                errors.push(
+                    'signals.sceneProgression.completedRequestedStep 必须是布尔值。',
+                );
+            }
+        }
+    }
+    if (
+        requireSceneProgression &&
+        !signals?.sceneProgression
+    ) {
+        errors.push(
+            '本回合必须提交 signals.sceneProgression。',
+        );
+    }
+    if (
+        requirePacingBeatRealized &&
+        signals
+            ?.pacingBeatRealized !==
+            true
+    ) {
+        errors.push(
+            '本回合必须将 signals.pacingBeatRealized 设为 true。',
+        );
+    }
+    return {
+        valid:
+            errors.length === 0,
+        errors,
+    };
+}
+
 export function createTurnPerformanceWorkflow(ports) {
     const {
         CANON_CAST_IDENTITY_CONTRACT,
@@ -33,7 +421,6 @@ export function createTurnPerformanceWorkflow(ports) {
         '',
         beginLiveSceneStream,
         buildBehavioralEnvironment,
-        buildCurrentMaterialState,
         buildSpatialContext,
         buildStructuredPlayerTurnSequence,
         buildTemporaryActorPromotionPolicy,
@@ -52,7 +439,7 @@ export function createTurnPerformanceWorkflow(ports) {
         removeExplicitAddressDirective,
         resolvePlayerAddressing,
         resolveTemporaryActorRevealedName,
-        sendRoleRequest,
+        sendModelTaskRequest,
         setLiveSceneStreamPhase,
         settleNarrativeTurnPerformance,
         translateOpeningValues,
@@ -218,22 +605,6 @@ export function createTurnPerformanceWorkflow(ports) {
         removeExplicitAddressDirective(
             playerAction,
         );
-        const currentRoomState =
-        state.map
-            ?.roomStates?.[
-                `${state.map?.activeMapId}:${state.map?.currentLocalNodeId}`
-            ] ||
-        null;
-        const sceneSafeRoomState =
-        currentRoomState
-            ? Object.fromEntries(
-                Object.entries(
-                    currentRoomState,
-                ).filter(([key]) =>
-                    key !==
-                    'materialEffects'),
-            )
-            : null;
         const playerTurnSequence =
         buildStructuredPlayerTurnSequence(
             playerAction,
@@ -299,6 +670,9 @@ export function createTurnPerformanceWorkflow(ports) {
                                 .actorIds ||
                             []
                         ),
+                    ],
+                    queryAnchors: [
+                        narrativePlayerAction,
                     ],
                 },
             );
@@ -377,39 +751,6 @@ export function createTurnPerformanceWorkflow(ports) {
                         currentRoomId:
                             state.map
                                 ?.currentLocalNodeId,
-                        currentRoomState:
-                            sceneSafeRoomState,
-                        currentMaterialState:
-                            buildCurrentMaterialState(
-                                state,
-                            ),
-                        formalItems:
-                            (
-                                state.items ||
-                                []
-                            )
-                                .filter(item =>
-                                    item.visibility !==
-                                    'hidden')
-                                .map(item => ({
-                                    id: item.id,
-                                    type:
-                                        item.type ||
-                                        item.kind,
-                                    labelEn:
-                                        item.labelEn,
-                                    ownerId:
-                                        item.ownerId,
-                                    holderId:
-                                        item.holderId,
-                                    state:
-                                        item.state ||
-                                        item.status,
-                                    isEquipped:
-                                        item
-                                            .isEquipped ===
-                                        true,
-                                })),
                         calendarEntries,
                         calendarStorySources,
                         behavioralEnvironment,
@@ -479,23 +820,22 @@ Strict boundaries from prohibitions:
 - memoryActivations contains sealed actor-ID capsules. An NPC may use only the capsule whose actor ID exactly equals that NPC's ID. Never transfer, paraphrase, imply, or reveal a memory, directive, impression, claim, relationship, rumor, private goal, fear, secret, or inference from one capsule through another NPC or the narrator.
 - memoryActivations contains non-secret relationship continuity for the matching actor. If the activation establishes that the actor has met the player, treat the player as already known. Treat activated known actor IDs as people that actor has already met. Use the activated relationship stance and supporting events instead of generic or stale relationship labels, but never transfer one actor's continuity through another.
 - actorCards are public performance data only. An actor absent from memoryActivations may use only current-scene observations, public profile fields, the current player action, common memory activation facts, and public memoryActivations.
-- socialKnowledge statements and relationship evidence are known to that capsule's actor because they spoke, directly participated, or were recorded as a witness. The fact that another capsule knows something never makes it common knowledge.
-- stateProposals are sparse, optional hints. Emit one only when the prose actually changes an NPC's activity/presence/room, creates a temporary actor, changes an item, or supplies a directly witnessed social hint. Never repeat unchanged state.
-- social_hint is optional and actor-scoped. Never write core memory, relationship labels, private facts, or deductions. The settlement graph enforces visibility, cooldown, and significance independently.
+- Reported Events and relationship receipts are known only to matching capsule's actor because they spoke, directly participated, received the report, or were recorded as a witness. Another capsule's knowledge never becomes common knowledge.
+- stateProposals are sparse, optional hints. Emit one only when the prose actually changes an NPC's activity/presence/room, creates a temporary actor, changes an item, or records a pending first impression. Never repeat unchanged state.
+- Every Actor state proposal requires currentActivityEn. social_hint is allowed only when that actor is meeting and seeing the player for the first time; it contains only actorId, currentActivityEn and firstImpressionOfPlayerEn. Never output impressionOfPlayerEn, memoryUpdate, Appraisal, relationship, clue, private fact, deduction or any other social field. Post-turn Appraisal/Social workflows own those facts.
 - Follow the committed scene, actorCards, local records, and today's medium-tier directives exactly.
 - sceneFacts contains only schedules explicitly claimed by the current scene. It contains their public beat/storyline sources. Never infer another schedule from the clock, participant, location, tag, or planningTier, and never write, cancel, reschedule or settle Calendar state.
-- currentScene.summary/summaryEn is supplied only while it still describes the scene opening. After the scene timeline advances, current actors, currentActivityEn, currentMaterialState, currentRoomState, and timelineEntries are the binding present-tense authority.
+- currentScene.summary/summaryEn is supplied only while it still describes the scene opening. After the scene timeline advances, current actors, currentActivityEn, authoritySnapshot.currentMaterialState, authoritySnapshot.currentRoomState, and timelineEntries are the binding present-tense authority.
 - currentScene.timelineEntries is chronological history, not a set of simultaneous facts. Later form, position, presence, and material entries supersede earlier ones.
 - Player or NPC dialogue may recall an earlier form, use a nickname, joke, speculate, or simply be mistaken. Such speech does not create another entity or override actorCards. A past transformation of one actor is not a second simultaneous creature unless a separate current actor or material entity explicitly exists.
-- Daily directives can outlive a scene transition. Current committed scene, location, rooms, and currentActivityEn always override stale locations or completed actions mentioned in a daily directive.
 - behavioralEnvironment is binding current context. Materially embody time period, daylight, sleep pressure, curfew, weather, exposure, clothing, shelter, noise, and activity effects when relevant. It overrides stale daily timing or location guidance. Do not recite it as a checklist.
 - If pacingDirective is supplied, it is already committed mid-tier authority. Realize its beat and pressure during this turn using only the actors already present in this input, plus any player-selected unnamed person who must be promoted under temporaryActorPromotionPolicy. Do not add anything else beyond that directive.
 - If pacingDirective contains causalCollapse, show its visibleResiduesEn and aftermathEn before explaining anything. The narrator must not state or infer the hidden cause. Only an actor-specific witnessAccounts entry or that actor's sealed causalFacts may be spoken, and only by the matching directly addressed actor.
-- currentRoomState.visibleResiduesEn contains previously committed aftermath that remains physically or institutionally observable. Preserve it until a later authoritative state change removes it; visibility does not grant knowledge of its hidden cause.
+- authoritySnapshot.currentRoomState.visibleResiduesEn contains previously committed aftermath that remains physically or institutionally observable. Preserve it until a later authoritative state change removes it; visibility does not grant knowledge of its hidden cause.
 - A named residue or belonging never makes its owner present. Only actorCards entries may speak, act, move, or receive state proposals; do not admit an absent owner because their blanket, trunk, note, damage, or other aftermath remains in the room.
-- currentMaterialState is binding visual state for the player, present actors, and this room only. Preserve active outfits, accessories, hairstyles, visible conditions, held objects and hands, placements, moves, removals, furnishing adjustments, damage, repairs, dirt, and cleaning silently unless relevant; do not reset anything merely because this turn does not mention it.
+- authoritySnapshot.currentMaterialState is binding visual state for the player, present actors, and this room only. Preserve active outfits, accessories, hairstyles, visible conditions, held objects and hands, placements, moves, removals, furnishing adjustments, damage, repairs, dirt, and cleaning silently unless relevant; do not reset anything merely because this turn does not mention it.
 - implicitItemPolicy grants ordinary identity-appropriate objects without creating Items: students have normal uniform, quills, textbooks and school supplies; professors have ordinary robes and teaching/office supplies; shopkeepers have routine stock and tools; everyone has normal clothing, food, household and hygiene objects. Use these naturally without IDs, quantities, history or item_update proposals until a completed gift, loan, return, theft, or deliberate retention makes the specific object socially persistent.
-- formalItems is the complete player-visible tracked Item list. Use its stable ID for carry/place/equip/unequip/give/lend/consume/damage/clean/lose/destroy proposals. Never rename an existing Item.
+- authoritySnapshot.currentItems is the complete player-visible tracked Item list. Use its stable ID for carry/place/equip/unequip/give/lend/consume/damage/clean/lose/destroy proposals. Never rename an existing Item.
 - itemDirectives pairs a structured player-intent operation with one stable formal Item ID. Treat it as authoritative object selection and intended operation, but not as proof of success. Narrate the attempt, then emit an item_update only when this turn's observable result actually completes or changes that operation. Recipient identity for give/lend still comes from the natural player action.
 - itemDirectiveErrors are diagnostics for malformed or unknown references. Never guess a replacement Item or mutate state from an invalid directive.
 - Propose acquire for a new candidate only when ownership, a completed gift/loan/return/theft, social meaning, clue/promise value, signature identity, or future plot consequences make durable tracking useful. Include objective appearance and exact evidence from this turn. A transferred ordinary quill, book, classroom supply, or everyday object crosses the implicit boundary; preserve lender ownerId and borrower holderId with transferMode loan. Untransferred ordinary clothing and transient props stay implicit.
@@ -522,13 +862,13 @@ Strict boundaries from prohibitions:
 - Ensemble texture is simultaneous background, not a roll call. Individuate at most ${budget.maximumIndividuatedSecondaryActors || 2} secondary named actors unless the player directly affects more. Do not spend one reaction sentence proving that every present actor still exists.
 - Apply temporaryActorPromotionPolicy independently of the medium-tier pacing cooldown. Merely looking across a crowd keeps people anonymous. Selecting one specific unnamed person and sitting beside, speaking to, touching, displacing, following, blocking, giving to, taking from, or otherwise directly affecting them requires promotion in this response.
 - A promoted person must use a new stable snake_case ID not listed in reservedActorIds, appear visibly in segments, and receive one temporary_actor proposal. Use an observable descriptor as nameEn until the story reveals a real name. Do not invent secrets, private history, special powers, or a relationship.
-- A promoted actor's publicDescriptionEn contains stable physical traits only. Exclude clothing, accessories, held items, nearby belongings, pose, activity, and location; currentActivityEn and the material observer own those dynamic details.
+- A promoted actor's publicProfile.descriptionEn contains stable physical traits only. Exclude clothing, accessories, held items, nearby belongings, pose, activity, and location; runtime.currentActivityEn and the material observer own those dynamic details.
 - A 15-minute turn must materially advance at least one concrete axis: NPC initiative, access change, practical procedure, new bounded information, or social position. Furnishings, bystander reactions, and repeated explanations do not count by themselves.
-- If momentumDirective.explicitProgressionRequest is true, complete that requested procedural step in the prose. An optional signals.sceneProgression may report the completion, but omission never invalidates good prose.
+- When momentumDirective.required is true, signals.sceneProgression is required and must report the completed concrete change. If momentumDirective.explicitProgressionRequest is true, complete that requested procedural step in the prose.
 - If momentumDirective.intentLocationReached is true, entry, lining up, opening doors, introductions, songs, announcements, and "about to begin" beats are setup rather than completed procedure units. Render at least momentumDirective.minimumCompletedProcedureUnits finished unit beyond setup before stopping.
 - When signals.sceneProgression is supplied, summaryEn must include every consequential public result from this response: tracked Item damage/destruction, teacher praise or House-point awards, public reprimands, and other room-visible outcomes. Do not reduce a multi-result public event to only its first action.
 - signals.eventEnded is optional and true only when a bounded interaction or procedure phase genuinely closes. Omit signals rather than filling them mechanically.
-- If pacingDirective is visibly realized, signals.pacingBeatRealized may be true. The settlement graph does not require this bookkeeping field.
+- When pacingDirective is supplied, visibly realize it and set signals.pacingBeatRealized to true.
 
 ${NPC_IDENTITY_PROMPT_BOUNDARY}
 
@@ -552,20 +892,15 @@ Schema:
     {
       "type":"actor_activity|actor_move|actor_enter|actor_exit",
       "actorId":"actor_id",
-      "currentActivityEn":"only when changed",
+      "currentActivityEn":"required resulting activity",
       "mapId":"existing_map_id when moving",
       "roomId":"reachable_room_id when moving"
     },
     {
       "type":"social_hint",
       "actorId":"actor_id",
-      "firstImpressionOfPlayerEn":"optional first impression",
-      "impressionOfPlayerEn":"optional concrete current opinion based on this turn",
-      "memoryUpdate":{
-        "summaryEn":"optional directly witnessed experience",
-        "significance":"everyday|notable",
-        "lastingImpactEn":"required only for notable"
-      }
+      "currentActivityEn":"required resulting activity",
+      "firstImpressionOfPlayerEn":"required first impression for a first meeting"
     },
     {
       "type":"item_update",
@@ -588,15 +923,7 @@ Schema:
     },
     {
       "type":"temporary_actor",
-      "actor":{
-        "id":"new_stable_snake_case_id",
-        "nameEn":"observable public name or descriptor",
-        "roleEn":"ordinary scene role",
-        "publicDescriptionEn":"stable physical traits only; no clothing, props, activity, or location",
-        "personalityEn":"performable public temperament",
-        "speechStyleEn":"performable speech style",
-        "currentActivityEn":"observable activity at entry"
-      }
+	      "actor":{"id":"new_snake_case","nameEn":"public name","aliases":[],"roleEn":"scene role","publicProfile":{"descriptionEn":"stable traits","backgroundEn":""},"performanceCore":{"temperamentEn":"temperament","speechStyleEn":"speech","motivesEn":[],"socialStrategiesEn":[],"boundariesEn":[],"vulnerabilitiesEn":[]},"privateFacts":{"secretEn":"","knowledgeEn":[]},"runtime":{"present":true,"roomId":"","currentActivityEn":"entry activity","currentIntentEn":"","currentGoalEn":""},"initialRelationshipToPlayerEn":"","firstImpressionOfPlayerEn":""}
     }
   ],
   "signals":{
@@ -604,7 +931,7 @@ Schema:
     "pacingBeatRealized":false,
     "sceneProgression":{
       "type":"npc_initiative|access_change|practical_step|new_information|social_shift",
-      "summaryEn":"optional completed change",
+      "summaryEn":"completed change",
       "completedRequestedStep":false
     }
   }
@@ -630,7 +957,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
             movementResolution,
             momentumDirective,
             checkResolution,
-            admittedActors,
         },
     ) {
         const input = {
@@ -640,7 +966,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
             movementResolution,
             momentumDirective,
             checkResolution,
-            admittedActors,
         };
         try {
             const response = await fetch(
@@ -690,7 +1015,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         movementResolution,
                         momentumDirective,
                         checkResolution,
-                        admittedActors,
                     },
                 ),
                 settlementSource:
@@ -775,10 +1099,31 @@ ${CANON_WIT_TONE_CONTRACT}`,
                             ),
                         ),
                 },
+                expectationReasonsByActorId:
+                    Object.fromEntries(
+                        Object.entries(
+                            originalSceneInput
+                                .memoryActivations
+                                ?.byActorId ||
+                            {},
+                        ).map(([
+                            actorId,
+                            capsule,
+                        ]) => [
+                            actorId,
+                            (
+                                capsule
+                                    ?.expectations ||
+                                []
+                            ).length
+                                ? 'available'
+                                : 'no_legal_schema',
+                        ]),
+                    ),
             },
         );
         beginLiveSceneStream(checkResolution);
-        let response = await sendRoleRequest(
+        const response = await sendModelTaskRequest(
             lowSlot,
             scenePrompt,
             {
@@ -791,9 +1136,12 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     ),
             },
         );
-        let raw = extractRoleResponseText(response);
-        let lastError = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
+        const raw =
+            extractRoleResponseText(
+                response,
+            );
+        const attempt = 0;
+        {
             recordTurnDiagnostic(
                 'model_response',
                 {
@@ -826,6 +1174,29 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     recoverScenePerformancePayload(raw) ||
                     parsedPayload;
                 }
+                const outputContract =
+                    validateLowScenePerformanceOutputContract(
+                        parsedPayload,
+                        {
+                            requireSceneProgression:
+                                momentumDirective
+                                    ?.required ===
+                                true,
+                            requirePacingBeatRealized:
+                                state
+                                    .pacingDirector
+                                    ?.pendingBeat
+                                    ?.status ===
+                                'pending',
+                        },
+                    );
+                if (!outputContract.valid) {
+                    throw new Error(
+                        outputContract
+                            .errors
+                            .join('；'),
+                    );
+                }
                 const payload =
                 await settleScenePerformance(
                     parsedPayload,
@@ -835,8 +1206,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         movementResolution,
                         momentumDirective,
                         checkResolution,
-                        admittedActors:
-                            mentionedKnownActors,
                     },
                 );
                 const validation = validateScenePerformance(
@@ -904,9 +1273,8 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 );
                 return payload;
             } catch (error) {
-                lastError = error;
                 recordTurnDiagnostic(
-                    'performance_repair',
+                    'performance_failure',
                     {
                         attempt,
                         error:
@@ -916,92 +1284,14 @@ ${CANON_WIT_TONE_CONTRACT}`,
                                 error,
                             ),
                         willRetry:
-                            attempt === 0,
+                            false,
                     },
                 );
-                if (attempt > 0) break;
-                setLiveSceneStreamPhase('repairing');
-                const validationConflict = {
-                    stage:
-                        'scene_performance_validation',
-                    errors:
-                        String(
-                            error?.message ||
-                            error,
-                        )
-                            .split('；')
-                            .map(value =>
-                                value.trim())
-                            .filter(Boolean)
-                            .slice(0, 16),
-                };
-                let invalidOutput = raw;
-                try {
-                    invalidOutput =
-                        parseJsonObject(raw);
-                } catch {
-                    // Keep the raw response when it is not valid JSON.
-                }
-                const repairContext =
-                    projectLowTierContextV1(
-                        state,
-                        {
-                            actorIds:
-                                originalSceneInput
-                                    .actorCards
-                                    .map(card =>
-                                        card.actorId),
-                            playerTurn: {
-                                ...originalSceneInput
-                                    .playerTurn,
-                                repair: {
-                                    validationConflict,
-                                    validationError:
-                                        validationConflict
-                                            .errors
-                                            .join('；'),
-                                    invalidOutput,
-                                },
-                            },
-                            sceneFacts:
-                                originalSceneInput
-                                    .sceneFacts,
-                            actionOpportunities:
-                                originalSceneInput
-                                    .actionOpportunities,
-                            memoryActivationCapsules:
-                                originalSceneInput
-                                    .memoryActivations,
-                            prohibitions:
-                                originalSceneInput
-                                    .prohibitions,
-                        },
-                    );
-                response = await sendRoleRequest(lowSlot, [
-                    {
-                        role: 'system',
-                        content: `Repair only the narrative core of the on-scene performance JSON. Return ${budget.minimumSegments || 4}-${budget.maximumSegments || 16} ordered narration/dialogue segments with at least two narration segments. Every segment must contain concrete observable prose or spoken words; never return ellipses, TBD, or placeholder text. Each dialogue segment must use a supplied present actor ID. Preserve every already valid segment, but rewrite any sentence named by validationError. For a concrete prior time, place, action, or quotation, retain it only in the matching actor's dialogue and add historicalClaims with an exact claimTextEn substring plus sourceEventIds from that actor's supportingEvents; otherwise remove the unsupported detail. The narrator and other actors cannot consume that Event. stateProposals and signals are optional; omit them rather than inventing metadata. If checkResolution exists, visibly apply that exact local result without rerolling or changing it. If momentumDirective requests a deterministic action whose prerequisites are satisfied, complete it in the prose rather than stopping at preparation. If a pacingDirective exists, visibly perform it using the supplied actors. Preserve the committed player room and actor rooms. The prose must plausibly cover ${budget.elapsedMinutes} minutes. Quantified relative narration is allowed only within that ${budget.elapsedMinutes}-minute span; never invent an absolute clock, date, schedule, external countdown, or longer relative duration. Do not add world facts or locked clues. Return one JSON object with no Markdown.`,
-                    },
-                    {
-                        role: 'user',
-                        content:
-                            JSON.stringify(
-                                repairContext,
-                            ),
-                    },
-                ], {
-                    json: true,
-                    stream: true,
-                    onProgress: rawText =>
-                        updateLiveSceneStream(
-                            rawText,
-                            'repairing',
-                        ),
-                });
-                raw = extractRoleResponseText(response);
+                throw new Error(
+                    `低档现场表演无效：${String(error?.message || error)}`,
+                );
             }
         }
-        throw new Error(`低档现场表演连续两次无效：${String(lastError?.message || lastError)}`);
     }
 
     function buildSceneTransaction(
@@ -1088,10 +1378,12 @@ ${CANON_WIT_TONE_CONTRACT}`,
             []
         ).map(actor => ({
             ...actor,
-            ...resolveTemporaryActorRevealedName(
-                actor,
-                transaction.segments,
-            ),
+            nameEn:
+                resolveTemporaryActorRevealedName(
+                    actor,
+                    transaction.segments,
+                ).nameEn ||
+                actor.nameEn,
         }));
         const source = {
             ...transaction,
@@ -1105,17 +1397,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
             ...source.segments.map(segment => segment.textEn),
             ...(source.actorUpdates || []).flatMap(update => [
                 update.currentActivityEn || '',
-                update.currentIntentEn || '',
-                update.impressionOfPlayerEn || '',
-                update.memoryUpdate?.summaryEn || '',
-            ]),
-            ...temporaryActorEntrances.flatMap(actor => [
-                actor.nameEn,
-                actor.roleEn,
-                actor.publicDescriptionEn,
-                actor.personalityEn,
-                actor.speechStyleEn,
-                actor.currentActivityEn,
             ]),
             ...(source.revealedClues || []).flatMap(clue => [
                 clue.labelEn,
@@ -1137,45 +1418,13 @@ ${CANON_WIT_TONE_CONTRACT}`,
         };
         (source.actorUpdates || []).forEach(update => {
             const currentActivity = translated[cursor++];
-            const currentIntent = translated[cursor++];
-            const impressionOfPlayer = translated[cursor++];
-            const memorySummary = translated[cursor++];
             localized.actorUpdates.push({
                 ...update,
                 currentActivity,
-                currentIntent,
-                ...(update.impressionOfPlayerEn
-                    ? { impressionOfPlayer }
-                    : {}),
-                ...(update.memoryUpdate
-                    ? {
-                        memoryUpdate: {
-                            ...update.memoryUpdate,
-                            summary: memorySummary,
-                        },
-                    }
-                    : {}),
             });
         });
-        temporaryActorEntrances.forEach(actor => {
-            localized
-                .temporaryActorEntrances
-                .push({
-                    ...actor,
-                    name:
-                    translated[cursor++],
-                    role:
-                    translated[cursor++],
-                    publicDescription:
-                    translated[cursor++],
-                    personality:
-                    translated[cursor++],
-                    speechStyle:
-                    translated[cursor++],
-                    currentActivity:
-                    translated[cursor++],
-                });
-        });
+        localized.temporaryActorEntrances =
+            temporaryActorEntrances;
         (source.revealedClues || []).forEach(clue => {
             localized.revealedClues.push({
                 ...clue,

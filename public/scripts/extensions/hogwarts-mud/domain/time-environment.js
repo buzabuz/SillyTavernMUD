@@ -587,13 +587,3 @@ export function getWorldDate(clock) {
     const match = WORLD_CLOCK_PATTERN.exec(String(clock || ''));
     return match ? `${match[1]}-${match[2]}-${match[3]}` : '';
 }
-
-export function isDailyDirectorPlanCurrent(clock, dailyDirector) {
-    const date = getWorldDate(clock);
-    return Boolean(
-        date &&
-        dailyDirector?.date === date &&
-        dailyDirector?.status === 'ready' &&
-        dailyDirector?.plan,
-    );
-}

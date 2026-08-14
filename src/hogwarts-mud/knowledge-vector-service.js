@@ -133,6 +133,21 @@ export class KnowledgeVectorService {
                 Boolean(
                     exactResult.rebuilt,
                 ),
+            knowledgeApiContractVersion:
+                exactResult
+                    .knowledgeApiContractVersion,
+            indexFormatVersion:
+                exactResult
+                    .indexFormatVersion,
+            projectorVersion:
+                exactResult
+                    .projectorVersion,
+            projectionFingerprint:
+                exactResult
+                    .projectionFingerprint,
+            stateRevision:
+                exactResult
+                    .stateRevision,
             errors: [],
         };
         let preferredResult = null;
@@ -362,6 +377,20 @@ export class KnowledgeVectorService {
                 'json',
             degraded: false,
             indexRebuilt: true,
+            knowledgeApiContractVersion:
+                exact
+                    .knowledgeApiContractVersion,
+            indexFormatVersion:
+                exact
+                    .indexFormatVersion,
+            projectorVersion:
+                exact
+                    .projectorVersion,
+            projectionFingerprint:
+                exact
+                    .projectionFingerprint,
+            stateRevision:
+                exact.stateRevision,
             errors: [],
         };
         let preferred = null;

@@ -147,8 +147,7 @@ export function createTurnController(ports) {
                 ?.interiorMapGeneration
                 ?.status ===
                 'generating' ||
-            getMudState()?.sceneTransition?.status === 'resolving' ||
-            getMudState()?.directorFoundation?.status === 'building') {
+            getMudState()?.sceneTransition?.status === 'resolving') {
             toastr.warning('世界状态仍在结算，请稍候。');
             return;
         }

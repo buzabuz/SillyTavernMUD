@@ -383,7 +383,7 @@ test('invalid Chronicle model output reports immediately without automatic retry
                 () => [],
             projectNpcRuntimeActorsForPrompt:
                 () => [],
-            sendRoleRequest:
+            sendSceneTransitionRequest:
                 async () => {
                     modelCalls++;
                     return structuredClone(

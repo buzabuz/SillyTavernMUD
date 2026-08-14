@@ -2,8 +2,21 @@ import {
     reduceAppraisalProposals,
 } from '../domain/memory-synapse-reducer.js';
 import {
+    beginModelTaskAction,
+    endModelTaskAction,
+} from '../domain/model-task-runtime.js';
+import {
+    getDeterministicTimePolicy,
+} from '../domain/turn-time.js';
+import {
+    isStateRevisionCurrentOrModelTaskRuntimeOnly,
+} from '../domain/save-revision.js';
+import {
     markCommittedMessageEventsKnownToPlayer,
 } from '../presence-witness-contract.js';
+import {
+    getInteriorMount,
+} from '../domain/interior-mount.js';
 
 function capturePostTurnAppraisalGuard(
     state,
@@ -21,6 +34,21 @@ function capturePostTurnAppraisalGuard(
             Number(
                 state?.stateRevision ||
                 0,
+            ),
+        turn:
+            Number(
+                state?.turn?.count ||
+                0,
+            ),
+        sceneId:
+            String(
+                state?.scene?.id ||
+                '',
+            ),
+        clock:
+            String(
+                state?.clock ||
+                '',
             ),
         boundaryId:
             String(
@@ -42,8 +70,16 @@ function isPostTurnAppraisalGuardCurrent(
     return (
         current.timelineEpoch ===
             guard.timelineEpoch &&
-        current.stateRevision ===
-            guard.stateRevision &&
+        isStateRevisionCurrentOrModelTaskRuntimeOnly(
+            state,
+            guard.stateRevision,
+        ) &&
+        current.turn ===
+            guard.turn &&
+        current.sceneId ===
+            guard.sceneId &&
+        current.clock ===
+            guard.clock &&
         current.boundaryId ===
             guard.boundaryId
     );
@@ -103,6 +139,12 @@ export function createTurnWorkflow(ports) {
         }),
         beginTurnDiagnostics =
         () => null,
+        buildActorMemoryKnowledgeSeeds =
+        () => ({
+            recordIds: [],
+            retainedEventIdsByActorId:
+                {},
+        }),
         buildLocalSemanticRoomContext,
         buildSceneTransaction,
         clearLiveSceneStream,
@@ -113,13 +155,10 @@ export function createTurnWorkflow(ports) {
         createTurnPerformanceBudget,
         createTurnRetryCheckpoint,
         ensureCurrentInteriorMap,
-        ensureDailyDirectorPlan,
-        ensureDirectorFoundation,
-        ensureMemoryConsolidation,
-        runMediumCalendarDirectorSafely =
-        async () => null,
+        assertWorldFoundationReady,
         ensurePacingDirectorAssessment,
         ensureSceneLifecycleState,
+        ensureSocialDirectorForAction,
         ensureSocialDirectorCatchup,
         finalizeTurnDiagnostics =
         () => null,
@@ -134,7 +173,6 @@ export function createTurnWorkflow(ports) {
         getLocalMapDefinition,
         getMudState,
         getSettings,
-        getWorldDate,
         getInspectorMapScope,
         isObservedEventBoundary,
         jobRegistry,
@@ -482,6 +520,21 @@ export function createTurnWorkflow(ports) {
             let state = getMudState();
             const previousClock =
                 state.clock;
+            const modelTaskActionId = [
+                'turn',
+                state.timelineEpoch ||
+                    'stable_epoch',
+                Number(
+                    state.turn?.count ||
+                    0,
+                ) + 1,
+                assistantMessageId ??
+                    context.chat.length,
+            ].join(':');
+            beginModelTaskAction(
+                state,
+                modelTaskActionId,
+            );
             beginTurnDiagnostics({
                 playerAction,
                 sceneId:
@@ -632,8 +685,9 @@ export function createTurnWorkflow(ports) {
                     );
                     await context.saveChat();
                 }
-                await ensureDirectorFoundation();
-                await ensureDailyDirectorPlan();
+                assertWorldFoundationReady(
+                    state,
+                );
                 state = getMudState();
                 const playerMessageId =
                 context.chat.indexOf(
@@ -814,9 +868,20 @@ export function createTurnWorkflow(ports) {
                         ),
                     ].filter(Boolean)),
                 ];
+                const memoryKnowledgeSeeds =
+                    buildActorMemoryKnowledgeSeeds(
+                        state,
+                        knowledgeAudienceActorIds,
+                        contextPlan,
+                    );
                 const entityIds = [
                     state.scene?.id,
                     state.map?.currentLocalNodeId,
+                    ...(
+                        memoryKnowledgeSeeds
+                            .recordIds ||
+                        []
+                    ),
                 ].filter(Boolean);
                 let retrievedKnowledge = await retrieveLocalKnowledge(
                     narrativePlayerAction,
@@ -824,6 +889,14 @@ export function createTurnWorkflow(ports) {
                     {
                         audienceActorIds:
                             knowledgeAudienceActorIds,
+                        seedRecordIds:
+                            memoryKnowledgeSeeds
+                                .recordIds ||
+                            [],
+                        retainedEventIdsByActorId:
+                            memoryKnowledgeSeeds
+                                .retainedEventIdsByActorId ||
+                            {},
                         limit:
                         contextPlan
                             .ragLimit *
@@ -834,6 +907,9 @@ export function createTurnWorkflow(ports) {
                     activationCapsules:
                         retrievedKnowledge
                             .activationCapsules,
+                    retainedEventIdsByActorId:
+                        retrievedKnowledge
+                            .retainedEventIdsByActorId,
                     diagnostics:
                         retrievedKnowledge
                             .diagnostics,
@@ -853,13 +929,17 @@ export function createTurnWorkflow(ports) {
                     .activationCapsules =
                 retrievalMetadata
                     .activationCapsules;
+                filteredKnowledge
+                    .retainedEventIdsByActorId =
+                retrievalMetadata
+                    .retainedEventIdsByActorId;
                 filteredKnowledge.diagnostics =
                 retrievalMetadata.diagnostics;
                 retrievedKnowledge =
                 filteredKnowledge;
                 const budget = createTurnPerformanceBudget(
                     narrativePlayerAction,
-                    state.dailyDirector?.plan?.timePolicy,
+                    getDeterministicTimePolicy(),
                     {
                         activeNamedActorCount:
                         knowledgeAudienceActorIds
@@ -1285,6 +1365,7 @@ export function createTurnWorkflow(ports) {
                     'committing',
                     [],
                 );
+                state = getMudState();
                 let nextState = applyTurnTransaction(
                     state,
                     transaction,
@@ -1409,6 +1490,16 @@ export function createTurnWorkflow(ports) {
                         },
                     );
                 }
+                const liveModelTaskRuntime =
+                    getMudState()
+                        ?.modelTaskRuntime;
+                if (liveModelTaskRuntime) {
+                    nextState
+                        .modelTaskRuntime =
+                    structuredClone(
+                        liveModelTaskRuntime,
+                    );
+                }
                 if (rollbackCheckpoint) {
                     nextState.turnRetry =
                     rollbackCheckpoint;
@@ -1492,16 +1583,7 @@ export function createTurnWorkflow(ports) {
                 applySystemPrompt();
                 updateNativeMessageBlock(messageId, message);
                 renderAll();
-                await ensureSocialDirectorCatchup();
-                await ensureMemoryConsolidation();
-                await runMediumCalendarDirectorSafely({
-                    previousClock,
-                    playerAction,
-                });
-                state = getMudState();
-                if (state.dailyDirector?.date !== getWorldDate(state.clock)) {
-                    await ensureDailyDirectorPlan();
-                }
+                await ensureSocialDirectorForAction();
                 const completedDiagnostics =
                     finalizeTurnDiagnostics(
                         'committed',
@@ -1560,6 +1642,16 @@ export function createTurnWorkflow(ports) {
                 renderAll();
                 throw error;
             } finally {
+                const currentState =
+                    getMudState();
+                if (currentState) {
+                    endModelTaskAction(
+                        currentState,
+                        modelTaskActionId,
+                    );
+                    await context
+                        .saveMetadata();
+                }
                 discardTurnDiagnostics();
                 jobRegistry.turnActive = false;
                 clearLiveSceneStream();
@@ -1682,20 +1774,22 @@ export function createTurnWorkflow(ports) {
                 state.map,
             );
             if (
-                activeMap
-                    ?.sourceContainerKey &&
+                getInteriorMount(
+                    activeMap,
+                ) &&
             getInspectorMapScope() !==
                 'auto'
             ) {
                 resetInspectorMapScope();
                 renderAll();
             }
-            await ensureDirectorFoundation();
+            assertWorldFoundationReady(
+                state,
+            );
             await repairLegacyGenericTurnSummaries();
             await repairLegacySyntheticSceneOpeningSegments();
             await repairNarratedCurrentLocationResidents();
             await syncLocalKnowledge();
-            await ensureDailyDirectorPlan();
             await processUnsettledTurn();
             await ensureSocialDirectorCatchup();
         } catch (error) {

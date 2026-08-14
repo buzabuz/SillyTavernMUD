@@ -18,6 +18,9 @@ import {
 import {
     validateSocialGraphV3,
 } from './social-migration.js';
+import {
+    isStateRevisionCurrentOrModelTaskRuntimeOnly,
+} from './save-revision.js';
 
 export function getActorMemoryEntries(profile) {
     const normalized =
@@ -80,6 +83,27 @@ export function captureMemoryBoundaryGuard(
                         ?.stateRevision,
                 ) || 0,
             ),
+        turn:
+            Math.max(
+                0,
+                Number(
+                    worldState
+                        ?.turn
+                        ?.count,
+                ) || 0,
+            ),
+        sceneId:
+            String(
+                worldState
+                    ?.scene
+                    ?.id ||
+                '',
+            ),
+        clock:
+            String(
+                worldState?.clock ||
+                '',
+            ),
         boundaryId:
             getBoundaryId(
                 worldState
@@ -102,8 +126,16 @@ export function isMemoryBoundaryGuardCurrent(
         guard.boundaryId &&
         current.timelineEpoch ===
             guard.timelineEpoch &&
-        current.stateRevision ===
-            guard.stateRevision &&
+        isStateRevisionCurrentOrModelTaskRuntimeOnly(
+            worldState,
+            guard.stateRevision,
+        ) &&
+        current.turn ===
+            guard.turn &&
+        current.sceneId ===
+            guard.sceneId &&
+        current.clock ===
+            guard.clock &&
         current.boundaryId ===
             guard.boundaryId &&
         worldState

@@ -1628,7 +1628,7 @@ test('Calendar transition prompts expose only the selected schedule with public 
             },
             projectActorLibraryForContext:
                 () => [],
-            async sendRoleRequest(
+            async sendSceneTransitionRequest(
                 _slot,
                 requestPrompt,
             ) {
@@ -2021,20 +2021,15 @@ test('a failed post-commit High refresh blocks Medium fallback without changing 
     );
 });
 
-test('a post-commit Daily Director failure preserves Calendar Moment success semantics', async () => {
+test('Calendar Moment post-commit has no retired Daily Director hook', async () => {
     const committedState = {
         ...createState(),
         clock:
             TARGET_CLOCK,
         stateRevision: 7,
-        dailyDirector: {
-            date: '1991-09-02',
-            status: 'idle',
-        },
     };
     const warnings = [];
-    let currentState =
-        committedState;
+    let dailyCalls = 0;
 
     const result =
         await finalizeCalendarMomentPostCommit({
@@ -2042,9 +2037,7 @@ test('a post-commit Daily Director failure preserves Calendar Moment success sem
             previousClock:
                 CURRENT_CLOCK,
             getMudState: () =>
-                currentState,
-            getWorldDate: clock =>
-                clock.slice(0, 10),
+                committedState,
             runHighCalendarDirectorSafely:
                 async () => ({
                     status: 'skipped',
@@ -2055,21 +2048,7 @@ test('a post-commit Daily Director failure preserves Calendar Moment success sem
                 }),
             ensureDailyDirectorPlan:
                 async () => {
-                    currentState
-                        .dailyDirector = {
-                            date:
-                                '1991-09-03',
-                            status:
-                                'failed',
-                            error:
-                                'daily model unavailable',
-                            plan: null,
-                            settledAt:
-                                null,
-                        };
-                    throw new Error(
-                        'daily model unavailable',
-                    );
+                    dailyCalls += 1;
                 },
             warn: (...args) => {
                 warnings.push(args);
@@ -2103,24 +2082,11 @@ test('a post-commit Daily Director failure preserves Calendar Moment success sem
         'post-commit model failure must not create a misleading Calendar Moment failure marker',
     );
     assert.equal(
-        result.dailyDirector
-            .status,
-        'failed',
-        'the failure remains scoped to the Daily Director',
-    );
-    assert.equal(
         warnings.length,
-        1,
-    );
-    assert.match(
-        String(
-            warnings[0][1]
-                ?.message,
-        ),
-        /daily model unavailable/u,
+        0,
     );
     assert.equal(
-        currentState,
-        committedState,
+        dailyCalls,
+        0,
     );
 });

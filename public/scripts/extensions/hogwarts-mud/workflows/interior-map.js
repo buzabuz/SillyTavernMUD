@@ -1,3 +1,7 @@
+import {
+    getInteriorMount,
+} from '../domain/interior-mount.js';
+
 export function createInteriorMapWorkflow(ports) {
     const {
         applyGeneratedInteriorMap,
@@ -16,7 +20,7 @@ export function createInteriorMapWorkflow(ports) {
         renderAll,
         resetInspectorMapScope,
         resolveRoleSlots,
-        sendRoleRequest,
+        sendModelTaskRequest,
         translateOpeningValues,
         validateGeneratedInteriorMap,
     } = ports;
@@ -176,7 +180,7 @@ Schema:
             request,
         );
         let response =
-        await sendRoleRequest(
+        await sendModelTaskRequest(
             roleSlot,
             prompt,
             { json: true },
@@ -226,7 +230,7 @@ Schema:
                     break;
                 }
                 response =
-                await sendRoleRequest(
+                await sendModelTaskRequest(
                     roleSlot,
                     [
                         {
@@ -252,9 +256,6 @@ Schema:
                                             prompt[1]
                                                 .content,
                                         ),
-                                    requiredSchema:
-                                        prompt[0]
-                                            .content,
                                 }),
                         },
                     ],
@@ -284,11 +285,14 @@ Schema:
         );
         let inspectorScopeChanged =
         false;
+        const activeMount =
+            getInteriorMount(
+                activeMap,
+            );
         if (
-            activeMap
-                ?.sourceContainerKey &&
+            activeMount &&
         getInspectorMapScope() ===
-            activeMap.parentMapId
+            activeMount.parentMapId
         ) {
             resetInspectorMapScope();
             inspectorScopeChanged =
@@ -334,6 +338,28 @@ Schema:
             applySystemPrompt();
             renderAll();
             return next;
+        }
+        if (
+            request.status ===
+                'preset_missing'
+        ) {
+            state.map
+                .interiorMapGeneration = {
+                    status: 'failed',
+                    error:
+                    `Registered preset interior ${request.presetInteriorMapId} is missing.`,
+                    bindingKey:
+                    request.bindingKey,
+                    mapId:
+                    request
+                        .presetInteriorMapId,
+                    settledAt:
+                    new Date()
+                        .toISOString(),
+                };
+            await context.saveMetadata();
+            renderAll();
+            return null;
         }
         const previousGeneration =
         state.map

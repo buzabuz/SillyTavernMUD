@@ -364,8 +364,10 @@ function limitToExtremeContext(
 }
 
 function createTurnPorts(
-    sendRoleRequest,
+    sendModelTaskRequest,
     validateScenePerformance,
+    recordTurnDiagnostic =
+        () => {},
 ) {
     return {
         CANON_CAST_IDENTITY_CONTRACT:
@@ -422,6 +424,7 @@ function createTurnPorts(
             value => JSON.parse(value),
         recoverScenePerformancePayload:
             () => null,
+        recordTurnDiagnostic,
         removeExplicitAddressDirective:
             value => value,
         resolvePlayerAddressing:
@@ -433,7 +436,7 @@ function createTurnPorts(
             }),
         resolveTemporaryActorRevealedName:
             actor => actor,
-        sendRoleRequest,
+        sendModelTaskRequest,
         setLiveSceneStreamPhase:
             () => {},
         settleNarrativeTurnPerformance:
@@ -471,8 +474,9 @@ async function withSettlementFetch(
     }
 }
 
-test('[defect-probing] ordinary Performer repair explicitly preserves the original authority, capsules, and validation conflict', async () => {
+test('[defect-probing] ordinary Performer reports the first validation error without a repair call', async () => {
     const prompts = [];
+    const diagnostics = [];
     const responses = [
         JSON.stringify({
             segments: [{
@@ -514,11 +518,21 @@ test('[defect-probing] ordinary Performer repair explicitly preserves the origin
                             errors: [],
                         };
                 },
+                (
+                    type,
+                    data,
+                ) => {
+                    diagnostics.push({
+                        type,
+                        data,
+                    });
+                },
             ),
         );
 
-    await withSettlementFetch(
-        () =>
+    await assert.rejects(
+        () => withSettlementFetch(
+            () =>
             workflow.generateScenePerformance(
                 {
                     profileId: 'low',
@@ -546,49 +560,42 @@ test('[defect-probing] ordinary Performer repair explicitly preserves the origin
                 [],
                 createContextPlan(),
             ),
+        ),
+        /Item vanished_quill is physically absent/u,
     );
 
     assert.equal(
         prompts.length,
-        2,
-        'repair must reuse the one existing low-tier retry only',
+        1,
+        'invalid Low output must not trigger a repair call',
     );
     const originalInput =
         JSON.parse(
             prompts[0][1].content,
         );
-    const repairInput =
-        JSON.parse(
-            prompts[1][1].content,
-        );
     assert.deepEqual(
-        Object.keys(repairInput),
         Object.keys(originalInput),
+        [
+            'playerTurn',
+            'sceneFacts',
+            'actorCards',
+            'actionOpportunities',
+            'memoryActivations',
+            'prohibitions',
+        ],
     );
-    assert.deepEqual(
-        repairInput.sceneFacts,
-        originalInput.sceneFacts,
-    );
-    assert.deepEqual(
-        repairInput
-            .memoryActivations,
-        originalInput
-            .memoryActivations,
-    );
-    assert.deepEqual(
-        repairInput.playerTurn
-            .repair.validationConflict,
-        {
-            stage:
-                'scene_performance_validation',
-            errors: [
-                'Item vanished_quill is physically absent.',
-            ],
-        },
+    assert.equal(
+        diagnostics.find(entry =>
+            entry.type ===
+                'narrative_context')
+            ?.data
+            ?.expectationReasonsByActorId
+            ?.hermione,
+        'no_legal_schema',
     );
 });
 
-test('[defect-probing] production Performer extreme trimming keeps the repair action, conflict, authority, capsules, and segment provenance', async () => {
+test('[defect-probing] production Performer reports an extreme invalid output after one bounded request', async () => {
     const prompts = [];
     const claimTextEn =
         'Yesterday in the rain corridor, you hid my umbrella.';
@@ -651,8 +658,9 @@ test('[defect-probing] production Performer extreme trimming keeps the repair ac
             ),
         );
 
-    await withSettlementFetch(
-        () =>
+    await assert.rejects(
+        () => withSettlementFetch(
+            () =>
             workflow.generateScenePerformance(
                 {
                     profileId: 'low',
@@ -680,26 +688,25 @@ test('[defect-probing] production Performer extreme trimming keeps the repair ac
                 [],
                 createContextPlan(),
             ),
+        ),
+        /不得写入字段：disposable/u,
     );
 
     assert.equal(
         prompts.length,
-        2,
+        1,
     );
-    const repairInput =
+    const originalInput =
         JSON.parse(
-            prompts[1][1].content,
+            prompts[0][1].content,
         );
-    const invalidOutput =
-        repairInput.playerTurn
-            .repair.invalidOutput;
     assert.equal(
-        repairInput.playerTurn
+        originalInput.playerTurn
             .playerAction,
         'Pick up the vanished quill.',
     );
     assert.deepEqual(
-        Object.keys(repairInput),
+        Object.keys(originalInput),
         [
             'playerTurn',
             'sceneFacts',
@@ -709,26 +716,8 @@ test('[defect-probing] production Performer extreme trimming keeps the repair ac
             'prohibitions',
         ],
     );
-    assert.deepEqual(
-        repairInput.playerTurn
-            .repair.validationConflict,
-        {
-            stage:
-                'scene_performance_validation',
-            errors: [
-                'Item vanished_quill is physically absent.',
-                'The failed segment must retain its provenance.',
-            ],
-        },
-    );
-    assert.deepEqual(
-        invalidOutput.segments[0]
-            .historicalClaims[0]
-            .sourceEventIds,
-        ['event_umbrella'],
-    );
     assert.equal(
-        repairInput.requiredSchema,
+        originalInput.requiredSchema,
         undefined,
     );
 });
@@ -810,7 +799,7 @@ test('ordinary Performer accepts supported actor-scoped historical provenance in
     );
 });
 
-test('ordinary Performer sends missing historical provenance through deterministic repair', async () => {
+test('ordinary Performer reports missing historical provenance without repair', async () => {
     const prompts = [];
     const responses = [
         {
@@ -849,8 +838,8 @@ test('ordinary Performer sends missing historical provenance through determinist
             ),
         );
 
-    const result =
-        await withSettlementFetch(
+    await assert.rejects(
+        () => withSettlementFetch(
             () =>
                 workflow.generateScenePerformance(
                     {
@@ -879,22 +868,11 @@ test('ordinary Performer sends missing historical provenance through determinist
                     [],
                     createContextPlan(),
                 ),
-        );
-
-    assert.equal(prompts.length, 2);
-    const repairInput =
-        JSON.parse(
-            prompts[1][1].content,
-        );
-    assert.match(
-        repairInput.playerTurn
-            .repair.validationError,
+        ),
         /unsupported_historical_detail/u,
     );
-    assert.equal(
-        result.segments[0].textEn,
-        'I thought you might refuse help.',
-    );
+
+    assert.equal(prompts.length, 1);
 });
 
 test('ordinary Performer rejects narrator and other-NPC consumption of a private supporting Event', async () => {
@@ -1032,17 +1010,23 @@ test('ordinary Performer rejects narrator and other-NPC consumption of a private
         return result;
     };
 
-    await run(2);
-    const result =
-        await run(4);
+    await assert.rejects(
+        () => run(1),
+        /historicalClaims/u,
+    );
+    responses.shift();
+    await assert.rejects(
+        () => run(2),
+        /actor ron cannot access supporting Event\(s\) event_umbrella/u,
+    );
     assert.equal(
-        result.segments[0].textEn,
-        'I thought you might refuse help.',
+        prompts.length,
+        2,
     );
 });
 
 function createTransitionPorts(
-    sendRoleRequest,
+    sendSceneOpeningRequest,
     validateSceneTransitionPackage,
 ) {
     return {
@@ -1089,7 +1073,7 @@ function createTransitionPorts(
             value => value,
         projectNpcRuntimeActorsForPrompt:
             state => state.actors,
-        sendRoleRequest,
+        sendSceneOpeningRequest,
         stripSyntheticSceneOpeningActorSegments:
             segments => segments,
         synchronizeHeldItemLocations:
@@ -1098,24 +1082,23 @@ function createTransitionPorts(
     };
 }
 
-test('[defect-probing] low Opening repair explicitly preserves the original authority, capsules, and validation conflict', async () => {
+test('[defect-probing] low Opening reports the first validation error without a repair call', async () => {
     const prompts = [];
-    const responses = [
+    const response =
         JSON.stringify({
-            segments: [{
-                type: 'narration',
-                textEn:
-                    'Hermione lifts the quill from a Library table.',
-            }],
-        }),
-        JSON.stringify({
-            segments: [{
-                type: 'narration',
-                textEn:
-                    'The Library table is bare.',
-            }],
-        }),
-    ];
+            segments: [
+                {
+                    type: 'narration',
+                    textEn:
+                        'Hermione lifts the quill from a Library table.',
+                },
+                {
+                    type: 'narration',
+                    textEn:
+                        'Rain taps against the high windows.',
+                },
+            ],
+        });
     let validations = 0;
     const workflow =
         createSceneTransitionWorkflow(
@@ -1123,108 +1106,90 @@ test('[defect-probing] low Opening repair explicitly preserves the original auth
                 async (_slot, prompt) => {
                     prompts.push(prompt);
                     return {
-                        content:
-                            responses.shift(),
+                        content: response,
                     };
                 },
                 () => {
                     validations++;
-                    return validations === 1
-                        ? {
-                            valid: false,
-                            errors: [
-                                'Opening contradicts absent Item vanished_quill.',
-                            ],
-                        }
-                        : {
-                            valid: true,
-                            errors: [],
-                        };
+                    return {
+                        valid: false,
+                        errors: [
+                            'Opening contradicts absent Item vanished_quill.',
+                        ],
+                    };
                 },
             ),
         );
-    await workflow
-        .generateSceneTransitionOpening(
-            {
-                profileId: 'low',
-                tier: 'low',
-            },
-            createState(),
-            {
-                nextClock:
-                    '1991-09-04 · 09:45',
-                nextScene: {
-                    id: 'scene_library',
-                    nameEn: 'Library',
-                    summaryEn:
-                        'The Library waits.',
-                    mapId:
-                        'hogwarts_castle',
-                    roomId: 'library',
-                    actorStates: [{
-                        id: 'hermione',
-                        present: true,
+    await assert.rejects(
+        () =>
+            workflow
+                .generateSceneTransitionOpening(
+                    {
+                        profileId: 'low',
+                        tier: 'low',
+                    },
+                    createState(),
+                    {
+                        nextClock:
+                            '1991-09-04 · 09:45',
+                        nextScene: {
+                            id: 'scene_library',
+                            nameEn: 'Library',
+                            summaryEn:
+                                'The Library waits.',
+                            mapId:
+                                'hogwarts_castle',
+                            roomId: 'library',
+                            actorStates: [{
+                                id: 'hermione',
+                                present: true,
+                                mapId:
+                                    'hogwarts_castle',
+                                roomId: 'library',
+                                lifeStatus: 'alive',
+                                currentActivityEn:
+                                    'Sorting notes.',
+                                currentIntentEn:
+                                    'Finish the index.',
+                            }],
+                        },
+                    },
+                    {
                         mapId:
                             'hogwarts_castle',
                         roomId: 'library',
-                        lifeStatus: 'alive',
-                        currentActivityEn:
-                            'Sorting notes.',
-                        currentIntentEn:
-                            'Finish the index.',
-                    }],
-                },
-            },
-            {
-                mapId:
-                    'hogwarts_castle',
-                roomId: 'library',
-            },
-            createContextPlan(),
-            {},
-            createRetrievalResult(),
-        );
+                    },
+                    createContextPlan(),
+                    {},
+                    createRetrievalResult(),
+                ),
+        /Opening contradicts absent Item vanished_quill/u,
+    );
 
     assert.equal(
         prompts.length,
-        2,
-        'opening repair must not add a third paid call',
+        1,
+        'invalid Low opening must not trigger a repair call',
     );
+    assert.equal(validations, 1);
     const originalInput =
         JSON.parse(
             prompts[0][1].content,
         );
-    const repairInput =
-        JSON.parse(
-            prompts[1][1].content,
-        );
-    assert.deepEqual(
-        repairInput.authoritySnapshot,
+    assert.ok(
         originalInput.authoritySnapshot,
     );
-    assert.deepEqual(
-        repairInput
-            .memoryActivationCapsules,
+    assert.ok(
         originalInput
             .memoryActivationCapsules,
     );
-    assert.deepEqual(
-        repairInput.validationConflict,
-        {
-            stage:
-                'scene_opening_validation',
-            errors: [
-                'Opening contradicts absent Item vanished_quill.',
-            ],
-        },
-    );
 });
 
-test('[defect-probing] production Opening extreme trimming keeps the committed request, conflict, authority, capsules, and segment provenance', async () => {
+test('[defect-probing] production Opening reports an invalid extreme output after one bounded request', async () => {
     const prompts = [];
     const claimTextEn =
         'Yesterday in the rain corridor, you hid my umbrella.';
-    const responses = [
+    const response =
         JSON.stringify({
             segments: [{
                 type: 'dialogue',
@@ -1239,16 +1204,7 @@ test('[defect-probing] production Opening extreme trimming keeps the committed r
             }],
             disposable:
                 'x'.repeat(50_000),
-        }),
-        JSON.stringify({
-            segments: [{
-                type: 'narration',
-                textEn:
-                    'The Library table is bare.',
-            }],
-        }),
-    ];
-    let validations = 0;
+        });
     const workflow =
         createSceneTransitionWorkflow(
             createTransitionPorts(
@@ -1261,139 +1217,99 @@ test('[defect-probing] production Opening extreme trimming keeps the committed r
                         limitedPrompt,
                     );
                     return {
-                        content:
-                            responses.shift(),
+                        content: response,
                     };
                 },
-                () => {
-                    validations++;
-                    return validations === 1
-                        ? {
-                            valid: false,
-                            errors: [
-                                'Opening contradicts absent Item vanished_quill.',
-                                'The failed segment must retain its provenance.',
-                            ],
-                        }
-                        : {
-                            valid: true,
-                            errors: [],
-                        };
-                },
+                () => ({
+                    valid: true,
+                    errors: [],
+                }),
             ),
         );
 
-    await workflow
-        .generateSceneTransitionOpening(
-            {
-                profileId: 'low',
-                tier: 'low',
-            },
-            createState(),
-            {
-                nextClock:
-                    '1991-09-04 · 09:45',
-                nextScene: {
-                    id: 'scene_library',
-                    nameEn: 'Library',
-                    summaryEn:
-                        'The Library waits.',
-                    mapId:
-                        'hogwarts_castle',
-                    roomId: 'library',
-                    actorStates: [{
-                        id: 'hermione',
-                        present: true,
+    await assert.rejects(
+        () =>
+            workflow
+                .generateSceneTransitionOpening(
+                    {
+                        profileId: 'low',
+                        tier: 'low',
+                    },
+                    createState(),
+                    {
+                        nextClock:
+                            '1991-09-04 · 09:45',
+                        nextScene: {
+                            id: 'scene_library',
+                            nameEn: 'Library',
+                            summaryEn:
+                                'The Library waits.',
+                            mapId:
+                                'hogwarts_castle',
+                            roomId: 'library',
+                            actorStates: [{
+                                id: 'hermione',
+                                present: true,
+                                mapId:
+                                    'hogwarts_castle',
+                                roomId: 'library',
+                                lifeStatus: 'alive',
+                                currentActivityEn:
+                                    'Sorting notes.',
+                                currentIntentEn:
+                                    'Finish the index.',
+                            }],
+                        },
+                    },
+                    {
                         mapId:
                             'hogwarts_castle',
                         roomId: 'library',
-                        lifeStatus: 'alive',
-                        currentActivityEn:
-                            'Sorting notes.',
-                        currentIntentEn:
-                            'Finish the index.',
-                    }],
-                },
-            },
-            {
-                mapId:
-                    'hogwarts_castle',
-                roomId: 'library',
-            },
-            createContextPlan(),
-            {},
-            createPrivateMemoryRetrieval(),
-        );
+                    },
+                    createContextPlan(),
+                    {},
+                    createPrivateMemoryRetrieval(),
+                ),
+        /disposable/u,
+    );
 
     assert.equal(
         prompts.length,
-        2,
+        1,
     );
-    const repairInput =
+    const originalInput =
         JSON.parse(
-            prompts[1][1].content,
+            prompts[0][1].content,
         );
-    const invalidOutput =
-        JSON.parse(
-            repairInput
-                .invalidOutput,
-        );
-    assert.deepEqual(
-        repairInput.authoritySnapshot,
-        repairInput
-            .originalRequest
-            .authoritySnapshot,
-    );
-    assert.deepEqual(
-        repairInput
-            .memoryActivationCapsules,
-        repairInput
-            .originalRequest
-            .memoryActivationCapsules,
-    );
     assert.equal(
-        repairInput
-            .originalRequest
-            .openingClock,
+        originalInput.openingClock,
         '1991-09-04 · 09:45',
     );
     assert.equal(
-        repairInput
-            .originalRequest
+        originalInput
             .destinationAuthority
             .roomId,
         'library',
     );
     assert.equal(
-        repairInput
-            .originalRequest
+        originalInput
             .nextScene
             .id,
         'scene_library',
     );
     assert.equal(
-        repairInput
-            .originalRequest
-            .presentActorStates[0]
+        originalInput
+            .nextScene
+            .actorStates[0]
             .id,
         'hermione',
     );
-    assert.deepEqual(
-        repairInput.validationConflict,
-        {
-            stage:
-                'scene_opening_validation',
-            errors: [
-                'Opening contradicts absent Item vanished_quill.',
-                'The failed segment must retain its provenance.',
-            ],
-        },
+    assert.ok(
+        originalInput.authoritySnapshot,
     );
-    assert.deepEqual(
-        invalidOutput.segments[0]
-            .historicalClaims[0]
-            .sourceEventIds,
-        ['event_umbrella'],
+    assert.ok(
+        originalInput
+            .memoryActivationCapsules,
     );
 });
 
@@ -1513,9 +1429,10 @@ test('[Task 12] production Performer accepts supported actor recall and expectat
     );
 });
 
-test('[Task 12] production Performer repairs narrator and cross-actor private Event consumption', async () => {
+test('[Task 12] production Performer reports narrator and cross-actor private Event consumption once', async () => {
     const narratorPrompts = [];
-    await runTask12Performance(
+    await assert.rejects(
+        () => runTask12Performance(
         [{
             segments: [{
                 type: 'narration',
@@ -1530,21 +1447,12 @@ test('[Task 12] production Performer repairs narrator and cross-actor private Ev
             }],
         }],
         narratorPrompts,
+        ),
+        /unsupported_historical_detail/u,
     );
     assert.equal(
         narratorPrompts.length,
-        2,
-    );
-    const narratorRepair =
-        JSON.parse(
-            narratorPrompts[1][1]
-                .content,
-        );
-    assert.match(
-        narratorRepair
-            .playerTurn
-            .repair.validationError,
-        /unsupported_historical_detail/u,
+        1,
     );
 
     const state =
@@ -1567,7 +1475,8 @@ test('[Task 12] production Performer repairs narrator and cross-actor private Ev
         roleEn: 'Student',
     });
     const crossActorPrompts = [];
-    await runTask12Performance(
+    await assert.rejects(
+        () => runTask12Performance(
         [{
             segments: [{
                 ...supportedUmbrellaSegment(),
@@ -1583,39 +1492,31 @@ test('[Task 12] production Performer repairs narrator and cross-actor private Ev
         }],
         crossActorPrompts,
         state,
+        ),
+        /actor ron cannot access supporting Event\(s\) event_umbrella/u,
     );
     assert.equal(
         crossActorPrompts.length,
-        2,
-    );
-    const crossActorRepair =
-        JSON.parse(
-            crossActorPrompts[1][1]
-                .content,
-        );
-    assert.match(
-        crossActorRepair
-            .playerTurn
-            .repair.validationError,
-        /actor ron cannot access supporting Event\(s\) event_umbrella/u,
+        1,
     );
 });
 
-test('[Task 12] production low Opening rejects narrator recall and repairs deterministically', async () => {
+test('[Task 12] production low Opening reports narrator recall without repair', async () => {
     const prompts = [];
-    const responses = [{
-        segments: [{
-            type: 'narration',
-            textEn:
-                'Yesterday in the rain corridor, Tina hid Hermione\'s umbrella behind the armour.',
-        }],
-    }, {
-        segments: [{
-            type: 'narration',
-            textEn:
-                'The Library smells of rain and old parchment.',
-        }],
-    }];
+    const response = {
+        segments: [
+            {
+                type: 'narration',
+                textEn:
+                    'Yesterday in the rain corridor, Tina hid Hermione\'s umbrella behind the armour.',
+            },
+            {
+                type: 'narration',
+                textEn:
+                    'The Library smells of rain and old parchment.',
+            },
+        ],
+    };
     const workflow =
         createSceneTransitionWorkflow(
             createTransitionPorts(
@@ -1624,7 +1525,7 @@ test('[Task 12] production low Opening rejects narrator recall and repairs deter
                     return {
                         content:
                             JSON.stringify(
-                                responses.shift(),
+                                response,
                             ),
                     };
                 },
@@ -1634,59 +1535,54 @@ test('[Task 12] production low Opening rejects narrator recall and repairs deter
                 }),
             ),
         );
-    await workflow
-        .generateSceneTransitionOpening(
-            {
-                profileId: 'low',
-                tier: 'low',
-            },
-            createState(),
-            {
-                nextClock:
-                    '1991-09-04 · 09:45',
-                nextScene: {
-                    id: 'scene_library',
-                    nameEn: 'Library',
-                    summaryEn:
-                        'The Library waits.',
-                    mapId:
-                        'hogwarts_castle',
-                    roomId: 'library',
-                    actorStates: [{
-                        id: 'hermione',
-                        present: true,
+    await assert.rejects(
+        () =>
+            workflow
+                .generateSceneTransitionOpening(
+                    {
+                        profileId: 'low',
+                        tier: 'low',
+                    },
+                    createState(),
+                    {
+                        nextClock:
+                            '1991-09-04 · 09:45',
+                        nextScene: {
+                            id: 'scene_library',
+                            nameEn: 'Library',
+                            summaryEn:
+                                'The Library waits.',
+                            mapId:
+                                'hogwarts_castle',
+                            roomId: 'library',
+                            actorStates: [{
+                                id: 'hermione',
+                                present: true,
+                                mapId:
+                                    'hogwarts_castle',
+                                roomId: 'library',
+                                lifeStatus: 'alive',
+                                currentActivityEn:
+                                    'Sorting notes.',
+                                currentIntentEn:
+                                    'Finish the index.',
+                            }],
+                        },
+                    },
+                    {
                         mapId:
                             'hogwarts_castle',
                         roomId: 'library',
-                        lifeStatus: 'alive',
-                        currentActivityEn:
-                            'Sorting notes.',
-                        currentIntentEn:
-                            'Finish the index.',
-                    }],
-                },
-            },
-            {
-                mapId:
-                    'hogwarts_castle',
-                roomId: 'library',
-            },
-            createContextPlan(),
-            {},
-            createPrivateMemoryRetrieval(),
-        );
+                    },
+                    createContextPlan(),
+                    {},
+                    createPrivateMemoryRetrieval(),
+                ),
+        /unsupported_historical_detail/u,
+    );
     assert.equal(
         prompts.length,
-        2,
-    );
-    const repairInput =
-        JSON.parse(
-            prompts[1][1].content,
-        );
-    assert.match(
-        repairInput
-            .validationError,
-        /unsupported_historical_detail/u,
+        1,
     );
 });
 
@@ -1766,6 +1662,141 @@ test('[defect-probing] knowledge adapter preserves bounded retrieval metadata wi
     assert.doesNotMatch(
         persisted,
         /obsolete account|locked-clue-secret/iu,
+    );
+});
+
+test('knowledge adapter reports retrieval infrastructure failure without an empty-result fallback', async () => {
+    const events = [];
+    const failure =
+        Object.assign(
+            new Error(
+                'Knowledge API contract mismatch.',
+            ),
+            {
+                code:
+                    'KNOWLEDGE_API_CONTRACT_MISMATCH',
+            },
+        );
+    const adapter =
+        createKnowledgeAdapter({
+            getContext:
+                () => ({}),
+            getMudState:
+                () => createState(),
+            recordTurnDiagnostic:
+                (stage, data) => {
+                    events.push({
+                        stage,
+                        data,
+                    });
+                },
+            retrieveKnowledge:
+                async () => {
+                    throw failure;
+                },
+            syncKnowledgeBase:
+                async () => {},
+        });
+    await assert.rejects(
+        adapter.retrieveLocalKnowledge(
+            'quill',
+            [],
+        ),
+        error => error ===
+            failure,
+    );
+    assert.deepEqual(
+        events.find(event =>
+            event.stage ===
+                'knowledge_retrieval_failure')
+            ?.data,
+        {
+            code:
+                'KNOWLEDGE_API_CONTRACT_MISMATCH',
+            error:
+                'Knowledge API contract mismatch.',
+            willRetry: false,
+        },
+    );
+});
+
+test('knowledge adapter persists and rethrows exact sync failure', async () => {
+    const state =
+        createState();
+    let saves = 0;
+    const failure =
+        new Error(
+            'Local knowledge sync failed with 500',
+        );
+    const adapter =
+        createKnowledgeAdapter({
+            getContext:
+                () => ({
+                    async saveMetadata() {
+                        saves++;
+                    },
+                }),
+            getMudState:
+                () => state,
+            retrieveKnowledge:
+                async () => [],
+            syncKnowledgeBase:
+                async () => {
+                    throw failure;
+                },
+        });
+    await assert.rejects(
+        adapter.syncLocalKnowledge(),
+        error => error ===
+            failure,
+    );
+    assert.equal(
+        saves,
+        1,
+    );
+    assert.equal(
+        state.knowledgeBase
+            .lastError,
+        failure.message,
+    );
+});
+
+test('knowledge adapter does not save metadata for an unchanged healthy projection', async () => {
+    const state =
+        createState();
+    state.knowledgeBase = {
+        lastError: '',
+    };
+    let saves = 0;
+    const adapter =
+        createKnowledgeAdapter({
+            getContext:
+                () => ({
+                    async saveMetadata() {
+                        saves++;
+                    },
+                }),
+            getMudState:
+                () => state,
+            retrieveKnowledge:
+                async () => [],
+            syncKnowledgeBase:
+                async () => ({
+                    skipped: true,
+                    metadataChanged:
+                        false,
+                }),
+        });
+    const result =
+        await adapter
+            .syncLocalKnowledge();
+    assert.equal(
+        result.skipped,
+        true,
+    );
+    assert.equal(
+        saves,
+        0,
     );
 });
 
@@ -2286,7 +2317,7 @@ test('[Task 20] concrete non-identity anchors accept matching Event evidence', (
     });
 });
 
-test('[Task 14.1] production Performer repairs unmarked history with missing or private provenance', async () => {
+test('[Task 14.1] production Performer reports unmarked history with missing or private provenance once', async () => {
     const state =
         createState();
     state.actors.push({
@@ -2326,7 +2357,7 @@ test('[Task 14.1] production Performer repairs unmarked history with missing or 
             }],
         },
         expectedError:
-            /narrator segments cannot consume actor-private supporting Events/u,
+            /historicalClaims/u,
     }, {
         invalidSegment: {
             type: 'dialogue',
@@ -2345,37 +2376,20 @@ test('[Task 14.1] production Performer repairs unmarked history with missing or 
 
     for (const scenario of cases) {
         const prompts = [];
-        const result =
-            await runTask12Performance(
-                [{
+        await assert.rejects(
+            () =>
+                runTask12Performance(
+                    [{
                     segments: [
                         scenario.invalidSegment,
                     ],
-                }, {
-                    segments: [{
-                        type: 'dialogue',
-                        actorId: 'hermione',
-                        textEn:
-                            'I expect you may refuse help, so I brought a spare.',
                     }],
-                }],
-                prompts,
-                state,
-            );
-        assert.equal(prompts.length, 2);
-        const repairInput =
-            JSON.parse(
-                prompts[1][1].content,
-            );
-        assert.match(
-            repairInput.playerTurn
-                .repair.validationError,
+                    prompts,
+                    state,
+                ),
             scenario.expectedError,
         );
-        assert.equal(
-            result.segments[0].textEn,
-            'I expect you may refuse help, so I brought a spare.',
-        );
+        assert.equal(prompts.length, 1);
     }
 });
 
@@ -2383,18 +2397,19 @@ test('[Task 14.1] production low Opening treats unmarked literary past as curren
     const prompts = [];
     const claimTextEn =
         'Hermione hid Tina\'s umbrella behind the armour.';
-    const responses = [{
-        segments: [{
-            type: 'narration',
-            textEn: claimTextEn,
-        }],
-    }, {
-        segments: [{
-            type: 'narration',
-            textEn:
-                'The Library smells of rain and old parchment.',
-        }],
-    }];
+    const response = {
+        segments: [
+            {
+                type: 'narration',
+                textEn: claimTextEn,
+            },
+            {
+                type: 'narration',
+                textEn:
+                    'The Library smells of rain and old parchment.',
+            },
+        ],
+    };
     const workflow =
         createSceneTransitionWorkflow(
             createTransitionPorts(
@@ -2403,7 +2418,7 @@ test('[Task 14.1] production low Opening treats unmarked literary past as curren
                     return {
                         content:
                             JSON.stringify(
-                                responses.shift(),
+                                response,
                             ),
                     };
                 },

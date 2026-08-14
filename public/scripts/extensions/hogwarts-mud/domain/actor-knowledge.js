@@ -167,18 +167,6 @@ export function buildActorKnowledgeCapsules(
                 capsule,
             ]),
         );
-    const dailyDirectives =
-        new Map(
-            (
-                worldState?.dailyDirector
-                    ?.plan
-                    ?.actorDirectives ||
-                []
-            ).map(directive => [
-                directive.id,
-                directive,
-            ]),
-        );
     return requestedActorIds
         .map(actorId => {
             const actor =
@@ -203,10 +191,6 @@ export function buildActorKnowledgeCapsules(
                     continuityById.get(
                         actorId,
                     ) || null,
-                dailyDirective:
-                    dailyDirectives
-                        .get(actorId) ||
-                    null,
                 socialKnowledge:
                     getActorVisibleSocialKnowledge(
                         worldState,
@@ -650,6 +634,202 @@ export function buildActorContinuityCapsules(
             };
         })
         .filter(Boolean);
+}
+
+export function buildActorMemoryKnowledgeSeeds(
+    worldState,
+    actorIds = [],
+    contextPlan = {},
+) {
+    const requestedActorIds =
+        [
+            ...new Set(
+                actorIds
+                    .map(actorId =>
+                        String(
+                            actorId ||
+                            '',
+                        ).trim())
+                    .filter(Boolean),
+            ),
+        ];
+    const eventIds =
+        new Set(
+            (
+                worldState
+                    ?.eventKnowledge ||
+                []
+            ).map(event =>
+                event.eventId),
+        );
+    const appraisalsById =
+        new Map(
+            (
+                worldState
+                    ?.memorySynapse
+                    ?.appraisals ||
+                []
+            ).map(appraisal => [
+                appraisal.id,
+                appraisal,
+            ]),
+        );
+    const limits = {
+        core:
+            Math.min(
+                1,
+                contextPlan
+                    ?.memoryLimits
+                    ?.core ??
+                1,
+            ),
+        recent:
+            Math.min(
+                2,
+                contextPlan
+                    ?.memoryLimits
+                    ?.recent ??
+                2,
+            ),
+        everyday:
+            Math.min(
+                1,
+                contextPlan
+                    ?.memoryLimits
+                    ?.everyday ??
+                1,
+            ),
+    };
+    const recordIds =
+        new Set();
+    const retainedEventIdsByActorId =
+        {};
+    for (const actorId of
+        requestedActorIds) {
+        const retainedEventIds =
+            new Set();
+        (
+            worldState
+                ?.memorySynapse
+                ?.personSchemas ||
+            []
+        )
+            .filter(schema =>
+                schema.observerId ===
+                    actorId &&
+                [
+                    'active',
+                    'contested',
+                ].includes(
+                    schema.status,
+                ))
+            .sort((left, right) =>
+                String(
+                    right.updatedClock ||
+                    '',
+                ).localeCompare(
+                    String(
+                        left.updatedClock ||
+                        '',
+                    ),
+                    'en',
+                ))
+            .slice(0, 3)
+            .forEach(schema =>
+                recordIds.add(
+                    `schemas_${schema.id}`,
+                ));
+        const memoryEntry =
+            worldState
+                ?.actorMemoryIndex
+                ?.byActorId
+                ?.[actorId] ||
+            {};
+        for (const tier of [
+            'core',
+            'recent',
+            'everyday',
+        ]) {
+            (
+                memoryEntry[tier] ||
+                []
+            )
+                .slice(
+                    -limits[tier],
+                )
+                .forEach(reference => {
+                    if (
+                        reference
+                            ?.recordType ===
+                            'event' &&
+                        eventIds.has(
+                            reference
+                                .recordId,
+                        )
+                    ) {
+                        recordIds.add(
+                            `events_${
+                                reference
+                                    .recordId
+                            }`,
+                        );
+                        retainedEventIds
+                            .add(
+                                reference
+                                    .recordId,
+                            );
+                        return;
+                    }
+                    if (
+                        reference
+                            ?.recordType !==
+                            'appraisal'
+                    ) {
+                        return;
+                    }
+                    const appraisal =
+                        appraisalsById.get(
+                            reference
+                                .recordId,
+                        );
+                    if (
+                        !appraisal ||
+                        (
+                            appraisal
+                                .contextTags ||
+                            []
+                        ).includes(
+                            'migrated_current_impression',
+                        )
+                    ) {
+                        return;
+                    }
+                    recordIds.add(
+                        `appraisals_${
+                            appraisal.id
+                        }`,
+                    );
+                });
+        }
+        retainedEventIdsByActorId[
+            actorId
+        ] = [...retainedEventIds]
+            .sort((left, right) =>
+                left.localeCompare(
+                    right,
+                    'en',
+                ));
+    }
+    return {
+        recordIds:
+            [...recordIds]
+                .sort((left, right) =>
+                    left.localeCompare(
+                        right,
+                        'en',
+                    )),
+        retainedEventIdsByActorId,
+    };
 }
 
 export function migrateActorKnowledgeBoundaries(

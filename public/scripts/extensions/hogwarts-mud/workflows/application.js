@@ -8,6 +8,9 @@ import { createModelAdapter } from '../adapters/model.js';
 import { createKnowledgeAdapter } from '../adapters/knowledge.js';
 import { createTranslationAdapter } from '../adapters/translation.js';
 import { createLocalSemanticAdapter } from '../adapters/local-semantic.js';
+import {
+    createModelEventScheduler,
+} from '../runtime/model-event-scheduler.js';
 import { createOpeningWorkflow } from './opening.js';
 import { createInteriorMapWorkflow } from './interior-map.js';
 import { createDirectorWorkflows } from './directors.js';
@@ -30,10 +33,8 @@ export async function finalizeCalendarMomentPostCommit({
     committedState,
     previousClock,
     getMudState,
-    getWorldDate,
     runHighCalendarDirectorSafely,
     runMediumCalendarDirectorSafely,
-    ensureDailyDirectorPlan,
     warn = console.warn,
 }) {
     try {
@@ -60,19 +61,6 @@ export async function finalizeCalendarMomentPostCommit({
                 previousClock,
                 highPlanningResult,
             });
-        }
-        const settledState =
-            getMudState() ||
-            committedState;
-        if (
-            settledState
-                ?.dailyDirector
-                ?.date !==
-            getWorldDate(
-                settledState.clock,
-            )
-        ) {
-            await ensureDailyDirectorPlan();
         }
     } catch (error) {
         warn(
@@ -102,7 +90,6 @@ export function createWorkflowApplication(ports) {
         admitMentionedKnownActors,
         analyzeMemoryConsolidation,
         analyzePacingSignals,
-        applyDirectorFoundation,
         applyGeneratedInteriorMap,
         applyNativeRoleSettings,
         applyOpeningWorldPackage,
@@ -118,6 +105,7 @@ export function createWorkflowApplication(ports) {
         beginLiveSceneStream,
         buildActorContinuityCapsules,
         buildActorKnowledgeCapsules,
+        buildActorMemoryKnowledgeSeeds,
         buildActorSelectionPolicy,
         buildActorTranslationTerms,
         buildBehavioralEnvironment,
@@ -159,8 +147,6 @@ export function createWorkflowApplication(ports) {
         getRequestHeaders,
         getRoomName,
         getSceneDestinationAuthority,
-        getWorldDate,
-        isDailyDirectorPlanCurrent,
         isMemoryBoundaryGuardCurrent,
         jobRegistry,
         limitMessagesToContext,
@@ -232,7 +218,6 @@ export function createWorkflowApplication(ports) {
         updateLiveSceneStream,
         updateNativeMessageBlock,
         uuidv4,
-        validateDirectorFoundation,
         validateGeneratedInteriorMap,
         validateMemoryConsolidation,
         validateNextSceneIntent,
@@ -299,7 +284,8 @@ export function createWorkflowApplication(ports) {
     });
 
     const {
-        sendRoleRequest,
+        sendRoleRequest:
+            invokeRoleRequest,
         extractRoleResponseText,
         parseJsonObject,
     } = createModelAdapter({
@@ -314,6 +300,213 @@ export function createWorkflowApplication(ports) {
         recordTurnDiagnostic,
         uuidv4,
     });
+    const modelEventScheduler =
+        createModelEventScheduler({
+            invokeRole:
+                invokeRoleRequest,
+            getState:
+                getMudState,
+            persistRuntime:
+                async () => {
+                    if (getMudState()) {
+                        await getContext()
+                            .saveMetadata({
+                                source:
+                                    'model_task_runtime',
+                                changedDomains: [
+                                    'model_task_runtime',
+                                ],
+                            });
+                    }
+                },
+            getRuntimeMaximumCharacters:
+                roleSlot =>
+                    createContextBudgetPlan(
+                        roleSlot
+                            ?.contextSize,
+                        roleSlot
+                            ?.maxResponseLength,
+                    )
+                        .maxPromptCharacters,
+            enforceProductBudget:
+                true,
+            onAttempt:
+                envelope =>
+                    recordTurnDiagnostic(
+                        'model_task_attempt',
+                        {
+                            taskId:
+                                envelope.taskId,
+                            eventType:
+                                envelope.event
+                                    .eventType,
+                            emittedBy:
+                                envelope.event
+                                    .emittedBy,
+                            actionId:
+                                envelope.event
+                                    .actionId,
+                            phase:
+                                envelope.event
+                                    .phase,
+                            promptCharacters:
+                                envelope
+                                    .promptMeasurement
+                                    ?.characters ??
+                                null,
+                            productBudget:
+                                envelope
+                                    .promptBudget
+                                    ?.maximumCharacters ??
+                                null,
+                        },
+                    ),
+        });
+    const roleRequests = {
+        characterPolish:
+            modelEventScheduler
+                .createRoleRequest(
+                    'character_polish',
+                    {
+                        eventType:
+                            'setup.character_polish_requested',
+                        emittedBy:
+                            'ui.setup',
+                        tier: 'medium',
+                    },
+                ),
+        openingWorld:
+            modelEventScheduler
+                .createRoleRequest(
+                    'opening_world',
+                    {
+                        eventType:
+                            'world.bootstrap_requested',
+                        emittedBy:
+                            'opening.initialize',
+                        tier: 'high',
+                    },
+                ),
+        calendarHigh:
+            modelEventScheduler
+                .createRoleRequest(
+                    'calendar_high',
+                    {
+                        eventType:
+                            'calendar.high_planning_requested',
+                        emittedBy:
+                            'calendar.high_guard',
+                        tier: 'high',
+                    },
+                ),
+        calendarMedium:
+            modelEventScheduler
+                .createRoleRequest(
+                    'calendar_medium',
+                    {
+                        eventType:
+                            'calendar.horizon_low',
+                        emittedBy:
+                            'calendar.medium_guard',
+                        tier: 'medium',
+                    },
+                ),
+        interiorCartographer:
+            modelEventScheduler
+                .createRoleRequest(
+                    'interior_cartographer',
+                    {
+                        eventType:
+                            'map.container_entered',
+                        emittedBy:
+                            'map.interior_guard',
+                        tier: 'medium',
+                    },
+                ),
+        pacingDirector:
+            modelEventScheduler
+                .createRoleRequest(
+                    'pacing_director',
+                    {
+                        eventType:
+                            'turn.pre_generation',
+                        emittedBy:
+                            'turn.pacing_guard',
+                        tier: 'medium',
+                    },
+                ),
+        scenePerformance:
+            modelEventScheduler
+                .createRoleRequest(
+                    'scene_performance',
+                    {
+                        eventType:
+                            'turn.generation',
+                        emittedBy:
+                            'turn.performance',
+                        tier: 'low',
+                    },
+                ),
+        sceneTransition:
+            modelEventScheduler
+                .createRoleRequest(
+                    'scene_transition',
+                    {
+                        eventType:
+                            'scene.close_requested',
+                        emittedBy:
+                            'scene.transition',
+                    },
+                ),
+        sceneOpening:
+            modelEventScheduler
+                .createRoleRequest(
+                    'scene_opening',
+                    {
+                        eventType:
+                            'scene.transition_committed',
+                        emittedBy:
+                            'scene.transition',
+                        tier: 'low',
+                    },
+                ),
+        sceneOpeningBootstrap:
+            modelEventScheduler
+                .createRoleRequest(
+                    'scene_opening',
+                    {
+                        eventType:
+                            'world.bootstrap_committed',
+                        emittedBy:
+                            'opening.initialize',
+                        tier: 'low',
+                    },
+                ),
+        socialDirector:
+            modelEventScheduler
+                .createRoleRequest(
+                    'social_director',
+                    {
+                        eventType:
+                            'memory.event_boundary_committed',
+                        emittedBy:
+                            'social.memory_guard',
+                        tier: 'medium',
+                    },
+                ),
+        mapExpansion:
+            modelEventScheduler
+                .createRoleRequest(
+                    'map_expansion',
+                    {
+                        eventType:
+                            'map.expansion_requested',
+                        emittedBy:
+                            'ui.map',
+                        tier: 'high',
+                    },
+                ),
+    };
 
     const {
         syncLocalKnowledge,
@@ -341,6 +534,9 @@ export function createWorkflowApplication(ports) {
         normalizeTranslationProvider,
         protectTranslationTerms,
         restoreTranslationTerms,
+        runLocalModelTask:
+            modelEventScheduler
+                .runLocalTask,
         splitTranslationChunks,
     });
 
@@ -356,7 +552,8 @@ export function createWorkflowApplication(ports) {
         parseJsonObject,
         renderAll,
         resolveRoleSlots,
-        sendRoleRequest,
+        sendModelTaskRequest:
+            roleRequests.calendarHigh,
     });
 
     const {
@@ -373,12 +570,11 @@ export function createWorkflowApplication(ports) {
         parseJsonObject,
         renderAll,
         resolveRoleSlots,
-        sendRoleRequest,
+        sendModelTaskRequest:
+            roleRequests.calendarMedium,
     });
 
     const {
-        ensureDirectorFoundation:
-            ensureDirectorFoundationBase,
         composeSceneSegments,
         hasOpeningNarrative,
         initializeOpeningWorld:
@@ -387,7 +583,6 @@ export function createWorkflowApplication(ports) {
         CANON_WIT_TONE_CONTRACT,
         PRESET_WORLD_MAP,
         TRANSLATION_FORMAT_VERSION,
-        applyDirectorFoundation,
         applyNativeRoleSettings,
         applyOpeningWorldPackage,
         applySystemPrompt,
@@ -400,39 +595,33 @@ export function createWorkflowApplication(ports) {
         renderAll,
         resolveRoleSlots,
         scheduleRender,
-        sendRoleRequest,
+        sendBootstrapSceneOpeningRequest:
+            roleRequests.sceneOpeningBootstrap,
+        sendOpeningWorldRequest:
+            roleRequests.openingWorld,
         syncLocalKnowledge,
         translateOpeningValues,
-        validateDirectorFoundation,
         validateOpeningWorldPackage,
     });
 
-    async function ensureDirectorFoundation() {
-        const result =
-            await ensureDirectorFoundationBase();
-        const state =
-            getMudState();
+    function assertWorldFoundationReady(
+        state =
+        getMudState(),
+    ) {
         if (
-            state
-                ?.directorFoundation
-                ?.status === 'ready' &&
-            state.phase === 'playing'
+            !state ||
+            (state.actorLibrary || [])
+                .length < 3 ||
+            !(state.storyArcs || [])
+                .some(arc =>
+                    arc?.status !==
+                    'closed')
         ) {
-            const highPlanningResult =
-                await runHighCalendarDirectorSafely({
-                    trigger: 'foundation',
-                });
-            if (
-                highPlanningAllowsMedium(
-                    highPlanningResult,
-                )
-            ) {
-                await runMediumCalendarDirectorSafely({
-                    highPlanningResult,
-                });
-            }
+            throw new TypeError(
+                'World bootstrap is incomplete. Opening World must commit Actor Library and Story Arc atomically.',
+            );
         }
-        return result;
+        return true;
     }
 
     async function initializeOpeningWorld() {
@@ -441,14 +630,16 @@ export function createWorkflowApplication(ports) {
         const state =
             getMudState();
         if (
-            state
-                ?.directorFoundation
-                ?.status === 'ready' &&
+            state &&
             state.phase === 'playing'
         ) {
+            assertWorldFoundationReady(
+                state,
+            );
             const highPlanningResult =
                 await runHighCalendarDirectorSafely({
-                    trigger: 'foundation',
+                    trigger:
+                        'opening_world',
                 });
             if (
                 highPlanningAllowsMedium(
@@ -482,14 +673,15 @@ export function createWorkflowApplication(ports) {
         renderAll,
         resetInspectorMapScope,
         resolveRoleSlots,
-        sendRoleRequest,
+        sendModelTaskRequest:
+            roleRequests
+                .interiorCartographer,
         translateOpeningValues,
         validateGeneratedInteriorMap,
     });
 
     const {
         projectActorLibraryForContext,
-        ensureDailyDirectorPlan,
         ensurePacingDirectorAssessment,
     } = createDirectorWorkflows({
         CANON_CAST_IDENTITY_CONTRACT,
@@ -507,8 +699,6 @@ export function createWorkflowApplication(ports) {
         formatRetrievedKnowledge,
         getContext,
         getMudState,
-        getWorldDate,
-        isDailyDirectorPlanCurrent,
         jobRegistry,
         normalizeActorMemoryProfile,
         normalizePacingAssessmentPayload,
@@ -518,7 +708,8 @@ export function createWorkflowApplication(ports) {
         resolveRoleSlots,
         retrieveLocalKnowledge,
         selectSharedMemoriesForContext,
-        sendRoleRequest,
+        sendPacingDirectorRequest:
+            roleRequests.pacingDirector,
         syncLocalKnowledge,
         validatePacingAssessment,
     });
@@ -528,6 +719,7 @@ export function createWorkflowApplication(ports) {
         SOCIAL_DIRECTOR_RESPONSE_SCHEMA,
         ensureMemoryConsolidation,
         ensureSocialDirectorCatchup,
+        ensureSocialDirectorForAction,
     } = createSocialMemoryWorkflow({
         CONTEXT_SIZE_PRESETS,
         DEFAULT_MODEL_SLOTS,
@@ -551,7 +743,8 @@ export function createWorkflowApplication(ports) {
         renderAll,
         resolveRoleSlots,
         selectSharedMemoriesForContext,
-        sendRoleRequest,
+        sendModelTaskRequest:
+            roleRequests.socialDirector,
         syncLocalKnowledge,
         translateOpeningValues,
         validateMemoryConsolidation,
@@ -603,7 +796,10 @@ export function createWorkflowApplication(ports) {
         renderAll,
         resolveRoleSlots,
         retrieveLocalKnowledge,
-        sendRoleRequest,
+        sendSceneOpeningRequest:
+            roleRequests.sceneOpening,
+        sendSceneTransitionRequest:
+            roleRequests.sceneTransition,
         stripSyntheticSceneOpeningActorSegments,
         synchronizeHeldItemLocations,
         syncLocalKnowledge,
@@ -668,21 +864,8 @@ export function createWorkflowApplication(ports) {
                 highPlanningResult,
             });
         }
-        const settledState =
-            getMudState() ||
-            result;
-        if (
-            settledState
-                ?.dailyDirector
-                ?.date !==
-            getWorldDate(
-                settledState.clock,
-            )
-        ) {
-            await ensureDailyDirectorPlan();
-        }
         return getMudState() ||
-            settledState;
+            result;
     }
 
     async function runCalendarMoment(
@@ -701,10 +884,8 @@ export function createWorkflowApplication(ports) {
                     result,
                 previousClock,
                 getMudState,
-                getWorldDate,
                 runHighCalendarDirectorSafely,
                 runMediumCalendarDirectorSafely,
-                ensureDailyDirectorPlan,
             });
         return finalized;
     }
@@ -724,10 +905,8 @@ export function createWorkflowApplication(ports) {
                 result,
             previousClock,
             getMudState,
-            getWorldDate,
             runHighCalendarDirectorSafely,
             runMediumCalendarDirectorSafely,
-            ensureDailyDirectorPlan,
         });
     }
 
@@ -743,7 +922,6 @@ export function createWorkflowApplication(ports) {
         DEFAULT_MODEL_SLOTS,
         NPC_IDENTITY_PROMPT_BOUNDARY,
         beginLiveSceneStream,
-        buildActorContinuityCapsules,
         buildActorKnowledgeCapsules,
         buildBehavioralEnvironment,
         buildCurrentMaterialState,
@@ -766,7 +944,8 @@ export function createWorkflowApplication(ports) {
         removeExplicitAddressDirective,
         resolvePlayerAddressing,
         resolveTemporaryActorRevealedName,
-        sendRoleRequest,
+        sendModelTaskRequest:
+            roleRequests.scenePerformance,
         setLiveSceneStreamPhase,
         settleNarrativeTurnPerformance,
         translateOpeningValues,
@@ -789,6 +968,9 @@ export function createWorkflowApplication(ports) {
         getRequestHeaders,
         projectObservedInventoryUpdates,
         reconcileObservedPerceptionWithFallback,
+        runLocalModelTask:
+            modelEventScheduler
+                .runLocalTask,
         validatePerceptionContract,
     });
 
@@ -807,6 +989,7 @@ export function createWorkflowApplication(ports) {
         applyTurnTransaction,
         attachTurnDiagnostics,
         beginTurnDiagnostics,
+        buildActorMemoryKnowledgeSeeds,
         buildLocalSemanticRoomContext,
         buildSceneTransaction,
         clearLiveSceneStream,
@@ -817,12 +1000,10 @@ export function createWorkflowApplication(ports) {
         createTurnPerformanceBudget,
         createTurnRetryCheckpoint,
         ensureCurrentInteriorMap,
-        ensureDailyDirectorPlan,
-        ensureDirectorFoundation,
-        ensureMemoryConsolidation,
-        runMediumCalendarDirectorSafely,
+        assertWorldFoundationReady,
         ensurePacingDirectorAssessment,
         ensureSceneLifecycleState,
+        ensureSocialDirectorForAction,
         ensureSocialDirectorCatchup,
         finalizeTurnDiagnostics,
         filterKnowledgeForAudience,
@@ -834,7 +1015,6 @@ export function createWorkflowApplication(ports) {
         getLocalMapDefinition,
         getMudState,
         getSettings,
-        getWorldDate,
         getInspectorMapScope,
         isObservedEventBoundary,
         jobRegistry,
@@ -958,7 +1138,10 @@ export function createWorkflowApplication(ports) {
         resolveRoleSlots,
         getMudState,
         ensureSceneLifecycleState,
-        sendRoleRequest,
+        sendCharacterPolishRequest:
+            roleRequests.characterPolish,
+        sendMapExpansionRequest:
+            roleRequests.mapExpansion,
         extractRoleResponseText,
         parseJsonObject,
         syncLocalKnowledge,
@@ -969,13 +1152,12 @@ export function createWorkflowApplication(ports) {
         runHighCalendarDirectorSafely,
         runMediumCalendarDirector,
         runMediumCalendarDirectorSafely,
-        ensureDirectorFoundation,
+        assertWorldFoundationReady,
         composeSceneSegments,
         hasOpeningNarrative,
         initializeOpeningWorld,
         ensureCurrentInteriorMap,
         projectActorLibraryForContext,
-        ensureDailyDirectorPlan,
         ensurePacingDirectorAssessment,
         createMemoryConsolidationPrompt,
         SOCIAL_DIRECTOR_RESPONSE_SCHEMA,

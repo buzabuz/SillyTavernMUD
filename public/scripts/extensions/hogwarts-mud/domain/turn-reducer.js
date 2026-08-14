@@ -1,8 +1,9 @@
 // Extracted from the helpers compatibility facade for Task 4.
 
 import {
-    buildActorNameAliases,
-} from './actor-identity.js';
+    projectActorCreationCore,
+    projectActorCreationRuntime,
+} from './actor-creation-proposal.js';
 
 import {
     settleCalendarAtClock,
@@ -170,58 +171,56 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
     ).forEach(actor => {
         const update =
             actorUpdates.get(actor.id);
+        const cast = {
+            origin:
+                'scene_temporary',
+            introducedClock:
+                next.clock ||
+                'unknown',
+            introducedTurn:
+                committedTurn,
+        };
         upsertActorV1(next, {
             actorId: actor.id,
-            coreSource: {
-                ...structuredClone(
+            coreSource:
+                projectActorCreationCore(
                     actor,
+                    {
+                        cast,
+                    },
                 ),
-                aliases:
-                    buildActorNameAliases(
-                        actor.nameEn,
-                        actor.name,
-                    ),
-                cast: {
-                    origin:
-                        'scene_temporary',
-                    introducedClock:
-                        next.clock ||
-                        'unknown',
-                    introducedTurn:
-                        committedTurn,
-                },
-            },
             runtimeSource: {
-                mapId:
-                    update?.mapId ||
-                    next.map
-                        ?.activeMapId,
+                ...projectActorCreationRuntime(
+                    actor,
+                    {
+                        mapId:
+                            update?.mapId ||
+                            next.map
+                                ?.activeMapId,
+                        temporary:
+                            true,
+                    },
+                ),
                 roomId:
                     update?.roomId ||
+                    actor.runtime
+                        .roomId ||
                     next.map
                         ?.currentLocalNodeId,
                 present:
                     settledPresentActorIds
                         ?.has(actor.id) ??
                     true,
-                lifeStatus: 'alive',
-                lifeStatusPermanent:
-                    false,
-                lifeStatusDetailEn:
-                    'Alive.',
-                lifeStatusSinceClock:
-                    '',
                 currentActivityEn:
                     update
                         ?.currentActivityEn ||
-                    actor
+                    actor.runtime
                         .currentActivityEn,
                 currentIntentEn:
                     update
                         ?.currentIntentEn ||
-                    '',
-                currentGoalEn: '',
-                temporary: true,
+                    actor.runtime
+                        .currentIntentEn,
             },
         });
         markActorIntroducedV1(

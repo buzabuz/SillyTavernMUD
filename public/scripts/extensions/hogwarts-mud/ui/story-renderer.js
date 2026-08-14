@@ -736,35 +736,7 @@ export function createStoryRenderer(ports) {
                 activeStep: 1,
             }));
         } else if (jobRegistry.turnActive && state.phase === 'playing') {
-            if (state.directorFoundation?.status === 'building') {
-                storyElement.append(createGenerationStatusCard({
-                    tier: 'high',
-                    eyebrow: 'WORLD DIRECTOR · PRIVATE',
-                    title: '正在建立人物库与隐藏故事线',
-                    detail: '角色秘密、知识边界和线索图只在完整校验后写入存档。',
-                    steps: [
-                        '读取角色背景',
-                        '建立人物关系',
-                        '预写隐藏线索',
-                        '提交世界状态',
-                    ],
-                    activeStep: 2,
-                }));
-            } else if (state.dailyDirector?.status === 'building') {
-                storyElement.append(createGenerationStatusCard({
-                    tier: 'medium',
-                    eyebrow: 'DAILY DIRECTOR · ONCE PER DAY',
-                    title: '中档正在编排今日人物计划',
-                    detail: '正在整理人物动机、线索机会与本日时间策略。',
-                    steps: [
-                        '回顾昨日事件',
-                        '更新人物目标',
-                        '安排线索机会',
-                        '提交日计划',
-                    ],
-                    activeStep: 1,
-                }));
-            } else if (
+            if (
                 state.memoryDirector?.status ===
                     'consolidating'
             ) {
@@ -867,8 +839,6 @@ export function createStoryRenderer(ports) {
     }
 
     function syncComposerState(state) {
-        const foundationBuilding = state.directorFoundation?.status === 'building';
-        const dailyDirectorBuilding = state.dailyDirector?.status === 'building';
         const pacingDirectorBuilding =
             state.pacingDirector?.status === 'assessing';
         const memoryDirectorBuilding =
@@ -884,8 +854,6 @@ export function createStoryRenderer(ports) {
         const saveRevisionBlocked =
             isSaveRevisionBlocked();
         const ready = state.phase === 'playing' &&
-            !foundationBuilding &&
-            !dailyDirectorBuilding &&
             !pacingDirectorBuilding &&
             !memoryDirectorBuilding &&
             !sceneTransitionBuilding &&
@@ -931,11 +899,7 @@ export function createStoryRenderer(ports) {
                 ? SAVE_REVISION_REFRESH_MESSAGE
                 : failedPlayerTurn
                     ? '上一条玩家消息已保存，请先在上方重试本回合'
-                    : foundationBuilding
-                        ? '世界导演正在建立出场角色库与隐藏故事线，请稍候'
-                        : dailyDirectorBuilding
-                            ? '中档正在执行本日唯一一次日结，请稍候'
-                            : memoryDirectorBuilding
+                    : memoryDirectorBuilding
                                 ? '中档正在整理人物印象与共同记忆，请稍候'
                                 : pacingDirectorBuilding
                                     ? '中档正在检查场景节奏与人物变化，请稍候'

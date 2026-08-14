@@ -69,7 +69,6 @@ import {
     detectCausalCollapseOpportunity,
     deriveRelationshipLabels,
     estimateTurnMinutes,
-    ensureMentionedKnownActorMemories,
     extractStreamingSceneSegments,
     filterKnowledgeForAudience,
     findSceneDestination,
@@ -854,45 +853,104 @@ test('streaming scene parser reveals complete and partial JSON segments', () => 
     assert.equal(segments.at(-1).partial, false);
 });
 
-test('truncated scene recovery keeps root fields instead of an inner segment', () => {
+test('truncated scene recovery keeps only the complete Low output contract', () => {
     const raw = `\`\`\`json
 {
-  "publicEventEn": "Tina appeals to her father while Eddie protests.",
-  "pacingBeatRealized": false,
-  "checkApplied": false,
-  "sceneProgression": {
-    "type": "social_shift",
-    "summaryEn": "Alex hears both children and takes charge.",
-    "completedRequestedStep": false
-  },
   "segments": [
     {"type":"narration","textEn":"Tina points toward Eddie."},
     {"type":"dialogue","actorId":"alex_zhang","textEn":"What happened?"},
     {"type":"narration","textEn":"Eddie raises both hands."},
     {"type":"dialogue","actorId":"eddie_cooper","textEn":"That is not what happened."}
   ],
-  "actorUpdates": [
-    {"id":"alex_zhang","currentActivityEn":"Listening to both children`;
+  "stateProposals": [
+    {"type":"actor_activity","actorId":"alex_zhang","currentActivityEn":"Listening to both children."}
+  ],
+  "signals": {
+    "eventEnded": false,
+    "pacingBeatRealized": false,
+    "sceneProgression": {
+      "type": "social_shift",
+      "summaryEn": "Alex hears both children and takes charge.",
+      "completedRequestedStep": false
+    }
+  }`;
     const recovered =
         recoverScenePerformancePayload(raw);
 
     assert.equal(
-        recovered.publicEventEn,
-        'Tina appeals to her father while Eddie protests.',
-    );
-    assert.equal(
-        recovered.sceneProgression.type,
+        recovered
+            .signals
+            .sceneProgression
+            .type,
         'social_shift',
     );
     assert.equal(recovered.segments.length, 4);
-    assert.deepEqual(recovered.actorUpdates, [{
-        id: 'alex_zhang',
-        currentActivityEn:
-            'Listening to both children',
-    }]);
+    assert.deepEqual(
+        recovered.stateProposals,
+        [{
+            type: 'actor_activity',
+            actorId: 'alex_zhang',
+            currentActivityEn:
+                'Listening to both children.',
+        }],
+    );
+    assert.deepEqual(
+        Object.keys(recovered),
+        [
+            'segments',
+            'stateProposals',
+            'signals',
+        ],
+    );
     assert.deepEqual(
         Object.keys(recovered.segments[0]),
         ['type', 'textEn'],
+    );
+});
+
+test('scene recovery drops an incomplete state proposal instead of creating a legacy update', () => {
+    const raw = `\`\`\`json
+{
+  "segments":[
+    {"type":"narration","textEn":"Tina folds her arms."},
+    {"type":"dialogue","actorId":"eddie_cooper","textEn":"One question at a time."},
+    {"type":"narration","textEn":"The bronze doors open."},
+    {"type":"dialogue","actorId":"eddie_grandmother_cooper","textEn":"Edward Cooper."}
+  ],
+  "signals":{
+    "eventEnded":false,
+    "pacingBeatRealized":true,
+    "sceneProgression":{
+      "type":"npc_initiative",
+      "summaryEn":"Gran Cooper finds Eddie in Gringotts.",
+      "completedRequestedStep":false
+    }
+  },
+  "stateProposals":[
+    {"type":"actor_activity","actorId":"eddie_cooper","currentActivityEn":"Answering Tina by the column."},
+    {"type":"social_hint","actorId":"eddie_grandmother_cooper","currentActivityEn":"Confronting Eddie in the lobby.","firstImpressionOfPlayerEn":"A bold child"`;
+    const recovered =
+        recoverScenePerformancePayload(raw);
+
+    assert.equal(
+        recovered
+            .signals
+            .sceneProgression
+            .type,
+        'npc_initiative',
+    );
+    assert.equal(recovered.segments.length, 4);
+    assert.equal(
+        recovered.stateProposals,
+        undefined,
+    );
+    assert.equal(
+        recovered.actorUpdates,
+        undefined,
+    );
+    assert.equal(
+        recovered.memoryUpdate,
+        undefined,
     );
 });
 
@@ -1016,51 +1074,6 @@ test('scene transition recovery keeps a complete core and drops only a truncated
             { tier: 'medium' },
         ).valid,
         true,
-    );
-});
-
-test('scene recovery accepts an unquoted event and a partial final actor update', () => {
-    const raw = `\`\`\`json
-{
-  "publicEventEn":Tina questions Eddie while Gran Cooper enters the lobby.",
-  "pacingBeatRealized":true,
-  "checkApplied":false,
-  "sceneProgression":{
-    "type":"npc_initiative",
-    "summaryEn":"Gran Cooper finds Eddie in Gringotts.",
-    "completedRequestedStep":false
-  },
-  "segments":[
-    {"type":"narration","textEn":"Tina folds her arms."},
-    {"type":"dialogue","actorId":"eddie_cooper","textEn":"One question at a time."},
-    {"type":"narration","textEn":"The bronze doors open."},
-    {"type":"dialogue","actorId":"eddie_grandmother_cooper","textEn":"Edward Cooper."}
-  ],
-  "actorUpdates":[
-    {"id":"eddie_cooper","present":true,"currentActivityEn":"Answering Tina by the column."},
-    {"id":"eddie_grandmother_cooper","present":true,"currentActivityEn":"Confronting Eddie in the lobby.","mapId":"diagon_alley","roomId":"gringotts_lobby","memoryUpdate":{"summaryEn":"Gran found Eddie`;
-    const recovered =
-        recoverScenePerformancePayload(raw);
-
-    assert.equal(
-        recovered.publicEventEn,
-        'Tina questions Eddie while Gran Cooper enters the lobby.',
-    );
-    assert.equal(
-        recovered.sceneProgression.type,
-        'npc_initiative',
-    );
-    assert.equal(recovered.segments.length, 4);
-    assert.deepEqual(
-        recovered.actorUpdates.at(-1),
-        {
-            id: 'eddie_grandmother_cooper',
-            present: true,
-            currentActivityEn:
-                'Confronting Eddie in the lobby.',
-            mapId: 'diagon_alley',
-            roomId: 'gringotts_lobby',
-        },
     );
 });
 
@@ -9214,7 +9227,7 @@ test('temporary actor display names reconcile from revealed bilingual dialogue',
     );
 });
 
-test('exactly mentioned nearby acquaintances are recalled for one turn with memory', () => {
+test('exactly mentioned nearby acquaintances are admitted for one turn without writing memory', () => {
     const state = {
         map: {
             activeMapId:
@@ -9289,48 +9302,19 @@ test('exactly mentioned nearby acquaintances are recalled for one turn with memo
             .roomId,
         'great_hall',
     );
-    const withMemory =
-        ensureMentionedKnownActorMemories(
-            {
-                publicEventEn:
-                    'Tina nodded to Lavender Brown at the Gryffindor table, and Lavender acknowledged her.',
-                eventEnded: false,
-                segments: [{
-                    type: 'narration',
-                    textEn:
-                        'Tina nodded to Lavender, who nodded back.',
-                }],
-                actorPresence: {
-                    presentActorIdsAfterTurn:
-                        [],
-                },
-                actorUpdates: [],
-            },
-            admitted.state,
-            admitted.admittedActors,
-        );
     assert.equal(
-        withMemory.actorPresence
-            .presentActorIdsAfterTurn
-            .includes(
-                'canon_lavender_brown',
-            ),
+        admitted
+            .admittedActors[0]
+            .requireReaction,
         true,
     );
-    const update =
-        withMemory.actorUpdates
-            .find(item =>
-                item.id ===
-                'canon_lavender_brown');
     assert.equal(
-        update.memoryUpdate
-            .significance,
-        'everyday',
-    );
-    assert.match(
-        update.memoryUpdate
-            .summaryEn,
-        /Lavender Brown/,
+        Object.hasOwn(
+            admitted
+                .admittedActors[0],
+            'requireEverydayMemory',
+        ),
+        false,
     );
 });
 

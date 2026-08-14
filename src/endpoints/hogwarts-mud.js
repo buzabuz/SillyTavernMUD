@@ -1,8 +1,11 @@
 import express from 'express';
+import path from 'node:path';
 
 import {
+    KNOWLEDGE_API_CONTRACT_VERSION,
     KNOWLEDGE_CATEGORIES,
     KNOWLEDGE_NODE_TYPES,
+    KNOWLEDGE_REVISION_POLICIES,
 } from '../../public/scripts/extensions/hogwarts-mud/domain/knowledge-projector-v2.js';
 import {
     createConfiguredKnowledgeService,
@@ -65,6 +68,11 @@ function validateKnowledgeEnvelope(
         body &&
         typeof body === 'object' &&
         !Array.isArray(body) &&
+        Number(
+            body
+                .knowledgeApiContractVersion,
+        ) ===
+            KNOWLEDGE_API_CONTRACT_VERSION &&
         String(
             body.timelineId ||
             '',
@@ -130,6 +138,9 @@ function buildKnowledgeFilters(body) {
             Number(
                 body.stateRevision,
             ),
+        revisionPolicy:
+            KNOWLEDGE_REVISION_POLICIES
+                .NOT_FUTURE,
         audience: {
             actorIds,
             role,
@@ -331,6 +342,8 @@ function projectKnowledgeSearchResult(
             'none',
         );
     return {
+        knowledgeApiContractVersion:
+            KNOWLEDGE_API_CONTRACT_VERSION,
         records:
             Array.isArray(
                 result?.records,
@@ -448,6 +461,8 @@ function sendKnowledgeError(
     return response
         .status(500)
         .json({
+            knowledgeApiContractVersion:
+                KNOWLEDGE_API_CONTRACT_VERSION,
             error:
                 'knowledge_operation_failed',
         });
@@ -458,6 +473,11 @@ router.post(
     async (request, response) => {
         try {
             if (
+                Number(
+                    request.body
+                        ?.knowledgeApiContractVersion,
+                ) !==
+                    KNOWLEDGE_API_CONTRACT_VERSION ||
                 !request.body
                     ?.timelineId
             ) {
@@ -474,9 +494,11 @@ router.post(
                                 .timelineId,
                         ),
                 });
-            return response.json(
-                result,
-            );
+            return response.json({
+                knowledgeApiContractVersion:
+                    KNOWLEDGE_API_CONTRACT_VERSION,
+                ...result,
+            });
         } catch (error) {
             return sendKnowledgeError(
                 response,
@@ -531,13 +553,19 @@ router.post(
                     request,
                 ).sync(input);
             return response.json({
+                knowledgeApiContractVersion:
+                    KNOWLEDGE_API_CONTRACT_VERSION,
                 root:
                     clientRelativePath(
-                        request.user
-                            .directories
-                            .root,
-                        result.exact
-                            .root,
+                        path.resolve(
+                            request.user
+                                .directories
+                                .root,
+                        ),
+                        path.resolve(
+                            result.exact
+                                .root,
+                        ),
                     ),
                 records:
                     result.exact
@@ -601,6 +629,8 @@ router.post(
                     replace: true,
                 });
             return response.json({
+                knowledgeApiContractVersion:
+                    KNOWLEDGE_API_CONTRACT_VERSION,
                 rebuilt: true,
                 records:
                     result.exact
@@ -660,9 +690,11 @@ router.post(
                         request.body
                             .recordIds,
                 });
-            return response.json(
-                result,
-            );
+            return response.json({
+                knowledgeApiContractVersion:
+                    KNOWLEDGE_API_CONTRACT_VERSION,
+                ...result,
+            });
         } catch (error) {
             return sendKnowledgeError(
                 response,
@@ -754,7 +786,11 @@ async function searchKnowledge(
                 .query(input);
         return response.json(
             listOnly
-                ? result
+                ? {
+                    knowledgeApiContractVersion:
+                        KNOWLEDGE_API_CONTRACT_VERSION,
+                    ...result,
+                }
                 : projectKnowledgeSearchResult(
                     result,
                 ),

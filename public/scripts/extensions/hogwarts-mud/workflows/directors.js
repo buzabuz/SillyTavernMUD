@@ -1,31 +1,7 @@
 import {
-    projectCalendarAtMoment,
-    projectCalendarToday,
-    projectUpcomingCalendar,
-} from '../domain/calendar-projection.js';
-import {
     NARRATIVE_PROMPT_ACCESS,
     projectNarrativePromptInput,
 } from '../domain/narrative-prompt-context.js';
-
-export function selectRecentChronicle(
-    state,
-) {
-    const entries =
-        (
-            state.globalChronicle
-                ?.entries ||
-            []
-        ).slice(-3);
-    while (
-        entries.length &&
-        JSON.stringify(entries).length >
-            1400
-    ) {
-        entries.shift();
-    }
-    return entries;
-}
 
 export function createDirectorWorkflows(ports) {
     const {
@@ -46,8 +22,6 @@ export function createDirectorWorkflows(ports) {
         formatRetrievedKnowledge,
         getContext,
         getMudState,
-        getWorldDate,
-        isDailyDirectorPlanCurrent,
         jobRegistry,
         normalizePacingAssessmentPayload,
         parseJsonObject,
@@ -64,7 +38,7 @@ export function createDirectorWorkflows(ports) {
         renderAll,
         resolveRoleSlots,
         retrieveLocalKnowledge,
-        sendRoleRequest,
+        sendPacingDirectorRequest,
         syncLocalKnowledge,
         validatePacingAssessment,
     } = ports;
@@ -181,389 +155,6 @@ export function createDirectorWorkflows(ports) {
                         : {}),
                 };
             });
-    }
-
-    function createDailyDirectorPrompt(
-        state,
-        retrievedKnowledge = [],
-        contextPlan = createContextBudgetPlan(
-            CONTEXT_SIZE_PRESETS.rich,
-            DEFAULT_MODEL_SLOTS.medium.maxResponseLength,
-        ),
-    ) {
-        const date = getWorldDate(state.clock);
-        const hasCalendar =
-            Array.isArray(
-                state.calendar
-                    ?.entries,
-            );
-        const calendar = {
-            today:
-                hasCalendar
-                    ? projectCalendarToday(
-                        state,
-                        state.clock,
-                    )
-                    : [],
-            upcoming:
-                hasCalendar
-                    ? projectUpcomingCalendar(
-                        state,
-                        state.clock,
-                        7,
-                    )
-                    : [],
-            currentMoment:
-                hasCalendar
-                    ? projectCalendarAtMoment(
-                        state,
-                        state.clock,
-                    )
-                    : [],
-        };
-        return [
-            {
-                role: 'system',
-                content: `You are the mid-tier Daily Director for a persistent Harry Potter RPG. You are called exactly once per in-world date. Settle the previous day's character consequences and prepare today's actor guidance, clue opportunities, and time policy. Return exactly one compact JSON object with no Markdown.
-
-Rules:
-- Produce one directive for every currently present actor.
-- Use only the supplied medium-tier actor projection. Private goals, secrets, locked clues, and Story Arc state are unavailable.
-- A revealed clue must be prewritten and must have had its unlock condition satisfied in the supplied previous-day events.
-- Calendar is read-only. Use calendar.today, calendar.upcoming and calendar.currentMoment for guidance, but never output a Calendar proposal, entry, cancellation, reschedule, status change or horizon.
-- calendar.currentMoment is the complete set of schedules overlapping the current clock. Keep every entry regardless of participant, location, tag or planningTier.
-- Do not write scene prose or NPC dialogue.
-- Keep ordinary turn durations at least 15 minutes. Instantaneous magic may use fewer.
-- Keep every string under 20 English words. Do not restate character profiles.
-
-${NPC_IDENTITY_PROMPT_BOUNDARY}
-
-Schema:
-{
-  "date": "YYYY-MM-DD",
-  "actorDirectives": [
-    {
-      "id":"actor_id",
-      "goalEn":"today's immediate goal",
-      "moodEn":"current mood",
-      "guidanceEn":"how to perform this actor today"
-    }
-  ],
-  "revealedClueIds": ["clues actually earned yesterday"],
-  "timePolicy": {
-    "defaultMinutes":15,
-    "movementMinutes":15,
-    "investigationMinutes":30,
-    "extendedActionMinutes":60,
-    "instantaneousMagicMinutes":1
-  }
-}`,
-            },
-            {
-                role: 'user',
-                content: JSON.stringify(
-                    projectNarrativePromptInput(
-                        {
-                            date,
-                            calendar,
-                            currentScene:
-                                state.scene,
-                            presentActors:
-                            projectNpcRuntimeActorsForPrompt(
-                                state,
-                            ),
-                            actorLibrary:
-                            projectActorLibraryForContext(
-                                state.actorLibrary,
-                                contextPlan,
-                                {
-                                    includePrivate:
-                                        false,
-                                    identityObserver:
-                                        'self',
-                                    worldState:
-                                        state,
-                                },
-                            ),
-                            discoveredClues:
-                            (
-                                state.clues ||
-                                []
-                            ).filter(clue =>
-                                clue
-                                    .discovered ===
-                                true),
-                            recentChronicle:
-                                selectRecentChronicle(
-                                    state,
-                                ),
-                            recentMessages:
-                            getContext().chat
-                                .slice(
-                                    -contextPlan
-                                        .recentMessageLimit,
-                                )
-                                .map(message => ({
-                                    isUser:
-                                        Boolean(
-                                            message
-                                                .is_user,
-                                        ),
-                                    text:
-                                        message.mes,
-                                })),
-                            retrievedLocalKnowledge:
-                            formatRetrievedKnowledge(
-                                projectNarrativePromptInput(
-                                    retrievedKnowledge,
-                                ),
-                            ),
-                        },
-                        {
-                            access:
-                            NARRATIVE_PROMPT_ACCESS
-                                .MEDIUM,
-                        },
-                    ),
-                ),
-            },
-        ];
-    }
-
-    function validateDailyDirectorPlan(plan, state) {
-        const errors = [];
-        for (const key of [
-            'calendar',
-            'calendarEntries',
-            'calendarUpdates',
-            'calendarProposal',
-            'entries',
-            'horizon',
-        ]) {
-            if (
-                Object.hasOwn(
-                    plan || {},
-                    key,
-                )
-            ) {
-                errors.push(
-                    `Daily Director 不得输出 Calendar 字段 ${key}。`,
-                );
-            }
-        }
-        const date = getWorldDate(state.clock);
-        const actorIds = new Set((state.actorLibrary || []).map(actor => actor.id));
-        const presentActorIds = (state.actors || [])
-            .filter(actor => actor.present !== false)
-            .map(actor => actor.id);
-        if (plan?.date !== date) {
-            errors.push(`日计划日期必须是 ${date}。`);
-        }
-        const directives = Array.isArray(plan?.actorDirectives) ? plan.actorDirectives : [];
-        const directiveIds = new Set(directives.map(item => item.id));
-        presentActorIds.forEach(actorId => {
-            if (!directiveIds.has(actorId)) {
-                errors.push(`日计划缺少在场人物 ${actorId} 的指令。`);
-            }
-        });
-        directives.forEach(item => {
-            if (!actorIds.has(item.id)) {
-                errors.push(`日计划引用了不存在的角色 ${item.id || '?'}。`);
-            }
-            for (const key of ['goalEn', 'moodEn', 'guidanceEn']) {
-                if (!String(item[key] || '').trim()) {
-                    errors.push(`角色 ${item.id || '?'} 的日计划缺少 ${key}。`);
-                }
-            }
-        });
-        const activeArc = (state.storyArcs || []).find(arc => arc.status === 'active');
-        const clueIds = new Set((activeArc?.cluePlan || []).map(clue => clue.id));
-        (plan?.revealedClueIds || []).forEach(clueId => {
-            if (!clueIds.has(clueId)) {
-                errors.push(`日结试图揭示未预写线索 ${clueId || '?'}。`);
-            }
-        });
-        const policy = plan?.timePolicy || {};
-        for (const key of [
-            'defaultMinutes',
-            'movementMinutes',
-            'investigationMinutes',
-            'extendedActionMinutes',
-            'instantaneousMagicMinutes',
-        ]) {
-            if (!Number.isInteger(Number(policy[key])) || Number(policy[key]) < 0) {
-                errors.push(`日计划时间规则 ${key} 无效。`);
-            }
-        }
-        return { valid: errors.length === 0, errors };
-    }
-
-    async function generateDailyDirectorPlan(
-        roleSlot,
-        state,
-        retrievedKnowledge,
-        contextPlan,
-    ) {
-        let response = await sendRoleRequest(
-            roleSlot,
-            createDailyDirectorPrompt(
-                state,
-                retrievedKnowledge,
-                contextPlan,
-            ),
-            { json: true },
-        );
-        let raw = extractRoleResponseText(response);
-        let lastError = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                const plan = parseJsonObject(raw);
-                const validation = validateDailyDirectorPlan(plan, state);
-                if (!validation.valid) {
-                    throw new Error(validation.errors.join('；'));
-                }
-                return plan;
-            } catch (error) {
-                lastError = error;
-                if (attempt > 0) break;
-                response = await sendRoleRequest(roleSlot, [
-                    {
-                        role: 'system',
-                        content: 'Repair the compact daily-director JSON. Keep the supplied date, include every present actor exactly once, use only prewritten clue IDs, and provide a complete timePolicy. Output no dialogue or scene prose.',
-                    },
-                    {
-                        role: 'user',
-                        content: JSON.stringify({
-                            validationError: String(error?.message || error),
-                            invalidOutput: typeof raw === 'string' ? raw : JSON.stringify(raw),
-                            requiredSchema:
-                            createDailyDirectorPrompt(
-                                state,
-                                retrievedKnowledge,
-                                contextPlan,
-                            )[0].content,
-                        }),
-                    },
-                ], { json: true });
-                raw = extractRoleResponseText(response);
-            }
-        }
-        throw new Error(`中档日计划连续两次无效：${String(lastError?.message || lastError)}`);
-    }
-
-    async function ensureDailyDirectorPlan() {
-        let state = getMudState();
-        const date = getWorldDate(state?.clock);
-        if (!date || state?.phase !== 'playing') {
-            return;
-        }
-        if (isDailyDirectorPlanCurrent(state.clock, state.dailyDirector)) {
-            return;
-        }
-        if (jobRegistry.daily) {
-            return jobRegistry.daily;
-        }
-
-        jobRegistry.daily = (async () => {
-            const context = getContext();
-            state = getMudState();
-            state.dailyDirector = {
-                date,
-                status: 'building',
-                error: '',
-                plan: null,
-                settledAt: null,
-            };
-            await context.saveMetadata();
-            renderAll();
-            try {
-                const slots = resolveRoleSlots(state.modelSlots);
-                const contextPlan =
-                createContextBudgetPlan(
-                    slots.medium.contextSize,
-                    slots.medium.maxResponseLength,
-                );
-                const entityIds = [
-                    state.scene?.id,
-                    state.map?.currentLocalNodeId,
-                    ...(state.actors || []).filter(actor => actor.present !== false).map(actor => actor.id),
-                ].filter(Boolean);
-                const retrievedKnowledge = await retrieveLocalKnowledge(
-                    `Daily plan for ${date}. ${state.scene?.summaryEn || state.scene?.summary || ''}`,
-                    entityIds,
-                    {
-                        limit: contextPlan.ragLimit,
-                    },
-                );
-                const plan = await generateDailyDirectorPlan(
-                    slots.medium,
-                    state,
-                    retrievedKnowledge,
-                    contextPlan,
-                );
-                state = getMudState();
-                const activeArc = (state.storyArcs || []).find(arc => arc.status === 'active');
-                const cluePlan = new Map((activeArc?.cluePlan || []).map(clue => [clue.id, clue]));
-                const existingClueIds = new Set((state.clues || []).map(clue => clue.id));
-                const revealed = (plan.revealedClueIds || [])
-                    .filter(clueId => cluePlan.has(clueId) && !existingClueIds.has(clueId))
-                    .map(clueId => {
-                        const clue = cluePlan.get(clueId);
-                        return {
-                            id: clue.id,
-                            labelEn: clue.labelEn,
-                            detailEn: clue.playerFacingDiscoveryEn,
-                            label: clue.labelEn,
-                            detail: clue.playerFacingDiscoveryEn,
-                            discovered: true,
-                            discoveredAt: state.clock,
-                        };
-                    });
-                state.clues = [...(state.clues || []), ...revealed];
-                state.storyArcs = (state.storyArcs || []).map(arc => arc.id === activeArc?.id ? {
-                    ...arc,
-                    revealedClueIds: [...new Set([
-                        ...(arc.revealedClueIds || []),
-                        ...revealed.map(clue => clue.id),
-                    ])],
-                } : arc);
-                const directives = new Map(plan.actorDirectives.map(item => [item.id, item]));
-                state.actors = (state.actors || []).map(actor => {
-                    const directive = directives.get(actor.id);
-                    return directive ? {
-                        ...actor,
-                        currentIntentEn: directive.goalEn,
-                        currentIntent: directive.goalEn,
-                    } : actor;
-                });
-                state.dailyDirector = {
-                    date,
-                    status: 'ready',
-                    error: '',
-                    plan,
-                    settledAt: new Date().toISOString(),
-                };
-                await context.saveMetadata();
-                applySystemPrompt();
-                renderAll();
-                await syncLocalKnowledge();
-            } catch (error) {
-                state = getMudState();
-                state.dailyDirector = {
-                    date,
-                    status: 'failed',
-                    error: String(error?.cause?.message || error?.message || error),
-                    plan: null,
-                    settledAt: null,
-                };
-                await context.saveMetadata();
-                renderAll();
-                throw error;
-            }
-        })().finally(() => {
-            jobRegistry.daily = null;
-        });
-        return jobRegistry.daily;
     }
 
     function buildPacingActorSelectionPolicy(
@@ -894,25 +485,246 @@ When a public guest is necessary, guestActor must contain exactly:
         ];
     }
 
+    function createCausalPacingDirectorPrompt(
+        state,
+        pacingSignals,
+    ) {
+        const opportunity =
+            pacingSignals.metrics
+                ?.causalCollapseOpportunity ||
+            null;
+        const runtimeById =
+            new Map(
+                (
+                    state.actors ||
+                    []
+                ).map(actor => [
+                    actor.id,
+                    actor,
+                ]),
+            );
+        const relevantActorIds =
+            new Set([
+                opportunity
+                    ?.focusActorId,
+                ...(
+                    state.actors ||
+                    []
+                )
+                    .filter(actor =>
+                        actor.present !==
+                            false)
+                    .map(actor =>
+                        actor.id),
+            ].filter(Boolean));
+        const actorDirectory =
+            (
+                state.actorLibrary ||
+                []
+            )
+                .filter(actor =>
+                    relevantActorIds
+                        .has(actor.id))
+                .map(actor => {
+                    const runtime =
+                        runtimeById.get(
+                            actor.id,
+                        ) || {};
+                    return {
+                        id: actor.id,
+                        nameEn:
+                            actor.nameEn ||
+                            actor.id,
+                        roleEn:
+                            actor.roleEn ||
+                            '',
+                        present:
+                            runtime.present !==
+                            false,
+                        currentActivityEn:
+                            runtime
+                                .currentActivityEn ||
+                            '',
+                    };
+                });
+        const currentItem =
+            opportunity?.itemId
+                ? (
+                    state.items ||
+                    []
+                ).find(item =>
+                    item.id ===
+                        opportunity.itemId) ||
+                    null
+                : null;
+        const recentCommittedEvents =
+            (
+                state.eventKnowledge ||
+                []
+            )
+                .slice(-8)
+                .map(event => ({
+                    id:
+                        event.id ||
+                        event.eventId ||
+                        '',
+                    kind:
+                        event.kind ||
+                        event.type ||
+                        '',
+                    clock:
+                        event.clock ||
+                        '',
+                    summaryEn:
+                        event.summaryEn ||
+                        event.eventEn ||
+                        '',
+                    actorIds: [
+                        ...new Set([
+                            ...(
+                                event
+                                    .participantActorIds ||
+                                []
+                            ),
+                            ...(
+                                event
+                                    .witnessActorIds ||
+                                []
+                            ),
+                            ...(
+                                event
+                                    .recipientActorIds ||
+                                []
+                            ),
+                        ]),
+                    ],
+                }));
+        const existingCausalFacts =
+            (
+                state.causalCollapse
+                    ?.records ||
+                []
+            )
+                .slice(-8)
+                .map(record => ({
+                    id: record.id,
+                    slotKey:
+                        record.slotKey,
+                    kind:
+                        record.kind,
+                    factEn:
+                        record.factEn,
+                    focusActorId:
+                        record.focusActorId ||
+                        '',
+                    relatedActorIds:
+                        record
+                            .relatedActorIds ||
+                        [],
+                    itemId:
+                        record.itemId ||
+                        '',
+                    mapId:
+                        record.mapId ||
+                        '',
+                    roomId:
+                        record.roomId ||
+                        '',
+                }));
+        return [{
+            role: 'system',
+            content: `You are the medium-tier Causal Collapse Director. A deterministic guard found one unresolved observation slot. Return one JSON object and no Markdown.
+
+Choose hold when no grounded, reversible prior fact is compatible with the supplied committed State. Otherwise return exactly one causal_collision. Never create, admit, move, merge, rename or reveal an Actor. Never produce filler, mishaps, environmental hooks, generic initiative, Scene prose, dialogue, a new Item, a new map, a spell, a major identity, a death, a permanent injury, a successful major crime or a Canon rewrite.
+
+A bound fact must have become true 1 minute to 7 days before this observation, remain compatible with recentCommittedEvents and existingCausalFacts, and use only supplied Actor, Item, map, room and Event IDs. Show aftermath first: beatEn, pressureEn, visibleResiduesEn and aftermathEn may expose consequences but not narrate the hidden cause. Only matching witnessAccounts may know the cause.
+
+Schema:
+{
+  "decision": "hold|intervene",
+  "diagnosisEn": "1-45 English words",
+  "reassessAfterTurns": 6,
+  "intervention": null
+}
+
+For intervene:
+{
+  "kind": "causal_collision",
+  "timing": "this_turn",
+  "beatEn": "observable aftermath, at most 45 words",
+  "pressureEn": "immediate public pressure, at most 45 words",
+  "arcId": "",
+  "causalCollapse": {
+    "kind": "social_edge|offscreen_event|institutional_fact|material_history|obligation",
+    "focusActorId": "supplied existing actor ID or empty",
+    "relatedActorIds": ["supplied existing actor ID"],
+    "itemId": "supplied current item ID or empty",
+    "mapId": "supplied current map ID",
+    "roomId": "supplied current room ID",
+    "effectiveMinutesBeforeObservation": 7,
+    "factEn": "specific prior fact, at most 80 words",
+    "edgeType": "friend|roommate|classmate|rival|neighbor|witness|creditor|debtor|empty",
+    "visibleResiduesEn": ["1-3 observable details, each at most 45 words"],
+    "aftermathEn": "low-tier staging instruction, at most 45 words",
+    "witnessAccounts": [{"actorId":"supplied actor ID","accountEn":"private account, at most 60 words"}],
+    "sourceEventIds": ["supplied Event ID"],
+    "persistenceTargets": ["event|social_graph|room_state|item|obligation"],
+    "surfaceMode": "aftermath",
+    "consequenceMode": "mixed",
+    "irreversible": false,
+    "requiresHighTier": false
+  }
+}`,
+        }, {
+            role: 'user',
+            content:
+                JSON.stringify({
+                    causalOpportunity:
+                        opportunity,
+                    clock:
+                        state.clock,
+                    currentScene: {
+                        id:
+                            state.scene
+                                ?.id ||
+                            '',
+                        summaryEn:
+                            state.scene
+                                ?.summaryEn ||
+                            '',
+                    },
+                    currentLocation: {
+                        mapId:
+                            state.map
+                                ?.activeMapId ||
+                            '',
+                        roomId:
+                            state.map
+                                ?.currentLocalNodeId ||
+                            '',
+                        name:
+                            state.location ||
+                            '',
+                    },
+                    actorDirectory,
+                    currentItem,
+                    recentCommittedEvents,
+                    existingCausalFacts,
+                }),
+        }];
+    }
+
     async function generatePacingAssessment(
         roleSlot,
         state,
         pacingSignals,
-        retrievedKnowledge,
-        contextPlan,
     ) {
-        const actorSelectionPolicy =
-        buildPacingActorSelectionPolicy(
+        const prompt =
+        createCausalPacingDirectorPrompt(
             state,
             pacingSignals,
         );
-        const prompt = createPacingDirectorPrompt(
-            state,
-            pacingSignals,
-            retrievedKnowledge,
-            contextPlan,
-        );
-        let response = await sendRoleRequest(
+        let response = await sendPacingDirectorRequest(
             roleSlot,
             prompt,
             { json: true },
@@ -924,9 +736,6 @@ When a public guest is necessary, guestActor must contain exactly:
                 const payload =
                 normalizePacingAssessmentPayload(
                     parseJsonObject(raw),
-                    state,
-                    actorSelectionPolicy
-                        .explicitCanonCandidates,
                 );
                 if (payload.decision === 'hold' &&
                 payload.intervention === undefined) {
@@ -944,10 +753,10 @@ When a public guest is necessary, guestActor must contain exactly:
             } catch (error) {
                 lastError = error;
                 if (attempt > 0) break;
-                response = await sendRoleRequest(roleSlot, [
+                response = await sendPacingDirectorRequest(roleSlot, [
                     {
                         role: 'system',
-                        content: 'Repair the pacing assessment JSON. Preserve actorSelectionPolicy priority order and social-stage quota. Keep arcId empty and use only supplied actor, item, map, and room IDs. If causal_collapse_opportunity is active, return one compatible causal_collision with aftermath-only surface data, or one ordinary incident with causalCollapse null; never hold. Causal facts must be reversible and requireHighTier false. Otherwise return hold with null intervention or one safe this_turn intervention. Return JSON only.',
+                        content: 'Repair the causal-only Pacing JSON. Return hold with null intervention when no grounded prior fact fits. Otherwise return exactly one reversible this_turn causal_collision using only supplied Actor, Item, map, room and Event IDs. Never create or admit an Actor, and never return filler or a generic incident. Output JSON only.',
                     },
                     {
                         role: 'user',
@@ -957,7 +766,6 @@ When a public guest is necessary, guestActor must contain exactly:
                             invalidOutput: raw,
                             originalRequest:
                             JSON.parse(prompt[1].content),
-                            requiredSchema: prompt[0].content,
                         }),
                     },
                 ], { json: true });
@@ -971,8 +779,8 @@ When a public guest is necessary, guestActor must contain exactly:
 
     async function ensurePacingDirectorAssessment(
         playerAction = '',
-        currentAddressing = null,
-        selectionPlayerAction = playerAction,
+        _currentAddressing = null,
+        _selectionPlayerAction = playerAction,
     ) {
         if (jobRegistry.pacing) {
             return jobRegistry.pacing;
@@ -982,39 +790,6 @@ When a public guest is necessary, guestActor must contain exactly:
             state,
             playerAction,
         );
-        pacingSignals.playerAction = playerAction;
-        pacingSignals
-            .selectionPlayerAction =
-        selectionPlayerAction;
-        pacingSignals.currentAddressing =
-        currentAddressing
-            ?.valid === true
-            ? {
-                mode:
-                    currentAddressing
-                        .mode,
-                attempted:
-                    Boolean(
-                        currentAddressing
-                            .attempted,
-                    ),
-                valid: true,
-                actorIds: [
-                    ...(
-                        currentAddressing
-                            .actorIds ||
-                        []
-                    ),
-                ],
-                targetLabels: [
-                    ...(
-                        currentAddressing
-                            .targetLabels ||
-                        []
-                    ),
-                ],
-            }
-            : null;
         if (!pacingSignals.shouldAssess) {
             return null;
         }
@@ -1030,36 +805,10 @@ When a public guest is necessary, guestActor must contain exactly:
             renderAll();
             try {
                 const slots = resolveRoleSlots(state.modelSlots);
-                const contextPlan =
-                createContextBudgetPlan(
-                    slots.medium.contextSize,
-                    slots.medium.maxResponseLength,
-                );
-                const entityIds = [
-                    state.scene?.id,
-                    state.map?.currentLocalNodeId,
-                    ...(state.actors || [])
-                        .filter(actor => actor.present !== false)
-                        .map(actor => actor.id),
-                    ...(state.storyArcs || [])
-                        .filter(arc => arc.status === 'active')
-                        .map(arc => arc.id),
-                ].filter(Boolean);
-                const retrievedKnowledge =
-                await retrieveLocalKnowledge(
-                    `Assess scene pacing: ${pacingSignals.reasons.join(', ')}. ` +
-                    `${state.scene?.summaryEn || state.scene?.summary || ''}`,
-                    entityIds,
-                    {
-                        limit: contextPlan.ragLimit,
-                    },
-                );
                 const assessment = await generatePacingAssessment(
                     slots.medium,
                     state,
                     pacingSignals,
-                    retrievedKnowledge,
-                    contextPlan,
                 );
                 state = getMudState();
                 context.chatMetadata.hogwartsMud =
@@ -1071,9 +820,11 @@ When a public guest is necessary, guestActor must contain exactly:
                 await context.saveMetadata();
                 applySystemPrompt();
                 renderAll();
-                if (assessment.intervention?.guestActor ||
-                assessment.intervention?.actorEntrances?.length ||
-                assessment.intervention?.causalCollapse) {
+                if (
+                    assessment
+                        .intervention
+                        ?.causalCollapse
+                ) {
                     await syncLocalKnowledge();
                 }
                 return assessment;
@@ -1109,12 +860,8 @@ When a public guest is necessary, guestActor must contain exactly:
 
     return {
         projectActorLibraryForContext,
-        createDailyDirectorPrompt,
-        validateDailyDirectorPlan,
-        generateDailyDirectorPlan,
-        ensureDailyDirectorPlan,
-        buildPacingActorSelectionPolicy,
-        createPacingDirectorPrompt,
+        createPacingDirectorPrompt:
+            createCausalPacingDirectorPrompt,
         generatePacingAssessment,
         ensurePacingDirectorAssessment,
     };

@@ -1,4 +1,11 @@
+export const KNOWLEDGE_API_CONTRACT_VERSION = 3;
+export const KNOWLEDGE_INDEX_FORMAT_VERSION = 2;
 export const KNOWLEDGE_PROJECTOR_VERSION = 2;
+export const KNOWLEDGE_REVISION_POLICIES =
+    Object.freeze({
+        EXACT: 'exact',
+        NOT_FUTURE: 'not_future',
+    });
 export const KNOWLEDGE_NODE_TYPES = Object.freeze([
     'fact',
     'appraisal',
@@ -171,6 +178,30 @@ export function computeKnowledgeChecksum(value) {
             .toString(16)
             .padStart(8, '0');
     return `cyrb53-${high}${low}`;
+}
+
+export function computeKnowledgeProjectionFingerprint(
+    records,
+) {
+    return computeKnowledgeChecksum(
+        (records || [])
+            .map(record => [
+                normalizeKnowledgeId(
+                    record?.recordId ||
+                    record?.id,
+                ),
+                String(
+                    record
+                        ?.contentChecksum ||
+                    '',
+                ),
+            ])
+            .sort((left, right) =>
+                left[0].localeCompare(
+                    right[0],
+                    'en',
+                )),
+    );
 }
 
 export function normalizeKnowledgeSourceRefs(
@@ -603,6 +634,9 @@ export function hydrateKnowledgeRecords(
     {
         timelineEpoch = '',
         stateRevision,
+        revisionPolicy =
+            KNOWLEDGE_REVISION_POLICIES
+                .EXACT,
         audience = {},
         clock = '',
         nodeTypes = [],
@@ -617,6 +651,17 @@ export function hydrateKnowledgeRecords(
             : normalizeRevision(
                 stateRevision,
             );
+    if (
+        !Object.values(
+            KNOWLEDGE_REVISION_POLICIES,
+        ).includes(
+            revisionPolicy,
+        )
+    ) {
+        throw new TypeError(
+            `Invalid Knowledge revision policy: ${revisionPolicy}`,
+        );
+    }
     const requestedTypes =
         new Set(
             (nodeTypes || [])
@@ -659,11 +704,22 @@ export function hydrateKnowledgeRecords(
                 'timeline_mismatch';
         } else if (
             requestedRevision !== null &&
-            record.stateRevision !==
-                requestedRevision
+            (
+                revisionPolicy ===
+                    KNOWLEDGE_REVISION_POLICIES
+                        .EXACT
+                    ? record.stateRevision !==
+                        requestedRevision
+                    : record.stateRevision >
+                        requestedRevision
+            )
         ) {
             reason =
-                'stale_revision';
+                revisionPolicy ===
+                    KNOWLEDGE_REVISION_POLICIES
+                        .EXACT
+                    ? 'stale_revision'
+                    : 'future_revision';
         } else if (
             requestedCategories.size &&
             !requestedCategories
@@ -739,6 +795,124 @@ export function hydrateKnowledgeRecords(
                 selected.map(record =>
                     record.recordId),
             suppressed,
+        },
+    };
+}
+
+export function hydrateCanonicalKnowledgeCandidates({
+    candidateRecords = [],
+    seedRecordIds = [],
+    canonicalRecords = [],
+    filters = {},
+} = {}) {
+    const canonicalById =
+        new Map(
+            (canonicalRecords || [])
+                .map(record => [
+                    record.recordId,
+                    record,
+                ]),
+        );
+    const seedIds =
+        new Set(
+            (seedRecordIds || [])
+                .map(recordId =>
+                    normalizeKnowledgeId(
+                        recordId,
+                    )),
+        );
+    const candidatesById =
+        new Map(
+            (candidateRecords || [])
+                .map(record => [
+                    normalizeKnowledgeId(
+                        record?.recordId ||
+                        record?.id,
+                    ),
+                    record,
+                ]),
+        );
+    const orderedIds = [
+        ...seedIds,
+        ...candidatesById.keys(),
+    ];
+    const selected = [];
+    const suppressed = [];
+    const seen =
+        new Set();
+    for (const recordId of
+        orderedIds) {
+        if (
+            seen.has(recordId)
+        ) {
+            continue;
+        }
+        seen.add(recordId);
+        const canonical =
+            canonicalById.get(
+                recordId,
+            );
+        if (!canonical) {
+            suppressed.push({
+                recordId,
+                reason:
+                    'canonical_missing',
+            });
+            continue;
+        }
+        if (!seedIds.has(recordId)) {
+            const candidate =
+                candidatesById.get(
+                    recordId,
+                );
+            if (
+                stableKnowledgeStringify(
+                    candidate
+                        ?.sourceRefs ||
+                    [],
+                ) !==
+                stableKnowledgeStringify(
+                    canonical
+                        .sourceRefs ||
+                    [],
+                )
+            ) {
+                suppressed.push({
+                    recordId,
+                    reason:
+                        'source_refs_mismatch',
+                });
+                continue;
+            }
+        }
+        selected.push(
+            canonical,
+        );
+    }
+    const hydration =
+        hydrateKnowledgeRecords(
+            selected,
+            {
+                ...filters,
+                revisionPolicy:
+                    KNOWLEDGE_REVISION_POLICIES
+                        .EXACT,
+            },
+        );
+    return {
+        records:
+            hydration.records,
+        diagnostics: {
+            selectedRecordIds:
+                hydration.records
+                    .map(record =>
+                        record.recordId),
+            suppressed: [
+                ...suppressed,
+                ...hydration
+                    .diagnostics
+                    .suppressed,
+            ],
         },
     };
 }

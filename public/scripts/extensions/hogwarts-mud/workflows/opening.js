@@ -1,13 +1,15 @@
 import {
     applyCommittedSceneOpeningExperience,
 } from '../domain/archive-projection.js';
+import {
+    buildNarrativePromptContext,
+} from '../domain/narrative-prompt-context.js';
 
 export function createOpeningWorkflow(ports) {
     const {
         CANON_WIT_TONE_CONTRACT,
         PRESET_WORLD_MAP,
         TRANSLATION_FORMAT_VERSION,
-        applyDirectorFoundation,
         applyNativeRoleSettings,
         applyOpeningWorldPackage,
         applySystemPrompt,
@@ -20,10 +22,10 @@ export function createOpeningWorkflow(ports) {
         renderAll,
         resolveRoleSlots,
         scheduleRender,
-        sendRoleRequest,
+        sendBootstrapSceneOpeningRequest,
+        sendOpeningWorldRequest,
         syncLocalKnowledge,
         translateOpeningValues,
-        validateDirectorFoundation,
         validateOpeningWorldPackage,
     } = ports;
 
@@ -38,13 +40,13 @@ export function createOpeningWorkflow(ports) {
             opening.scene.map.nameEn,
             ...opening.scene.map.levels.map(level => level.nameEn),
             ...opening.scene.map.rooms.map(room => room.nameEn),
-            ...opening.actors.flatMap(actor => [
+            ...opening.actorProposals.flatMap(actor => [
                 actor.roleEn,
-                actor.relationshipToPlayerEn,
-                actor.impressionOfPlayerEn ||
-                actor.relationshipToPlayerEn,
-                actor.currentActivityEn,
-                actor.currentIntentEn,
+                actor.initialRelationshipToPlayerEn,
+                actor.firstImpressionOfPlayerEn ||
+                actor.initialRelationshipToPlayerEn,
+                actor.runtime.currentActivityEn,
+                actor.runtime.currentIntentEn,
             ]),
             opening.conflict.titleEn,
             opening.conflict.premiseEn,
@@ -74,7 +76,7 @@ export function createOpeningWorkflow(ports) {
             actorActivities: [],
             actorIntents: [],
         };
-        opening.actors.forEach(() => {
+        opening.actorProposals.forEach(() => {
             display.actorRoles.push(translated[cursor++]);
             display.actorRelationships.push(translated[cursor++]);
             display.actorImpressions.push(translated[cursor++]);
@@ -111,212 +113,6 @@ export function createOpeningWorkflow(ports) {
         };
     }
 
-    async function localizeDirectorFoundation(foundation) {
-        if (!getSettings().translationEnabled) {
-            return foundation;
-        }
-        const values = foundation.actorLibrary.flatMap(actor => [
-            actor.roleEn,
-            actor.relationshipToPlayerEn,
-            actor.impressionOfPlayerEn ||
-            actor.relationshipToPlayerEn,
-            actor.publicDescriptionEn,
-            actor.publicBackgroundEn,
-            actor.personalityEn,
-            actor.speechStyleEn,
-        ]);
-        const translated = await translateOpeningValues(values);
-        let cursor = 0;
-        return {
-            ...foundation,
-            actorLibrary: foundation.actorLibrary.map(actor => ({
-                ...actor,
-                display: {
-                    name: actor.nameEn,
-                    role: translated[cursor++],
-                    relationshipToPlayer: translated[cursor++],
-                    impressionOfPlayer: translated[cursor++],
-                    publicDescription: translated[cursor++],
-                    publicBackground: translated[cursor++],
-                    personality: translated[cursor++],
-                    speechStyle: translated[cursor++],
-                },
-            })),
-        };
-    }
-
-    function createDirectorFoundationPrompt(state) {
-        return [
-            {
-                role: 'system',
-                content: `You are the highest-level World Director for a persistent Harry Potter RPG. Build the durable private cast library and one fully prewritten hidden exploration arc. Return exactly one JSON object with no Markdown.
-
-The cast library must contain every currently present NPC plus future clue-bearing characters who can enter later. Canon characters must remain canon-consistent. Each character needs a stable public identity, voice, private goal, fear, secret, and bounded knowledge. The on-scene narrator will use these profiles to roleplay each person separately.
-
-publicDescriptionEn is the actor's stable physical description only: body, face, complexion, natural hair, and other durable features. Never include clothing, accessories, held objects, nearby possessions, furniture, current pose, current activity, or scene position. Those belong to current activity and the material presentation state.
-
-impressionOfPlayerEn is an actual starting opinion, not a relationship label. Parents, guardians, relatives, established friends, and other pre-existing contacts must begin with a specific impression grounded in the player's confirmed background and their shared history. Only a genuinely unmet character may use a not-yet-met state; never describe a parent or old friend as a stranger.
-
-The hidden exploration arc is binding private world truth, not a public quest summary. Predetermine the actual answer, stakes, involved people, and 3-8 discoverable clue nodes. Spread clues across at least three distinct people, places, or items. A clue may become player-visible only after its unlock condition is satisfied. Do not use the storage narrator as a character.
-
-Keep the output compact and machine-safe:
-- Create 5-7 actors total, including every current actor ID exactly once.
-- Create exactly 4 clue nodes.
-- Every string value must be at most 35 English words.
-- Every knowledgeEn array must contain 1-3 short facts.
-- Do not restate the prompt, explain decisions, or emit analysis.
-- Close every string, array, and object.
-
-Schema:
-{
-  "actorLibrary": [{
-    "id": "snake_case",
-    "nameEn": "string",
-    "roleEn": "string",
-    "relationshipToPlayerEn": "string",
-    "impressionOfPlayerEn": "specific initial opinion of the player",
-    "publicDescriptionEn": "stable physical traits only; no clothing, props, activity, or location",
-    "publicBackgroundEn": "what the player currently knows",
-    "personalityEn": "stable temperament",
-    "speechStyleEn": "voice, diction, habits",
-    "privateGoalEn": "hidden current goal",
-    "fearEn": "private fear",
-    "secretEn": "private secret",
-    "knowledgeEn": ["facts this character actually knows"]
-  }],
-  "storyArc": {
-    "id": "snake_case",
-    "titleEn": "private director title",
-    "hookEn": "the surface mystery",
-    "hiddenTruthEn": "the predetermined actual answer",
-    "stakesEn": "what changes if discovered or suppressed",
-    "involvedActorIds": ["actor_id"],
-    "cluePlan": [{
-      "id": "snake_case",
-      "labelEn": "private clue label",
-      "hiddenFactEn": "which part of the truth this proves",
-      "playerFacingDiscoveryEn": "what may be shown after discovery",
-      "unlockConditionEn": "specific action or earned disclosure",
-      "sourceActorIds": ["actor_id"],
-      "sourceLocationIds": ["optional_location_id"],
-      "sourceItemId": "optional_item_id"
-    }]
-  }
-}`,
-            },
-            {
-                role: 'user',
-                content: JSON.stringify({
-                    playerCharacter: state.character,
-                    campaign: state.campaign,
-                    currentScene: state.scene,
-                    currentActors: state.actors,
-                    internalConflict: state.conflict,
-                    candidateHiddenClues: state.clues,
-                    committedOpening: state.opening?.package,
-                }),
-            },
-        ];
-    }
-
-    async function generateDirectorFoundation(roleSlot, state) {
-        let response = await sendRoleRequest(
-            roleSlot,
-            createDirectorFoundationPrompt(state),
-            { json: true },
-        );
-        let raw = extractRoleResponseText(response);
-        let lastError = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                const foundation = parseJsonObject(raw);
-                const validation = validateDirectorFoundation(foundation, state.actors);
-                if (!validation.valid) {
-                    throw new Error(validation.errors.join('；'));
-                }
-                return foundation;
-            } catch (error) {
-                lastError = error;
-                if (attempt > 0) break;
-                response = await sendRoleRequest(roleSlot, [
-                    {
-                        role: 'system',
-                        content: 'Repair the director-foundation JSON. Return exactly one compact complete JSON object matching the supplied schema. Keep every present actor ID, use 5-7 actors total, exactly 4 clue nodes, at most 35 words per string, and ensure all references resolve. Output no analysis.',
-                    },
-                    {
-                        role: 'user',
-                        content: JSON.stringify({
-                            validationError: String(error?.message || error),
-                            invalidOutput: typeof raw === 'string' ? raw : JSON.stringify(raw),
-                            requiredSchema: createDirectorFoundationPrompt(state)[0].content,
-                        }),
-                    },
-                ], { json: true });
-                raw = extractRoleResponseText(response);
-            }
-        }
-        throw new Error(`世界导演未能建立出场角色库：${String(lastError?.message || lastError)}`);
-    }
-
-    async function ensureDirectorFoundation() {
-        const current = getMudState();
-        const foundationReady = current?.directorFoundation?.status === 'ready' &&
-        Array.isArray(current.actorLibrary) &&
-        current.actorLibrary.length >= 3 &&
-        Array.isArray(current.storyArcs) &&
-        current.storyArcs.some(arc => Array.isArray(arc.cluePlan) && arc.cluePlan.length >= 3);
-        if (foundationReady || current?.phase !== 'playing') {
-            return;
-        }
-        if (jobRegistry.foundation) {
-            return jobRegistry.foundation;
-        }
-
-        jobRegistry.foundation = (async () => {
-            const context = getContext();
-            let state = getMudState();
-            const slots = resolveRoleSlots(state.modelSlots);
-            const roleSlot = slots.high;
-            if (!roleSlot.profileId) {
-                throw new Error('出场角色库没有可用的高档或中档 Connection Profile。');
-            }
-            state.directorFoundation = {
-                status: 'building',
-                error: '',
-                committedAt: state.directorFoundation?.committedAt || null,
-            };
-            await context.saveMetadata();
-            renderAll();
-            try {
-                let foundation = await generateDirectorFoundation(roleSlot, state);
-                try {
-                    foundation = await localizeDirectorFoundation(foundation);
-                } catch (translationError) {
-                    console.warn('[Hogwarts MUD] Cast library translation failed; using English labels', translationError);
-                }
-                context.chatMetadata.hogwartsMud = applyDirectorFoundation(state, foundation);
-                state = getMudState();
-                await context.saveMetadata();
-                await syncLocalKnowledge();
-                applySystemPrompt();
-                renderAll();
-            } catch (error) {
-                state = getMudState();
-                state.directorFoundation = {
-                    status: 'failed',
-                    error: String(error?.cause?.message || error?.message || error),
-                    committedAt: null,
-                };
-                await context.saveMetadata();
-                renderAll();
-                throw error;
-            }
-        })().finally(() => {
-            jobRegistry.foundation = null;
-        });
-        return jobRegistry.foundation;
-    }
-
     function createOpeningDirectorPrompt(state) {
         const isFirstYear = state.campaign.grade === 1;
         return [
@@ -326,9 +122,9 @@ Schema:
 
 The opening must already be in motion before the player gets control. Establish an exact time, a concrete current room, 1-8 present NPCs with independent activity and intent, and one strong dramatic conflict with immediate pressure and long-term stakes.
 
-Every present actor and actor-library profile needs impressionOfPlayerEn. For family, guardians, relatives, established friends, and other pre-existing contacts, write a specific initial opinion grounded in the confirmed player background and their shared life before this scene. Do not use "stranger", "unknown", or a bare relationship label for them.
+	Every actor is proposed exactly once in actorProposals. For a present actor, runtime.present is true, runtime.roomId names one opening-map room, and firstImpressionOfPlayerEn is a specific initial opinion grounded in visible conduct or confirmed shared history. Do not use "stranger", "unknown", or a bare relationship label for family, guardians, relatives, established friends, or other pre-existing contacts.
 
-publicDescriptionEn is stable physical appearance only. Exclude clothes, accessories, held objects, nearby possessions, furniture, pose, activity, and location. Put current behavior in currentActivityEn; subsequent clothing and object state is maintained separately.
+	publicProfile.descriptionEn is stable physical appearance only. Exclude clothes, accessories, held objects, nearby possessions, furniture, pose, activity, and location. Put current behavior in runtime.currentActivityEn; subsequent clothing and object state is maintained separately.
 
 For a first-year pre-Hogwarts start, use the player's actual home background when available. Create a compact, internally consistent local MUD map for that home and begin with the admission-letter situation already affecting the household. For an older student, choose the most causally appropriate pre-term or school setting. Never list the storage narrator as an NPC. Never decide the player's response, dialogue, thoughts, or action.
 
@@ -349,6 +145,7 @@ Schema:
     "id": "snake_case",
     "nameEn": "string",
     "summaryEn": "string",
+	    "explorationHookEn": "6-60 word non-spoiler environmental hook",
     "worldAnchorId": "optional preset world node id or empty string",
     "map": {
       "id": "snake_case",
@@ -360,21 +157,36 @@ Schema:
       "currentRoomId": "room_id"
     }
   },
-  "actors": [{"id":"snake_case","nameEn":"string","roleEn":"string","relationshipToPlayerEn":"string","impressionOfPlayerEn":"specific initial opinion of the player","publicDescriptionEn":"stable physical traits only","currentActivityEn":"string","currentIntentEn":"string","roomId":"existing_room_id","present":true}],
-  "actorLibrary": [{
+	  "actorProposals": [{
     "id":"snake_case",
     "nameEn":"string",
+	    "aliases":["public alias"],
     "roleEn":"string",
-    "relationshipToPlayerEn":"string",
-    "impressionOfPlayerEn":"specific initial opinion or not-yet-met state",
-    "publicDescriptionEn":"stable physical traits only",
-    "publicBackgroundEn":"string",
-    "personalityEn":"string",
-    "speechStyleEn":"string",
-    "privateGoalEn":"string",
-    "fearEn":"string",
-    "secretEn":"string",
-    "knowledgeEn":["string"]
+	    "publicProfile":{
+	      "descriptionEn":"stable physical traits only",
+	      "backgroundEn":"public background"
+	    },
+	    "performanceCore":{
+	      "temperamentEn":"stable temperament",
+	      "speechStyleEn":"voice, diction and habits",
+	      "motivesEn":["durable motive"],
+	      "socialStrategiesEn":["performable social strategy"],
+	      "boundariesEn":["durable boundary"],
+	      "vulnerabilitiesEn":["durable vulnerability"]
+	    },
+	    "privateFacts":{
+	      "secretEn":"private secret or empty string",
+	      "knowledgeEn":["fact this actor actually knows"]
+	    },
+	    "runtime":{
+	      "present":true,
+	      "roomId":"existing_room_id or empty when absent",
+	      "currentActivityEn":"observable current activity",
+	      "currentIntentEn":"current intent",
+	      "currentGoalEn":"current goal"
+	    },
+	    "initialRelationshipToPlayerEn":"initial relationship structure",
+	    "firstImpressionOfPlayerEn":"specific opinion when present, otherwise empty"
   }],
   "storyArc": {
     "id":"snake_case",
@@ -425,132 +237,288 @@ Schema:
         ];
     }
 
-    function validateOpeningScenePlan(plan, state) {
-        const errors = [];
-        const actorIds = new Set((state.actorLibrary || []).map(actor => actor.id));
-        const sequence = Array.isArray(plan?.sequence) ? plan.sequence : [];
-        const dialogueBeats = Array.isArray(plan?.dialogueBeats) ? plan.dialogueBeats : [];
-        if (!sequence.length || sequence.length > 24) {
-            errors.push('首幕必须包含 1–24 个顺序分段。');
-        }
-        const beats = new Map();
-        dialogueBeats.forEach(beat => {
-            if (!String(beat.id || '').trim() || beats.has(beat.id) ||
-            !actorIds.has(beat.actorId) || !String(beat.intentEn || '').trim()) {
-                errors.push('首幕对白任务无效。');
-            }
-            beats.set(beat.id, beat);
-        });
-        sequence.forEach(segment => {
-            if (segment.type === 'narration' && !String(segment.textEn || '').trim()) {
-                errors.push('首幕旁白不能为空。');
-            } else if (segment.type === 'dialogue' &&
-            (!beats.has(segment.beatId) ||
-                beats.get(segment.beatId)?.actorId !== segment.actorId)) {
-                errors.push('首幕对白分段引用了无效任务。');
-            } else if (!['narration', 'dialogue'].includes(segment.type)) {
-                errors.push('首幕分段类型无效。');
-            }
-        });
-        return { valid: errors.length === 0, errors };
-    }
-
-    async function generatePlannedDialogueLines(lowSlot, state, dialogueBeats) {
-        if (!dialogueBeats.length) return [];
-        const actorIds = new Set(dialogueBeats.map(beat => beat.actorId));
-        const response = await sendRoleRequest(lowSlot, [
-            {
-                role: 'system',
-                content: `You are the low-tier Dialogue Performer. Write only the requested NPC spoken lines. Do not narrate setting, actions, consequences, time, clues, or state. Return exactly:
-{"lines":[{"beatId":"beat_1","actorId":"actor_id","textEn":"spoken words only"}]}
-
-${CANON_WIT_TONE_CONTRACT}`,
-            },
-            {
-                role: 'user',
-                content: JSON.stringify({
-                    actorProfiles: state.actorLibrary.filter(actor => actorIds.has(actor.id)),
-                    dialogueBeats,
-                }),
-            },
-        ], { json: true });
-        const payload = parseJsonObject(extractRoleResponseText(response));
-        const lines = Array.isArray(payload.lines) ? payload.lines : [];
-        const beats = new Map(dialogueBeats.map(beat => [beat.id, beat]));
-        if (lines.length !== dialogueBeats.length) {
-            throw new Error('低档对白模型没有完成全部首幕对白任务。');
-        }
-        lines.forEach(line => {
-            const beat = beats.get(line.beatId);
-            if (!beat || beat.actorId !== line.actorId || !String(line.textEn || '').trim()) {
-                throw new Error('低档对白模型返回了无效的首幕对白。');
-            }
-        });
-        return lines;
-    }
-
-    function mergeOpeningScenePlan(plan, lines) {
-        const lineMap = new Map(lines.map(line => [line.beatId, line]));
-        return plan.sequence.map(segment => segment.type === 'narration'
-            ? { type: 'narration', textEn: segment.textEn }
-            : {
-                type: 'dialogue',
-                actorId: segment.actorId,
-                textEn: lineMap.get(segment.beatId)?.textEn || '',
-            });
-    }
-
-    function createOpeningScenePlanPrompt(state) {
+    function createBootstrapSceneOpeningPrompt(
+        state,
+    ) {
+        const presentActorIds =
+            (state.actors || [])
+                .filter(actor =>
+                    actor.present ===
+                    true)
+                .map(actor =>
+                    actor.id);
+        const profileById =
+            new Map(
+                (state.actorLibrary || [])
+                    .map(profile => [
+                        profile.id,
+                        profile,
+                    ]),
+            );
+        const context =
+            buildNarrativePromptContext(
+                state,
+                [],
+                {
+                    actorIds:
+                        presentActorIds,
+                },
+            );
         return [
             {
                 role: 'system',
-                content: `You are the mid-tier Opening Scene Director for a persistent Harry Potter RPG. Plan the first playable scene using the committed world package and actor profiles exactly. Return exactly one JSON object with no Markdown wrapper.
+                content: `You are the low-tier Scene Opening Performer. Opening World has already committed the first Scene. Render it as original English narration and NPC dialogue. Return exactly one JSON object and no Markdown.
 
-Requirements:
-- Begin inside the current room with the listed NPCs already doing their current activities.
-- You own setting, physical continuity, event sequencing, and narration.
-- Do not write NPC dialogue. Emit dialogue tasks for the low-tier Dialogue Performer.
-- Use 500-900 words total with literary scene continuity.
-- Preserve all committed facts and do not introduce a different location, time, NPC, item, or outcome.
-- Never narrate the player character's unspoken thoughts, dialogue, decision, or action.
-- End at the first consequential moment that demands the player's response.
-- Do not reveal any private goal, secret, hidden truth, or locked clue.
+Use authoritySnapshot as the only current Actor, Item, Material and Room authority. actorPerformanceCards provide only public performance guidance for the matching actor ID. Never transfer one Actor's temperament or knowledge to another.
+
+Do not change the committed clock, room, cast, conflict, activities, intents, Items or facts. Dialogue may use only a present actor ID. Never speak, think, decide, emote, move or act for the player. Do not reveal private facts, Story Arc truth or locked clues. Focus on at most three named actors, begin inside the committed current room, put the opening conflict in motion, and end where the player can respond.
+
+Write 2-6 ordered segments totalling roughly 180-420 English words.
 
 Schema:
-{
-  "elapsedMinutes": 0,
-  "publicEventEn": "the inciting event begins",
-  "sequence": [
-    {"type":"narration","textEn":"scene prose"},
-    {"type":"dialogue","beatId":"beat_1","actorId":"actor_id"}
-  ],
-  "dialogueBeats": [
-    {
-      "id":"beat_1",
-      "actorId":"actor_id",
-      "intentEn":"what the speaker needs from the player",
-      "mustConveyEn":["facts the line may communicate"],
-      "emotionalSubtextEn":"private delivery subtext",
-      "maxWords":80
-    }
-  ]
-}
-
-${CANON_WIT_TONE_CONTRACT}`,
+{"segments":[{"type":"narration","textEn":"observable prose"},{"type":"dialogue","actorId":"present_actor_id","textEn":"spoken words only"}]}`,
             },
             {
                 role: 'user',
-                content: JSON.stringify({
-                    character: state.character,
-                    campaign: state.campaign,
-                    committedOpeningPackage: state.opening.package,
-                    currentScene: state.scene,
-                    presentActors: state.actors,
-                    actorProfiles: state.actorLibrary,
-                    conflict: state.conflict,
-                }),
+                content:
+                    JSON.stringify({
+                        openingClock:
+                            state.clock,
+                        currentScene:
+                            state.scene,
+                        openingBriefEn:
+                            state.opening
+                                ?.package
+                                ?.openingBriefEn ||
+                            '',
+                        conflict:
+                            state.conflict,
+                        authoritySnapshot:
+                            context
+                                .authoritySnapshot,
+                        actorPerformanceCards:
+                            presentActorIds
+                                .map(actorId => {
+                                    const profile =
+                                        profileById.get(
+                                            actorId,
+                                        ) || {};
+                                    return {
+                                        id:
+                                            actorId,
+                                        nameEn:
+                                            profile
+                                                .nameEn ||
+                                            actorId,
+                                        roleEn:
+                                            profile
+                                                .roleEn ||
+                                            '',
+                                        publicProfile:
+                                            profile
+                                                .publicProfile ||
+                                            {},
+                                        performanceCore:
+                                            profile
+                                                .performanceCore ||
+                                            {},
+                                    };
+                                }),
+                        memoryActivationCapsules:
+                            context
+                                .memoryActivationCapsules,
+                    }),
             },
         ];
+    }
+
+    function validateBootstrapSceneOpening(
+        payload,
+        state,
+    ) {
+        const errors = [];
+        if (
+            !payload ||
+            typeof payload !==
+                'object' ||
+            Array.isArray(payload)
+        ) {
+            return {
+                valid: false,
+                errors: [
+                    'Bootstrap Scene Opening must be an object.',
+                ],
+                segments: [],
+            };
+        }
+        const unknownRootKeys =
+            Object.keys(payload)
+                .filter(key =>
+                    key !== 'segments');
+        if (unknownRootKeys.length) {
+            errors.push(
+                `Bootstrap Scene Opening cannot contain fields: ${unknownRootKeys.join(', ')}.`,
+            );
+        }
+        const segments =
+            Array.isArray(
+                payload?.segments,
+            )
+                ? payload.segments
+                : [];
+        if (
+            segments.length < 2 ||
+            segments.length > 6
+        ) {
+            errors.push(
+                'Bootstrap Scene Opening requires 2-6 segments.',
+            );
+        }
+        const presentActorIds =
+            new Set(
+                (state.actors || [])
+                    .filter(actor =>
+                        actor.present ===
+                        true)
+                    .map(actor =>
+                        actor.id),
+            );
+        let narrationCount = 0;
+        let wordCount = 0;
+        segments.forEach((
+            segment,
+            index,
+        ) => {
+            const allowedKeys =
+                segment?.type ===
+                    'narration'
+                    ? new Set([
+                        'type',
+                        'textEn',
+                    ])
+                    : segment?.type ===
+                        'dialogue'
+                        ? new Set([
+                            'type',
+                            'actorId',
+                            'textEn',
+                        ])
+                        : null;
+            if (
+                !allowedKeys ||
+                !String(
+                    segment?.textEn ||
+                    '',
+                ).trim()
+            ) {
+                errors.push(
+                    `Bootstrap segment ${index} is invalid.`,
+                );
+                return;
+            }
+            const unknownKeys =
+                Object.keys(segment)
+                    .filter(key =>
+                        !allowedKeys.has(
+                            key,
+                        ));
+            if (unknownKeys.length) {
+                errors.push(
+                    `Bootstrap segment ${index} cannot contain fields: ${unknownKeys.join(', ')}.`,
+                );
+            }
+            wordCount +=
+                String(
+                    segment.textEn,
+                )
+                    .trim()
+                    .split(/\s+/u)
+                    .filter(Boolean)
+                    .length;
+            if (
+                segment.type ===
+                'narration'
+            ) {
+                narrationCount += 1;
+                if (
+                    segment.actorId !==
+                    undefined
+                ) {
+                    errors.push(
+                        `Narration segment ${index} cannot have actorId.`,
+                    );
+                }
+            } else if (
+                !presentActorIds.has(
+                    segment.actorId,
+                )
+            ) {
+                errors.push(
+                    `Dialogue segment ${index} has an unknown or absent actor.`,
+                );
+            }
+        });
+        if (!narrationCount) {
+            errors.push(
+                'Bootstrap Scene Opening requires narration.',
+            );
+        }
+        if (
+            wordCount < 180 ||
+            wordCount > 420
+        ) {
+            errors.push(
+                'Bootstrap Scene Opening must contain 180-420 English words.',
+            );
+        }
+        return {
+            valid:
+                errors.length === 0,
+            errors,
+            segments,
+        };
+    }
+
+    async function generateBootstrapSceneOpening(
+        lowSlot,
+        state,
+    ) {
+        const prompt =
+            createBootstrapSceneOpeningPrompt(
+                state,
+            );
+        const response =
+            await sendBootstrapSceneOpeningRequest(
+                lowSlot,
+                prompt,
+                {
+                    json: true,
+                },
+            );
+        const raw =
+            extractRoleResponseText(
+                response,
+            );
+        try {
+            const parsed =
+                parseJsonObject(raw);
+            const validation =
+                validateBootstrapSceneOpening(
+                    parsed,
+                    state,
+                );
+            if (!validation.valid) {
+                throw new Error(
+                    validation.errors
+                        .join('；'),
+                );
+            }
+            return validation.segments;
+        } catch (error) {
+            throw new Error(
+                `Bootstrap Scene Opening invalid: ${String(error?.message || error)}`,
+            );
+        }
     }
 
     function composeSceneSegments(segments, actorLibrary, language = 'en') {
@@ -632,7 +600,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
     }
 
     async function generateOpeningPackage(highSlot, state) {
-        let response = await sendRoleRequest(
+        let response = await sendOpeningWorldRequest(
             highSlot,
             createOpeningDirectorPrompt(state),
             { json: true },
@@ -652,7 +620,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 if (attempt > 0) {
                     break;
                 }
-                response = await sendRoleRequest(highSlot, [
+                response = await sendOpeningWorldRequest(highSlot, [
                     {
                         role: 'system',
                         content: 'Repair an invalid opening-world JSON package. Return exactly one complete JSON object with no Markdown and no commentary. Preserve usable facts, fill missing required fields, close all arrays and objects, keep the campaign year unchanged, and ensure every map exit references an existing room.',
@@ -662,7 +630,12 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         content: JSON.stringify({
                             validationError: String(error?.message || error),
                             invalidOutput: typeof raw === 'string' ? raw : JSON.stringify(raw),
-                            requiredSchema: createOpeningDirectorPrompt(state)[0].content,
+                            originalRequest:
+                                JSON.parse(
+                                    createOpeningDirectorPrompt(
+                                        state,
+                                    )[1].content,
+                                ),
                         }),
                     },
                 ], { json: true });
@@ -712,12 +685,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     let localized = opening;
                     try {
                         localized = await localizeOpeningPackage(opening);
-                        const localizedFoundation = await localizeDirectorFoundation({
-                            actorLibrary: opening.actorLibrary,
-                            storyArc: opening.storyArc,
-                        });
-                        localized.actorLibrary = localizedFoundation.actorLibrary;
-                        localized.storyArc = localizedFoundation.storyArc;
                     } catch (translationError) {
                         console.warn('[Hogwarts MUD] Opening state translation failed; using English labels', translationError);
                     }
@@ -729,26 +696,18 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 }
 
                 if (!hasOpeningNarrative()) {
-                    const sceneSlot = slots.medium;
+                    const sceneSlot =
+                        slots.low;
                     if (!sceneSlot?.profileId) {
-                        throw new Error('首幕场景编排至少需要中档 Connection Profile。');
+                        throw new Error(
+                            '首幕场景表演需要低档 Connection Profile。',
+                        );
                     }
-                    const response = await sendRoleRequest(
+                    const segments =
+                        await generateBootstrapSceneOpening(
                         sceneSlot,
-                        createOpeningScenePlanPrompt(state),
-                        { json: true },
-                    );
-                    const plan = parseJsonObject(extractRoleResponseText(response));
-                    const validation = validateOpeningScenePlan(plan, state);
-                    if (!validation.valid) {
-                        throw new Error(`首幕场景计划无效：${validation.errors.join('；')}`);
-                    }
-                    const lines = await generatePlannedDialogueLines(
-                        slots.low,
                         state,
-                        plan.dialogueBeats || [],
                     );
-                    const segments = mergeOpeningScenePlan(plan, lines);
                     const localizedSegments = await localizeSceneSegments(segments);
                     await appendOpeningNarrative(localizedSegments, state);
                 }
@@ -782,15 +741,10 @@ ${CANON_WIT_TONE_CONTRACT}`,
 
     return {
         localizeOpeningPackage,
-        localizeDirectorFoundation,
-        createDirectorFoundationPrompt,
-        generateDirectorFoundation,
-        ensureDirectorFoundation,
         createOpeningDirectorPrompt,
-        validateOpeningScenePlan,
-        generatePlannedDialogueLines,
-        mergeOpeningScenePlan,
-        createOpeningScenePlanPrompt,
+        createBootstrapSceneOpeningPrompt,
+        validateBootstrapSceneOpening,
+        generateBootstrapSceneOpening,
         composeSceneSegments,
         localizeSceneSegments,
         appendOpeningNarrative,

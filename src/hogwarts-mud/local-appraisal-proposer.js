@@ -124,6 +124,8 @@ export function proposeTurnAppraisals(
     return enqueueLocalSemanticOperation(
         () =>
             callStructuredModel({
+                taskId:
+                    'local_appraisal_proposer',
                 system:
                     APPRAISAL_SYSTEM,
                 input,

@@ -72,11 +72,41 @@ function stableValues(
 
 function projectCurrentItems(
     worldState,
+    {
+        includeHidden = false,
+    } = {},
 ) {
+    const mapId =
+        worldState.map
+            ?.activeMapId ||
+        worldState.scene?.mapId ||
+        '';
+    const roomId =
+        worldState.map
+            ?.currentLocalNodeId ||
+        worldState.scene?.roomId ||
+        '';
+    const currentHolderIds =
+        new Set([
+            'player',
+            ...(
+                worldState.actors ||
+                []
+            )
+                .filter(actor =>
+                    actor.present !==
+                    false)
+                .map(actor =>
+                    actor.id),
+        ]);
     return (
         worldState.items ||
         []
     )
+        .filter(source =>
+            includeHidden ||
+            source?.visibility !==
+                'hidden')
         .map(
             (
                 source,
@@ -87,19 +117,49 @@ function projectCurrentItems(
                     index,
                     {
                         mapId:
-                            worldState
-                                .map
-                                ?.activeMapId,
+                            mapId,
                         roomId:
-                            worldState
-                                .map
-                                ?.currentLocalNodeId,
+                            roomId,
                         clock:
                             worldState
                                 .clock,
                     },
                 ),
         )
+        .map(item => (
+            item.holderId &&
+            currentHolderIds.has(
+                item.holderId,
+            )
+                ? {
+                    ...item,
+                    location: {
+                        mapId,
+                        roomId,
+                        placement:
+                            'with_holder',
+                    },
+                }
+                : item
+        ))
+        .filter(item =>
+            [
+                'whole',
+                'remains',
+            ].includes(
+                item.physicalForm,
+            ) &&
+            (
+                currentHolderIds.has(
+                    item.holderId,
+                ) ||
+                (
+                    item.location
+                        ?.mapId === mapId &&
+                    item.location
+                        ?.roomId === roomId
+                )
+            ))
         .sort((left, right) =>
             left.id.localeCompare(
                 right.id,
@@ -380,10 +440,18 @@ function projectMaterialState(
 
 export function buildNarrativeAuthoritySnapshot(
     worldState = {},
+    {
+        access = 'medium',
+    } = {},
 ) {
     const currentItems =
         projectCurrentItems(
             worldState,
+            {
+                includeHidden:
+                    access ===
+                    'dedicated_high',
+            },
         );
     const itemsById =
         new Map(
@@ -459,11 +527,17 @@ export function buildNarrativeAuthoritySnapshot(
                 itemsById,
             ),
         currentRoomState:
-            cloneJsonValue(
-                worldState.map
-                    ?.roomStates
-                    ?.[roomKey],
-                {},
+            Object.fromEntries(
+                Object.entries(
+                    cloneJsonValue(
+                        worldState.map
+                            ?.roomStates
+                            ?.[roomKey],
+                        {},
+                    ),
+                ).filter(([key]) =>
+                    key !==
+                    'materialEffects'),
             ),
         currentOpenFacts:
             stableValues(

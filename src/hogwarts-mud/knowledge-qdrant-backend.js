@@ -1,4 +1,6 @@
 import {
+    KNOWLEDGE_API_CONTRACT_VERSION,
+    KNOWLEDGE_PROJECTOR_VERSION,
     computeKnowledgeChecksum,
     hydrateKnowledgeRecords,
     knowledgeClockOrdinal,
@@ -82,7 +84,10 @@ export function getQdrantCollectionGeneration({
     dimensions,
 }) {
     return computeKnowledgeChecksum({
-        projectorVersion: 2,
+        knowledgeApiContractVersion:
+            KNOWLEDGE_API_CONTRACT_VERSION,
+        projectorVersion:
+            KNOWLEDGE_PROJECTOR_VERSION,
         embeddingModel:
             String(embeddingModel || ''),
         dimensions:
@@ -172,12 +177,15 @@ export function buildQdrantPayloadFilter({
         );
     }
     if (stateRevision !== undefined) {
-        must.push(
-            qdrantMatch(
-                'stateRevision',
-                Number(stateRevision),
-            ),
-        );
+        must.push({
+            key: 'stateRevision',
+            range: {
+                lte:
+                    Number(
+                        stateRevision,
+                    ),
+            },
+        });
     }
     if (nodeTypes.length) {
         must.push(
@@ -562,6 +570,8 @@ export class QdrantKnowledgeBackend {
 
     pointPayload(record) {
         return {
+            knowledgeApiContractVersion:
+                KNOWLEDGE_API_CONTRACT_VERSION,
             recordId:
                 record.recordId,
             nodeType:

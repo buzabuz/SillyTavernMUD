@@ -29,7 +29,7 @@ export function createSetupController(ports) {
         renderWorldMap,
         resolveRoleSlots,
         saveSettingsDebounced,
-        sendRoleRequest,
+        sendCharacterPolishRequest,
         setAppScreen,
         syncModelSlotControls,
         validateCharacterDraft,
@@ -277,7 +277,7 @@ export function createSetupController(ports) {
                 ...slots.medium,
                 profileId,
             };
-            const response = await sendRoleRequest(roleSlot, [
+            const response = await sendCharacterPolishRequest(roleSlot, [
                 {
                     role: 'system',
                     content: `You polish a structured player character background for a Hogwarts role-playing game beginning in ${campaign.startYear}, school grade ${campaign.grade}. Preserve every supplied fact, add no secret lineage or ability, write 180-260 English words, and output prose only.`,

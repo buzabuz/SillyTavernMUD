@@ -251,11 +251,6 @@ function createState(
                 CURRENT_CLOCK,
             ...calendarPatch,
         },
-        directorFoundation: {
-            status: 'ready',
-            committedAt:
-                'foundation_commit',
-        },
         actorLibrary: [{
             id: ACTOR_ID,
             name:
@@ -483,7 +478,7 @@ function createHarness(
                             'medium_profile',
                     },
                 }),
-            sendRoleRequest:
+            sendModelTaskRequest:
                 async (
                     roleSlot,
                     prompt,
@@ -514,7 +509,7 @@ function createHarness(
     };
 }
 
-test('[defect-probing] Foundation commits one four-year storyline with eight ordered term beats and no schedules', async () => {
+test('[defect-probing] Opening World trigger commits one four-year storyline with eight ordered term beats and no schedules', async () => {
     const state =
         createState();
     const storyline =
@@ -543,7 +538,7 @@ test('[defect-probing] Foundation commits one four-year storyline with eight ord
         await harness.workflow
             .runHighCalendarDirector({
                 trigger:
-                    'foundation',
+                    'opening_world',
             });
 
     assert.equal(
@@ -634,7 +629,7 @@ test('[defect-probing] High prompt and validator accept only the V2 typed storyl
             state,
             {
                 trigger:
-                    'foundation',
+                    'opening_world',
             },
         );
     assert.equal(
@@ -686,7 +681,7 @@ test('[defect-probing] High prompt and validator accept only the V2 typed storyl
                 state,
                 {
                     trigger:
-                        'foundation',
+                        'opening_world',
                 },
             );
         assert.equal(
@@ -706,7 +701,7 @@ test('[defect-probing] High prompt and validator accept only the V2 typed storyl
             state,
             {
                 trigger:
-                    'foundation',
+                    'opening_world',
             },
         );
     assert.match(
@@ -723,7 +718,7 @@ test('[defect-probing] High prompt and validator accept only the V2 typed storyl
     );
 });
 
-test('[defect-probing] a grandfathered V1 High schedule does not make V2 Foundation skip missing storylines', async () => {
+test('[defect-probing] a grandfathered V1 High schedule does not make the Opening World trigger skip missing storylines', async () => {
     const legacySchedule =
         createSchedule(
             'grandfathered_high_event',
@@ -758,7 +753,7 @@ test('[defect-probing] a grandfathered V1 High schedule does not make V2 Foundat
         await harness.workflow
             .runHighCalendarDirector({
                 trigger:
-                    'foundation',
+                    'opening_world',
             });
 
     assert.equal(
@@ -1207,7 +1202,7 @@ test('long-term storyBeats remain isolated from pacingDirector.pendingBeat acros
     await harness.workflow
         .runHighCalendarDirector({
             trigger:
-                'foundation',
+                'opening_world',
         });
 
     assert.deepEqual(
@@ -1245,7 +1240,7 @@ test('long-term storyBeats remain isolated from pacingDirector.pendingBeat acros
     );
 });
 
-test('model and durable save failures preserve Calendar, Foundation, transition, Scene and pendingBeat', async () => {
+test('model and durable save failures preserve Calendar, transition, Scene and pendingBeat', async () => {
     const state =
         createState();
     const before =
@@ -1270,7 +1265,7 @@ test('model and durable save failures preserve Calendar, Foundation, transition,
             .workflow
             .runHighCalendarDirectorSafely({
                 trigger:
-                    'foundation',
+                    'opening_world',
             });
     assert.equal(
         failedPlan.status,
@@ -1426,7 +1421,7 @@ test('empty high_transition typed proposal consumes its base revision once throu
     );
 });
 
-test('application starts High only after committed Foundation or high transition and never invokes Medium after High failure', async () => {
+test('application starts High only after committed Opening World or high transition and never invokes Medium after High failure', async () => {
     const [
         applicationSource,
         openingSource,
@@ -1456,19 +1451,19 @@ test('application starts High only after committed Foundation or high transition
     ]);
     assert.match(
         applicationSource,
-        /await ensureDirectorFoundationBase\(\);[\s\S]*?directorFoundation[\s\S]*?await runHighCalendarDirectorSafely\(\{[\s\S]*?trigger: 'foundation'/u,
-    );
-    assert.match(
-        applicationSource,
-        /await initializeOpeningWorldBase\(\);[\s\S]*?directorFoundation[\s\S]*?await runHighCalendarDirectorSafely\(\{[\s\S]*?trigger: 'foundation'/u,
+        /await initializeOpeningWorldBase\(\);[\s\S]*?assertWorldFoundationReady\([\s\S]*?await runHighCalendarDirectorSafely\(\{[\s\S]*?trigger:[\s\S]*?'opening_world'/u,
     );
     assert.match(
         applicationSource,
         /await runSceneTransitionBase\([\s\S]*?options,[\s\S]*?\);[\s\S]*?options\.tier ===[\s\S]*?'high'[\s\S]*?trigger:[\s\S]*?'high_transition'/u,
     );
-    assert.match(
+    assert.doesNotMatch(
+        applicationSource,
+        /ensureDirectorFoundation|directorFoundation|ensureDailyDirectorPlan|dailyDirector/u,
+    );
+    assert.doesNotMatch(
         openingSource,
-        /context\.chatMetadata\.hogwartsMud = applyDirectorFoundation/u,
+        /applyDirectorFoundation|directorFoundation|generateOpeningScenePlan|generateOpeningDialogue/u,
     );
     assert.match(
         transitionSource,
@@ -1476,7 +1471,6 @@ test('application starts High only after committed Foundation or high transition
     );
 
     let mediumCalls = 0;
-    let dailyCalls = 0;
     const committedState =
         createState(
             {},
@@ -1484,13 +1478,6 @@ test('application starts High only after committed Foundation or high transition
                 sceneTransition: {
                     tier: 'high',
                     status: 'settled',
-                },
-                dailyDirector: {
-                    date:
-                        CURRENT_CLOCK.slice(
-                            0,
-                            10,
-                        ),
                 },
             },
         );
@@ -1517,10 +1504,6 @@ test('application starts High only after committed Foundation or high transition
                 async () => {
                     mediumCalls += 1;
                 },
-            ensureDailyDirectorPlan:
-                async () => {
-                    dailyCalls += 1;
-                },
         });
     assert.equal(
         result,
@@ -1528,10 +1511,6 @@ test('application starts High only after committed Foundation or high transition
     );
     assert.equal(
         mediumCalls,
-        0,
-    );
-    assert.equal(
-        dailyCalls,
         0,
     );
 });

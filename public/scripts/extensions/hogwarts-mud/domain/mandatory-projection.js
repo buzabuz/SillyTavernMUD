@@ -33,15 +33,15 @@ function projectMandatorySceneState(
                 presentActorIds.has(profile.id))
             .map(profile => [profile.id, profile]),
     );
+    const materialState =
+        buildCurrentMaterialState(
+            worldState,
+        );
     const scene = worldState.scene
         ? {
             id: worldState.scene.id,
-            name: worldState.scene.name,
             nameEn: worldState.scene.nameEn,
-            summary: worldState.scene.summary,
             summaryEn: worldState.scene.summaryEn,
-            explorationHook:
-                worldState.scene.explorationHook,
             explorationHookEn:
                 worldState.scene.explorationHookEn,
             temporalFactsEn:
@@ -49,15 +49,25 @@ function projectMandatorySceneState(
                     .temporalFactsEn || [],
             mapId: worldState.scene.mapId,
             roomId: worldState.scene.roomId,
-            itemStates:
-                worldState.scene
-                    .itemStates || [],
             nextSceneIntent:
                 worldState.scene.nextSceneIntent || null,
             pacingPressureEn:
                 worldState.scene.pacingPressureEn || '',
         }
         : null;
+    const currentMapId =
+        worldState.map
+            ?.activeMapId ||
+        '';
+    const currentRoomId =
+        worldState.map
+            ?.currentLocalNodeId ||
+        '';
+    const currentHolderIds =
+        new Set([
+            'player',
+            ...presentActorIds,
+        ]);
     return {
         clock: worldState.clock,
         chapter: worldState.chapter,
@@ -75,16 +85,53 @@ function projectMandatorySceneState(
                     ]
                     ?.visibleResiduesEn ||
                 [],
-            materialEffects:
-                buildCurrentMaterialState(
-                    worldState,
-                ).roomEffects,
         },
         currentMaterialState:
-            buildCurrentMaterialState(
-                worldState,
-            ),
-        presentActors: presentActors.map(actor => ({
+            {
+                mapId:
+                    materialState
+                        .mapId,
+                roomId:
+                    materialState
+                        .roomId,
+                roomEffects:
+                    (
+                        materialState
+                            .roomEffects ||
+                        []
+                    ).map(effect => ({
+                        id: effect.id,
+                        type: effect.type,
+                        operation:
+                            effect.operation,
+                        actorId:
+                            effect.actorId,
+                        objectText:
+                            effect.objectText,
+                        targetText:
+                            effect.targetText,
+                        resultText:
+                            effect.resultText,
+                        persistence:
+                            effect.persistence,
+                        committedClock:
+                            effect
+                                .committedClock,
+                    })),
+                actorPresentations:
+                    Object.fromEntries(
+                        Object.entries(
+                            materialState
+                                .actorPresentations ||
+                            {},
+                        ).filter(([
+                            actorId,
+                        ]) =>
+                            presentActorIds
+                                .has(actorId)),
+                    ),
+            },
+        actorCards: presentActors.map(actor => ({
             id: actor.id,
             nameEn:
                 profiles.get(
@@ -114,58 +161,38 @@ function projectMandatorySceneState(
                 ),
             mapId: actor.mapId,
             roomId: actor.roomId,
-            presentation:
-                worldState
-                    .actorPresentations?.[
-                        actor.id
-                    ] ||
-                null,
-        })),
-        actorPerformance: presentActors.map(actor => {
-            const profile = profiles.get(actor.id) || {};
-            return {
-                id: actor.id,
+            performanceCore: {
                 temperamentEn:
-                    profile
-                        .performanceCore
+                    profiles.get(actor.id)
+                        ?.performanceCore
                         ?.temperamentEn ||
                     '',
                 speechStyleEn:
-                    profile
-                        .performanceCore
+                    profiles.get(actor.id)
+                        ?.performanceCore
                         ?.speechStyleEn ||
                     '',
                 motivesEn:
-                    profile
-                        .performanceCore
+                    profiles.get(actor.id)
+                        ?.performanceCore
                         ?.motivesEn ||
                     [],
                 boundariesEn:
-                    profile
-                        .performanceCore
+                    profiles.get(actor.id)
+                        ?.performanceCore
                         ?.boundariesEn ||
                     [],
                 vulnerabilitiesEn:
-                    profile
-                        .performanceCore
+                    profiles.get(actor.id)
+                        ?.performanceCore
                         ?.vulnerabilitiesEn ||
                     [],
-                knowledgeEn:
-                    profile
-                        .privateFacts
-                        ?.knowledgeEn ||
-                    [],
-            };
-        }),
+            },
+        })),
         behavioralEnvironment:
             buildBehavioralEnvironment(
                 worldState,
             ),
-        dailyDirectives: (
-            worldState.dailyDirector?.plan
-                ?.actorDirectives || []
-        ).filter(directive =>
-            presentActorIds.has(directive.id)),
         pacingDirective:
             worldState.pacingDirector?.pendingBeat
                 ?.status === 'pending'
@@ -233,7 +260,59 @@ function projectMandatorySceneState(
             : null,
         discoveredClues: (worldState.clues || [])
             .filter(clue => clue.discovered === true),
-        items: worldState.items || [],
+        currentItems:
+            (
+                worldState.items ||
+                []
+            )
+                .filter(item =>
+                    item.visibility !==
+                        'hidden' &&
+                    [
+                        'whole',
+                        'remains',
+                    ].includes(
+                        item.physicalForm,
+                    ) &&
+                    (
+                        currentHolderIds
+                            .has(
+                                item.holderId,
+                            ) ||
+                        (
+                            item.location
+                                ?.mapId ===
+                                currentMapId &&
+                            item.location
+                                ?.roomId ===
+                                currentRoomId
+                        )
+                    ))
+                .map(item => ({
+                    id: item.id,
+                    labelEn:
+                        item.labelEn ||
+                        item.label ||
+                        item.id,
+                    ownerId:
+                        item.ownerId ||
+                        '',
+                    holderId:
+                        item.holderId ||
+                        '',
+                    state:
+                        item.state ||
+                        '',
+                    physicalForm:
+                        item
+                            .physicalForm,
+                    isEquipped:
+                        item.isEquipped ===
+                        true,
+                    storyRoles:
+                        item.storyRoles ||
+                        [],
+                })),
         knownSpells:
             (
                 worldState

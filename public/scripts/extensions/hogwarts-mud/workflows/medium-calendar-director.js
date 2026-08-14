@@ -18,6 +18,13 @@ import {
     projectNarrativePromptInput,
 } from '../domain/narrative-prompt-context.js';
 import {
+    getMapRooms,
+} from '../domain/map-access.js';
+import {
+    getInteriorMount,
+    listMapsByMountHierarchy,
+} from '../domain/interior-mount.js';
+import {
     advanceWorldClock,
     worldClockToEpochMinutes,
 } from '../domain/time-environment.js';
@@ -137,7 +144,6 @@ export function detectExplicitCalendarCommitment(
 export function evaluateMediumCalendarTriggers(
     worldState,
     {
-        previousClock = '',
         highPlanningResult = null,
         playerAction = '',
         force = false,
@@ -190,20 +196,6 @@ export function evaluateMediumCalendarTriggers(
     ) {
         reasons.push(
             'horizon_insufficient',
-        );
-    }
-    if (
-        isCalendarWorldClock(
-            previousClock,
-        ) &&
-        previousClock.slice(0, 10) !==
-            worldState.clock.slice(
-                0,
-                10,
-            )
-    ) {
-        reasons.push(
-            'day_changed',
         );
     }
     if (
@@ -401,7 +393,14 @@ export function projectSchedulableStoryBeats(
                     structuredClone(
                         beat,
                     ),
-                existingSchedules,
+                occupiedBeatSlots:
+                    [...occupiedSlots]
+                        .filter(Number.isInteger)
+                        .sort((
+                            left,
+                            right,
+                        ) =>
+                            left - right),
                 missingBeatSlots:
                     STORY_BEAT_SLOTS
                         .filter(slot =>
@@ -534,23 +533,11 @@ function projectAdmittedActorStates(
             {};
         return {
             id: profile.id,
-            name:
-                String(
-                    profile.name ||
-                    profile.nameEn ||
-                    profile.id,
-                ),
             nameEn:
                 String(
                     profile.nameEn ||
                     profile.name ||
                     profile.id,
-                ),
-            role:
-                String(
-                    profile.role ||
-                    profile.roleEn ||
-                    '',
                 ),
             roleEn:
                 String(
@@ -558,38 +545,42 @@ function projectAdmittedActorStates(
                     profile.role ||
                     '',
                 ),
-            lifeStatus:
-                String(
-                    runtime.lifeStatus ||
-                    '',
-                ),
-            present:
-                runtime.present ===
-                true,
-            mapId:
-                String(
-                    runtime.mapId ||
-                    '',
-                ),
-            roomId:
-                String(
-                    runtime.roomId ||
-                    '',
-                ),
-            currentActivityEn:
-                String(
-                    runtime
-                        .currentActivityEn ||
-                    '',
-                ),
-            currentIntentEn:
-                String(
-                    runtime
-                        .currentIntentEn ||
-                    '',
-                ),
         };
     });
+}
+
+function projectCalendarLocationDirectory(
+    worldState,
+) {
+    return listMapsByMountHierarchy(
+        worldState.map || {},
+    ).map(({
+        map,
+        depth,
+    }) => ({
+        id: map.id,
+        nameEn:
+            map.nameEn ||
+            map.name ||
+            map.id,
+        depth,
+        mount:
+            getInteriorMount(map),
+        rooms:
+            getMapRooms(
+                map,
+                worldState.map,
+            ).map(room => ({
+                id: room.id,
+                nameEn:
+                    room.nameEn ||
+                    room.name ||
+                    room.id,
+                access:
+                    room.access ||
+                    '',
+            })),
+    }));
 }
 
 export function projectMediumCalendarDirectorContext(
@@ -597,7 +588,6 @@ export function projectMediumCalendarDirectorContext(
     {
         trigger,
         recentPlayerActions = [],
-        mapAuthority = null,
     } = {},
 ) {
     const targetHorizon =
@@ -644,7 +634,7 @@ export function projectMediumCalendarDirectorContext(
                     worldState,
                     targetHorizon,
                 ),
-            planningWindowSchedules:
+            existingSchedules:
                 projectPlanningEntries(
                     worldState,
                 ),
@@ -659,28 +649,13 @@ export function projectMediumCalendarDirectorContext(
                     'social',
                     'personal',
                 ],
-                coverage:
-                    projectDailyScheduleCoverage(
-                        worldState,
-                        targetHorizon,
-                    ),
             },
-            highEntries:
-                projectPlanningEntries(
-                    worldState,
-                    'high',
-                ),
-            currentAndFutureMediumEntries:
-                projectPlanningEntries(
-                    worldState,
-                    'medium',
-                ),
             recentPlayerActions:
                 recentPlayerActions
                     .map(normalizedText)
                     .filter(Boolean)
                     .slice(-8),
-            admittedActorStates:
+            admittedActorDirectory:
                 projectAdmittedActorStates(
                     worldState,
                 ),
@@ -707,9 +682,9 @@ export function projectMediumCalendarDirectorContext(
                         '',
                     ),
             },
-            mapAuthority:
-                structuredClone(
-                    mapAuthority,
+            locationDirectory:
+                projectCalendarLocationDirectory(
+                    worldState,
                 ),
         },
         {
@@ -1001,13 +976,13 @@ export function createMediumCalendarDirectorPrompt(
 
 Rules:
 - Return exactly baseTimelineEpoch, baseStateRevision and entries. Calendar horizon is committed locally only after this proposal succeeds; never output horizon.
-- Create or update only planningTier "medium" schedules in entries. Never output or modify storyline, storyBeat or Scene records. highEntries are grandfathered read-only schedules.
+- Create or update only planningTier "medium" schedules in entries. Never output or modify storyline, storyBeat or Scene records. existingSchedules with planningTier "high" are grandfathered read-only schedules.
 - For every schedulableStoryBeats item, preserve every existing sourceBeatId + beatSlot pair and create each missingBeatSlots value. The merged Calendar must contain exactly the stable slots 1, 2, 3 and 4 for that beat.
 - Beat-derived schedules use scheduleKind "story", the supplied storyBeat ID as sourceBeatId, and a beatSlot from 1 through 4. Place them inside both the storyBeat window and the supplied planning window. They are opportunities, not prewritten Scenes or outcomes.
 - Reuse the existing schedule ID for the same sourceBeatId + beatSlot or repeated routine, promise, class, meeting, training session or event. Never change an existing sourceBeatId + beatSlot pair and never create a duplicate for it.
-- Maintain a readable agenda across dailyScheduleGuidance.coverage. Breakfast, class, lunch, dinner, training, date and meeting are ordinary schedule tags used only when applicable; represent them with the existing routine/class/social/personal scheduleKind values. Do not invent meal, class or timetable fields or mechanisms.
+- Maintain a readable agenda using existingSchedules and dailyScheduleGuidance. Breakfast, class, lunch, dinner, training, date and meeting are ordinary schedule tags used only when applicable; represent them with the existing routine/class/social/personal scheduleKind values. Do not invent meal, class or timetable fields or mechanisms.
 - New or rescheduled entries must start between currentClock and planningWindow.targetHorizon. An empty proposal is valid only when all beat slots and applicable daily schedules already exist.
-- Use recent player behavior, explicitCommitment, admitted actor state and mapAuthority. Use only supplied actor, map and room IDs.
+- Use recent player behavior, explicitCommitment, admittedActorDirectory and locationDirectory. Use only supplied actor, map and room IDs.
 - Every field is player-visible. Never output hidden storyArc facts, private motives, locked clues, model reasoning, secret payloads or guaranteed outcomes.
 - Breakfast, lunch, dinner, quidditch, date, exam, class, training, meeting, canon and every other category are ordinary equal tags. No tag grants priority, protection, exclusivity, automatic results or special mechanics.
 - Overlapping time, participants and locations are allowed. Do not cancel, hide, move or omit one arrangement merely because another overlaps it.
@@ -1059,8 +1034,6 @@ export function createMediumCalendarDirectorWorkflow(
     const {
         applySystemPrompt =
         () => {},
-        buildMapAuthorityContext =
-        () => null,
         extractRoleResponseText,
         getContext =
         () => ({
@@ -1073,7 +1046,7 @@ export function createMediumCalendarDirectorWorkflow(
         renderAll =
         () => {},
         resolveRoleSlots,
-        sendRoleRequest,
+        sendModelTaskRequest,
     } = ports;
 
     async function generateMediumCalendarProposal(
@@ -1097,10 +1070,6 @@ export function createMediumCalendarDirectorWorkflow(
                 {
                     trigger,
                     recentPlayerActions,
-                    mapAuthority:
-                        buildMapAuthorityContext(
-                            state,
-                        ),
                 },
             );
         let raw = '';
@@ -1111,7 +1080,7 @@ export function createMediumCalendarDirectorWorkflow(
             attempt++
         ) {
             const response =
-                await sendRoleRequest(
+                await sendModelTaskRequest(
                     roleSlot,
                     attempt === 0
                         ? prompt
@@ -1138,9 +1107,6 @@ export function createMediumCalendarDirectorWorkflow(
                                             prompt[1]
                                                 .content,
                                         ),
-                                    requiredSchema:
-                                        prompt[0]
-                                            .content,
                                 }),
                         }],
                     {

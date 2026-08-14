@@ -487,18 +487,26 @@ function createTransitionWorkflow({
         projectNpcRuntimeActorsForPrompt:
             state =>
                 state.actors,
-        sendRoleRequest:
+        sendSceneOpeningRequest:
             async (_slot, prompt) => {
                 openingPrompts.push(prompt);
                 return {
                     content:
                         JSON.stringify({
-                            segments: [{
-                                type:
-                                    'narration',
-                                textEn:
-                                    'The Library settles into view.',
-                            }],
+                            segments: [
+                                {
+                                    type:
+                                        'narration',
+                                    textEn:
+                                        'The Library settles into view.',
+                                },
+                                {
+                                    type:
+                                        'narration',
+                                    textEn:
+                                        'Rain taps softly against the tall windows.',
+                                },
+                            ],
                         }),
                 };
             },

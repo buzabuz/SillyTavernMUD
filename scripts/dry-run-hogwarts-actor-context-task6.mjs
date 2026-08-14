@@ -142,6 +142,10 @@ export const DEFAULT_TINA_LEGACY_FILE =
     path.resolve(
         'data/default-user/backups/chat_hogwarts_world_director_20260812-183453.jsonl',
     );
+export const DEFAULT_TINA_LIFECYCLE_FILE =
+    path.resolve(
+        'data/default-user/backups/chat_hogwarts_world_director_20260813-124742.jsonl',
+    );
 
 const LEGACY_PROMPT_BASELINE =
     Object.freeze({
@@ -356,6 +360,10 @@ function createFailureState(state) {
 function runMigrationEvidence(
     sourceState,
     chat,
+    lifecycleSourceState =
+        null,
+    lifecycleChat =
+        chat,
 ) {
     const sourceBytes =
         Buffer.from(json(sourceState));
@@ -416,13 +424,14 @@ function runMigrationEvidence(
 
     const lifecycleState =
         structuredClone(
-            sourceState,
+            lifecycleSourceState ||
+            first.state,
         );
     let saveRequests = 0;
     const lifecycle =
         createLifecycle(
             lifecycleState,
-            chat,
+            lifecycleChat,
             {
                 saveMetadataDebounced:
                     () => {
@@ -439,6 +448,10 @@ function runMigrationEvidence(
         Buffer.from(
             json(lifecycleState),
         );
+    const lifecycleSecondBefore =
+        structuredClone(
+            lifecycleState,
+        );
     const lifecycleSecond =
         lifecycle
             .ensureSceneLifecycleState(
@@ -451,6 +464,19 @@ function runMigrationEvidence(
     assert.equal(
         lifecycleSecond,
         false,
+        `Lifecycle second pass changed: ${Object.keys(
+            lifecycleState,
+        ).filter(key =>
+            json(
+                lifecycleState[
+                    key
+                ],
+            ) !==
+            json(
+                lifecycleSecondBefore[
+                    key
+                ],
+            )).join(', ')}`,
     );
     assert.deepEqual(
         Buffer.from(
@@ -460,9 +486,15 @@ function runMigrationEvidence(
     );
 
     const lifecycleFailed =
-        createFailureState(
-            sourceState,
+        structuredClone(
+            lifecycleSourceState ||
+            first.state,
         );
+    lifecycleFailed.socialGraph = {
+        ...lifecycleFailed
+            .socialGraph,
+        version: 1,
+    };
     const lifecycleFailedBefore =
         Buffer.from(
             json(lifecycleFailed),
@@ -471,7 +503,7 @@ function runMigrationEvidence(
     try {
         createLifecycle(
             lifecycleFailed,
-            chat,
+            lifecycleChat,
         ).ensureSceneLifecycleState(
             lifecycleFailed,
         );
@@ -481,7 +513,7 @@ function runMigrationEvidence(
     }
     assert.match(
         lifecycleFailure,
-        /cannot be converted/u,
+        /complete V1\/V2 production source boundary/u,
     );
     assert.deepEqual(
         Buffer.from(
@@ -546,20 +578,29 @@ function runMigrationEvidence(
                 clockUnchanged:
                     lifecycleState
                         .clock ===
-                    sourceState.clock,
+                    (
+                        lifecycleSourceState ||
+                        first.state
+                    ).clock,
                 turnUnchanged:
                     json(
                         lifecycleState
                             .turn,
                     ) ===
                     json(
-                        sourceState
+                        (
+                            lifecycleSourceState ||
+                            first.state
+                        )
                             .turn,
                     ),
                 stateRevisionUnchanged:
                     lifecycleState
                         .stateRevision ===
-                    sourceState
+                    (
+                        lifecycleSourceState ||
+                        first.state
+                    )
                         .stateRevision,
             },
             sizes: {
@@ -2384,30 +2425,19 @@ async function buildPromptEvidence(
             slot.maxResponseLength,
         );
     const prompts = [];
-    const responses = [
-        {
-            segments: [{
-                type:
-                    'narration',
-                textEn:
-                    'Invalid build-only response.',
-            }],
-        },
-        {
-            segments: [{
-                type:
-                    'narration',
-                textEn:
-                    'The table remains unchanged.',
-            }, {
-                type:
-                    'narration',
-                textEn:
-                    'The room waits.',
-            }],
-        },
-    ];
-    let validations = 0;
+    const response = {
+        segments: [{
+            type:
+                'narration',
+            textEn:
+                'The table remains unchanged.',
+        }, {
+            type:
+                'narration',
+            textEn:
+                'The room waits.',
+        }],
+    };
     let settlementCaptures = 0;
     const workflow =
         createTurnPerformanceWorkflow({
@@ -2457,7 +2487,7 @@ async function buildPromptEvidence(
             removeExplicitAddressDirective,
             resolvePlayerAddressing,
             resolveTemporaryActorRevealedName,
-            sendRoleRequest:
+            sendModelTaskRequest:
                 async (
                     _slot,
                     prompt,
@@ -2469,7 +2499,7 @@ async function buildPromptEvidence(
                     );
                     return {
                         content:
-                            responses.shift(),
+                            response,
                     };
                 },
             setLiveSceneStreamPhase:
@@ -2483,23 +2513,10 @@ async function buildPromptEvidence(
             updateLiveSceneStream:
                 () => {},
             validateScenePerformance:
-                () => {
-                    validations += 1;
-                    return validations ===
-                        1
-                        ? {
-                            valid:
-                                false,
-                            errors: [
-                                'build-only forced repair',
-                            ],
-                        }
-                        : {
-                            valid:
-                                true,
-                            errors: [],
-                        };
-                },
+                () => ({
+                    valid: true,
+                    errors: [],
+                }),
         });
     const originalFetch =
         globalThis.fetch;
@@ -2511,30 +2528,7 @@ async function buildPromptEvidence(
                 json:
                     async () => ({
                         performance:
-                            responses
-                                .length ===
-                            1
-                                ? {
-                                    segments: [{
-                                        type:
-                                            'narration',
-                                        textEn:
-                                            'Invalid build-only response.',
-                                    }],
-                                }
-                                : {
-                                    segments: [{
-                                        type:
-                                            'narration',
-                                        textEn:
-                                            'The table remains unchanged.',
-                                    }, {
-                                        type:
-                                            'narration',
-                                        textEn:
-                                            'The room waits.',
-                                    }],
-                                },
+                            response,
                     }),
             };
         };
@@ -2564,8 +2558,8 @@ async function buildPromptEvidence(
     }
     assert.equal(
         prompts.length,
-        2,
-        'Production build-only capture must produce initial and repair prompts.',
+        1,
+        'Production build-only capture must produce exactly one initial Prompt.',
     );
     const initial =
         promptReport(
@@ -2573,19 +2567,8 @@ async function buildPromptEvidence(
             slot,
             forbiddenCurrentImpressions,
         );
-    const repair =
-        promptReport(
-            prompts[1],
-            slot,
-            forbiddenCurrentImpressions,
-        );
     assert.equal(
         initial
-            .forbiddenCurrentImpressionCount,
-        0,
-    );
-    assert.equal(
-        repair
             .forbiddenCurrentImpressionCount,
         0,
     );
@@ -2604,7 +2587,6 @@ async function buildPromptEvidence(
         performanceBudget,
         contextPlan,
         initial,
-        repair,
         buildOnly: {
             promptCaptures:
                 prompts.length,
@@ -2670,10 +2652,20 @@ export async function runTask6Acceptance(
                 DEFAULT_TINA_LEGACY_FILE,
             )
             : before;
+    const lifecycleArchive =
+        activeHasActorContext &&
+        resolved ===
+            DEFAULT_TINA_FILE
+            ? await readArchive(
+                DEFAULT_TINA_LIFECYCLE_FILE,
+            )
+            : migrationArchive;
     const migration =
         runMigrationEvidence(
             migrationArchive.state,
             migrationArchive.chat,
+            lifecycleArchive.state,
+            lifecycleArchive.chat,
         );
     const snapshots =
         buildSnapshotEvidence(
@@ -2763,6 +2755,33 @@ export async function runTask6Acceptance(
         migrationFileBefore,
         'Dry-run changed the Tina legacy evidence archive.',
     );
+    const lifecycleArchiveAfter =
+        lifecycleArchive === before
+            ? after
+            : lifecycleArchive ===
+                migrationArchive
+                ? migrationArchiveAfter
+                : await readArchive(
+                    lifecycleArchive.path,
+                );
+    const lifecycleFileBefore =
+        fileMetric(
+            lifecycleArchive
+                .contents,
+            lifecycleArchive.stats,
+        );
+    const lifecycleFileAfter =
+        fileMetric(
+            lifecycleArchiveAfter
+                .contents,
+            lifecycleArchiveAfter
+                .stats,
+        );
+    assert.deepEqual(
+        lifecycleFileAfter,
+        lifecycleFileBefore,
+        'Dry-run changed the Tina lifecycle evidence archive.',
+    );
     return {
         version: 2,
         mode: 'build-only',
@@ -2797,6 +2816,19 @@ export async function runTask6Acceptance(
             distinctFromActive:
                 migrationArchive !==
                 before,
+        },
+        lifecycleArchive: {
+            path:
+                lifecycleArchive.path,
+            before:
+                lifecycleFileBefore,
+            after:
+                lifecycleFileAfter,
+            shaAndMtimeUnchanged:
+                true,
+            distinctFromMigration:
+                lifecycleArchive !==
+                migrationArchive,
         },
         migration:
             migration.report,

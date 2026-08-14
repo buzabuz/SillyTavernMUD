@@ -1,6 +1,6 @@
 ---
 name: "hogwarts-change-governance"
-description: "Requires production-system reconnaissance, prompt budgets, and real-save verification. Invoke before analyzing, planning, debugging, implementing, or reviewing Hogwarts MUD changes."
+description: "Requires business semantics, production reconnaissance, prompt budgets, single-attempt failure, blind simulation, and real-save verification. Invoke for any Hogwarts MUD change."
 ---
 
 # Hogwarts Change Governance
@@ -60,24 +60,89 @@ Follow these gates in order. Do not skip or reorder them.
 
 Do not design from field names, schemas, tests, or a previous agent's summary. Before proposing a solution, trace the behavior through the real production path.
 
-1. Read the actual entry point, orchestration path, prompt builder, projectors, retrieval path, reducers, persistence path, and every direct production reader and writer affected by the change.
-2. Trace the end-to-end call graph from user action to persisted result. Include legacy readers, compatibility projectors, fallbacks, repair paths, and asynchronous boundaries.
-3. Record in `prd.md` and `spec.md`:
+1. Before interpreting current code or save data, retrieve the relevant project memory/history, explicit user decisions, approved PRD, living runtime contract and prior incident evidence. Current State, archived prose, model output and repair scripts may be wrong; they are evidence, not automatic product authority.
+2. Write the semantic invariant before designing: define each concept, orthogonal fields, allowed combinations, forbidden transitions, evidence priority and sole writer. Do not collapse two fields merely because their names sound related.
+3. Use this authority order when evidence conflicts: the user's latest explicit decision; the current approved PRD and living runtime contract; current production reducer/validator contract; committed structured State; archived prose, model text, migration heuristic and test fixture. A lower source cannot silently override a higher source.
+4. If the semantic invariant is missing, ambiguous, contradicted by history, or would change an existing user-approved fact, stop and ask the user before editing code, tests, migrations, repair scripts or real saves. Never resolve product ambiguity by guessing.
+5. Read the actual entry point, orchestration path, prompt builder, projectors, retrieval path, reducers, persistence path, and every direct production reader and writer affected by the change.
+6. Trace the end-to-end call graph from user action to persisted result. Include legacy readers, compatibility projectors, fallbacks, repair paths, and asynchronous boundaries.
+7. For scheduler, registry, application wiring, workflow factory, dependency-port, module-boundary, or exported-symbol changes, inventory every test harness and fixture that constructs, stubs, imports, or bypasses the affected production path. Record each harness update target before implementation.
+8. Record in `prd.md` and `spec.md`:
    - the current authoritative source for each semantic fact;
    - every transformation and prompt projection of that fact;
    - every production reader and writer;
    - which old reader, field, or projection will be removed or replaced;
    - which behavior is proven from real runtime evidence rather than inferred from code shape.
-4. For any prompt-affecting change, use the real production prompt builder in model-free build-only mode against the active representative save before implementation. Record:
+9. For any prompt-affecting change, use the real production prompt builder in model-free build-only mode against the active representative save before implementation. Record:
    - total characters and estimated tokens;
    - System Prompt and output Schema sizes;
    - per-section size, source path, audience, and authoritative owner;
    - repeated semantic sources and duplicate payloads;
    - the largest fields and current trimming behavior.
-5. If no build-only path exists, creating a deterministic measurement path is the first implementation task after approval. Do not change prompt contents before the baseline exists.
-6. Synthetic fixtures and unit tests may supplement this map but may not replace the real-save baseline or production call graph.
+10. If no build-only path exists, creating a deterministic measurement path is the first implementation task after approval. Do not change prompt contents before the baseline exists.
+11. Synthetic fixtures and unit tests may supplement this map but may not replace the real-save baseline or production call graph.
 
 Stop here if the original system is not understood well enough to identify all current writers, readers, prompt projections, and removal targets. Do not add a new layer beside an unknown old layer.
+
+### Permanent Item Existence Invariant
+
+These Item semantics are product authority and must be checked before any Item
+migration, archive repair, narrative rewrite, Prompt change or save edit:
+
+1. `items[].state` and `items[].physicalForm` are orthogonal. Never infer one
+   solely from the other.
+2. `state=destroyed` means the original usable object has been destroyed. It
+   does not mean that all physical matter disappeared.
+3. `physicalForm=remains` means physical remnants still exist. They may retain
+   `holderId` and location, follow their holder, and support operations allowed
+   for remains such as carry, place and transfer. They cannot be equipped or
+   silently restored into the intact original.
+4. `physicalForm=absent` means no physical remnant exists. Only this form
+   requires empty holder and location.
+5. A destroyed Item may therefore validly be
+   `state=destroyed + physicalForm=remains + holderId=<actor/player>`.
+6. Never convert `remains` to `absent`, clear its holder/location, or rewrite
+   archive prose to claim “no remnants” merely because the Item is destroyed.
+   Such a conversion requires explicit higher-authority product evidence that
+   no material remains. Model prose, archive wording, migration heuristics and
+   repair-script assumptions cannot override an already approved remains fact.
+7. When existing State or archive prose conflicts with this invariant, report
+   the exact conflict and ask the user which fact is authoritative before
+   changing anything.
+
+### Permanent Knowledge Runtime Verification
+
+Apply these rules to every Knowledge endpoint, backend, projector, retrieval,
+hydration, capsule, or composition-root change:
+
+1. Client and Node server must exchange an explicit Knowledge API contract
+   version on health and every mutating or query operation. Missing or
+   mismatched versions fail before a paid model request; never add an
+   unversioned fallback or dual-read compatibility path.
+2. Persisted index format, projector version, timeline epoch, State save
+   revision, and Knowledge content identity are different concepts. Do not use
+   `stateRevision` equality as Knowledge content identity. Use a deterministic
+   content fingerprint that excludes save-only metadata.
+3. JSON, Vectra and Qdrant are candidate indexes. Before Prompt use, resolve
+   stable candidate IDs against current State/chat canonical records and
+   reapply current revision, timeline, ACL, clock, source-ref and supersession
+   gates. Backend text, ACL or activation capsules are never Prompt authority.
+4. After changing backend or endpoint code, restart the real Node process and
+   prove the new process serves the expected contract through an authenticated
+   health request. Browser module reload, unit tests and source inspection do
+   not prove the running server changed.
+5. Build-only evidence reporting zero network calls proves only deterministic
+   Prompt assembly. It cannot prove Knowledge health, rebuild, search,
+   degradation, authentication or client/server compatibility.
+6. Acceptance must cover the production composition root with a real legacy or
+   previously persisted disk index, the running endpoint, current canonical
+   hydration, actor-scoped capsules and the final production Prompt builder.
+   Tests that inject prepared capsules or fresh in-memory indexes are
+   supplemental only.
+7. Every State-backed retained Event path must prove that the current query
+   anchor reaches the capsule builder. Candidate selection alone is
+   insufficient evidence; the final model-visible capsule must contain the
+   authorized Event.
 
 ### Gate 3: Reconcile The Living Runtime Contract
 
@@ -122,9 +187,11 @@ Requirements for key sections:
 
 - `Before` and `After` describe externally observable behavior and authoritative data flow, not task progress.
 - `Migration and Compatibility` defaults to one-time atomic migration followed by deletion of old fields. Long-term dual-read, dual-write, fallback projectors, compatibility periods, and generic legacy archaeology are forbidden unless the user explicitly requests them in the approved PRD. Define old-save behavior, atomicity, failure rollback, and old-field removal.
+- Every migration or repair PRD must include a semantic before/after matrix for each changed field and explain why the transition is allowed by the approved business invariant. Archive prose or current corrupted State is not sufficient justification.
 - `Prompt Field Budget` must start from the measured real-save baseline. It lists each added, removed, or changed prompt field; authoritative source; audience; before/after characters and estimated tokens; hard budget; trimming or omission rule; replacement/removal target; and whether it is protected. Explicitly write `None` only after the production prompt path proves there is no prompt impact.
 - Numeric Prompt budgets must be derived from the active role configuration and the production budget function, currently `modelSlots[role].contextSize`, `modelSlots[role].maxResponseLength`, and `createContextBudgetPlan(...).maxPromptCharacters`. Never invent a limit, copy one from memory, or present an optimization target as an existing runtime setting.
 - Record the configured runtime ceiling and any proposed product target separately. A lower product target is not authoritative until the user explicitly approves it in the current PRD revision. Do not claim a separate System Prompt cap unless the production runtime actually enforces one.
+- Model failure policy defaults to exactly one paid model request per task invocation. Parse, Schema, authority, provenance, settlement, or validation failure must surface as the original error without an automatic second repair/retry round or model-generated fallback. An exception is forbidden unless the current PRD names the exact task, eligible error classes, maximum attempts, added call budget, and receives explicit user approval. Historical retry code or an older PRD is not approval for a new or changed path.
 - System Prompt, output Schema, player action, current Authority Snapshot, and current-scene actor capsule contract are protected. Protection means they cannot be silently truncated; it does not permit them to exceed the approved total budget.
 - Full actor libraries, raw `actorKnowledge`, full Social Graph state, raw database records, and unbounded transcript/history are forbidden prompt inputs unless the PRD explicitly proves their necessity and budget.
 - Event and memory sharing defaults to stable IDs and authoritative lookup. Do not copy the same event summary into multiple witnesses, projections, capsules, and prompt sections.
@@ -138,7 +205,7 @@ Before seeking approval:
 
 1. Make `spec.md` map every PRD behavior to components, data flow, runtime-contract rows, writer/reader ownership, migration, old-field removal, failure handling, and verification.
 2. Make `tasks.md` use stable task IDs, dependencies, expected files, verification, and one of `pending`, `in_progress`, `blocked`, or `completed`.
-3. Make `checklist.md` cover all PRD acceptance criteria plus contract ownership, prompt budget, duplicate-source elimination, frontend whitelist, migration, regression, real-save prompt measurement, and rollback checks.
+3. Make `checklist.md` cover all PRD acceptance criteria plus contract ownership, prompt budget, single-attempt failure and any explicitly approved repair exception, duplicate-source elimination, frontend whitelist, migration, regression, real-save prompt measurement, blind model simulation when Prompt behavior is affected, and rollback checks.
 4. Initialize `progress.md` with the current phase, artifact revision, completed governance work, open decisions, and evidence links.
 5. Cross-link all five files and the living runtime contract.
 
@@ -169,13 +236,61 @@ After approval:
 4. Compatibility projections may serve migration or UI boundaries only when explicitly approved. They must not silently re-enter model prompts as a second source of the same fact.
 5. After every prompt-affecting task, rebuild the real prompt without a model call and compare it with the approved baseline. Record per-section and total deltas immediately.
 6. Treat any unexplained prompt growth, duplicate semantic source, hard-budget violation, protected-field truncation, or full-database injection as a failed task, even when unit tests pass.
-7. Implement within the approved scope and contract.
-8. Update `tasks.md`, `checklist.md`, and `progress.md` as each task or gate changes state.
-9. Record deviations and blockers immediately; do not silently widen scope.
-10. Keep `prd.md` focused on durable product truth. Change it only when product intent or acceptance changes.
-11. Keep `spec.md` synchronized with approved technical decisions and runtime-contract ownership.
+7. Implement the default one-request failure path and physically remove unreachable repair Prompts, retry loops, and model-generated fallbacks. Do not leave a disabled or impossible second round in production code.
+8. When changing a scheduler, task registry, application composition root, workflow factory signature, injected port, module boundary, export, or import, update every affected test harness and fixture in the same task. A production rename or architectural move is incomplete while any harness still uses the old port, wrapper, export, caller, timing, or persistence behavior.
+9. Run the affected harnesses and prove they reach their intended business assertions. A test that exits earlier because of a missing port, stale export, obsolete fixture, or setup `TypeError` is a failed migration, not a legacy/unrelated failure and not acceptance evidence.
+10. For every migration, repair script or real-save edit, generate a model-free before/after report and verify every changed field against the approved semantic matrix before applying. If any field transition was not explicitly designed, stop.
+11. Never rewrite archive prose, structured State and knowledge projections together to make a guessed interpretation appear consistent. Consistency produced by overwriting all evidence is not correctness.
+12. Implement within the approved scope and contract.
+13. Update `tasks.md`, `checklist.md`, and `progress.md` as each task or gate changes state.
+14. Record deviations and blockers immediately; do not silently widen scope.
+15. Keep `prd.md` focused on durable product truth. Change it only when product intent or acceptance changes.
+16. Keep `spec.md` synchronized with approved technical decisions and runtime-contract ownership.
 
-### Gate 8: Close The Change
+### Gate 8: Run Blind Model Simulation
+
+This gate is mandatory whenever a change adds, removes, or modifies any model
+Prompt, output Schema, response parser/recovery path, settlement/fold,
+validator, reducer contract, retry, repair, or fallback behavior.
+
+1. Enumerate every affected active model task, tier, mode, and production entry
+   path. A shared task with bootstrap and runtime modes counts as separate
+   cases when its Prompt or validator differs.
+2. For each case, launch a new independent sub-agent with no forked
+   conversation history. Do not reuse the implementation agent, an earlier
+   simulation agent, or a sub-agent that has seen project requirements.
+3. Give that sub-agent only the exact final production request visible to the
+   model: System messages, User messages, transport output Schema and the
+   minimal task/tier instruction required to return the response. Do not give
+   it the PRD, spec, source code, validator, expected answer, known defect,
+   previous response, repair feedback, or conversation summary.
+4. Ask for one response only. Do not coach, repair, retry, or send validation
+   errors back to the same sub-agent.
+5. The production path under test must issue exactly one model request. Feed
+   the untouched raw response through the real production
+   parser/recovery, settlement/fold, authority/provenance validation, reducer
+   boundary and failure policy, then assert that no repair request or
+   model-generated fallback was captured. A hand-written fixture, an
+   author-corrected response, or direct construction of the expected object is
+   not blind-model evidence.
+6. If the response fails, the gate fails. Fix the Prompt or contract, rebuild
+   the real production request, and rerun with another new context-free
+   sub-agent. Never edit the response into a passing fixture.
+7. Record in `progress.md` and link from `checklist.md`: task/tier/mode, real
+   Prompt capture path or hash, confirmation that the sub-agent was fresh and
+   context-free, raw validation outcome, production stage reached, model-call
+   count, and any error. Do not persist full private Prompts, responses,
+   secrets, or save data in governance documents.
+8. The blind simulation supplements rather than replaces deterministic tests,
+   real-save build-only measurement, or an explicitly approved real API
+   end-to-end run.
+
+If sub-agents are unavailable, the exact production request cannot be isolated,
+or the untouched response cannot run through the production chain, stop and
+report the acceptance gate as blocked. Do not substitute a response written by
+the main agent.
+
+### Gate 9: Close The Change
 
 A change is complete only when:
 
@@ -189,6 +304,20 @@ A change is complete only when:
 8. Prompt-affecting changes prove that duplicate semantic sources are removed, reference-based memory resolves correctly, and no old full-state projection remains beside its replacement.
 9. At least one real end-to-end affected workflow succeeds when safe and approved. A model-free prompt build is always required; unit tests alone are never completion evidence.
 10. The approved prompt budget passes without trimming System Prompt or output Schema. A functional test suite, checklist count, or vector-backend health result cannot override a real prompt-budget failure.
+11. Every Prompt-affecting task passes Gate 8 for each affected active
+    task/mode/entry path. Main-agent-authored fake API responses do not satisfy
+    this requirement.
+12. Every affected task proves one model request on success and one model
+    request on parse/Schema/authority/provenance/settlement/validation failure,
+    with no second repair round or model-generated fallback, unless the current
+    PRD contains the exact explicitly approved exception.
+13. Every test harness affected by scheduler/registry/wiring/port/module/export
+    changes is migrated and reaches its intended business assertion. Missing
+    ports, stale exports, obsolete setup failures, and skipped production
+    boundaries block completion.
+14. Every migration/repair field transition matches the approved semantic
+    before/after matrix, and real-save verification proves unrelated facts were
+    not rewritten to support an inferred interpretation.
 
 ## Incident-Derived Non-Negotiable Lesson
 
@@ -202,6 +331,24 @@ This failure establishes permanent rules:
 4. Qdrant, RAG, EventStore, and relational memory are retrieval systems. Their databases do not belong in the Prompt; only bounded, audience-safe projections and stable source references do.
 5. A completion claim is forbidden unless the real representative save passes the approved prompt budget and affected end-to-end workflow.
 6. When a real-save measurement contradicts synthetic tests, the real production measurement wins and the task remains incomplete.
+7. A response written by the same agent that authored the Prompt is not an
+   independent model-behavior test. Prompt acceptance requires the blind,
+   context-free sub-agent gate above.
+8. Invalid model output is an error, not permission to spend another Prompt.
+   A second automatic repair/retry round is forbidden by default and cannot be
+   justified by historical behavior, convenience, or a passing repair test.
+9. Architecture and scheduler refactors are not complete when production code
+   compiles but test harnesses still construct the old system. Harnesses must
+   migrate with the changed composition root and execute the real affected
+   boundary before their results count.
+10. On 2026-08-11, `task7_quill_archive_repair` incorrectly replaced an
+    approved carried Item remnant with “no remnants”, cleared holder/location
+    and forced `physicalForm=absent`. This happened because archive wording was
+    treated as authority above the established Item business invariant.
+    Repairing all copies to match a guessed interpretation made the error look
+    internally consistent. Therefore archive repair must never change product
+    semantics without first checking memory, PRD, living contract and explicit
+    user decisions; ambiguity requires asking the user.
 
 ## Stop Conditions
 
@@ -218,6 +365,21 @@ Stop and ask for resolution when any of these is true:
 - A new projection would coexist with an overlapping legacy payload without explicit approved migration and removal.
 - The affected role exceeds the runtime-derived Prompt budget or an explicitly approved PRD target, duplicates semantic sources, or requires protected-field truncation.
 - Only synthetic fixtures or unit tests support the completion claim.
+- A Prompt-affecting change has not passed blind model simulation for every
+  affected active task/mode/entry path.
+- A model path can automatically issue a second repair/retry request or
+  model-generated fallback without the exact exception in the currently
+  approved PRD.
+- A scheduler, registry, wiring, port, module, export, or import change leaves
+  any affected test harness stale, failing before its business assertion, or
+  bypassing the new production boundary.
+- Business semantics, orthogonal field meanings, or the authority order are
+  unclear or contradicted by current State, archive prose, model output,
+  migration heuristics, tests or prior decisions.
+- A migration or repair would change a user-approved fact without an explicit
+  semantic before/after matrix and current user approval.
+- An Item repair infers `physicalForm=absent` from `state=destroyed`, or clears
+  holder/location for `physicalForm=remains`.
 - The current artifact revision lacks explicit approval.
 - Implementation behavior would differ materially from the approved PRD or spec.
 

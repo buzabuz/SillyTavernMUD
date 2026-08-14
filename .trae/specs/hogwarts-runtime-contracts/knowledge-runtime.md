@@ -8,7 +8,8 @@ Knowledge 是检索投影，不是第二份世界状态。
 committed State + committed message transaction
 -> deterministic Knowledge Projector V2
 -> JSON exact / Vectra / Qdrant
--> Planner + relational expansion
+-> candidate IDs from Planner + relational expansion
+-> current State/chat canonical records
 -> audience/revision/clock hydration
 -> sealed Prompt capsule
 ```
@@ -53,7 +54,11 @@ Prompt 的固定优先级是：
 - ID、排序和 checksum 必须稳定。
 - 长 Scene transcript 分块，不只嵌入开头。
 - locked/private 记录必须在 backend filter 与最终 hydration 两层隔离。
-- 记录只接受与请求相同的 timeline、revision、有效时钟和 audience。
+- Backend candidate 只接受相同 timeline epoch、`record.stateRevision <=
+  current stateRevision`、有效时钟和 audience；future revision 必须拒绝。
+- 最终 Prompt hydration 必须按稳定 ID 回到当前 State/chat canonical record，
+  并以当前 `stateRevision` 做 exact 校验。Backend text、ACL、sourceRefs 和
+  activation capsule 都不能直接进入 Prompt。
 - `superseded` tag 或命中 `supersededSourceRefs` 的记录默认不注入 Prompt。
 - Scene Opening 只有保存后才投影；开场正文不能自行建立未提交事实。
 
@@ -61,11 +66,24 @@ Prompt 的固定优先级是：
 
 Hogwarts `VectorBackend` 提供 `health/upsert/delete/query/rebuild`。
 
+- 当前 Knowledge API contract 固定为
+  `knowledgeApiContractVersion=3`。health/sync/rebuild/list/search 的请求与
+  响应都必须携带该值；缺失或不匹配直接报
+  `KNOWLEDGE_API_CONTRACT_MISMATCH`，并在任何 paid model call 之前终止。
+- JSON index format 与 projector version 都是 `2`。旧 V1 index 不做
+  dual-read；当前 contract 的 replace sync 必须从 State/chat 原子重建。
+- `projectionFingerprint` 由排序后的
+  `[recordId, contentChecksum]` 确定性计算，不含 `stateRevision`、时间戳、
+  backend 状态或输入顺序。metadata/scheduler-only save 不得触发重复
+  embedding 或把健康索引判为 stale。
 - 配置且健康时 Qdrant 是首选语义后端，使用 timeline、revision、audience、node type、category 和 clock payload filter。
 - Qdrant point ID 从 record ID 确定性生成；embedding model 或维度改变时使用新的 collection generation。
 - JSON exact 是始终可用的确定性检索基线；Vectra 若启用，也必须使用同一 V2 record/audience 契约。
 - Qdrant 未配置、health/query 失败或 collection 丢失时，回合和 Scene 继续使用 JSON exact；State/chat commit 不得因向量后端失败。
 - stale revision sync 必须拒绝。索引丢失时从完整 V2 projection rebuild，不复用旧 hash 作为事实。
+- Backend/endpoint 代码变更后必须重启 Node 服务，并以真实 POST health
+  handshake 证明当前进程加载了新 contract。仅有 build-only
+  `0 network calls` 不能证明真实 Knowledge backend 可用。
 
 diagnostics 至少记录实际 backend、preferred backend、degraded、错误摘要、selected record ID、suppressed reason、source path 和 rebuild 状态。
 
@@ -129,7 +147,12 @@ hogwartsMud.knowledge.qdrant.collectionPrefix: hogwarts_knowledge
 hogwartsMud.knowledge.qdrant.timeoutMs: 10000
 ```
 
-真实 model/dimension 探测对应 generation `g16b00e5647de42`。本地 loopback 配置不提交 secret；若启用凭据，只通过未提交配置或 `HOGWARTS_QDRANT_API_KEY` 注入。
+当前 API contract 3、projector 2 与真实 model/dimension 探测对应
+generation `g1a452f76ff5d81`。旧 generation
+`g16b00e5647de42` 不得被新客户端当成当前 contract。是否删除旧
+generation 属于运维清理，必须在新 generation 的 count、ACL 和查询验证后
+单独执行。本地 loopback 配置不提交 secret；若启用凭据，只通过未提交配置或
+`HOGWARTS_QDRANT_API_KEY` 注入。
 
 Tina 权威 archive 的真实同步和 ACL/snapshot smoke CLI 为：
 
@@ -138,18 +161,23 @@ node scripts/sync-hogwarts-knowledge-qdrant.mjs \
   --archive "data/default-user/chats/Hogwarts_World_Director/Hogwarts World Director - 2026-08-02@22h16m07s339ms.jsonl" \
   --config config.yaml \
   --operation rebuild \
-  --expected-record-count 101 \
+  --expected-record-count 138 \
   --known-record-id events_item_harry_spare_brass_quill_current \
   --known-source-ref event:event_transfiguration_after_break_18d50cd8847574f4
 
 node scripts/smoke-hogwarts-qdrant.mjs \
   --archive "data/default-user/chats/Hogwarts_World_Director/Hogwarts World Director - 2026-08-02@22h16m07s339ms.jsonl" \
   --config config.yaml \
-  --expected-count 101 \
+  --expected-count 138 \
   --snapshots-path docker/data/qdrant/snapshots
 ```
 
-sync 只能从只读 State + chat 构建 Knowledge Projector V2，并应报告 Qdrant backend、`degraded=false`、generation `g16b00e5647de42`、101 records/points、0 failures、已知 sourceRef 命中、0 narrative model calls 和 archive SHA 不变。smoke 必须使用 Qdrant 服务端 payload filter 验证 public、授权 actor-private、locked、缺失 visibility 与未授权 actor；临时 ACL collection 必须清理。未指定 `--snapshot-name` 时 smoke 会创建真实 collection snapshot。
+sync 只能从只读 State + chat 构建 Knowledge Projector V2，并应报告 Qdrant
+backend、`degraded=false`、当前 generation、138 records/points、0 failures、
+已知 sourceRef 命中、0 narrative model calls 和 archive SHA 不变。smoke
+必须使用 Qdrant 服务端 payload filter 验证 public、授权 actor-private、
+locked、缺失 visibility 与未授权 actor；临时 ACL collection 必须清理。
+未指定 `--snapshot-name` 时 smoke 会创建真实 collection snapshot。
 
 snapshot 只包含 collection 配置、points、vectors 与 payload，不包含 State/chat 或 collection alias。标准备份/恢复步骤是：
 
@@ -161,7 +189,7 @@ snapshot 只包含 collection 配置、points、vectors 与 payload，不包含 
 
 ```bash
 QDRANT_URL=http://127.0.0.1:6333
-COLLECTION='hogwarts_knowledge_Hogwarts_World_Director_-_2026-08-02_22h16m07s339ms_g16b00e5647de42'
+COLLECTION='hogwarts_knowledge_Hogwarts_World_Director_-_2026-08-02_22h16m07s339ms_g1a452f76ff5d81'
 SNAPSHOT='/absolute/path/to/collection.snapshot'
 CHECKSUM="$(cat "$SNAPSHOT.checksum")"
 test "$(shasum -a 256 "$SNAPSHOT" | awk '{print $1}')" = "$CHECKSUM"
@@ -200,7 +228,7 @@ Person Schema 是 observer-target 行为预期，不是 Identity 或公共关系
 
 ## Low / Medium Prompt
 
-低档普通 Performer 与 repair 的 User Payload 固定为 `LowTierContextV1` 六字段：
+低档普通 Performer 的 User Payload 固定为 `LowTierContextV1` 六字段：
 
 ```text
 playerTurn
@@ -216,9 +244,13 @@ prohibitions
 - `memoryActivations` 的快通路每 actor 最多 3 个 active Schema，只投影 expectation、confidence 与 status；慢通路每 actor 最多 3 个 hydrated Event，全局最多 8 个。
 - `expectationEn` 只影响预期、边界、简写和主动性，不在正文解释 Schema 标签。
 - 只有 matching observer activation 内存在带 `sourceRefs` 的 canonical Event 时，人物才能声称具体旧时间、地点、动作或原话。
+- 当前玩家动作必须作为 retained Event 的 query anchor 传入 capsule builder；
+  只取回 canonical Event 而不传 anchor 仍视为生产链失败。
 - raw historical evidence 必须带归属，不能放在 authority snapshot 之后伪装成当前事实。
-- repair 必须由同一个六字段 projector 重建，继续携带原 scene facts、actor cards、memory activations 和触发拒绝的 conflict。
 - 总 User Payload 不超过 50 KiB；裁剪先删除 hydrated Event，再删除可重建 opportunity，不得重新注入 raw actor/social/history 数据。
+- 每个 Low invocation 只允许一次模型请求。parse、Schema、settlement、
+  provenance 或 validation 失败直接返回原错误，不构造 repair Prompt、
+  retry 或模型 fallback。
 
 中档 Scene Transition 与 Memory Consolidation 只读取有 provenance 且通过 audience/clock/revision 的证据。locked clue、private goal 和 secret 仅能由明确授权的高档流程读取。closure summary 或检索文本不能覆盖 Item、location、life、Identity 或 spell 权威。
 

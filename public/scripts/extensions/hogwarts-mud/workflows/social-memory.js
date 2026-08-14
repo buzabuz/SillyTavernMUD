@@ -1,14 +1,56 @@
 import {
-    buildNarrativeAuthoritySnapshot,
-} from '../domain/narrative-authority.js';
-import {
-    NARRATIVE_AUTHORITY_PROMPT_CONTRACT,
-    NARRATIVE_PROMPT_ACCESS,
-    projectNarrativePromptInput,
-} from '../domain/narrative-prompt-context.js';
-import {
     getEventKnowledgeSourceMessageIds,
 } from '../presence-witness-contract.js';
+
+function projectSocialEvent(
+    event,
+) {
+    return {
+        eventId:
+            event.eventId ||
+            event.id ||
+            '',
+        kind:
+            event.kind ||
+            event.type ||
+            '',
+        sceneId:
+            event.sceneId ||
+            '',
+        clock:
+            event.clock ||
+            '',
+        summaryEn:
+            event.summaryEn ||
+            '',
+        participantActorIds:
+            event
+                .participantActorIds ||
+            [],
+        witnessActorIds:
+            event
+                .witnessActorIds ||
+            [],
+        speakerId:
+            event.speakerId ||
+            '',
+        recipientIds:
+            event.recipientIds ||
+            event
+                .recipientActorIds ||
+            [],
+        subjectIds:
+            event.subjectIds ||
+            [],
+        aboutEventId:
+            event.aboutEventId ||
+            '',
+        parentReportedEventId:
+            event
+                .parentReportedEventId ||
+            '',
+    };
+}
 
 export function createSocialMemoryWorkflow(ports) {
     const {
@@ -34,7 +76,7 @@ export function createSocialMemoryWorkflow(ports) {
         () => {},
         renderAll,
         resolveRoleSlots,
-        sendRoleRequest,
+        sendModelTaskRequest,
         syncLocalKnowledge,
         translateOpeningValues,
         validateMemoryConsolidation,
@@ -477,10 +519,67 @@ export function createSocialMemoryWorkflow(ports) {
         normalizeSocialGraph(
             state.socialGraph,
         );
+        const batchEventIds =
+            new Set(
+                (
+                    evidence
+                        .eventKnowledge ||
+                    []
+                ).map(event =>
+                    event.eventId ||
+                    event.id)
+                    .filter(Boolean),
+            );
+        const batchActorIds =
+            new Set([
+                'player',
+                ...(
+                    signals.actors ||
+                    []
+                ).map(actor =>
+                    actor.id),
+                ...(
+                    evidence
+                        .presentActorIds ||
+                    []
+                ),
+                ...(
+                    evidence
+                        .eventKnowledge ||
+                    []
+                ).flatMap(event => [
+                    ...(
+                        event
+                            .participantActorIds ||
+                        []
+                    ),
+                    ...(
+                        event
+                            .witnessActorIds ||
+                        []
+                    ),
+                    event.speakerId,
+                    ...(
+                        event
+                            .recipientIds ||
+                        event
+                            .recipientActorIds ||
+                        []
+                    ),
+                    ...(
+                        event.subjectIds ||
+                        []
+                    ),
+                ]),
+            ].filter(Boolean));
         const existingSocialGraph = {
             relationshipEvidence:
             existingGraph
                 .relationshipEvidence
+                .filter(item =>
+                    batchEventIds.has(
+                        item.eventId,
+                    ))
                 .map(item => ({
                     id: item.id,
                     sourceActorId:
@@ -507,6 +606,13 @@ export function createSocialMemoryWorkflow(ports) {
             relationships:
             existingGraph
                 .relationships
+                .filter(edge =>
+                    batchActorIds.has(
+                        edge.sourceActorId,
+                    ) &&
+                    batchActorIds.has(
+                        edge.targetActorId,
+                    ))
                 .map(edge => ({
                     sourceActorId:
                         edge.sourceActorId,
@@ -542,9 +648,9 @@ export function createSocialMemoryWorkflow(ports) {
         return [
             {
                 role: 'system',
-                content: `You are the single mid-tier Social Director for a persistent Harry Potter RPG. Perform one source-grounded extraction for a deterministic reducer. Consolidate Appraisal memory, attributed reported Events, and directed relationship effects. Do not write scene prose or invent events. Return one compact JSON object. Internal reasoning is permitted, but the final answer must contain one complete JSON object matching the schema.
+                content: `You are the single mid-tier Social Director for a persistent Harry Potter RPG. Perform one source-grounded extraction for a deterministic reducer. Consolidate Appraisal memory, attributed reported Events, and directed relationship effects. Do not write scene prose or invent events. Return one compact JSON object matching the supplied transport JSON Schema.
 
-${NARRATIVE_AUTHORITY_PROMPT_CONTRACT}
+socialAuthorityStamp is the binding revision, Scene and Actor-ID whitelist for this extraction. It is not narrative prose and grants no hidden knowledge.
 
 Rules:
 - Use only supplied memory IDs, committed Events and exact sceneEvidence text. Never use actor secrets, hidden clues, private goals, or facts the actor did not witness or receive.
@@ -555,7 +661,7 @@ Rules:
 - aboutEventId is optional authority linkage only. It does not make the allegation true and does not grant recipients access to the linked Event. Fabricated claims use an empty aboutEventId.
 - parentReportedEventId is optional and may cite only a report the speaker previously spoke or received. correction and retraction require it.
 - recipientAppraisals are subjective reactions to a local report. Each observer must be that report's explicit recipient; the reducer maps localReportId to the committed Event.
-- Generic statements are forbidden. Identity and relationship claims are structured records that cite localReportId; never copy quote text, speaker, witness, Scene, message or clock into a claim.
+- Generic free-text claims are forbidden. Identity and relationship claims are structured records that cite localReportId; never copy quote text, speaker, witness, Scene, message or clock into a claim.
 - Never write authority Identity, resolve a person reference, or create a formal family edge. New personReferences remain unresolved.
 - relationshipEvidence is directed and references exactly one existing Event ID or localReportId through eventRef. appraisalRef is optional. It contains only relationship effects, never prose, Scene, messages, witnesses or visibility.
 - Use only actorDirectory IDs and allowedMessageIds. existingSocialGraph is read-only calibration and duplicate context. Extract only new supplied sceneEvidence.
@@ -585,93 +691,33 @@ Rules:
 - Review only actors who need a consolidation operation. Include 0-8 actor reviews.
 - processedThroughMessageId is required. It advances only across a fully scanned prefix of sceneEvidence. If the 24-report cap prevents scanning the full batch, set scanComplete false and leave the suffix for catch-up.
 ${backfillRules}
-
-Schema:
-{
-  "scanComplete": true,
-  "processedThroughMessageId": 123,
-  "reviewAfterTurns": 10,
-  "reviews": [
-    {
-      "id": "existing_actor_id",
-      "operations": [
-        {
-          "sourceIds": ["existing_memory_id"],
-          "targetTier": "core|recent|forget",
-          "summaryEn": "required merged memory unless targetTier is forget"
-        }
-      ]
-    }
-  ],
-  "reportedEvents": [
-    {
-      "localReportId": "response_local_id",
-      "statementKind": "claim|correction|retraction",
-      "sourceStatementText": "exact source substring",
-      "audienceEvidenceText": "exact target/audience substring or empty string",
-      "summaryEn": "attributed English report summary",
-      "sourceSegmentRefs": [{"messageId": 123, "segmentIndex": 0}],
-      "speakerId": "existing_actor_id",
-      "recipientIds": ["different_existing_actor_id"],
-      "subjectIds": ["existing_actor_id"],
-      "aboutEventId": "",
-      "parentReportedEventId": "",
-      "distortionLevel": 0
-    }
-  ],
-  "recipientAppraisals": [
-    {
-      "localReportId": "response_local_id",
-      "observerId": "explicit_recipient_actor_id",
-      "targetId": "player|existing_actor_id",
-      "summaryEn": "recipient-specific subjective interpretation",
-      "contextTags": ["heard_claim"],
-      "confidence": 0.7
-    }
-  ],
-  "identityClaims": [],
-  "relationshipClaims": [],
-  "personReferences": [],
-  "relationshipEvidence": [
-    {
-      "sourceActorId": "existing_actor_id",
-      "targetActorId": "player|different_existing_actor_id",
-      "eventRef": "existing_event_id|response_local_id",
-      "appraisalRef": "",
-      "eventKind": "support",
-      "dimensionDeltas": [
-        {"dimension": "trust", "delta": 4, "impact": "meaningful"}
-      ],
-      "structuralTags": ["classmate"],
-      "emotionEffects": [
-        {"emotion": "gratitude", "intensity": 3}
-      ]
-    }
-  ],
-  "schemaOperations": [
-    {
-      "type": "upsert",
-      "schemaId": null,
-      "observerId": "existing_actor_id",
-      "targetId": "player",
-      "labelEn": "short subjective pattern",
-      "expectationEn": "specific expected behavior",
-      "supportAppraisalIds": ["accepted_appraisal_id"],
-      "counterAppraisalIds": [],
-      "contextTags": ["context_tag"],
-      "supersedesSchemaId": null
-    }
-  ]
-}`,
+The transport JSON Schema is the sole output shape authority.`,
             },
             {
                 role: 'user',
                 content: JSON.stringify(
-                    projectNarrativePromptInput({
-                        authoritySnapshot:
-                        buildNarrativeAuthoritySnapshot(
-                            state,
-                        ),
+                    {
+                        socialAuthorityStamp: {
+                            timelineEpoch:
+                                state
+                                    .timelineEpoch ||
+                                '',
+                            stateRevision:
+                                Number(
+                                    state
+                                        .stateRevision ||
+                                    0,
+                                ),
+                            clock:
+                                state.clock,
+                            currentSceneId:
+                                state.scene
+                                    ?.id ||
+                                '',
+                            actorIds:
+                                [...batchActorIds]
+                                    .sort(),
+                        },
                         clock: state.clock,
                         currentTurn:
                     Number(state.turn?.count || 0),
@@ -679,11 +725,15 @@ Schema:
                         reviewableActors,
                         actorDirectory:
                     (state.actorLibrary ||
-                    []).map(actor => ({
-                        id: actor.id,
-                        nameEn:
-                            actor.nameEn,
-                    })),
+                    [])
+                        .filter(actor =>
+                            batchActorIds
+                                .has(actor.id))
+                        .map(actor => ({
+                            id: actor.id,
+                            nameEn:
+                                actor.nameEn,
+                        })),
                         existingSocialGraph:
                     existingSocialGraph,
                         memorySynapse: {
@@ -719,7 +769,10 @@ Schema:
                             .filter(event =>
                                 event.sceneId ===
                                     state.scene
-                                        ?.id),
+                                        ?.id)
+                            .map(
+                                projectSocialEvent,
+                            ),
                         earlierCommittedEvents:
                         (
                             evidence
@@ -729,17 +782,16 @@ Schema:
                             .filter(event =>
                                 event.sceneId !==
                                     state.scene
-                                        ?.id),
+                                        ?.id)
+                            .map(
+                                projectSocialEvent,
+                            ),
                         sceneEvidence:
                     evidence.messages,
                         allowedMessageIds:
                     evidence
                         .allowedMessageIds,
-                    }, {
-                        access:
-                        NARRATIVE_PROMPT_ACCESS
-                            .MEDIUM,
-                    }),
+                    },
                 ),
             },
         ];
@@ -1378,7 +1430,7 @@ Schema:
             evidence,
             contextPlan,
         );
-        const response = await sendRoleRequest(
+        const response = await sendModelTaskRequest(
             roleSlot,
             prompt,
             {
@@ -1800,6 +1852,35 @@ Schema:
                 return graphResult;
             } catch (error) {
                 if (
+                    error?.code ===
+                        'MODEL_TASK_DEFERRED'
+                ) {
+                    state = getMudState();
+                    state.socialGraph =
+                    normalizeSocialGraph(
+                        state.socialGraph,
+                    );
+                    state.socialGraph.status =
+                        'pending';
+                    state.socialGraph.error =
+                        '';
+                    if (!backfill) {
+                        state.memoryDirector = {
+                            ...(
+                                state
+                                    .memoryDirector ||
+                                {}
+                            ),
+                            status: 'pending',
+                            error: '',
+                        };
+                    }
+                    await context
+                        .saveMetadata();
+                    renderAll();
+                    return null;
+                }
+                if (
                     !schemaDiagnosticsRecorded &&
                     proposedSchemaOperations
                 ) {
@@ -1895,60 +1976,71 @@ Schema:
             force = false,
         } = {},
     ) {
-        for (
-            let batch = 0;
-            batch < 5;
-            batch++
-        ) {
-            const graph =
+        const graph =
             normalizeSocialGraph(
                 getMudState()
                     ?.socialGraph,
             );
-            if (
-                !force &&
+        if (
+            !force &&
             graph.extractorVersion >=
                 SOCIAL_GRAPH_EXTRACTOR_VERSION &&
             !graph
                 .backfillPendingSceneId
-            ) {
-                return graph;
-            }
-            const attemptKey = [
-                graph.extractorVersion,
-                graph
-                    .lastProcessedMessageId,
-                graph
-                    .backfillPendingSceneId,
-            ].join(':');
-            if (
-                jobRegistry.socialCatchupAttempts
-                    .has(attemptKey)
-            ) {
-                return graph;
-            }
+        ) {
+            return graph;
+        }
+        const attemptKey = [
+            graph.extractorVersion,
+            graph
+                .lastProcessedMessageId,
+            graph
+                .backfillPendingSceneId,
+        ].join(':');
+        if (
             jobRegistry.socialCatchupAttempts
-                .add(attemptKey);
-            await ensureMemoryConsolidation({
-                backfill: true,
-            });
-            const nextGraph =
+                .has(attemptKey)
+        ) {
+            return graph;
+        }
+        jobRegistry.socialCatchupAttempts
+            .add(attemptKey);
+        await ensureMemoryConsolidation({
+            backfill: true,
+        });
+        const nextGraph =
             normalizeSocialGraph(
                 getMudState()
                     ?.socialGraph,
             );
-            if (
-                nextGraph.status ===
-                'failed' ||
-            !nextGraph
-                .backfillPendingSceneId
-            ) {
-                return nextGraph;
-            }
-            force = false;
+        if (
+            nextGraph.status ===
+                'pending'
+        ) {
+            jobRegistry
+                .socialCatchupAttempts
+                .delete(attemptKey);
         }
+        return nextGraph;
+    }
+
+    async function ensureSocialDirectorForAction() {
+        const graph =
+            normalizeSocialGraph(
+                getMudState()
+                    ?.socialGraph,
+            );
+        if (
+            graph.extractorVersion <
+                SOCIAL_GRAPH_EXTRACTOR_VERSION ||
+            graph.backfillPendingSceneId
+        ) {
+            return ensureSocialDirectorCatchup();
+        }
+        await ensureMemoryConsolidation();
         return normalizeSocialGraph(
-            getMudState()?.socialGraph,
+            getMudState()
+                ?.socialGraph,
         );
     }
 
@@ -1966,5 +2058,6 @@ Schema:
         resolveSocialDirectorGraph,
         ensureMemoryConsolidation,
         ensureSocialDirectorCatchup,
+        ensureSocialDirectorForAction,
     };
 }
