@@ -1,0 +1,196 @@
+{
+  "reviewVersion": 4,
+  "reviewedAt": "2026-08-16",
+  "reason": "Correct all row-level false positives and false negatives found by independent Phase 1 acceptance attempts 1 and 2.",
+  "groups": [
+    {
+      "name": "finite_shape_internal_marker_or_tokenizer",
+      "ids": [
+        "regex_2334b9a7609e19ed7d90",
+        "regex_53005ea697b1dc6b7a13",
+        "regex_80af43cb65e1b9e0e292",
+        "regex_119ddcb1fdc2dcc18110",
+        "regex_212065d192656f31a2b8",
+        "regex_3c3ca09b09d5f4efbedb",
+        "regex_2969954057fa7463e9b6",
+        "regex_d789a4cde005a7c0c50d",
+        "regex_6a9028101698dd79cf70",
+        "regex_bf1cfc89b28d8a5370e0",
+        "regex_e60854a9abddb1f0fe19",
+        "regex_83721b9188e4ae0d299e",
+        "regex_1f2a52fee726e89028ee",
+        "regex_a97955791931a72c5020",
+        "regex_1dabfa7fa92597c06285",
+        "regex_058bf1c214a380c8652a",
+        "regex_6671407460ff21298918",
+        "regex_09ca46c4ddc459e5bcea",
+        "regex_d70a38e08d314b3eb3c4",
+        "regex_6b66a7a1fa1315f98c3c",
+        "regex_39caa17f4e9613cf03f3",
+        "regex_2892c2182b0aedc14aac",
+        "regex_f76625d7f7106bf3dd10",
+        "regex_77ce180069898027a180",
+        "regex_7e43c89f57600bc308d4",
+        "regex_9c54c91f00126ed8e51b"
+      ],
+      "fromCategories": [
+        "semantic_runtime",
+        "semantic_migration"
+      ],
+      "category": "accepted_lexical",
+      "rationale": "Only normalizes or tokenizes characters, parses a finite ID/date/directive/internal marker, or matches an exact finite sentinel/catalog alias; it does not infer open-ended prose meaning.",
+      "targetOwner": "regex_shape_only",
+      "deterministicOwner": "the current source owner; regex may enforce only character-level or finite grammar",
+      "phase2Action": "retain_shape_only"
+    },
+    {
+      "name": "persisted_migration_prose_inference",
+      "ids": [
+        "regex_6ed98e72666082da163c",
+        "regex_9538de223033b9f44d4d",
+        "regex_ab81b81b72314f060be6"
+      ],
+      "fromCategories": [
+        "accepted_lexical",
+        "semantic_migration"
+      ],
+      "category": "semantic_migration",
+      "rationale": "Interprets persisted memory, error or scene-name prose to delete or rewrite migrated State; structured legacy fields or conservative defaults must decide instead.",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "name": "actor_relationship_or_system_identity_inference",
+      "ids": [
+        "regex_75677d9e5ccaf7fcbeff",
+        "regex_e1e0099903da8174b1fd"
+      ],
+      "fromCategories": [
+        "accepted_lexical",
+        "semantic_runtime"
+      ],
+      "category": "semantic_runtime",
+      "rationale": "Classifies free Actor prose as a generic relationship impression or backend narrator identity and changes validation/normalization.",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, explicit system-role identity, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "name": "location_and_event_summary_meaning",
+      "ids": [
+        "regex_14ccc5ffd98e572eb030",
+        "regex_6f115f3a12a0e86ad8fa",
+        "regex_83919ff49b9fb6ae77d9"
+      ],
+      "fromCategories": [
+        "accepted_lexical",
+        "semantic_runtime"
+      ],
+      "category": "semantic_runtime",
+      "rationale": "Interprets activity-clause priority or event-summary specificity from free prose and changes room inference, fallback text or paid-turn acceptance.",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room and Event evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "name": "translation_literal_role_inference",
+      "ids": [
+        "regex_6230d305e1f2e46fe92f",
+        "regex_bb38b053bafba1538a5e",
+        "regex_f759d35efdb6db00c410",
+        "regex_1b41ac542c395b4df9f4",
+        "regex_2e8ef0aa336d7888c2c3",
+        "regex_4646ff8ebaf35cb9bdc2",
+        "regex_8592fdfbde926ad26c39"
+      ],
+      "fromCategories": [
+        "accepted_lexical"
+      ],
+      "category": "semantic_runtime",
+      "rationale": "Infers whether a Latin letter has a signature, compartment, initial or geometric semantic role in free prose and affects translation acceptance.",
+      "targetOwner": "local_translation_4b",
+      "deterministicOwner": "source-token provenance plus translation acceptance and localization-state validators",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "name": "appraisal_error_text_classification",
+      "ids": [
+        "regex_2f8f095ef08c0cffcf47",
+        "regex_89adbe7a0cccc8144c4e",
+        "regex_c1d1346a05bd0d767ca1",
+        "regex_2524b83cf2df687775b1",
+        "regex_7fe178b8f5536a91eed5",
+        "regex_571a77f7a6912139da2d",
+        "regex_9361166bc1abb84b9b7a",
+        "regex_e153ecded3ae54dcb880"
+      ],
+      "fromCategories": [
+        "accepted_lexical"
+      ],
+      "category": "semantic_runtime",
+      "rationale": "Infers a structured rejection reason from free-form validation error prose instead of consuming an explicit error code.",
+      "targetOwner": "deterministic_error_code_registry",
+      "deterministicOwner": "typed Appraisal validation error codes and deterministic reason mapping",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "name": "sensitive_field_name_inference",
+      "ids": [
+        "regex_ff3789edbed95e02f2f5",
+        "regex_bb2d901128b2660c398e"
+      ],
+      "fromCategories": [
+        "accepted_lexical"
+      ],
+      "category": "semantic_runtime",
+      "rationale": "Infers sensitivity from an open-ended field-name keyword rather than an explicit governed field registry.",
+      "targetOwner": "deterministic_sensitive_field_registry",
+      "deterministicOwner": "explicit save-revision and diagnostics sensitive-field registries",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "name": "process_log_severity_inference",
+      "ids": [
+        "regex_efa3a586ee892120006d"
+      ],
+      "fromCategories": [
+        "accepted_lexical"
+      ],
+      "category": "semantic_runtime",
+      "rationale": "Infers process failure severity from unstructured Ollama stderr prose.",
+      "targetOwner": "deterministic_process_health_protocol",
+      "deterministicOwner": "process exit status and explicit Ollama health/readiness protocol",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "name": "uncalled_narrative_presence_filter",
+      "ids": [
+        "regex_e21fdc2ee013a2534e6d"
+      ],
+      "fromCategories": [
+        "accepted_lexical",
+        "semantic_runtime"
+      ],
+      "category": "dead_or_retired",
+      "rationale": "Interprets Actor-presence prose and removes a complete narrative segment, but the exported helper has no current production caller.",
+      "targetOwner": "remove_dead_regex",
+      "deterministicOwner": "none; remove the uncalled exported narrative filter",
+      "phase2Action": "remove_dead_regex"
+    },
+    {
+      "name": "unreachable_private_key_pattern",
+      "ids": [
+        "regex_3c0bea94ae7681dc6e36"
+      ],
+      "fromCategories": [
+        "accepted_lexical"
+      ],
+      "category": "dead_or_retired",
+      "rationale": "The only caller starts recursion with privatePath=true, so short-circuit evaluation makes this regex unreachable.",
+      "targetOwner": "remove_dead_regex",
+      "deterministicOwner": "none; the current storyArcs root is already explicitly private",
+      "phase2Action": "remove_dead_regex"
+    }
+  ]
+}

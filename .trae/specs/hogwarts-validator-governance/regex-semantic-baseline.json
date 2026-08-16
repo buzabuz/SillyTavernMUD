@@ -1,0 +1,1560 @@
+{
+  "baselineVersion": 1,
+  "establishedAt": "2026-08-16",
+  "sourceFingerprint": "6927d5e1ba93d5ae6114741adc181da818fb0206beae0861d87f4457e21836a5",
+  "counts": {
+    "semanticRuntime": 195,
+    "semanticMigration": 26,
+    "semanticTotal": 221
+  },
+  "policy": "Current semantic rows must equal this baseline minus append-only retirement events. New IDs, relabelling, owner changes, unregistered deletion and resurrection fail.",
+  "rows": [
+    {
+      "id": "regex_01ad4fbd22b031ac27c9",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_02cbb36ad23852d82abc",
+      "category": "semantic_runtime",
+      "targetOwner": "embedding_candidate_retrieval",
+      "deterministicOwner": "canonical hydration plus ACL, timeline, revision, clock, source and supersession gates",
+      "phase2Action": "remove_and_use_embedding_candidate_retrieval"
+    },
+    {
+      "id": "regex_0572c8059cfdce10bcf9",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_07165cb64ea0c1f05bd9",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_0a23a9b4cacd3defddae",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_0b9fec5a1946f3a1a930",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_0cc4d4ba39075d67d6b1",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_0cd8dd7724221acfaa1f",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_0ec2d8f384f36e2d199a",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_0f7ab680ce68b6e3f682",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_spell",
+      "deterministicOwner": "Spell catalog, check/XP rules, evidence/ID guards and Spell Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_0f94c22c4b4e3dbb9528",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_104c120bc26d9a6fe93e",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_1069a10166cc34b5443b",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_107c22c558216c2511f9",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_10ec13bf4974a1dc3c84",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_11f7fc4a4e5913aa43b3",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_1351546a8865ee656ea1",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_146d6d4dca5685a2733d",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_14ccc5ffd98e572eb030",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room and Event evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_16aed1a3c22f64da011e",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_19991321dc0f07b69759",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_1ac469fc9ec865f1cb1d",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_1b41ac542c395b4df9f4",
+      "category": "semantic_runtime",
+      "targetOwner": "local_translation_4b",
+      "deterministicOwner": "source-token provenance plus translation acceptance and localization-state validators",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_1b7b80e0fd3e6acede21",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_spell",
+      "deterministicOwner": "Spell catalog, check/XP rules, evidence/ID guards and Spell Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_1ef2268abe0cc01f778a",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_1feef41e21eec8846281",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_200060f1c9330319cbd3",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_20faed7fae4605f31355",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_21112974d609d45d2375",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_21e7f5665958fe60718f",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_2277ee13d4cf1bfd3224",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_22de50c2fd5358e96ab9",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_248ef7d8fa92e0eee017",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_identity",
+      "deterministicOwner": "Actor Identity observation schema, evidence/ID guards and owning Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_2524b83cf2df687775b1",
+      "category": "semantic_runtime",
+      "targetOwner": "deterministic_error_code_registry",
+      "deterministicOwner": "typed Appraisal validation error codes and deterministic reason mapping",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "id": "regex_26e8bd8825f91b4fc4cb",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_spell",
+      "deterministicOwner": "Spell catalog, check/XP rules, evidence/ID guards and Spell Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_272b0da904bbb33d74e0",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_2800aa48c52ed3055dc9",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_2a3ae12b498eaa495f81",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_2a43999e7ee4237b1945",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_2d55af281e7a982c15a7",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_2df0e6bad9ff582957a0",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_spell",
+      "deterministicOwner": "Spell catalog, check/XP rules, evidence/ID guards and Spell Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_2e16a987b8b1339db9b8",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_2e8ef0aa336d7888c2c3",
+      "category": "semantic_runtime",
+      "targetOwner": "local_translation_4b",
+      "deterministicOwner": "source-token provenance plus translation acceptance and localization-state validators",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_2f8f095ef08c0cffcf47",
+      "category": "semantic_runtime",
+      "targetOwner": "deterministic_error_code_registry",
+      "deterministicOwner": "typed Appraisal validation error codes and deterministic reason mapping",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "id": "regex_2f913f2b51a0e4ea7ae8",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_2fdde7865f7d82b5c69d",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_315300324444dde902d0",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_34232e8f867eeb7ee46f",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_34791475e3322ec27123",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_35a3889194bef6826ab6",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_35b26ff37947fe2454a2",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_374470340fd6a9687304",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_38070eb5ecadca37cc1a",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_3a07b2b3c4462be596c8",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_3caa79bbaefbd0717149",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_3cdf3d5d8505de8e925d",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_spell",
+      "deterministicOwner": "Spell catalog, check/XP rules, evidence/ID guards and Spell Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_3d39d820fb1cac6f572f",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_3d4d04672af4c998336d",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_3dda77fda4fbb8aec5a2",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_3e9c2f54df186b6ae45d",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_3ea62978fd2f38e863db",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_3ee767b5f332e9d32b70",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_3f4637e5e9ffcce0d3fc",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_3f9b9e032d8fee23038f",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_431bf627ab0b2b79494e",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_43410eddca806907eb88",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_44c4b129eeeb3ebaa65b",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_4541f371ea348c6e8442",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_45db6cf61d5b85cce7ba",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_461897aa3c6170939177",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_4646ff8ebaf35cb9bdc2",
+      "category": "semantic_runtime",
+      "targetOwner": "local_translation_4b",
+      "deterministicOwner": "source-token provenance plus translation acceptance and localization-state validators",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_466076dc4c4c0a1ac5ea",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_469568144ecbfbeeff3a",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_488ed9069369eb42daab",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_4a54e203d1863f5e731d",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_4cac459b032d1bab153e",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_4cd14a6192a234fd18db",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_4cf2cd04c84a19faacc1",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_4de3cfbe58ebedb6f2ca",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_4e749ae67a65861b4a6c",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_4f49f2e0ad0e7af0842e",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_50cc02d7a553bf5f04db",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_52efbbe17b05d4c87c63",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_530b765f95134d162dc8",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_56b7f2a8e8674f346487",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_571a77f7a6912139da2d",
+      "category": "semantic_runtime",
+      "targetOwner": "deterministic_error_code_registry",
+      "deterministicOwner": "typed Appraisal validation error codes and deterministic reason mapping",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "id": "regex_596c50378eab89797326",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_5a0b0f723a69657f1164",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_5c1516843bcd58a490de",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_5cdb710abd579abab861",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_5d206bb02f214592e6c8",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_5d6775493486b525b156",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_5ee4d888645a02e1f278",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_60d62040dc6d4cf4e012",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_6230d305e1f2e46fe92f",
+      "category": "semantic_runtime",
+      "targetOwner": "local_translation_4b",
+      "deterministicOwner": "source-token provenance plus translation acceptance and localization-state validators",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_625144b576c444c62841",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_64699f9b7cd38213c31f",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_6472cf0b573efc195736",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_66456cdbc0719c9d65bb",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_identity",
+      "deterministicOwner": "Actor Identity observation schema, evidence/ID guards and owning Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_67a77ed930578e4b3591",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_6c4b7e4a05b2b6b2d423",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_6c4c300e543d1a52501d",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_6d55d5d1b2b5671cda0b",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_6da3a5ef0889ebba0f2d",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_6ed98e72666082da163c",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_6f115f3a12a0e86ad8fa",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room and Event evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_6ff175b60141354ee243",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_71544b0f317388f6f3ef",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_71ac8360a5464a60226f",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_72b156f5d2b7dcb64e49",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_72bef46ca67a8655128c",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_745c0b62f39c2653d0a3",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_75677d9e5ccaf7fcbeff",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, explicit system-role identity, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_78767ded5d8b3fad1d5b",
+      "category": "semantic_runtime",
+      "targetOwner": "embedding_candidate_retrieval",
+      "deterministicOwner": "canonical hydration plus ACL, timeline, revision, clock, source and supersession gates",
+      "phase2Action": "remove_and_use_embedding_candidate_retrieval"
+    },
+    {
+      "id": "regex_78b08b7ac76225880e10",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_79f2fc09a21174d987e4",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_7d2479d8dd6151aa2943",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_7f22695c22a08a0ab127",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_7f5e6fd7379ec37fea35",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_7fe178b8f5536a91eed5",
+      "category": "semantic_runtime",
+      "targetOwner": "deterministic_error_code_registry",
+      "deterministicOwner": "typed Appraisal validation error codes and deterministic reason mapping",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "id": "regex_809abf3fce6b251c9a85",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_8185cc890b479722124c",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_83919ff49b9fb6ae77d9",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room and Event evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_839e73e0531fbbddba85",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_8592fdfbde926ad26c39",
+      "category": "semantic_runtime",
+      "targetOwner": "local_translation_4b",
+      "deterministicOwner": "source-token provenance plus translation acceptance and localization-state validators",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_8711ec26120293dac2dd",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_87bdb9f61d7c26a135a1",
+      "category": "semantic_runtime",
+      "targetOwner": "embedding_candidate_retrieval",
+      "deterministicOwner": "canonical hydration plus ACL, timeline, revision, clock, source and supersession gates",
+      "phase2Action": "remove_and_use_embedding_candidate_retrieval"
+    },
+    {
+      "id": "regex_8886edf5d47bdaa05497",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_88d5702630a767c79869",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_89307c8fd87760d6e36d",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_89adbe7a0cccc8144c4e",
+      "category": "semantic_runtime",
+      "targetOwner": "deterministic_error_code_registry",
+      "deterministicOwner": "typed Appraisal validation error codes and deterministic reason mapping",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "id": "regex_8a41fc884df3958efc9b",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_8bb7890875515e195478",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_8ce5a8b377c9ec0a76ed",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_8db9a5bde5d246c15ebe",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_9219747d11a59afea030",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_930e0c50d0c543801bf6",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_9361166bc1abb84b9b7a",
+      "category": "semantic_runtime",
+      "targetOwner": "deterministic_error_code_registry",
+      "deterministicOwner": "typed Appraisal validation error codes and deterministic reason mapping",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "id": "regex_942acc774f772f9abfce",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_94a50eca75400f98e98d",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_94d6d3eefecff6a2c979",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_9538de223033b9f44d4d",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_95fb03136090abb1c3bb",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_968ddf08baf24a8306e7",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_97fadc02847c359b28e0",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_9cabd8b9250786b63c98",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_identity",
+      "deterministicOwner": "Actor Identity observation schema, evidence/ID guards and owning Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_9cdc1849b70f08539eb2",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_9e5b82f07a8e3d1f78a1",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_9f4c2330c5a72bc79548",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_9fa7db2643500db6b28f",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_a024f6982289110983bd",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_a0540127cfe14213f5e0",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_a4b382364d463ceb39ee",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_a68153123ba0763677ab",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_a6c8819fe7aaf39556bc",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_a9ded6c390402d5f0c4c",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_ab81b81b72314f060be6",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_ac0f8526b8939e6d43a1",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_ac0fc966e4b944cfa6f2",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_ac9fd37eb21bd792199f",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_acce53185c16adaf831a",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_b270885226c92ca2c669",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_b4291b74c7586d7bbdb2",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_b4fc8e35ed4161b031eb",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_b69ed6a9e3e29792969f",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_b721349c66445296ce66",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_b8a2f4145a1898be19d4",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_b965c979229876d84ae5",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_b967729e0c2401269f61",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_baffad67466ed240d060",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_bb2d901128b2660c398e",
+      "category": "semantic_runtime",
+      "targetOwner": "deterministic_sensitive_field_registry",
+      "deterministicOwner": "explicit save-revision and diagnostics sensitive-field registries",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "id": "regex_bb38b053bafba1538a5e",
+      "category": "semantic_runtime",
+      "targetOwner": "local_translation_4b",
+      "deterministicOwner": "source-token provenance plus translation acceptance and localization-state validators",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_bc98d363b3788003fe1f",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_be13f78dcf966c799ce7",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_be1ecde551deadef3dc0",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_befca1522d81f04ae68a",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_c05ba36fc34b6e6c69c5",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_c1569a548179e23ddf7a",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_c1c0db72dac679b1b37e",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_c1d1346a05bd0d767ca1",
+      "category": "semantic_runtime",
+      "targetOwner": "deterministic_error_code_registry",
+      "deterministicOwner": "typed Appraisal validation error codes and deterministic reason mapping",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "id": "regex_c2a8c04b10d4939a135d",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_c306810cb55d27e40035",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_c40b0bb6378fab14beb8",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_c57ea9a2051a376d3cdb",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_c818e236549fd382fe11",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_c81d6bda4cde68441049",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_ca39fb6e2cdf169c3402",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_cb0793a6680cd868d813",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_d040db62ec186a9042a2",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_spell",
+      "deterministicOwner": "Spell catalog, check/XP rules, evidence/ID guards and Spell Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_d0923701b0dc28b908cb",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_spell",
+      "deterministicOwner": "Spell catalog, check/XP rules, evidence/ID guards and Spell Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_d2cab848422f8aacb6b1",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_d2d5bf34b84aae77451c",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_d75b30d6b28f278e7de2",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_dd837a9b7166d7aa65d7",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_de834ac2465dc723f0bd",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_df0d2fe332dd361d6be0",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_e153ecded3ae54dcb880",
+      "category": "semantic_runtime",
+      "targetOwner": "deterministic_error_code_registry",
+      "deterministicOwner": "typed Appraisal validation error codes and deterministic reason mapping",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "id": "regex_e1e0099903da8174b1fd",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, explicit system-role identity, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_e25db02d944da5468980",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_e27809f2b8a8081db50d",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_e2a094d5325a89b249d5",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_e393d4b70e901d79ba71",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_e3ce868bc6c9ddf1a2eb",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_e53ea050d6ce209e97fc",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_e79925a3004f2ee6567a",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_e9307b311262ba20a130",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_e982d2f87302e34e7f31",
+      "category": "semantic_runtime",
+      "targetOwner": "local_appraisal_1_7b",
+      "deterministicOwner": "Actor, Social and Appraisal schemas, evidence/ID guards and owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_eb0fb1da42c25fc877cb",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_ece7afb18590f5e6b1b9",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_ed91e79f5c0470fe56cd",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_efa3a586ee892120006d",
+      "category": "semantic_runtime",
+      "targetOwner": "deterministic_process_health_protocol",
+      "deterministicOwner": "process exit status and explicit Ollama health/readiness protocol",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "id": "regex_f05cc11c10cd0b1ddd9d",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_f471f95d54adddce1f44",
+      "category": "semantic_runtime",
+      "targetOwner": "local_post_core_1_7b",
+      "deterministicOwner": "Actor, room, Event and perception evidence/ID guards plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_f759d35efdb6db00c410",
+      "category": "semantic_runtime",
+      "targetOwner": "local_translation_4b",
+      "deterministicOwner": "source-token provenance plus translation acceptance and localization-state validators",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_f7c6a769f02f00717002",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_f8606471fcba9985543b",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_spell",
+      "deterministicOwner": "Spell catalog, check/XP rules, evidence/ID guards and Spell Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_fa86bb442b4a80273c0e",
+      "category": "semantic_migration",
+      "targetOwner": "deterministic_migration_no_model",
+      "deterministicOwner": "owning domain migration using explicit structured values or the approved conservative default",
+      "phase2Action": "remove_and_use_explicit_or_conservative_migration"
+    },
+    {
+      "id": "regex_fae6880e2a2bb0bc4e68",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_fcce82cd7e65fe26d4a0",
+      "category": "semantic_runtime",
+      "targetOwner": "dynamic_4b_inventory",
+      "deterministicOwner": "Item schema, evidence/ID guards, existence invariants and Item Reducer",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    },
+    {
+      "id": "regex_ff3789edbed95e02f2f5",
+      "category": "semantic_runtime",
+      "targetOwner": "deterministic_sensitive_field_registry",
+      "deterministicOwner": "explicit save-revision and diagnostics sensitive-field registries",
+      "phase2Action": "remove_and_use_explicit_structured_protocol"
+    },
+    {
+      "id": "regex_ffdf15c29f40f35e7413",
+      "category": "semantic_runtime",
+      "targetOwner": "local_pre_turn_1_7b",
+      "deterministicOwner": "check, movement, clock and Calendar validators plus owning Reducers",
+      "phase2Action": "remove_and_replace_with_registered_semantic_owner"
+    }
+  ]
+}

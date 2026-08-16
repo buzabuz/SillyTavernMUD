@@ -63,6 +63,17 @@ The permanent frontend dynamic-text authority is:
 It registers every dynamic value written into the Hogwarts frontend and the
 required localization route and acceptance expansion for that value.
 
+The permanent validation-responsibility authority is:
+
+```text
+.trae/skills/hogwarts-change-governance/VALIDATION_RESPONSIBILITY_REGISTRY.json
+.trae/skills/hogwarts-change-governance/VALIDATION_RESPONSIBILITY_REGISTRY.md
+```
+
+The JSON file is registry authority. The Markdown file is its human-readable
+companion. Update both in the owning system change; do not create a central
+runtime validator or generic cross-domain test harness.
+
 ## Documentation Routing And Maintenance
 
 Use exactly these documentation routes:
@@ -76,6 +87,8 @@ Use exactly these documentation routes:
 | Current runtime behavior | `.trae/specs/hogwarts-runtime-contracts/` | Maintained in the same change as production behavior |
 | Runtime field registry | `.trae/specs/hogwarts-runtime-contracts/state-fields.md` | Sole documentation registry for field meaning, writer, readers, migration, compatibility, and diagnostics |
 | Cross-change debt | `.trae/specs/TECH_DEBT.md` | Current evidence-backed debt and change/feature counts |
+| Validation responsibility registry | `.trae/skills/hogwarts-change-governance/VALIDATION_RESPONSIBILITY_REGISTRY.json` | Permanent contract and rule ownership across Regex, Embedding, model, Schema, transform, validator and Reducer stages |
+| Validation responsibility table | `.trae/skills/hogwarts-change-governance/VALIDATION_RESPONSIBILITY_REGISTRY.md` | Human-readable companion updated with the JSON registry by each owning system |
 | Frontend dynamic-field registry | `.trae/skills/hogwarts-change-governance/FRONTEND_DYNAMIC_FIELD_REGISTRY.md` | Permanent field-family inventory and mandatory rendered acceptance matrix for every Hogwarts frontend change |
 | Supporting evidence | `.trae/specs/<change-id>/<evidence-kind>/` | Must be linked from the owning checklist or progress log and marked with its evidence status |
 | Extension operations | `public/scripts/extensions/hogwarts-mud/README.md` | User/developer operation and navigation entry; not a field or product contract |
@@ -113,6 +126,24 @@ Use exactly these documentation routes:
    history. Reopening it for new scope requires adding the missing current
    artifacts, registering the PRD, and obtaining explicit approval; never
    invent a historical PRD during unrelated cleanup.
+
+### Permanent Push Scope Confirmation Gate
+
+Before every `git push`, remote branch creation, or MR/PR creation/update:
+
+1. Inspect the exact commit range and worktree. List the target remote, source
+   branch, base branch, included files grouped by purpose, and every dirty or
+   untracked path deliberately excluded.
+2. Present that exact scope to the user and request an explicit confirmation.
+   Earlier implementation approval or a general request to "push" does not
+   replace this final scope confirmation.
+3. A local commit may be prepared before confirmation, but do not push,
+   force-push, create/update an MR/PR, or upload artifacts until the user
+   confirms the displayed scope.
+4. After confirmation, push only the reviewed commit range. Never sweep
+   unrelated worktree changes into the commit to make the branch look clean.
+5. If the staged diff, branch base, remote, or included files change after
+   confirmation, present the revised scope and confirm again before pushing.
 
 ### Zombie Document Gate
 
@@ -181,6 +212,47 @@ are one domain-specific application, not the scope of this invariant.
 6. Before declaring completion, reread the approved PRD and perform a
    criterion-by-criterion audit against the implemented product. Work that is
    technically correct but misses the PRD's actual goal is incomplete.
+
+### Permanent Plain-Language Before/After Reporting Gate
+
+This gate applies before presenting any Hogwarts PRD, Spec or approval packet.
+Detailed artifacts cannot substitute for a direct user-facing explanation.
+
+1. Before asking the user to read or approve files, report the proposed change
+   in the user's language using this order:
+   - one plain-language sentence stating the user outcome;
+   - a compact responsibility table when multiple mechanisms/components are
+     involved;
+   - concrete normal-user Before/After scenarios;
+   - concrete failure Before/After scenarios;
+   - operational-cost changes.
+2. Every scenario must name:
+   - what the user does or what runtime event occurs;
+   - what the user currently sees;
+   - what the user will see after the change;
+   - what State is or is not written;
+   - what happens when validation or a dependency fails.
+3. Use at least three representative scenarios for a cross-domain/core change.
+   Include every distinct user-visible workflow affected by a narrower change.
+   Architecture names, field lists and test counts alone are not scenarios.
+4. For every model, retrieval, scheduler or background-task change, the report
+   and PRD must include a Before/After operational table covering:
+   - model calls per normal action and worst-case action;
+   - whether calls are sequential or concurrent;
+   - whether one model serves multiple tasks;
+   - model/context residency and estimated RAM/VRAM pressure;
+   - user-visible latency or queueing impact;
+   - paid-call count and retry/fallback behavior.
+5. The PRD `Before` and `After` sections must contain or directly link the same
+   user-scenario matrix. A PRD that describes only internal data flow,
+   components, schemas or validators is not decision-complete.
+6. The approval message must summarize the scenarios and operational costs
+   before linking files. Never send a bare file-review request or make the user
+   infer the product outcome from a long PRD.
+7. Lead with plain language and keep the first report compact. Put technical
+   evidence after the user outcome, not before it.
+8. This report does not replace the governed PRD. If the plain-language report
+   and PRD differ, approval is blocked until both are reconciled.
 
 ### Gate 1: Identify And Reuse The Change
 
@@ -328,6 +400,43 @@ The canonical cross-change retirement and migration manifest is:
 11. Retired test utilities, fixture loaders, compatibility exports and dead
     fixture paths are retired code too. Remove them with their test instead of
     keeping an unreachable harness branch.
+
+### Permanent Validation Responsibility Registry Gate
+
+Apply this gate before designing, implementing, reviewing or accepting any
+Hogwarts Prompt, output Schema, parser, adoption/normalization/resolution
+stage, validator, semantic model, embedding route, Reducer or model-task
+change.
+
+1. Read `VALIDATION_RESPONSIBILITY_REGISTRY.md` and the affected JSON rows.
+   Every new system or changed model-output boundary appends or updates its own
+   stable `VCON-*` row before implementation.
+2. The owning system row names Regex/Embedding/model responsibility, Schema,
+   transform stages, deterministic validator, State fields, sole writer,
+   failure policy, call policy and test owner. Internal helper assertions stay
+   inside the domain; do not build a central runtime validator.
+3. Regex remains shape/finite grammar only. Embedding remains candidate
+   retrieval only. Semantic decisions, deterministic authority and Reducer
+   settlement remain separate responsibilities.
+4. **Every new gameplay system must add a new domain-named focused test file.**
+   It cannot claim coverage from an existing unrelated test file or a generic
+   central registry test.
+5. The new system's tests cover at minimum:
+   - valid structured proposal reaches its owning Reducer;
+   - invalid Schema, evidence, ID, ACL, arithmetic or transition writes no
+     State;
+   - hypothetical or absent semantics produce no proposal;
+   - regex and Embedding cannot act as semantic fallback or State authority;
+   - model failure performs no automatic repair/retry/provider fallback unless
+     the current PRD explicitly approves the exception;
+   - normal and worst-case model-call budgets match the PRD.
+6. Test ownership stays with the system. A future Money system therefore adds
+   a Money contract row and `hogwarts-mud-money*.test.mjs`; Inventory, Spell
+   or registry tests cannot substitute for it.
+7. The owning PRD/Spec, focused tests, blind simulation where applicable and a
+   fresh independent acceptance Agent decide whether the new system is
+   complete. The cross-system table records responsibility; it is not itself
+   an implementation or acceptance engine.
 
 ### Permanent Frontend Dynamic Field Registry Gate
 
@@ -488,7 +597,10 @@ artifact status.
 
 Requirements for key sections:
 
-- `Before` and `After` describe externally observable behavior and authoritative data flow, not task progress.
+- `Before` and `After` describe externally observable behavior and
+  authoritative data flow, not task progress. They must include the
+  user-scenario and operational-cost matrix required by the Permanent
+  Plain-Language Before/After Reporting Gate.
 - `Migration and Compatibility` defaults to one-time atomic migration followed by deletion of old fields. Long-term dual-read, dual-write, fallback projectors, compatibility periods, and generic legacy archaeology are forbidden unless the user explicitly requests them in the approved PRD. Define old-save behavior, atomicity, failure rollback, and old-field removal.
 - Every migration or repair PRD must include a semantic before/after matrix for each changed field and explain why the transition is allowed by the approved business invariant. Archive prose or current corrupted State is not sufficient justification.
 - `Prompt Field Budget` must start from the measured real-save baseline. It lists each added, removed, or changed prompt field; authoritative source; audience; before/after characters and estimated tokens; hard budget; trimming or omission rule; replacement/removal target; and whether it is protected. Explicitly write `None` only after the production prompt path proves there is no prompt impact.
@@ -789,6 +901,8 @@ A change is complete only when:
     authoritative artifact paths, independently executes the complete
     acceptance scope, and reports a pass. Any post-failure fix is rechecked by
     another fresh Agent.
+21. Every affected validation-responsibility row is current and every new
+    gameplay system has its own domain-named focused test file.
 
 ## Incident-Derived Non-Negotiable Lesson
 
@@ -828,6 +942,9 @@ Stop and ask for resolution when any of these is true:
 - The repository root does not match the exact project path.
 - The correct stable `<change-id>` cannot be determined without changing product scope.
 - A field would have multiple authoritative writers.
+- A new system's Prompt, Schema, transform, validator, embedding route,
+  Reducer or model task lacks an updated `VCON-*` row or its own domain-named
+  focused test file.
 - A reader depends on a field outside the frontend whitelist or documented runtime contract.
 - A frontend dynamic text value is absent from the permanent registry, has an
   unknown route, remains marked `NO`/`PATCH`, or lacks its required rendered

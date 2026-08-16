@@ -1,0 +1,2909 @@
+{
+  "benchmarkVersion": 1,
+  "generatedAt": "2026-08-16T08:08:40.619Z",
+  "machine": {
+    "model": "MacBook Pro Mac15,6",
+    "chip": "Apple M3 Pro",
+    "memoryBytes": 38654705664,
+    "ollamaVersion": "0.32.6",
+    "models": {
+      "qwen3:1.7b": {
+        "parameterCount": 2031739904,
+        "quantization": "Q4_K_M",
+        "diskBytes": 1400000000
+      },
+      "qwen3:4b": {
+        "parameterCount": 4022468096,
+        "quantization": "Q4_K_M",
+        "diskBytes": 2500000000
+      }
+    }
+  },
+  "promptHashes": {
+    "post": "f6e6a4a4f2eea0645724d5f61da065edb6651adb2b9d9cb4ae6d20556aaee499",
+    "inventory": "46e8937ed49358cf205a874c884e397f317c2bb467b847bbf349c22d9e7c70c8",
+    "spell": "b01a6ce46e05a855a918500fdf2cdbc9ba62c96bafd524bbed992f064b5265ab",
+    "merged": "f2deb0efe4a9b1a753cf92b319d0b6e576717af8d986bc0ece4568f25b2648bd"
+  },
+  "caseIds": [
+    "private_note_transfer",
+    "departure_visible_injury",
+    "destroy_with_remains",
+    "vanish_item_spell_demo",
+    "spell_teaching_and_gift",
+    "hypothetical_no_change",
+    "failed_secret_custom_spell",
+    "explicit_no_visible_injury"
+  ],
+  "performanceResults": null,
+  "qualityResults": [
+    {
+      "id": "two_stage_merged_followups_4b_ctx2048",
+      "rounds": 2,
+      "runs": [
+        {
+          "caseId": "private_note_transfer",
+          "round": 0,
+          "wallMs": 7971.580249999999,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 3432.393916,
+              "totalMs": 3428.262167,
+              "loadMs": 1163.8345,
+              "promptEvalMs": 589.363,
+              "evalMs": 1667.072,
+              "promptTokens": 924,
+              "outputTokens": 123,
+              "contentHash": "1e2c3446b7fc968a3b418e389dfae83ba0cd1d1fbd8632e8d58310ac3dec5897",
+              "contentCharacters": 407,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "target",
+                  "audibleScope": "none",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry"
+                  ],
+                  "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 4538.680583,
+              "totalMs": 4537.387208,
+              "loadMs": 921.524833,
+              "promptEvalMs": 962.844,
+              "evalMs": 2645.59,
+              "promptTokens": 602,
+              "outputTokens": 109,
+              "contentHash": "396774d83aa3965cc8d3c468ffbd69574e3e76d51025a27aeeafd069528ad7df",
+              "contentCharacters": 369,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "give",
+                    "itemId": "folded_note",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "harry",
+                    "targetHolderId": "harry",
+                    "physicalForm": "unchanged",
+                    "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                    "confidence": 1
+                  }
+                ]
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            "",
+            ""
+          ],
+          "rawScore": {
+            "passed": 12,
+            "total": 12,
+            "ratio": 1,
+            "failures": []
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "target",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "give",
+                  "itemId": "folded_note",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "harry",
+                  "targetHolderId": "harry",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 12,
+            "total": 12,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "target",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "give",
+                  "itemId": "folded_note",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "harry",
+                  "targetHolderId": "harry",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "departure_visible_injury",
+          "round": 0,
+          "wallMs": 3358.7625419999986,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 3358.7148749999997,
+              "totalMs": 3357.1985,
+              "loadMs": 111.721958,
+              "promptEvalMs": 159.147,
+              "evalMs": 3076.069,
+              "promptTokens": 886,
+              "outputTokens": 239,
+              "contentHash": "b768b4d0388352e331d8ce8aa820e433940599e5b303fc0268805f6d0ed62fc3",
+              "contentCharacters": 868,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": true,
+                  "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                  "confidence": 1
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "entrance_hall",
+                    "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                    "confidence": 1
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "ron",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 1
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry"
+                  ],
+                  "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 1
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            ""
+          ],
+          "rawScore": {
+            "passed": 11,
+            "total": 13,
+            "ratio": 0.8461538461538461,
+            "failures": [
+              "identityObservation",
+              "allEvidenceGrounded"
+            ]
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                "confidence": 1
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "entrance_hall",
+                  "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                  "confidence": 1
+                }
+              ],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 11,
+            "total": 13,
+            "ratio": 0.8461538461538461,
+            "failures": [
+              "identityObservation",
+              "identityObservationCount"
+            ]
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                "confidence": 1
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "entrance_hall",
+                  "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                  "confidence": 1
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "ron",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 1
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "destroy_with_remains",
+          "round": 0,
+          "wallMs": 6696.823291000001,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2092.364125,
+              "totalMs": 2091.381583,
+              "loadMs": 175.425917,
+              "promptEvalMs": 175.567,
+              "evalMs": 1733.868,
+              "promptTokens": 920,
+              "outputTokens": 134,
+              "contentHash": "01d4ddec7921aab93a7a04c15e0351c9187b532ba09ff93489d8fe24cb50d29a",
+              "contentCharacters": 430,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": true,
+                  "evidenceText": "",
+                  "confidence": 1
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 1
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 3088.311375000001,
+              "totalMs": 3087.248417,
+              "loadMs": 185.829708,
+              "promptEvalMs": 272.056,
+              "evalMs": 2623.747,
+              "promptTokens": 598,
+              "outputTokens": 111,
+              "contentHash": "dc6f813078b15967932c3c5d1f1d8e8314caac5d49c78eba1c690c92e9cb932c",
+              "contentCharacters": 363,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "destroy",
+                    "itemId": "tinas_quill",
+                    "itemType": "tool",
+                    "ownerId": "player",
+                    "holderId": "player",
+                    "targetHolderId": "",
+                    "physicalForm": "remains",
+                    "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                    "confidence": 0.99
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 1515.9704579999998,
+              "totalMs": 1515.02925,
+              "loadMs": 938.91675,
+              "promptEvalMs": 219.054,
+              "evalMs": 354.549,
+              "promptTokens": 105,
+              "outputTokens": 14,
+              "contentHash": "f0e91c39c0d21cbaf07895efe9096c303cefd9665b96c2867078ccf940cb34ed",
+              "contentCharacters": 31,
+              "parsed": {
+                "physicalForm": "remains"
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "rawScore": {
+            "passed": 10,
+            "total": 11,
+            "ratio": 0.9090909090909091,
+            "failures": [
+              "eventBoundary"
+            ]
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "destroy",
+                  "itemId": "tinas_quill",
+                  "itemType": "tool",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "remains",
+                  "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                  "confidence": 0.99
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "destroy",
+                  "itemId": "tinas_quill",
+                  "itemType": "tool",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "remains",
+                  "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                  "confidence": 0.99
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "vanish_item_spell_demo",
+          "round": 0,
+          "wallMs": 11550.782166,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 1953.2765,
+              "totalMs": 1952.401833,
+              "loadMs": 100.505958,
+              "promptEvalMs": 178.902,
+              "evalMs": 1665.04,
+              "promptTokens": 934,
+              "outputTokens": 129,
+              "contentHash": "49ed6d3f7ce471d6df152788827dd0ba21fb3e2bda03ce964cae8fa6c41467f0",
+              "contentCharacters": 416,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 8036.557874999999,
+              "totalMs": 8035.394209,
+              "loadMs": 942.018584,
+              "promptEvalMs": 1850.266,
+              "evalMs": 5231.643,
+              "promptTokens": 1138,
+              "outputTokens": 213,
+              "contentHash": "56386f09e953b7fb3282dd6c3dc354c36062d6a1ad99e51103ebbd253a1868ab",
+              "contentCharacters": 775,
+              "parsed": {
+                "inventory": {
+                  "inventoryUpdates": [
+                    {
+                      "operation": "destroy",
+                      "itemId": "tinas_quill",
+                      "itemType": "tool",
+                      "ownerId": "player",
+                      "holderId": "player",
+                      "targetHolderId": "",
+                      "physicalForm": "absent",
+                      "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                      "confidence": 1
+                    }
+                  ]
+                },
+                "spell": {
+                  "spellEvents": [
+                    {
+                      "kind": "demonstrated",
+                      "spellId": "spell_evanesco",
+                      "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                      "confidence": 1
+                    }
+                  ],
+                  "customSpellProposals": []
+                }
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 1560.7202910000015,
+              "totalMs": 1558.760125,
+              "loadMs": 971.064417,
+              "promptEvalMs": 222.365,
+              "evalMs": 362.864,
+              "promptTokens": 114,
+              "outputTokens": 14,
+              "contentHash": "7597286d419f871ff43f8de6bfb7a467516a25d1af133972089f0e2f438ced92",
+              "contentCharacters": 30,
+              "parsed": {
+                "physicalForm": "absent"
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "rawScore": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "destroy",
+                  "itemId": "tinas_quill",
+                  "itemType": "tool",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "absent",
+                  "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "demonstrated",
+                  "spellId": "spell_evanesco",
+                  "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "destroy",
+                  "itemId": "tinas_quill",
+                  "itemType": "tool",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "absent",
+                  "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "demonstrated",
+                  "spellId": "spell_evanesco",
+                  "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "spell_teaching_and_gift",
+          "round": 0,
+          "wallMs": 9879.602707999999,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 1956.4656250000007,
+              "totalMs": 1955.354083,
+              "loadMs": 110.042417,
+              "promptEvalMs": 195.099,
+              "evalMs": 1641.686,
+              "promptTokens": 948,
+              "outputTokens": 120,
+              "contentHash": "c9b5ab7d1a5161590d4d1777f59b29892823a4b150dbda5b89a4d4ef5ac78dbd",
+              "contentCharacters": 370,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "hermione"
+                  ],
+                  "evidenceText": "*认真跟着赫敏学习咒语，然后接过她送的签名羊皮纸*",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 0
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 7922.955041999998,
+              "totalMs": 7921.977,
+              "loadMs": 961.857042,
+              "promptEvalMs": 1867.937,
+              "evalMs": 5080.638,
+              "promptTokens": 1152,
+              "outputTokens": 200,
+              "contentHash": "df8f41821b3e30bbfe3074b7711b1b79d2fe07eb1063ac13830b3bc0156fcc75",
+              "contentCharacters": 723,
+              "parsed": {
+                "inventory": {
+                  "inventoryUpdates": [
+                    {
+                      "operation": "acquire",
+                      "itemId": "signed_parchment",
+                      "itemType": "document",
+                      "ownerId": "player",
+                      "holderId": "player",
+                      "targetHolderId": "",
+                      "physicalForm": "unchanged",
+                      "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                      "confidence": 1
+                    }
+                  ]
+                },
+                "spell": {
+                  "spellEvents": [
+                    {
+                      "kind": "taught",
+                      "spellId": "spell_lumos",
+                      "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                      "confidence": 1
+                    }
+                  ],
+                  "customSpellProposals": []
+                }
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            "",
+            ""
+          ],
+          "rawScore": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "hermione"
+                ],
+                "evidenceText": "*认真跟着赫敏学习咒语，然后接过她送的签名羊皮纸*",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "hermione"
+                ],
+                "evidenceText": "*认真跟着赫敏学习咒语，然后接过她送的签名羊皮纸*",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "hypothetical_no_change",
+          "round": 0,
+          "wallMs": 1665.3069590000014,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 1665.2489580000038,
+              "totalMs": 1663.480083,
+              "loadMs": 117.589291,
+              "promptEvalMs": 160.352,
+              "evalMs": 1376.673,
+              "promptTokens": 895,
+              "outputTokens": 100,
+              "contentHash": "7ce7ddffd9cdcc0c8f61ce956b5d650ceffbb43023ea07e9109da60b1ec79819",
+              "contentCharacters": 315,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": true,
+                  "evidenceText": "",
+                  "confidence": 1
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "none",
+                  "audibleScope": "none",
+                  "concealment": "none",
+                  "directParticipantActorIds": [],
+                  "evidenceText": "",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 1
+                },
+                "followUpTasks": []
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            ""
+          ],
+          "rawScore": {
+            "passed": 10,
+            "total": 11,
+            "ratio": 0.9090909090909091,
+            "failures": [
+              "eventBoundary"
+            ]
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "none",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [],
+                "evidenceText": "“If I promise to meet tomorrow, would that count? I am not agreeing yet.”",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": []
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "none",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [],
+                "evidenceText": "",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": []
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "failed_secret_custom_spell",
+          "round": 0,
+          "wallMs": 7235.468832999999,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2052.2197919999962,
+              "totalMs": 2051.240542,
+              "loadMs": 115.003417,
+              "promptEvalMs": 179.643,
+              "evalMs": 1747.146,
+              "promptTokens": 926,
+              "outputTokens": 125,
+              "contentHash": "72f385e9ab3393b7a1e6ea59a0ffbe0f2c6ab9c65af69ee80a754228a11bce2f",
+              "contentCharacters": 438,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": true,
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 1
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "ron"
+                  ],
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 1
+                },
+                "followUpTasks": [
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 5183.1470000000045,
+              "totalMs": 5182.24575,
+              "loadMs": 106.323792,
+              "promptEvalMs": 865.693,
+              "evalMs": 4128.810999,
+              "promptTokens": 543,
+              "outputTokens": 171,
+              "contentHash": "58e537c24777641a968804b0a18808c51df509e57ca2b5734755a6f8b3ff5332",
+              "contentCharacters": 593,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "experiment",
+                    "spellId": "",
+                    "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": [
+                  {
+                    "incantation": "Umbra Flecto",
+                    "effectEn": "bend the light",
+                    "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                    "confidence": 1
+                  }
+                ]
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            "",
+            ""
+          ],
+          "rawScore": {
+            "passed": 9,
+            "total": 12,
+            "ratio": 0.75,
+            "failures": [
+              "eventBoundary",
+              "perception",
+              "allEvidenceGrounded"
+            ]
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "attempted",
+                "directParticipantActorIds": [
+                  "ron"
+                ],
+                "evidenceText": "*偷偷尝试自创咒语 Umbra Flecto，让光线弯曲*",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "experiment",
+                  "spellId": "",
+                  "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": [
+                {
+                  "incantation": "Umbra Flecto",
+                  "effectEn": "bend the light",
+                  "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                  "confidence": 1
+                }
+              ]
+            }
+          },
+          "score": {
+            "passed": 12,
+            "total": 12,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "ron"
+                ],
+                "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "experiment",
+                  "spellId": "",
+                  "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": [
+                {
+                  "incantation": "Umbra Flecto",
+                  "effectEn": "bend the light",
+                  "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                  "confidence": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "caseId": "explicit_no_visible_injury",
+          "round": 0,
+          "wallMs": 2645.9603750000024,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2645.912457999999,
+              "totalMs": 2644.476083,
+              "loadMs": 251.131208,
+              "promptEvalMs": 164.488,
+              "evalMs": 2209.703,
+              "promptTokens": 887,
+              "outputTokens": 169,
+              "contentHash": "6a324fe8000ea9b82b2c7803d915c368223baab560db45c692ce26d9cf746295",
+              "contentCharacters": 604,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": true,
+                  "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                  "confidence": 1
+                },
+                "actorUpdates": [],
+                "identityObservations": [
+                  {
+                    "actorId": "ron",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                    "confidence": 1
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "none",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "ron"
+                  ],
+                  "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 1
+                },
+                "followUpTasks": []
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            ""
+          ],
+          "rawScore": {
+            "passed": 11,
+            "total": 12,
+            "ratio": 0.9166666666666666,
+            "failures": [
+              "eventBoundary"
+            ]
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [
+                {
+                  "actorId": "ron",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                  "confidence": 1
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "ron"
+                ],
+                "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": []
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 12,
+            "total": 12,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [
+                {
+                  "actorId": "ron",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                  "confidence": 1
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "ron"
+                ],
+                "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": []
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "private_note_transfer",
+          "round": 1,
+          "wallMs": 5535.016207999994,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 1915.674208999997,
+              "totalMs": 1914.882958,
+              "loadMs": 100.654167,
+              "promptEvalMs": 176.467,
+              "evalMs": 1629.769,
+              "promptTokens": 924,
+              "outputTokens": 123,
+              "contentHash": "1e2c3446b7fc968a3b418e389dfae83ba0cd1d1fbd8632e8d58310ac3dec5897",
+              "contentCharacters": 407,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "target",
+                  "audibleScope": "none",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry"
+                  ],
+                  "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 3619.221792000004,
+              "totalMs": 3618.516166,
+              "loadMs": 98.301208,
+              "promptEvalMs": 961.727,
+              "evalMs": 2543.26,
+              "promptTokens": 602,
+              "outputTokens": 109,
+              "contentHash": "396774d83aa3965cc8d3c468ffbd69574e3e76d51025a27aeeafd069528ad7df",
+              "contentCharacters": 369,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "give",
+                    "itemId": "folded_note",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "harry",
+                    "targetHolderId": "harry",
+                    "physicalForm": "unchanged",
+                    "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                    "confidence": 1
+                  }
+                ]
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            "",
+            ""
+          ],
+          "rawScore": {
+            "passed": 12,
+            "total": 12,
+            "ratio": 1,
+            "failures": []
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "target",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "give",
+                  "itemId": "folded_note",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "harry",
+                  "targetHolderId": "harry",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 12,
+            "total": 12,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "target",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "give",
+                  "itemId": "folded_note",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "harry",
+                  "targetHolderId": "harry",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "departure_visible_injury",
+          "round": 1,
+          "wallMs": 3309.804333,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 3309.762542000004,
+              "totalMs": 3309.00425,
+              "loadMs": 100.257459,
+              "promptEvalMs": 156.403,
+              "evalMs": 3044.937,
+              "promptTokens": 886,
+              "outputTokens": 239,
+              "contentHash": "b768b4d0388352e331d8ce8aa820e433940599e5b303fc0268805f6d0ed62fc3",
+              "contentCharacters": 868,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": true,
+                  "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                  "confidence": 1
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "entrance_hall",
+                    "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                    "confidence": 1
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "ron",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 1
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry"
+                  ],
+                  "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 1
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            ""
+          ],
+          "rawScore": {
+            "passed": 11,
+            "total": 13,
+            "ratio": 0.8461538461538461,
+            "failures": [
+              "identityObservation",
+              "allEvidenceGrounded"
+            ]
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                "confidence": 1
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "entrance_hall",
+                  "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                  "confidence": 1
+                }
+              ],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 11,
+            "total": 13,
+            "ratio": 0.8461538461538461,
+            "failures": [
+              "identityObservation",
+              "identityObservationCount"
+            ]
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                "confidence": 1
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "entrance_hall",
+                  "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                  "confidence": 1
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "ron",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 1
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "Harry limped through the doors into the Entrance Hall, a bleeding cut visible across his palm.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "destroy_with_remains",
+          "round": 1,
+          "wallMs": 6505.075749999996,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2013.0270830000009,
+              "totalMs": 2012.227792,
+              "loadMs": 98.309084,
+              "promptEvalMs": 175.838,
+              "evalMs": 1730.891,
+              "promptTokens": 920,
+              "outputTokens": 134,
+              "contentHash": "01d4ddec7921aab93a7a04c15e0351c9187b532ba09ff93489d8fe24cb50d29a",
+              "contentCharacters": 430,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": true,
+                  "evidenceText": "",
+                  "confidence": 1
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 1
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 2991.535250000001,
+              "totalMs": 2990.670083,
+              "loadMs": 99.308583,
+              "promptEvalMs": 271.587,
+              "evalMs": 2613.727,
+              "promptTokens": 598,
+              "outputTokens": 111,
+              "contentHash": "dc6f813078b15967932c3c5d1f1d8e8314caac5d49c78eba1c690c92e9cb932c",
+              "contentCharacters": 363,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "destroy",
+                    "itemId": "tinas_quill",
+                    "itemType": "tool",
+                    "ownerId": "player",
+                    "holderId": "player",
+                    "targetHolderId": "",
+                    "physicalForm": "remains",
+                    "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                    "confidence": 0.99
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 1500.3727079999953,
+              "totalMs": 1499.648083,
+              "loadMs": 942.229791,
+              "promptEvalMs": 210.404,
+              "evalMs": 343.6,
+              "promptTokens": 105,
+              "outputTokens": 14,
+              "contentHash": "f0e91c39c0d21cbaf07895efe9096c303cefd9665b96c2867078ccf940cb34ed",
+              "contentCharacters": 31,
+              "parsed": {
+                "physicalForm": "remains"
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "rawScore": {
+            "passed": 10,
+            "total": 11,
+            "ratio": 0.9090909090909091,
+            "failures": [
+              "eventBoundary"
+            ]
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "destroy",
+                  "itemId": "tinas_quill",
+                  "itemType": "tool",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "remains",
+                  "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                  "confidence": 0.99
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "destroy",
+                  "itemId": "tinas_quill",
+                  "itemType": "tool",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "remains",
+                  "evidenceText": "The quill snapped, leaving splinters and a bent nib in Tina's hand.",
+                  "confidence": 0.99
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "vanish_item_spell_demo",
+          "round": 1,
+          "wallMs": 11600.8125,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2027.5109159999993,
+              "totalMs": 2026.592834,
+              "loadMs": 104.286459,
+              "promptEvalMs": 179.235,
+              "evalMs": 1734.842,
+              "promptTokens": 934,
+              "outputTokens": 129,
+              "contentHash": "49ed6d3f7ce471d6df152788827dd0ba21fb3e2bda03ce964cae8fa6c41467f0",
+              "contentCharacters": 416,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 8035.100250000003,
+              "totalMs": 8033.957208,
+              "loadMs": 968.996375,
+              "promptEvalMs": 1858.41,
+              "evalMs": 5194.928,
+              "promptTokens": 1138,
+              "outputTokens": 213,
+              "contentHash": "56386f09e953b7fb3282dd6c3dc354c36062d6a1ad99e51103ebbd253a1868ab",
+              "contentCharacters": 775,
+              "parsed": {
+                "inventory": {
+                  "inventoryUpdates": [
+                    {
+                      "operation": "destroy",
+                      "itemId": "tinas_quill",
+                      "itemType": "tool",
+                      "ownerId": "player",
+                      "holderId": "player",
+                      "targetHolderId": "",
+                      "physicalForm": "absent",
+                      "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                      "confidence": 1
+                    }
+                  ]
+                },
+                "spell": {
+                  "spellEvents": [
+                    {
+                      "kind": "demonstrated",
+                      "spellId": "spell_evanesco",
+                      "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                      "confidence": 1
+                    }
+                  ],
+                  "customSpellProposals": []
+                }
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 1537.9916250000097,
+              "totalMs": 1536.616625,
+              "loadMs": 960.441916,
+              "promptEvalMs": 221.22,
+              "evalMs": 351.825,
+              "promptTokens": 114,
+              "outputTokens": 14,
+              "contentHash": "7597286d419f871ff43f8de6bfb7a467516a25d1af133972089f0e2f438ced92",
+              "contentCharacters": 30,
+              "parsed": {
+                "physicalForm": "absent"
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "rawScore": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "destroy",
+                  "itemId": "tinas_quill",
+                  "itemType": "tool",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "absent",
+                  "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "demonstrated",
+                  "spellId": "spell_evanesco",
+                  "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "destroy",
+                  "itemId": "tinas_quill",
+                  "itemType": "tool",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "absent",
+                  "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "demonstrated",
+                  "spellId": "spell_evanesco",
+                  "evidenceText": "Hermione demonstrated Evanesco on Tina's broken quill. The quill vanished completely, leaving no trace or ash.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "spell_teaching_and_gift",
+          "round": 1,
+          "wallMs": 9760.136125000005,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 1928.583500000008,
+              "totalMs": 1926.077375,
+              "loadMs": 104.861,
+              "promptEvalMs": 194.012,
+              "evalMs": 1618.851,
+              "promptTokens": 948,
+              "outputTokens": 120,
+              "contentHash": "c9b5ab7d1a5161590d4d1777f59b29892823a4b150dbda5b89a4d4ef5ac78dbd",
+              "contentCharacters": 370,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "hermione"
+                  ],
+                  "evidenceText": "*认真跟着赫敏学习咒语，然后接过她送的签名羊皮纸*",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 0
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 7831.368791000001,
+              "totalMs": 7829.821584,
+              "loadMs": 958.043834,
+              "promptEvalMs": 1871.787,
+              "evalMs": 4988.54,
+              "promptTokens": 1152,
+              "outputTokens": 200,
+              "contentHash": "df8f41821b3e30bbfe3074b7711b1b79d2fe07eb1063ac13830b3bc0156fcc75",
+              "contentCharacters": 723,
+              "parsed": {
+                "inventory": {
+                  "inventoryUpdates": [
+                    {
+                      "operation": "acquire",
+                      "itemId": "signed_parchment",
+                      "itemType": "document",
+                      "ownerId": "player",
+                      "holderId": "player",
+                      "targetHolderId": "",
+                      "physicalForm": "unchanged",
+                      "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                      "confidence": 1
+                    }
+                  ]
+                },
+                "spell": {
+                  "spellEvents": [
+                    {
+                      "kind": "taught",
+                      "spellId": "spell_lumos",
+                      "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                      "confidence": 1
+                    }
+                  ],
+                  "customSpellProposals": []
+                }
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            "",
+            ""
+          ],
+          "rawScore": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "hermione"
+                ],
+                "evidenceText": "*认真跟着赫敏学习咒语，然后接过她送的签名羊皮纸*",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "hermione"
+                ],
+                "evidenceText": "*认真跟着赫敏学习咒语，然后接过她送的签名羊皮纸*",
+                "evidenceSegmentIndex": -1,
+                "confidence": 0
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "hypothetical_no_change",
+          "round": 1,
+          "wallMs": 1714.2958749999962,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 1714.2399589999986,
+              "totalMs": 1712.611292,
+              "loadMs": 116.207917,
+              "promptEvalMs": 160.451,
+              "evalMs": 1415.616,
+              "promptTokens": 895,
+              "outputTokens": 100,
+              "contentHash": "7ce7ddffd9cdcc0c8f61ce956b5d650ceffbb43023ea07e9109da60b1ec79819",
+              "contentCharacters": 315,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": true,
+                  "evidenceText": "",
+                  "confidence": 1
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "none",
+                  "audibleScope": "none",
+                  "concealment": "none",
+                  "directParticipantActorIds": [],
+                  "evidenceText": "",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 1
+                },
+                "followUpTasks": []
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            ""
+          ],
+          "rawScore": {
+            "passed": 10,
+            "total": 11,
+            "ratio": 0.9090909090909091,
+            "failures": [
+              "eventBoundary"
+            ]
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "none",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [],
+                "evidenceText": "“If I promise to meet tomorrow, would that count? I am not agreeing yet.”",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": []
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 11,
+            "total": 11,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "none",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [],
+                "evidenceText": "",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": []
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          }
+        },
+        {
+          "caseId": "failed_secret_custom_spell",
+          "round": 1,
+          "wallMs": 7266.821125000002,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2065.114916999999,
+              "totalMs": 2064.052792,
+              "loadMs": 118.984959,
+              "promptEvalMs": 179.312,
+              "evalMs": 1757.298,
+              "promptTokens": 926,
+              "outputTokens": 125,
+              "contentHash": "72f385e9ab3393b7a1e6ea59a0ffbe0f2c6ab9c65af69ee80a754228a11bce2f",
+              "contentCharacters": 438,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": true,
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 1
+                },
+                "actorUpdates": [],
+                "identityObservations": [],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "ron"
+                  ],
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 1
+                },
+                "followUpTasks": [
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 5201.593582999994,
+              "totalMs": 5200.737959,
+              "loadMs": 117.673959,
+              "promptEvalMs": 875.641,
+              "evalMs": 4171.595,
+              "promptTokens": 543,
+              "outputTokens": 171,
+              "contentHash": "58e537c24777641a968804b0a18808c51df509e57ca2b5734755a6f8b3ff5332",
+              "contentCharacters": 593,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "experiment",
+                    "spellId": "",
+                    "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": [
+                  {
+                    "incantation": "Umbra Flecto",
+                    "effectEn": "bend the light",
+                    "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                    "confidence": 1
+                  }
+                ]
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            "",
+            ""
+          ],
+          "rawScore": {
+            "passed": 9,
+            "total": 12,
+            "ratio": 0.75,
+            "failures": [
+              "eventBoundary",
+              "perception",
+              "allEvidenceGrounded"
+            ]
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "attempted",
+                "directParticipantActorIds": [
+                  "ron"
+                ],
+                "evidenceText": "*偷偷尝试自创咒语 Umbra Flecto，让光线弯曲*",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "experiment",
+                  "spellId": "",
+                  "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": [
+                {
+                  "incantation": "Umbra Flecto",
+                  "effectEn": "bend the light",
+                  "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                  "confidence": 1
+                }
+              ]
+            }
+          },
+          "score": {
+            "passed": 12,
+            "total": 12,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "ron"
+                ],
+                "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": [
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "experiment",
+                  "spellId": "",
+                  "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": [
+                {
+                  "incantation": "Umbra Flecto",
+                  "effectEn": "bend the light",
+                  "evidenceText": "Tina whispered Umbra Flecto, trying to bend the light, but the spell failed in a loud flash that sent Ron into the rafters before the whole class.",
+                  "confidence": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "caseId": "explicit_no_visible_injury",
+          "round": 1,
+          "wallMs": 2614.822457999995,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2614.779125000001,
+              "totalMs": 2613.445083,
+              "loadMs": 101.610667,
+              "promptEvalMs": 159.87,
+              "evalMs": 2344.357,
+              "promptTokens": 887,
+              "outputTokens": 169,
+              "contentHash": "6a324fe8000ea9b82b2c7803d915c368223baab560db45c692ce26d9cf746295",
+              "contentCharacters": 604,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": true,
+                  "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                  "confidence": 1
+                },
+                "actorUpdates": [],
+                "identityObservations": [
+                  {
+                    "actorId": "ron",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                    "confidence": 1
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "none",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "ron"
+                  ],
+                  "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                  "evidenceSegmentIndex": -1,
+                  "confidence": 1
+                },
+                "followUpTasks": []
+              },
+              "parseError": ""
+            }
+          ],
+          "parseErrors": [
+            ""
+          ],
+          "rawScore": {
+            "passed": 11,
+            "total": 12,
+            "ratio": 0.9166666666666666,
+            "failures": [
+              "eventBoundary"
+            ]
+          },
+          "acceptedOutput": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [
+                {
+                  "actorId": "ron",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                  "confidence": 1
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "ron"
+                ],
+                "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": []
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 12,
+            "total": 12,
+            "ratio": 1,
+            "failures": []
+          },
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": true,
+                "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "identityObservations": [
+                {
+                  "actorId": "ron",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                  "confidence": 1
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "none",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "ron"
+                ],
+                "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries.",
+                "evidenceSegmentIndex": -1,
+                "confidence": 1
+              },
+              "followUpTasks": []
+            },
+            "inventory": {
+              "inventoryUpdates": []
+            },
+            "spell": {
+              "spellEvents": [],
+              "customSpellProposals": []
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "performance": [],
+    "quality": [
+      {
+        "id": "two_stage_merged_followups_4b_ctx2048",
+        "runCount": 16,
+        "passed": 182,
+        "checks": 186,
+        "scoreRatio": 0.978494623655914,
+        "averageWallMs": 6206.941968624999,
+        "failuresByCase": {
+          "private_note_transfer": [],
+          "departure_visible_injury": [
+            "identityObservation",
+            "identityObservationCount",
+            "identityObservation",
+            "identityObservationCount"
+          ],
+          "destroy_with_remains": [],
+          "vanish_item_spell_demo": [],
+          "spell_teaching_and_gift": [],
+          "hypothetical_no_change": [],
+          "failed_secret_custom_spell": [],
+          "explicit_no_visible_injury": []
+        }
+      }
+    ]
+  }
+}
