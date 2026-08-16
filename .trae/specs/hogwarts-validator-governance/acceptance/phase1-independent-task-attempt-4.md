@@ -1,0 +1,59 @@
+# Phase 1 Independent Acceptance Task - Attempt 4
+
+Fresh-context declaration requested: the verifier must start without parent
+conversation history and must not receive an expected result.
+
+Repository:
+
+```text
+/Users/bytedance/sillytavern/SillyTavern
+```
+
+Project goal:
+
+```text
+Phase 1 establishes validator governance only. Regex may own character shape
+and finite grammar, embedding may own candidate retrieval only, local small
+models may propose natural-language semantics, paid large models may produce
+player-facing narrative, and deterministic guards plus Reducers own State
+settlement. Every current regex construction and every non-shape owner must be
+registered. Existing semantic regex must be mechanically locked to only
+decrease, all persisted registry history must require a visible reviewed
+revision, and a retired semantic fingerprint must never return. Phase 1 must
+make zero production behavior and zero model-call changes. Phase 2 and Phase 3
+must remain unimplemented.
+```
+
+Authoritative artifacts:
+
+```text
+.trae/specs/hogwarts-validator-governance/prd.md
+.trae/specs/hogwarts-validator-governance/spec.md
+.trae/specs/hogwarts-validator-governance/checklist.md
+.trae/specs/hogwarts-validator-governance/tasks.md
+.trae/specs/hogwarts-validator-governance/regex-classification.json
+.trae/specs/hogwarts-validator-governance/regex-semantic-baseline.json
+.trae/specs/hogwarts-validator-governance/regex-semantic-retirements.json
+.trae/specs/hogwarts-validator-governance/regex-inventory.md
+.trae/specs/hogwarts-validator-governance/semantic-ownership-plan.md
+.trae/specs/hogwarts-validator-governance/inventory-regex.mjs
+.trae/specs/hogwarts-runtime-contracts/state-fields.md
+HOGWARTS_MUD_PRODUCT_SPEC.md
+```
+
+Instructions:
+
+1. Work read-only. Do not edit production code, tests, governance artifacts,
+   migrations or saves.
+2. Derive the complete acceptance scope independently from the project goal,
+   PRD, Spec and checklist.
+3. Inspect the complete row registry and production consequences.
+4. Exercise positive and adversarial enforcement behavior, including forged
+   persisted row identity/metadata, lexical category/owner and rationale
+   history, governance-file mutation, unregistered deletion, owner/category
+   mutation and retired-ID resurrection.
+5. Inspect the current worktree and verify the zero-runtime-change boundary.
+6. Run the checks needed to decide every Phase 1 criterion.
+7. Report findings first, then a criterion-by-criterion pass/fail result with
+   exact evidence.
+8. Do not assume the main agent's conclusion is correct.

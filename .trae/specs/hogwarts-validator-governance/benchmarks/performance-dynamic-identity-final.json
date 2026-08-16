@@ -1,0 +1,986 @@
+{
+  "benchmarkVersion": 1,
+  "generatedAt": "2026-08-16T11:13:22.852Z",
+  "machine": {
+    "model": "MacBook Pro Mac15,6",
+    "chip": "Apple M3 Pro",
+    "memoryBytes": 38654705664,
+    "ollamaVersion": "0.32.6",
+    "models": {
+      "qwen3:1.7b": {
+        "parameterCount": 2031739904,
+        "quantization": "Q4_K_M",
+        "diskBytes": 1400000000
+      },
+      "qwen3:4b": {
+        "parameterCount": 4022468096,
+        "quantization": "Q4_K_M",
+        "diskBytes": 2500000000
+      }
+    }
+  },
+  "promptHashes": {
+    "post": "f6e6a4a4f2eea0645724d5f61da065edb6651adb2b9d9cb4ae6d20556aaee499",
+    "postCore": "cd40f661ca7266f15b97f8917e710d61e9b85d4ce03f5327aa79c49d79faee78",
+    "inventory": "46e8937ed49358cf205a874c884e397f317c2bb467b847bbf349c22d9e7c70c8",
+    "spell": "b01a6ce46e05a855a918500fdf2cdbc9ba62c96bafd524bbed992f064b5265ab",
+    "identity": "e3a17d7327a20f2d8f27936cb90be5c297a142de2f58b362269c74712263288b",
+    "dynamicAll": "5b27a61079d76459f9d6a82c9ac422c37894fc9d3db5ae0aff4eec17d8edb94d",
+    "merged": "f2deb0efe4a9b1a753cf92b319d0b6e576717af8d986bc0ece4568f25b2648bd"
+  },
+  "caseIds": [
+    "private_note_transfer",
+    "departure_visible_injury",
+    "destroy_with_remains",
+    "vanish_item_spell_demo",
+    "spell_teaching_and_gift",
+    "identity_spell_and_gift",
+    "hypothetical_no_change",
+    "failed_secret_custom_spell",
+    "explicit_no_visible_injury"
+  ],
+  "performanceResults": [
+    {
+      "id": "two_stage_dynamic_4b_identity_ctx2048",
+      "server": {
+        "port": 11552,
+        "numParallel": 1,
+        "maxLoadedModels": 1,
+        "kvCacheType": "default"
+      },
+      "testCase": "identity_spell_and_gift",
+      "runs": [
+        {
+          "round": 0,
+          "wallMs": 20670.486125000003,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 6372.398375000001,
+              "totalMs": 6370.41,
+              "loadMs": 141.772709,
+              "promptEvalMs": 787.513,
+              "evalMs": 5428.612,
+              "promptTokens": 829,
+              "outputTokens": 253,
+              "contentHash": "9fd0fe0fecd798ea10175e7b46de13bbe0e07fcf5decec69c524d7367a8147f1",
+              "contentCharacters": 975,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                    "confidence": 1,
+                    "evidenceSegmentIndex": 1
+                  }
+                ],
+                "perception": {
+                  "visualScope": "target",
+                  "audibleScope": "none",
+                  "concealment": "attempted",
+                  "directParticipantActorIds": [
+                    "harry"
+                  ],
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "evidenceSegmentIndex": 1,
+                  "confidence": 1
+                }
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 14297.143665999998,
+              "totalMs": 14295.8945,
+              "loadMs": 1438.843542,
+              "promptEvalMs": 3195.327,
+              "evalMs": 9646.69,
+              "promptTokens": 1419,
+              "outputTokens": 254,
+              "contentHash": "adc0759cbfdecc61da0f04984523b1eb0385bfdbfe596db3165875e64013e355",
+              "contentCharacters": 902,
+              "parsed": {
+                "inventory": {
+                  "inventoryUpdates": [
+                    {
+                      "operation": "acquire",
+                      "itemId": "signed_parchment",
+                      "itemType": "document",
+                      "ownerId": "player",
+                      "holderId": "player",
+                      "targetHolderId": "",
+                      "physicalForm": "unchanged",
+                      "evidenceText": "a signed parchment to keep",
+                      "confidence": 1
+                    }
+                  ]
+                },
+                "spell": {
+                  "spellEvents": [
+                    {
+                      "kind": "taught",
+                      "spellId": "spell_lumos",
+                      "evidenceText": "Lumos. Watch the wand tip, then repeat it.",
+                      "confidence": 1
+                    }
+                  ],
+                  "customSpellProposals": []
+                },
+                "identity": {
+                  "identityObservations": [
+                    {
+                      "actorId": "harry",
+                      "injuryStatus": "injured",
+                      "evidenceText": "a bleeding cut was clearly visible across Harry's palm",
+                      "evidenceSegmentIndex": 1,
+                      "confidence": 1
+                    }
+                  ]
+                }
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "route": {
+              "requestedTasks": [
+                "inventory",
+                "spell",
+                "identity"
+              ],
+              "inventoryOperationHints": [
+                {
+                  "operation": "acquire",
+                  "itemId": ""
+                }
+              ],
+              "identityTargetActorIds": [
+                "harry"
+              ],
+              "inspectionTargetActorIds": [],
+              "focalActorIds": [],
+              "movementDestinationRoomIds": []
+            },
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "confidence": 1
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "confidence": 1,
+                  "evidenceSegmentIndex": 1
+                }
+              ],
+              "perception": {
+                "visualScope": "target",
+                "audibleScope": "none",
+                "concealment": "attempted",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "evidenceSegmentIndex": 1,
+                "confidence": 1
+              },
+              "followUpTasks": [],
+              "identityObservations": [
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "a bleeding cut was clearly visible across Harry's palm",
+                  "evidenceSegmentIndex": 1,
+                  "confidence": 1
+                }
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "a signed parchment to keep",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Lumos. Watch the wand tip, then repeat it.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 254,
+            "peakRssBytes": 3040968704,
+            "peakModelBytes": 2865674321,
+            "peakVramBytes": 2865674321,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 41945,
+                "ppid": 41944,
+                "rssBytes": 65830912,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 42199,
+                "ppid": 41945,
+                "rssBytes": 2975137792,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab63"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@2048",
+              "qwen3:4b@2048"
+            ]
+          },
+          "rawScore": {
+            "passed": 16,
+            "total": 18,
+            "ratio": 0.8888888888888888,
+            "failures": [
+              "actorUpdateCount",
+              "allEvidenceGrounded"
+            ]
+          },
+          "acceptedOutput": {
+            "route": {
+              "requestedTasks": [
+                "inventory",
+                "spell",
+                "identity"
+              ],
+              "inventoryOperationHints": [
+                {
+                  "operation": "acquire",
+                  "itemId": ""
+                }
+              ],
+              "identityTargetActorIds": [
+                "harry"
+              ],
+              "inspectionTargetActorIds": [],
+              "focalActorIds": [],
+              "movementDestinationRoomIds": []
+            },
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "perception": {
+                "visualScope": "target",
+                "audibleScope": "none",
+                "concealment": "attempted",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "evidenceSegmentIndex": 1,
+                "confidence": 1
+              },
+              "followUpTasks": [],
+              "identityObservations": [
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "evidenceSegmentIndex": 1,
+                  "confidence": 1
+                }
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "a signed parchment to keep",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Lumos. Watch the wand tip, then repeat it.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 18,
+            "total": 18,
+            "ratio": 1,
+            "failures": []
+          }
+        },
+        {
+          "round": 1,
+          "wallMs": 23992.887041,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 8804.782040999999,
+              "totalMs": 8803.543542,
+              "loadMs": 1730.564125,
+              "promptEvalMs": 781.621,
+              "evalMs": 6279.732,
+              "promptTokens": 829,
+              "outputTokens": 253,
+              "contentHash": "9fd0fe0fecd798ea10175e7b46de13bbe0e07fcf5decec69c524d7367a8147f1",
+              "contentCharacters": 975,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                    "confidence": 1,
+                    "evidenceSegmentIndex": 1
+                  }
+                ],
+                "perception": {
+                  "visualScope": "target",
+                  "audibleScope": "none",
+                  "concealment": "attempted",
+                  "directParticipantActorIds": [
+                    "harry"
+                  ],
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "evidenceSegmentIndex": 1,
+                  "confidence": 1
+                }
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 15187.655041000002,
+              "totalMs": 15186.214209,
+              "loadMs": 2196.69725,
+              "promptEvalMs": 3254.754,
+              "evalMs": 9715.465,
+              "promptTokens": 1419,
+              "outputTokens": 254,
+              "contentHash": "adc0759cbfdecc61da0f04984523b1eb0385bfdbfe596db3165875e64013e355",
+              "contentCharacters": 902,
+              "parsed": {
+                "inventory": {
+                  "inventoryUpdates": [
+                    {
+                      "operation": "acquire",
+                      "itemId": "signed_parchment",
+                      "itemType": "document",
+                      "ownerId": "player",
+                      "holderId": "player",
+                      "targetHolderId": "",
+                      "physicalForm": "unchanged",
+                      "evidenceText": "a signed parchment to keep",
+                      "confidence": 1
+                    }
+                  ]
+                },
+                "spell": {
+                  "spellEvents": [
+                    {
+                      "kind": "taught",
+                      "spellId": "spell_lumos",
+                      "evidenceText": "Lumos. Watch the wand tip, then repeat it.",
+                      "confidence": 1
+                    }
+                  ],
+                  "customSpellProposals": []
+                },
+                "identity": {
+                  "identityObservations": [
+                    {
+                      "actorId": "harry",
+                      "injuryStatus": "injured",
+                      "evidenceText": "a bleeding cut was clearly visible across Harry's palm",
+                      "evidenceSegmentIndex": 1,
+                      "confidence": 1
+                    }
+                  ]
+                }
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "route": {
+              "requestedTasks": [
+                "inventory",
+                "spell",
+                "identity"
+              ],
+              "inventoryOperationHints": [
+                {
+                  "operation": "acquire",
+                  "itemId": ""
+                }
+              ],
+              "identityTargetActorIds": [
+                "harry"
+              ],
+              "inspectionTargetActorIds": [],
+              "focalActorIds": [],
+              "movementDestinationRoomIds": []
+            },
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "confidence": 1
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "confidence": 1,
+                  "evidenceSegmentIndex": 1
+                }
+              ],
+              "perception": {
+                "visualScope": "target",
+                "audibleScope": "none",
+                "concealment": "attempted",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "evidenceSegmentIndex": 1,
+                "confidence": 1
+              },
+              "followUpTasks": [],
+              "identityObservations": [
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "a bleeding cut was clearly visible across Harry's palm",
+                  "evidenceSegmentIndex": 1,
+                  "confidence": 1
+                }
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "a signed parchment to keep",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Lumos. Watch the wand tip, then repeat it.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 281,
+            "peakRssBytes": 2987704320,
+            "peakModelBytes": 2865674321,
+            "peakVramBytes": 2865674321,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 41945,
+                "ppid": 41944,
+                "rssBytes": 56295424,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 43143,
+                "ppid": 41945,
+                "rssBytes": 2931408896,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab63"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@2048",
+              "qwen3:4b@2048"
+            ]
+          },
+          "rawScore": {
+            "passed": 16,
+            "total": 18,
+            "ratio": 0.8888888888888888,
+            "failures": [
+              "actorUpdateCount",
+              "allEvidenceGrounded"
+            ]
+          },
+          "acceptedOutput": {
+            "route": {
+              "requestedTasks": [
+                "inventory",
+                "spell",
+                "identity"
+              ],
+              "inventoryOperationHints": [
+                {
+                  "operation": "acquire",
+                  "itemId": ""
+                }
+              ],
+              "identityTargetActorIds": [
+                "harry"
+              ],
+              "inspectionTargetActorIds": [],
+              "focalActorIds": [],
+              "movementDestinationRoomIds": []
+            },
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "perception": {
+                "visualScope": "target",
+                "audibleScope": "none",
+                "concealment": "attempted",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "evidenceSegmentIndex": 1,
+                "confidence": 1
+              },
+              "followUpTasks": [],
+              "identityObservations": [
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "evidenceSegmentIndex": 1,
+                  "confidence": 1
+                }
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "a signed parchment to keep",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Lumos. Watch the wand tip, then repeat it.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 18,
+            "total": 18,
+            "ratio": 1,
+            "failures": []
+          }
+        },
+        {
+          "round": 2,
+          "wallMs": 23626.472457999997,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 7663.118999999999,
+              "totalMs": 7661.20675,
+              "loadMs": 1699.585375,
+              "promptEvalMs": 746.607,
+              "evalMs": 5204.771,
+              "promptTokens": 829,
+              "outputTokens": 253,
+              "contentHash": "9fd0fe0fecd798ea10175e7b46de13bbe0e07fcf5decec69c524d7367a8147f1",
+              "contentCharacters": 975,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                    "confidence": 1,
+                    "evidenceSegmentIndex": 1
+                  }
+                ],
+                "perception": {
+                  "visualScope": "target",
+                  "audibleScope": "none",
+                  "concealment": "attempted",
+                  "directParticipantActorIds": [
+                    "harry"
+                  ],
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "evidenceSegmentIndex": 1,
+                  "confidence": 1
+                }
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 15962.8825,
+              "totalMs": 15955.012459,
+              "loadMs": 2589.290125,
+              "promptEvalMs": 3275.255,
+              "evalMs": 10074.56,
+              "promptTokens": 1419,
+              "outputTokens": 254,
+              "contentHash": "adc0759cbfdecc61da0f04984523b1eb0385bfdbfe596db3165875e64013e355",
+              "contentCharacters": 902,
+              "parsed": {
+                "inventory": {
+                  "inventoryUpdates": [
+                    {
+                      "operation": "acquire",
+                      "itemId": "signed_parchment",
+                      "itemType": "document",
+                      "ownerId": "player",
+                      "holderId": "player",
+                      "targetHolderId": "",
+                      "physicalForm": "unchanged",
+                      "evidenceText": "a signed parchment to keep",
+                      "confidence": 1
+                    }
+                  ]
+                },
+                "spell": {
+                  "spellEvents": [
+                    {
+                      "kind": "taught",
+                      "spellId": "spell_lumos",
+                      "evidenceText": "Lumos. Watch the wand tip, then repeat it.",
+                      "confidence": 1
+                    }
+                  ],
+                  "customSpellProposals": []
+                },
+                "identity": {
+                  "identityObservations": [
+                    {
+                      "actorId": "harry",
+                      "injuryStatus": "injured",
+                      "evidenceText": "a bleeding cut was clearly visible across Harry's palm",
+                      "evidenceSegmentIndex": 1,
+                      "confidence": 1
+                    }
+                  ]
+                }
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "route": {
+              "requestedTasks": [
+                "inventory",
+                "spell",
+                "identity"
+              ],
+              "inventoryOperationHints": [
+                {
+                  "operation": "acquire",
+                  "itemId": ""
+                }
+              ],
+              "identityTargetActorIds": [
+                "harry"
+              ],
+              "inspectionTargetActorIds": [],
+              "focalActorIds": [],
+              "movementDestinationRoomIds": []
+            },
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "confidence": 1
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "confidence": 1,
+                  "evidenceSegmentIndex": 1
+                }
+              ],
+              "perception": {
+                "visualScope": "target",
+                "audibleScope": "none",
+                "concealment": "attempted",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "evidenceSegmentIndex": 1,
+                "confidence": 1
+              },
+              "followUpTasks": [],
+              "identityObservations": [
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "a bleeding cut was clearly visible across Harry's palm",
+                  "evidenceSegmentIndex": 1,
+                  "confidence": 1
+                }
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "a signed parchment to keep",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Lumos. Watch the wand tip, then repeat it.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 288,
+            "peakRssBytes": 3005267968,
+            "peakModelBytes": 2865674321,
+            "peakVramBytes": 2865674321,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 41945,
+                "ppid": 41944,
+                "rssBytes": 59342848,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 44018,
+                "ppid": 41945,
+                "rssBytes": 2945925120,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab63"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@2048",
+              "qwen3:4b@2048"
+            ]
+          },
+          "rawScore": {
+            "passed": 16,
+            "total": 18,
+            "ratio": 0.8888888888888888,
+            "failures": [
+              "actorUpdateCount",
+              "allEvidenceGrounded"
+            ]
+          },
+          "acceptedOutput": {
+            "route": {
+              "requestedTasks": [
+                "inventory",
+                "spell",
+                "identity"
+              ],
+              "inventoryOperationHints": [
+                {
+                  "operation": "acquire",
+                  "itemId": ""
+                }
+              ],
+              "identityTargetActorIds": [
+                "harry"
+              ],
+              "inspectionTargetActorIds": [],
+              "focalActorIds": [],
+              "movementDestinationRoomIds": []
+            },
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "confidence": 1
+              },
+              "actorUpdates": [],
+              "perception": {
+                "visualScope": "target",
+                "audibleScope": "none",
+                "concealment": "attempted",
+                "directParticipantActorIds": [
+                  "harry"
+                ],
+                "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                "evidenceSegmentIndex": 1,
+                "confidence": 1
+              },
+              "followUpTasks": [],
+              "identityObservations": [
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "A bleeding cut was clearly visible across Harry's palm while Hermione corrected Tina's pronunciation and handed Tina a signed parchment to keep.",
+                  "evidenceSegmentIndex": 1,
+                  "confidence": 1
+                }
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "unchanged",
+                  "evidenceText": "a signed parchment to keep",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Lumos. Watch the wand tip, then repeat it.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "score": {
+            "passed": 18,
+            "total": 18,
+            "ratio": 1,
+            "failures": []
+          }
+        }
+      ],
+      "serverLogTail": "l: prompt cache is enabled, size limit: 8192 MiB\nsrv    load_model: use `--cache-ram 0` to disable the prompt cache\nsrv    load_model: for more info see https://github.com/ggml-org/llama.cpp/pull/16391\nsrv    load_model: context checkpoints enabled, max = 32, min spacing = 8192\nsrv          init: idle slots will be saved to prompt cache upon starting a new task\nsrv          init: init: chat template, example_format: '<|im_start|>system\nYou are a helpful assistant<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\nHi there<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n'\nsrv          init: init: chat template, thinking = 0\nsrv  llama_server: model loaded\nsrv  llama_server: listening on http://127.0.0.1:53273\nsrv  update_slots: all slots are idle\ntime=2026-08-16T19:13:09.352+08:00 level=INFO source=llama_server.go:1329 msg=\"llama-server started in 2.27 seconds\"\ntime=2026-08-16T19:13:09.375+08:00 level=INFO source=images.go:373 msg=\"template selection\" model=registry.ollama.ai/library/qwen3:4b selected=go_template renderer=\"\" parser=\"\" go_template=\"[completion tools thinking]\" chat_template=\"[tools thinking completion]\" harmony=null renderer_parser=null\ntime=2026-08-16T19:13:09.375+08:00 level=INFO source=sched.go:728 msg=\"loaded runners\" count=1\ntime=2026-08-16T19:13:09.375+08:00 level=INFO source=llama_server.go:1262 msg=\"waiting for llama-server to start responding\"\ntime=2026-08-16T19:13:09.376+08:00 level=INFO source=llama_server.go:1329 msg=\"llama-server started in 2.29 seconds\"\nsrv  server_strea: conv_id= (empty=1)\nslot get_availabl: id  0 | task -1 |  - skipping, slot is empty\nslot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1\nsrv  get_availabl: updating prompt cache\nsrv          load:  - looking for better prompt, base f_keep = -1.000, f_sim = 0.000\nsrv        update:  - cache state: 0 prompts, 0.000 MiB (limits: 8192.000 MiB, 2048 tokens, 8589934592 est)\nsrv  get_availabl: prompt cache update took 0.01 ms\nslot launch_slot_: id  0 | task -1 | sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> temp-ext -> dist \nslot launch_slot_: id  0 | task -1 | sampler params: \n\trepeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000\n\tdry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 2048\n\ttop_k = 20, top_p = 0.950, min_p = 0.000, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000\n\tmirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900\nslot launch_slot_: id  0 | task 0 | processing task, is_child = 0\nslot   operator(): id  0 | task 0 | new prompt, n_ctx_slot = 2048, n_keep = 4, task.n_tokens = 1419\nslot   operator(): id  0 | task 0 | cached n_tokens = 0, memory_seq_rm [0, end)\nslot   operator(): id  0 | task 0 | cached n_tokens = 512, memory_seq_rm [512, end)\nslot   operator(): id  0 | task 0 | cached n_tokens = 1024, memory_seq_rm [1024, end)\nslot init_sampler: id  0 | task 0 | init sampler, took 0.14 ms, tokens: text = 1419, total = 1419\nslot print_timing: id  0 | task 0 | n_decoded =    100, tg =  25.48 t/s, tg_3s =  25.48 t/s\nslot print_timing: id  0 | task 0 | n_decoded =    175, tg =  25.14 t/s, tg_3s =  24.71 t/s\nslot print_timing: id  0 | task 0 | n_decoded =    252, tg =  25.25 t/s, tg_3s =  25.50 t/s\nslot print_timing: id  0 | task 0 | prompt eval time =    3275.26 ms /  1419 tokens (    2.31 ms per token,   433.25 tokens per second)\nslot print_timing: id  0 | task 0 |        eval time =   10074.56 ms /   254 tokens (   39.66 ms per token,    25.21 tokens per second)\nslot print_timing: id  0 | task 0 |       total time =   13349.81 ms /  1673 tokens\nslot print_timing: id  0 | task 0 |    graphs reused =        252\nslot      release: id  0 | task 0 | stop processing: n_tokens = 1672, truncated = 0\nsrv  update_slots: all slots are idle\n"
+    }
+  ],
+  "qualityResults": null,
+  "summary": {
+    "performance": [
+      {
+        "id": "two_stage_dynamic_4b_identity_ctx2048",
+        "successfulRuns": 3,
+        "failedRuns": 0,
+        "averageWallMs": 22763.28187466667,
+        "peakRssBytes": 3040968704,
+        "peakModelBytes": 2865674321,
+        "peakVramBytes": 2865674321,
+        "peakLoadedModels": 1,
+        "scoreRatio": 1
+      }
+    ],
+    "quality": []
+  }
+}

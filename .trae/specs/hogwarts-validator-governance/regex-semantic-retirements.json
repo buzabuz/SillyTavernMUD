@@ -1,0 +1,6 @@
+{
+  "ledgerVersion": 1,
+  "establishedAt": "2026-08-16",
+  "policy": "Append one event when an approved Phase 2 task physically removes a baseline semantic regex. Events are never edited or deleted.",
+  "events": []
+}

@@ -1,0 +1,3259 @@
+{
+  "benchmarkVersion": 1,
+  "generatedAt": "2026-08-16T07:08:38.754Z",
+  "machine": {
+    "model": "MacBook Pro Mac15,6",
+    "chip": "Apple M3 Pro",
+    "memoryBytes": 38654705664,
+    "ollamaVersion": "0.32.6",
+    "models": {
+      "qwen3:1.7b": {
+        "parameterCount": 2031739904,
+        "quantization": "Q4_K_M",
+        "diskBytes": 1400000000
+      },
+      "qwen3:4b": {
+        "parameterCount": 4022468096,
+        "quantization": "Q4_K_M",
+        "diskBytes": 2500000000
+      }
+    }
+  },
+  "promptHashes": {
+    "post": "e3f99256ccff885c5adf80429d91f22a050a6a3b9d2cc20397b41d58a554b77d",
+    "inventory": "3fcab2e9a9880178aed7c1235ce933f36c2be07e219b1d66c110a7098269110e",
+    "spell": "b01a6ce46e05a855a918500fdf2cdbc9ba62c96bafd524bbed992f064b5265ab",
+    "merged": "e9041f87ae83810aca80e11d84573b4a224269c596d87433558d662d509db8c4"
+  },
+  "caseIds": [
+    "private_note_transfer",
+    "departure_visible_injury",
+    "destroy_with_remains",
+    "vanish_item_spell_demo",
+    "spell_teaching_and_gift",
+    "hypothetical_no_change",
+    "failed_secret_custom_spell",
+    "explicit_no_visible_injury"
+  ],
+  "performanceResults": [
+    {
+      "id": "pipeline_serial_mixed",
+      "server": {
+        "port": 11544,
+        "numParallel": 1,
+        "maxLoadedModels": 1,
+        "kvCacheType": "default"
+      },
+      "testCase": "spell_teaching_and_gift",
+      "runs": [
+        {
+          "round": 0,
+          "wallMs": 11362.440333999999,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 4872.378667,
+              "totalMs": 4871.351709,
+              "loadMs": 102.673834,
+              "promptEvalMs": 629.698,
+              "evalMs": 4130.983,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 4213.969958000001,
+              "totalMs": 4213.1185,
+              "loadMs": 907.95775,
+              "promptEvalMs": 981.907,
+              "evalMs": 2318.602,
+              "promptTokens": 586,
+              "outputTokens": 98,
+              "contentHash": "eb86e4531af42790d84026f1366067e147b32132c3bdd3c8654fecad16260da2",
+              "contentCharacters": 336,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "acquire",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "player",
+                    "targetHolderId": "",
+                    "physicalForm": "",
+                    "evidenceText": "handed Tina a signed parchment to keep",
+                    "confidence": 0.9
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2275.826000000001,
+              "totalMs": 2275.129375,
+              "loadMs": 650.320166,
+              "promptEvalMs": 375.556,
+              "evalMs": 1244.881,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "",
+                  "evidenceText": "handed Tina a signed parchment to keep",
+                  "confidence": 0.9
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 142,
+            "peakRssBytes": 3354558464,
+            "peakModelBytes": 3169761361,
+            "peakVramBytes": 3169761361,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 80035,
+                "ppid": 80034,
+                "rssBytes": 63012864,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 80235,
+                "ppid": 80035,
+                "rssBytes": 3291545600,
+                "command": "(llama-server)"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096",
+              "qwen3:4b@4096"
+            ]
+          },
+          "score": {
+            "passed": 8,
+            "total": 12,
+            "ratio": 0.6666666666666666,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        },
+        {
+          "round": 1,
+          "wallMs": 12142.403166,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 5627.2004590000015,
+              "totalMs": 5626.264666,
+              "loadMs": 909.035625,
+              "promptEvalMs": 583.062,
+              "evalMs": 4125.618,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 4231.401250000003,
+              "totalMs": 4230.705375,
+              "loadMs": 910.0715,
+              "promptEvalMs": 982.021,
+              "evalMs": 2333.675,
+              "promptTokens": 586,
+              "outputTokens": 98,
+              "contentHash": "eb86e4531af42790d84026f1366067e147b32132c3bdd3c8654fecad16260da2",
+              "contentCharacters": 336,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "acquire",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "player",
+                    "targetHolderId": "",
+                    "physicalForm": "",
+                    "evidenceText": "handed Tina a signed parchment to keep",
+                    "confidence": 0.9
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2283.6542499999996,
+              "totalMs": 2283.00125,
+              "loadMs": 655.113875,
+              "promptEvalMs": 374.262,
+              "evalMs": 1248.64,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "",
+                  "evidenceText": "handed Tina a signed parchment to keep",
+                  "confidence": 0.9
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 152,
+            "peakRssBytes": 3356803072,
+            "peakModelBytes": 3169761361,
+            "peakVramBytes": 3169761361,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 80035,
+                "ppid": 80034,
+                "rssBytes": 65568768,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 80703,
+                "ppid": 80035,
+                "rssBytes": 3291234304,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab63"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096",
+              "qwen3:4b@4096"
+            ]
+          },
+          "score": {
+            "passed": 8,
+            "total": 12,
+            "ratio": 0.6666666666666666,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        },
+        {
+          "round": 2,
+          "wallMs": 11891.94425,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 5378.945166999998,
+              "totalMs": 5378.077875,
+              "loadMs": 650.039583,
+              "promptEvalMs": 574.933,
+              "evalMs": 4144.763,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 4226.3011659999975,
+              "totalMs": 4225.5525,
+              "loadMs": 909.56275,
+              "promptEvalMs": 983.144,
+              "evalMs": 2327.583,
+              "promptTokens": 586,
+              "outputTokens": 98,
+              "contentHash": "eb86e4531af42790d84026f1366067e147b32132c3bdd3c8654fecad16260da2",
+              "contentCharacters": 336,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "acquire",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "player",
+                    "targetHolderId": "",
+                    "physicalForm": "",
+                    "evidenceText": "handed Tina a signed parchment to keep",
+                    "confidence": 0.9
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2286.519666,
+              "totalMs": 2285.82475,
+              "loadMs": 654.475334,
+              "promptEvalMs": 374.238,
+              "evalMs": 1252.504,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "",
+                  "evidenceText": "handed Tina a signed parchment to keep",
+                  "confidence": 0.9
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 149,
+            "peakRssBytes": 3357147136,
+            "peakModelBytes": 3169761361,
+            "peakVramBytes": 3169761361,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 80035,
+                "ppid": 80034,
+                "rssBytes": 65634304,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 81162,
+                "ppid": 80035,
+                "rssBytes": 3291512832,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab63"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096",
+              "qwen3:4b@4096"
+            ]
+          },
+          "score": {
+            "passed": 8,
+            "total": 12,
+            "ratio": 0.6666666666666666,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        }
+      ],
+      "serverLogTail": "k 5.96 ms, sched copies = 1\ncmn  common_init_: warming up the model with an empty run - please wait ... (--no-warmup to disable)\nsrv    load_model: initializing, n_slots = 1, n_ctx_slot = 4096, kv_unified = 'false'\nspec common_specu: no implementations specified for speculative decoding\nslot   load_model: id  0 | task -1 | new slot, n_ctx = 4096\nsrv    load_model: prompt cache is enabled, size limit: 8192 MiB\nsrv    load_model: use `--cache-ram 0` to disable the prompt cache\nsrv    load_model: for more info see https://github.com/ggml-org/llama.cpp/pull/16391\nsrv    load_model: context checkpoints enabled, max = 32, min spacing = 8192\nsrv          init: idle slots will be saved to prompt cache upon starting a new task\nsrv          init: init: chat template, example_format: '<|im_start|>system\nYou are a helpful assistant<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\nHi there<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n'\nsrv          init: init: chat template, thinking = 0\nsrv  llama_server: model loaded\nsrv  llama_server: listening on http://127.0.0.1:61595\nsrv  update_slots: all slots are idle\ntime=2026-08-16T15:07:03.932+08:00 level=INFO source=llama_server.go:1329 msg=\"llama-server started in 0.50 seconds\"\ntime=2026-08-16T15:07:03.949+08:00 level=INFO source=images.go:373 msg=\"template selection\" model=registry.ollama.ai/library/qwen3:1.7b selected=go_template renderer=\"\" parser=\"\" go_template=\"[completion tools thinking]\" chat_template=\"[tools thinking completion]\" harmony=null renderer_parser=null\ntime=2026-08-16T15:07:03.949+08:00 level=INFO source=sched.go:728 msg=\"loaded runners\" count=1\ntime=2026-08-16T15:07:03.949+08:00 level=INFO source=llama_server.go:1262 msg=\"waiting for llama-server to start responding\"\ntime=2026-08-16T15:07:03.950+08:00 level=INFO source=llama_server.go:1329 msg=\"llama-server started in 0.52 seconds\"\nsrv  server_strea: conv_id= (empty=1)\nslot get_availabl: id  0 | task -1 |  - skipping, slot is empty\nslot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1\nsrv  get_availabl: updating prompt cache\nsrv          load:  - looking for better prompt, base f_keep = -1.000, f_sim = 0.000\nsrv        update:  - cache state: 0 prompts, 0.000 MiB (limits: 8192.000 MiB, 4096 tokens, 8589934592 est)\nsrv  get_availabl: prompt cache update took 0.01 ms\nslot launch_slot_: id  0 | task -1 | sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> temp-ext -> dist \nslot launch_slot_: id  0 | task -1 | sampler params: \n\trepeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000\n\tdry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 4096\n\ttop_k = 20, top_p = 0.950, min_p = 0.000, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000\n\tmirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900\nslot launch_slot_: id  0 | task 0 | processing task, is_child = 0\nslot   operator(): id  0 | task 0 | new prompt, n_ctx_slot = 4096, n_keep = 4, task.n_tokens = 561\nslot   operator(): id  0 | task 0 | cached n_tokens = 0, memory_seq_rm [0, end)\nslot   operator(): id  0 | task 0 | cached n_tokens = 512, memory_seq_rm [512, end)\nslot init_sampler: id  0 | task 0 | init sampler, took 0.06 ms, tokens: text = 561, total = 561\nslot print_timing: id  0 | task 0 | prompt eval time =     374.24 ms /   561 tokens (    0.67 ms per token,  1499.05 tokens per second)\nslot print_timing: id  0 | task 0 |        eval time =    1252.50 ms /    99 tokens (   12.65 ms per token,    79.04 tokens per second)\nslot print_timing: id  0 | task 0 |       total time =    1626.74 ms /   660 tokens\nslot print_timing: id  0 | task 0 |    graphs reused =         98\nslot      release: id  0 | task 0 | stop processing: n_tokens = 659, truncated = 0\nsrv  update_slots: all slots are idle\n"
+    },
+    {
+      "id": "pipeline_parallel_followups_same_1_7b",
+      "server": {
+        "port": 11545,
+        "numParallel": 2,
+        "maxLoadedModels": 1,
+        "kvCacheType": "default"
+      },
+      "testCase": "spell_teaching_and_gift",
+      "runs": [
+        {
+          "round": 0,
+          "wallMs": 7755.543250000002,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 4842.466459000003,
+              "totalMs": 4841.596334,
+              "loadMs": 102.887834,
+              "promptEvalMs": 570.187,
+              "evalMs": 4160.341,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2478.884917000003,
+              "totalMs": 2478.000959,
+              "loadMs": 666.018334,
+              "promptEvalMs": 775.686,
+              "evalMs": 1030.319,
+              "promptTokens": 591,
+              "outputTokens": 65,
+              "contentHash": "4aea4872f94fe69ec9d8c4064ad172a09aefef0f9024dd11b7dd3bc0307aedea",
+              "contentCharacters": 250,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "give",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "harry",
+                    "targetHolderId": "harry",
+                    "physicalForm": "",
+                    "evidenceText": "She handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2912.830167,
+              "totalMs": 2911.724083,
+              "loadMs": 666.263875,
+              "promptEvalMs": 665.084,
+              "evalMs": 1575.182,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "give",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "harry",
+                  "targetHolderId": "harry",
+                  "physicalForm": "",
+                  "evidenceText": "She handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 97,
+            "peakRssBytes": 2574712832,
+            "peakModelBytes": 2393532005,
+            "peakVramBytes": 2393532005,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 81414,
+                "ppid": 80034,
+                "rssBytes": 69042176,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 81631,
+                "ppid": 81414,
+                "rssBytes": 2505670656,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3d0b790534fe4b79525fc3692950408dca41171676ed7e21db57af5c65e"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096"
+            ]
+          },
+          "score": {
+            "passed": 7,
+            "total": 12,
+            "ratio": 0.5833333333333334,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "inventoryUpdate",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        },
+        {
+          "round": 1,
+          "wallMs": 8318.671291999999,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 5379.178458000002,
+              "totalMs": 5378.290792,
+              "loadMs": 650.988167,
+              "promptEvalMs": 572.909,
+              "evalMs": 4146.457,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2481.1277919999993,
+              "totalMs": 2480.304708,
+              "loadMs": 676.439625,
+              "promptEvalMs": 661.974,
+              "evalMs": 1135.837,
+              "promptTokens": 591,
+              "outputTokens": 65,
+              "contentHash": "4aea4872f94fe69ec9d8c4064ad172a09aefef0f9024dd11b7dd3bc0307aedea",
+              "contentCharacters": 250,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "give",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "harry",
+                    "targetHolderId": "harry",
+                    "physicalForm": "",
+                    "evidenceText": "She handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2939.254832999999,
+              "totalMs": 2938.151167,
+              "loadMs": 676.8465,
+              "promptEvalMs": 780.789,
+              "evalMs": 1475.045,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "give",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "harry",
+                  "targetHolderId": "harry",
+                  "physicalForm": "",
+                  "evidenceText": "She handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 104,
+            "peakRssBytes": 2579759104,
+            "peakModelBytes": 2393532005,
+            "peakVramBytes": 2393532005,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 81414,
+                "ppid": 80034,
+                "rssBytes": 75415552,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 81946,
+                "ppid": 81414,
+                "rssBytes": 2504343552,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3d0b790534fe4b79525fc3692950408dca41171676ed7e21db57af5c65e"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096"
+            ]
+          },
+          "score": {
+            "passed": 7,
+            "total": 12,
+            "ratio": 0.5833333333333334,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "inventoryUpdate",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        },
+        {
+          "round": 2,
+          "wallMs": 8156.284207999997,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 5262.2831249999945,
+              "totalMs": 5261.193166,
+              "loadMs": 651.544291,
+              "promptEvalMs": 562.878,
+              "evalMs": 4038.588,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2445.4008749999994,
+              "totalMs": 2444.167291,
+              "loadMs": 676.496791,
+              "promptEvalMs": 649.039,
+              "evalMs": 1113.311,
+              "promptTokens": 591,
+              "outputTokens": 65,
+              "contentHash": "4aea4872f94fe69ec9d8c4064ad172a09aefef0f9024dd11b7dd3bc0307aedea",
+              "contentCharacters": 250,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "give",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "harry",
+                    "targetHolderId": "harry",
+                    "physicalForm": "",
+                    "evidenceText": "She handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 2893.784249999997,
+              "totalMs": 2892.540458,
+              "loadMs": 675.507917,
+              "promptEvalMs": 767.469,
+              "evalMs": 1443.19,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "give",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "harry",
+                  "targetHolderId": "harry",
+                  "physicalForm": "",
+                  "evidenceText": "She handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 102,
+            "peakRssBytes": 2579988480,
+            "peakModelBytes": 2393532005,
+            "peakVramBytes": 2393532005,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 81414,
+                "ppid": 80034,
+                "rssBytes": 75464704,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 82263,
+                "ppid": 81414,
+                "rssBytes": 2504523776,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3d0b790534fe4b79525fc3692950408dca41171676ed7e21db57af5c65e"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096"
+            ]
+          },
+          "score": {
+            "passed": 7,
+            "total": 12,
+            "ratio": 0.5833333333333334,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "inventoryUpdate",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        }
+      ],
+      "serverLogTail": " LRU, t_last = -1\nsrv  get_availabl: updating prompt cache\nsrv          load:  - looking for better prompt, base f_keep = -1.000, f_sim = 0.000\nsrv        update:  - cache state: 0 prompts, 0.000 MiB (limits: 8192.000 MiB, 8192 tokens, 8589934592 est)\nsrv  get_availabl: prompt cache update took 0.01 ms\nslot launch_slot_: id  1 | task -1 | sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> temp-ext -> dist \nslot launch_slot_: id  1 | task -1 | sampler params: \n\trepeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000\n\tdry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 4096\n\ttop_k = 20, top_p = 0.950, min_p = 0.000, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000\n\tmirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900\nslot launch_slot_: id  1 | task 0 | processing task, is_child = 0\nslot process_sing: id  0 | task -1 | saving idle slot to prompt cache\nslot get_availabl: id  0 | task -1 |  - skipping, slot is empty\nslot get_availabl: id  1 | task 0 |  - skipping, is_processing = 1\nslot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1\nsrv  get_availabl: updating prompt cache\nsrv          load:  - looking for better prompt, base f_keep = -1.000, f_sim = 0.000\nsrv        update:  - cache state: 0 prompts, 0.000 MiB (limits: 8192.000 MiB, 8192 tokens, 8589934592 est)\nsrv  get_availabl: prompt cache update took 0.00 ms\nslot launch_slot_: id  0 | task -1 | sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> temp-ext -> dist \nslot launch_slot_: id  0 | task -1 | sampler params: \n\trepeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000\n\tdry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 4096\n\ttop_k = 20, top_p = 0.950, min_p = 0.000, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000\n\tmirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900\nslot launch_slot_: id  0 | task 1 | processing task, is_child = 0\nslot   operator(): id  0 | task 1 | new prompt, n_ctx_slot = 4096, n_keep = 4, task.n_tokens = 591\nslot   operator(): id  0 | task 1 | cached n_tokens = 0, memory_seq_rm [0, end)\nslot init_sampler: id  0 | task 1 | init sampler, took 0.06 ms, tokens: text = 591, total = 591\nslot   operator(): id  1 | task 0 | new prompt, n_ctx_slot = 4096, n_keep = 4, task.n_tokens = 561\nslot   operator(): id  1 | task 0 | cached n_tokens = 0, memory_seq_rm [0, end)\nslot   operator(): id  1 | task 0 | cached n_tokens = 433, memory_seq_rm [433, end)\nslot init_sampler: id  1 | task 0 | init sampler, took 0.05 ms, tokens: text = 561, total = 561\nslot print_timing: id  0 | task 1 | prompt eval time =     649.04 ms /   591 tokens (    1.10 ms per token,   910.58 tokens per second)\nslot print_timing: id  0 | task 1 |        eval time =    1113.31 ms /    65 tokens (   17.13 ms per token,    58.38 tokens per second)\nslot print_timing: id  0 | task 1 |       total time =    1762.35 ms /   656 tokens\nslot print_timing: id  0 | task 1 |    graphs reused =         63\nslot      release: id  0 | task 1 | stop processing: n_tokens = 655, truncated = 0\nslot print_timing: id  1 | task 0 | prompt eval time =     767.47 ms /   561 tokens (    1.37 ms per token,   730.97 tokens per second)\nslot print_timing: id  1 | task 0 |        eval time =    1443.19 ms /    99 tokens (   14.58 ms per token,    68.60 tokens per second)\nslot print_timing: id  1 | task 0 |       total time =    2210.66 ms /   660 tokens\nslot print_timing: id  1 | task 0 |    graphs reused =         97\nslot      release: id  1 | task 0 | stop processing: n_tokens = 659, truncated = 0\nsrv  update_slots: all slots are idle\n"
+    },
+    {
+      "id": "pipeline_parallel_followups_mixed_max1",
+      "server": {
+        "port": 11546,
+        "numParallel": 2,
+        "maxLoadedModels": 1,
+        "kvCacheType": "default"
+      },
+      "testCase": "spell_teaching_and_gift",
+      "runs": [
+        {
+          "round": 0,
+          "wallMs": 11055.886040999998,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 4682.200375,
+              "totalMs": 4681.349,
+              "loadMs": 98.934166,
+              "promptEvalMs": 560.93,
+              "evalMs": 4014.279,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 4209.0895410000085,
+              "totalMs": 4208.428375,
+              "loadMs": 920.570417,
+              "promptEvalMs": 1034.409,
+              "evalMs": 2248.821,
+              "promptTokens": 586,
+              "outputTokens": 98,
+              "contentHash": "eb86e4531af42790d84026f1366067e147b32132c3bdd3c8654fecad16260da2",
+              "contentCharacters": 336,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "acquire",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "player",
+                    "targetHolderId": "",
+                    "physicalForm": "",
+                    "evidenceText": "handed Tina a signed parchment to keep",
+                    "confidence": 0.9
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 6373.476584000004,
+              "totalMs": 6372.505792,
+              "loadMs": 4793.20675,
+              "promptEvalMs": 358.791,
+              "evalMs": 1215.786,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "",
+                  "evidenceText": "handed Tina a signed parchment to keep",
+                  "confidence": 0.9
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 137,
+            "peakRssBytes": 3979755520,
+            "peakModelBytes": 3848200519,
+            "peakVramBytes": 3848200519,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 82370,
+                "ppid": 80034,
+                "rssBytes": 81461248,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 82565,
+                "ppid": 82370,
+                "rssBytes": 3898294272,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab63"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096",
+              "qwen3:4b@4096"
+            ]
+          },
+          "score": {
+            "passed": 8,
+            "total": 12,
+            "ratio": 0.6666666666666666,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        },
+        {
+          "round": 1,
+          "wallMs": 11517.625958999997,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 5227.2172500000015,
+              "totalMs": 5226.114666,
+              "loadMs": 648.923041,
+              "promptEvalMs": 561.494,
+              "evalMs": 4008.739,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 4125.864291000005,
+              "totalMs": 4125.132417,
+              "loadMs": 921.1655,
+              "promptEvalMs": 952.076,
+              "evalMs": 2246.359,
+              "promptTokens": 586,
+              "outputTokens": 98,
+              "contentHash": "eb86e4531af42790d84026f1366067e147b32132c3bdd3c8654fecad16260da2",
+              "contentCharacters": 336,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "acquire",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "player",
+                    "targetHolderId": "",
+                    "physicalForm": "",
+                    "evidenceText": "handed Tina a signed parchment to keep",
+                    "confidence": 0.9
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 6290.194749999995,
+              "totalMs": 6289.304875,
+              "loadMs": 4708.959875,
+              "promptEvalMs": 358.884,
+              "evalMs": 1216.433,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "",
+                  "evidenceText": "handed Tina a signed parchment to keep",
+                  "confidence": 0.9
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 144,
+            "peakRssBytes": 3979689984,
+            "peakModelBytes": 3848200519,
+            "peakVramBytes": 3848200519,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 82370,
+                "ppid": 80034,
+                "rssBytes": 81510400,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 83005,
+                "ppid": 82370,
+                "rssBytes": 3898179584,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab63"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096",
+              "qwen3:4b@4096"
+            ]
+          },
+          "score": {
+            "passed": 8,
+            "total": 12,
+            "ratio": 0.6666666666666666,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        },
+        {
+          "round": 2,
+          "wallMs": 11766.331665999998,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 5362.752166999999,
+              "totalMs": 5362.032625,
+              "loadMs": 650.332417,
+              "promptEvalMs": 563.971,
+              "evalMs": 4140.493,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 4214.977209000004,
+              "totalMs": 4214.179792,
+              "loadMs": 909.548584,
+              "promptEvalMs": 970.819,
+              "evalMs": 2329.461,
+              "promptTokens": 586,
+              "outputTokens": 98,
+              "contentHash": "eb86e4531af42790d84026f1366067e147b32132c3bdd3c8654fecad16260da2",
+              "contentCharacters": 336,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "acquire",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "player",
+                    "targetHolderId": "",
+                    "physicalForm": "",
+                    "evidenceText": "handed Tina a signed parchment to keep",
+                    "confidence": 0.9
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 6403.337916999997,
+              "totalMs": 6402.442584,
+              "loadMs": 4782.669125,
+              "promptEvalMs": 367.712,
+              "evalMs": 1246.884,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "",
+                  "evidenceText": "handed Tina a signed parchment to keep",
+                  "confidence": 0.9
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 147,
+            "peakRssBytes": 3979919360,
+            "peakModelBytes": 3848200519,
+            "peakVramBytes": 3848200519,
+            "peakLoadedModels": 1,
+            "peakProcesses": [
+              {
+                "pid": 82370,
+                "ppid": 80034,
+                "rssBytes": 81543168,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 83452,
+                "ppid": 82370,
+                "rssBytes": 3898376192,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab63"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096",
+              "qwen3:4b@4096"
+            ]
+          },
+          "score": {
+            "passed": 8,
+            "total": 12,
+            "ratio": 0.6666666666666666,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        }
+      ],
+      "serverLogTail": "warmup to disable)\nsrv    load_model: initializing, n_slots = 2, n_ctx_slot = 4096, kv_unified = 'false'\nspec common_specu: no implementations specified for speculative decoding\nslot   load_model: id  0 | task -1 | new slot, n_ctx = 4096\nslot   load_model: id  1 | task -1 | new slot, n_ctx = 4096\nsrv    load_model: prompt cache is enabled, size limit: 8192 MiB\nsrv    load_model: use `--cache-ram 0` to disable the prompt cache\nsrv    load_model: for more info see https://github.com/ggml-org/llama.cpp/pull/16391\nsrv    load_model: context checkpoints enabled, max = 32, min spacing = 8192\nsrv          init: idle slots will be saved to prompt cache upon starting a new task\nsrv          init: init: chat template, example_format: '<|im_start|>system\nYou are a helpful assistant<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\nHi there<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n'\nsrv          init: init: chat template, thinking = 0\nsrv  llama_server: model loaded\nsrv  llama_server: listening on http://127.0.0.1:61822\nsrv  update_slots: all slots are idle\ntime=2026-08-16T15:08:04.710+08:00 level=INFO source=llama_server.go:1329 msg=\"llama-server started in 0.50 seconds\"\ntime=2026-08-16T15:08:04.728+08:00 level=INFO source=images.go:373 msg=\"template selection\" model=registry.ollama.ai/library/qwen3:1.7b selected=go_template renderer=\"\" parser=\"\" go_template=\"[completion tools thinking]\" chat_template=\"[tools thinking completion]\" harmony=null renderer_parser=null\ntime=2026-08-16T15:08:04.728+08:00 level=INFO source=sched.go:728 msg=\"loaded runners\" count=1\ntime=2026-08-16T15:08:04.728+08:00 level=INFO source=llama_server.go:1262 msg=\"waiting for llama-server to start responding\"\ntime=2026-08-16T15:08:04.728+08:00 level=INFO source=llama_server.go:1329 msg=\"llama-server started in 0.52 seconds\"\nsrv  server_strea: conv_id= (empty=1)\nslot get_availabl: id  0 | task -1 |  - skipping, slot is empty\nslot get_availabl: id  1 | task -1 |  - skipping, slot is empty\nslot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = -1\nsrv  get_availabl: updating prompt cache\nsrv          load:  - looking for better prompt, base f_keep = -1.000, f_sim = 0.000\nsrv        update:  - cache state: 0 prompts, 0.000 MiB (limits: 8192.000 MiB, 8192 tokens, 8589934592 est)\nsrv  get_availabl: prompt cache update took 0.01 ms\nslot launch_slot_: id  1 | task -1 | sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> temp-ext -> dist \nslot launch_slot_: id  1 | task -1 | sampler params: \n\trepeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000\n\tdry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 4096\n\ttop_k = 20, top_p = 0.950, min_p = 0.000, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000\n\tmirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900\nslot launch_slot_: id  1 | task 0 | processing task, is_child = 0\nslot process_sing: id  0 | task -1 | saving idle slot to prompt cache\nslot   operator(): id  1 | task 0 | new prompt, n_ctx_slot = 4096, n_keep = 4, task.n_tokens = 561\nslot   operator(): id  1 | task 0 | cached n_tokens = 0, memory_seq_rm [0, end)\nslot init_sampler: id  1 | task 0 | init sampler, took 0.06 ms, tokens: text = 561, total = 561\nslot print_timing: id  1 | task 0 | prompt eval time =     367.71 ms /   561 tokens (    0.66 ms per token,  1525.65 tokens per second)\nslot print_timing: id  1 | task 0 |        eval time =    1246.88 ms /    99 tokens (   12.59 ms per token,    79.40 tokens per second)\nslot print_timing: id  1 | task 0 |       total time =    1614.60 ms /   660 tokens\nslot print_timing: id  1 | task 0 |    graphs reused =         98\nslot      release: id  1 | task 0 | stop processing: n_tokens = 659, truncated = 0\nsrv  update_slots: all slots are idle\n"
+    },
+    {
+      "id": "pipeline_parallel_followups_mixed_max2",
+      "server": {
+        "port": 11547,
+        "numParallel": 2,
+        "maxLoadedModels": 2,
+        "kvCacheType": "default"
+      },
+      "testCase": "spell_teaching_and_gift",
+      "runs": [
+        {
+          "round": 0,
+          "wallMs": 10070.344291999994,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 4757.215207999994,
+              "totalMs": 4756.302583,
+              "loadMs": 102.706833,
+              "promptEvalMs": 573.34,
+              "evalMs": 4072.693,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 5313.037750000003,
+              "totalMs": 5312.323542,
+              "loadMs": 914.9665,
+              "promptEvalMs": 1072.717,
+              "evalMs": 3319.203,
+              "promptTokens": 586,
+              "outputTokens": 98,
+              "contentHash": "eb86e4531af42790d84026f1366067e147b32132c3bdd3c8654fecad16260da2",
+              "contentCharacters": 336,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "acquire",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "player",
+                    "targetHolderId": "",
+                    "physicalForm": "",
+                    "evidenceText": "handed Tina a signed parchment to keep",
+                    "confidence": 0.9
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 4542.444834000009,
+              "totalMs": 4541.44775,
+              "loadMs": 1717.96125,
+              "promptEvalMs": 546.935,
+              "evalMs": 2271.023,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "",
+                  "evidenceText": "handed Tina a signed parchment to keep",
+                  "confidence": 0.9
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 126,
+            "peakRssBytes": 6423461888,
+            "peakModelBytes": 6241732524,
+            "peakVramBytes": 6241732524,
+            "peakLoadedModels": 2,
+            "peakProcesses": [
+              {
+                "pid": 83697,
+                "ppid": 80034,
+                "rssBytes": 77250560,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 83909,
+                "ppid": 83697,
+                "rssBytes": 3858628608,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab63"
+              },
+              {
+                "pid": 83940,
+                "ppid": 83697,
+                "rssBytes": 2487582720,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3d0b790534fe4b79525fc3692950408dca41171676ed7e21db57af5c65e"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096",
+              "qwen3:4b@4096",
+              "qwen3:1.7b@4096+qwen3:4b@4096"
+            ]
+          },
+          "score": {
+            "passed": 8,
+            "total": 12,
+            "ratio": 0.6666666666666666,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        },
+        {
+          "round": 1,
+          "wallMs": 10528.405625,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 5244.8374170000025,
+              "totalMs": 5243.893667,
+              "loadMs": 660.754667,
+              "promptEvalMs": 562.135,
+              "evalMs": 4012.967,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 5283.486292000001,
+              "totalMs": 5282.846,
+              "loadMs": 918.969334,
+              "promptEvalMs": 1062.019,
+              "evalMs": 3297.927,
+              "promptTokens": 586,
+              "outputTokens": 98,
+              "contentHash": "eb86e4531af42790d84026f1366067e147b32132c3bdd3c8654fecad16260da2",
+              "contentCharacters": 336,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "acquire",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "player",
+                    "targetHolderId": "",
+                    "physicalForm": "",
+                    "evidenceText": "handed Tina a signed parchment to keep",
+                    "confidence": 0.9
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 4579.196708999996,
+              "totalMs": 4578.223833,
+              "loadMs": 1724.198667,
+              "promptEvalMs": 552.628,
+              "evalMs": 2295.814,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "",
+                  "evidenceText": "handed Tina a signed parchment to keep",
+                  "confidence": 0.9
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 132,
+            "peakRssBytes": 6424166400,
+            "peakModelBytes": 6241732524,
+            "peakVramBytes": 6241732524,
+            "peakLoadedModels": 2,
+            "peakProcesses": [
+              {
+                "pid": 83697,
+                "ppid": 80034,
+                "rssBytes": 78348288,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 84323,
+                "ppid": 83697,
+                "rssBytes": 3858448384,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab63"
+              },
+              {
+                "pid": 84355,
+                "ppid": 83697,
+                "rssBytes": 2487369728,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3d0b790534fe4b79525fc3692950408dca41171676ed7e21db57af5c65e"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096",
+              "qwen3:4b@4096",
+              "qwen3:1.7b@4096+qwen3:4b@4096"
+            ]
+          },
+          "score": {
+            "passed": 8,
+            "total": 12,
+            "ratio": 0.6666666666666666,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        },
+        {
+          "round": 2,
+          "wallMs": 10511.357375000007,
+          "calls": [
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 5225.271332999997,
+              "totalMs": 5224.294375,
+              "loadMs": 652.177291,
+              "promptEvalMs": 563.99,
+              "evalMs": 3999.954,
+              "promptTokens": 886,
+              "outputTokens": 322,
+              "contentHash": "127d806d8dea3943f215949087839b74e0899dfe59ddae24fc92c2227de97962",
+              "contentCharacters": 1132,
+              "parsed": {
+                "eventBoundary": {
+                  "ended": false,
+                  "evidenceText": "",
+                  "confidence": 0.95
+                },
+                "actorUpdates": [
+                  {
+                    "actorId": "harry",
+                    "presence": "absent",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "ron",
+                    "presence": "present",
+                    "roomId": "charms_classroom",
+                    "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                    "confidence": 0.95
+                  }
+                ],
+                "identityObservations": [
+                  {
+                    "actorId": "hermione",
+                    "injuryStatus": "no_visible_injury",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 0.95
+                  },
+                  {
+                    "actorId": "harry",
+                    "injuryStatus": "injured",
+                    "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                    "confidence": 0.95
+                  }
+                ],
+                "perception": {
+                  "visualScope": "room",
+                  "audibleScope": "room",
+                  "concealment": "none",
+                  "directParticipantActorIds": [
+                    "harry",
+                    "hermione",
+                    "ron"
+                  ],
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 0.95
+                },
+                "followUpTasks": [
+                  "inventory",
+                  "spell"
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:4b",
+              "wallMs": 5286.014500000005,
+              "totalMs": 5285.291583,
+              "loadMs": 922.981708,
+              "promptEvalMs": 1063.261,
+              "evalMs": 3293.892,
+              "promptTokens": 586,
+              "outputTokens": 98,
+              "contentHash": "eb86e4531af42790d84026f1366067e147b32132c3bdd3c8654fecad16260da2",
+              "contentCharacters": 336,
+              "parsed": {
+                "inventoryUpdates": [
+                  {
+                    "operation": "acquire",
+                    "itemId": "signed_parchment",
+                    "itemType": "document",
+                    "ownerId": "player",
+                    "holderId": "player",
+                    "targetHolderId": "",
+                    "physicalForm": "",
+                    "evidenceText": "handed Tina a signed parchment to keep",
+                    "confidence": 0.9
+                  }
+                ]
+              },
+              "parseError": ""
+            },
+            {
+              "model": "qwen3:1.7b",
+              "wallMs": 4629.671625000003,
+              "totalMs": 4628.5995,
+              "loadMs": 1725.773125,
+              "promptEvalMs": 556.387,
+              "evalMs": 2341.271,
+              "promptTokens": 561,
+              "outputTokens": 99,
+              "contentHash": "525250b5b36f97dc5bd0e59a512710c877bc6d2d042a6ff494df605b60fd2b55",
+              "contentCharacters": 362,
+              "parsed": {
+                "spellEvents": [
+                  {
+                    "kind": "observed",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                    "confidence": 1
+                  },
+                  {
+                    "kind": "taught",
+                    "spellId": "spell_lumos",
+                    "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                    "confidence": 1
+                  }
+                ],
+                "customSpellProposals": []
+              },
+              "parseError": ""
+            }
+          ],
+          "output": {
+            "post": {
+              "eventBoundary": {
+                "ended": false,
+                "evidenceText": "",
+                "confidence": 0.95
+              },
+              "actorUpdates": [
+                {
+                  "actorId": "harry",
+                  "presence": "absent",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "ron",
+                  "presence": "present",
+                  "roomId": "charms_classroom",
+                  "evidenceText": "Tina examined Ron's arms; there were no visible injuries.",
+                  "confidence": 0.95
+                }
+              ],
+              "identityObservations": [
+                {
+                  "actorId": "hermione",
+                  "injuryStatus": "no_visible_injury",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 0.95
+                },
+                {
+                  "actorId": "harry",
+                  "injuryStatus": "injured",
+                  "evidenceText": "Harry limped into the Entrance Hall, leaving the classroom, with a bleeding cut visible.",
+                  "confidence": 0.95
+                }
+              ],
+              "perception": {
+                "visualScope": "room",
+                "audibleScope": "room",
+                "concealment": "none",
+                "directParticipantActorIds": [
+                  "harry",
+                  "hermione",
+                  "ron"
+                ],
+                "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                "confidence": 0.95
+              },
+              "followUpTasks": [
+                "inventory",
+                "spell"
+              ]
+            },
+            "inventory": {
+              "inventoryUpdates": [
+                {
+                  "operation": "acquire",
+                  "itemId": "signed_parchment",
+                  "itemType": "document",
+                  "ownerId": "player",
+                  "holderId": "player",
+                  "targetHolderId": "",
+                  "physicalForm": "",
+                  "evidenceText": "handed Tina a signed parchment to keep",
+                  "confidence": 0.9
+                }
+              ]
+            },
+            "spell": {
+              "spellEvents": [
+                {
+                  "kind": "observed",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "Hermione said, \"Lumos. Watch the wand tip, then repeat it.\"",
+                  "confidence": 1
+                },
+                {
+                  "kind": "taught",
+                  "spellId": "spell_lumos",
+                  "evidenceText": "She demonstrated Lumos twice, corrected Tina's pronunciation, and handed Tina a signed parchment to keep.",
+                  "confidence": 1
+                }
+              ],
+              "customSpellProposals": []
+            }
+          },
+          "parseErrors": [
+            "",
+            "",
+            ""
+          ],
+          "memory": {
+            "sampleCount": 131,
+            "peakRssBytes": 6425559040,
+            "peakModelBytes": 6241732524,
+            "peakVramBytes": 6241732524,
+            "peakLoadedModels": 2,
+            "peakProcesses": [
+              {
+                "pid": 83697,
+                "ppid": 80034,
+                "rssBytes": 79708160,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/ollama serve"
+              },
+              {
+                "pid": 84731,
+                "ppid": 83697,
+                "rssBytes": 3858382848,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab63"
+              },
+              {
+                "pid": 84768,
+                "ppid": 83697,
+                "rssBytes": 2487468032,
+                "command": "/Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/llama-server --model /Users/bytedance/sillytavern/SillyTavern/data/_cache/ollama/models/blobs/sha256-3d0b790534fe4b79525fc3692950408dca41171676ed7e21db57af5c65e"
+              }
+            ],
+            "observedModelSets": [
+              "qwen3:1.7b@4096",
+              "qwen3:4b@4096",
+              "qwen3:1.7b@4096+qwen3:4b@4096"
+            ]
+          },
+          "score": {
+            "passed": 8,
+            "total": 12,
+            "ratio": 0.6666666666666666,
+            "failures": [
+              "actorUpdateCount",
+              "identityObservationCount",
+              "spellEventCount",
+              "allEvidenceGrounded"
+            ]
+          }
+        }
+      ],
+      "serverLogTail": "checkpoints enabled, max = 32, min spacing = 8192\nsrv          init: idle slots will be saved to prompt cache upon starting a new task\nsrv          init: init: chat template, example_format: '<|im_start|>system\nYou are a helpful assistant<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\nHi there<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n'\nsrv          init: init: chat template, thinking = 0\nsrv  llama_server: model loaded\nsrv  llama_server: listening on http://127.0.0.1:61937\nsrv  update_slots: all slots are idle\ntime=2026-08-16T15:08:35.136+08:00 level=INFO source=llama_server.go:1329 msg=\"llama-server started in 0.76 seconds\"\ntime=2026-08-16T15:08:35.155+08:00 level=INFO source=images.go:373 msg=\"template selection\" model=registry.ollama.ai/library/qwen3:1.7b selected=go_template renderer=\"\" parser=\"\" go_template=\"[completion tools thinking]\" chat_template=\"[tools thinking completion]\" harmony=null renderer_parser=null\ntime=2026-08-16T15:08:35.155+08:00 level=INFO source=sched.go:728 msg=\"loaded runners\" count=2\ntime=2026-08-16T15:08:35.155+08:00 level=INFO source=llama_server.go:1262 msg=\"waiting for llama-server to start responding\"\ntime=2026-08-16T15:08:35.156+08:00 level=INFO source=llama_server.go:1329 msg=\"llama-server started in 0.78 seconds\"\nsrv  server_strea: conv_id= (empty=1)\nslot get_availabl: id  0 | task -1 |  - skipping, slot is empty\nslot get_availabl: id  1 | task -1 |  - skipping, slot is empty\nslot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = -1\nsrv  get_availabl: updating prompt cache\nsrv          load:  - looking for better prompt, base f_keep = -1.000, f_sim = 0.000\nsrv        update:  - cache state: 0 prompts, 0.000 MiB (limits: 8192.000 MiB, 8192 tokens, 8589934592 est)\nsrv  get_availabl: prompt cache update took 0.01 ms\nslot launch_slot_: id  1 | task -1 | sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> temp-ext -> dist \nslot launch_slot_: id  1 | task -1 | sampler params: \n\trepeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000\n\tdry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 4096\n\ttop_k = 20, top_p = 0.950, min_p = 0.000, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000\n\tmirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900\nslot launch_slot_: id  1 | task 0 | processing task, is_child = 0\nslot process_sing: id  0 | task -1 | saving idle slot to prompt cache\nslot   operator(): id  1 | task 0 | new prompt, n_ctx_slot = 4096, n_keep = 4, task.n_tokens = 561\nslot   operator(): id  1 | task 0 | cached n_tokens = 0, memory_seq_rm [0, end)\nslot init_sampler: id  1 | task 0 | init sampler, took 0.06 ms, tokens: text = 561, total = 561\nslot print_timing: id  1 | task 0 | prompt eval time =     556.39 ms /   561 tokens (    0.99 ms per token,  1008.29 tokens per second)\nslot print_timing: id  1 | task 0 |        eval time =    2341.27 ms /    99 tokens (   23.65 ms per token,    42.28 tokens per second)\nslot print_timing: id  1 | task 0 |       total time =    2897.66 ms /   660 tokens\nslot print_timing: id  1 | task 0 |    graphs reused =         98\nslot      release: id  1 | task 0 | stop processing: n_tokens = 659, truncated = 0\nsrv  update_slots: all slots are idle\nslot print_timing: id  1 | task 0 | prompt eval time =    1063.26 ms /   586 tokens (    1.81 ms per token,   551.13 tokens per second)\nslot print_timing: id  1 | task 0 |        eval time =    3293.89 ms /    98 tokens (   33.61 ms per token,    29.75 tokens per second)\nslot print_timing: id  1 | task 0 |       total time =    4357.15 ms /   684 tokens\nslot print_timing: id  1 | task 0 |    graphs reused =         97\nslot      release: id  1 | task 0 | stop processing: n_tokens = 683, truncated = 0\nsrv  update_slots: all slots are idle\n"
+    }
+  ],
+  "qualityResults": null,
+  "summary": {
+    "performance": [
+      {
+        "id": "pipeline_serial_mixed",
+        "successfulRuns": 3,
+        "failedRuns": 0,
+        "averageWallMs": 11798.929250000001,
+        "peakRssBytes": 3357147136,
+        "peakModelBytes": 3169761361,
+        "peakVramBytes": 3169761361,
+        "peakLoadedModels": 1,
+        "scoreRatio": 0.6666666666666666
+      },
+      {
+        "id": "pipeline_parallel_followups_same_1_7b",
+        "successfulRuns": 3,
+        "failedRuns": 0,
+        "averageWallMs": 8076.832916666666,
+        "peakRssBytes": 2579988480,
+        "peakModelBytes": 2393532005,
+        "peakVramBytes": 2393532005,
+        "peakLoadedModels": 1,
+        "scoreRatio": 0.5833333333333334
+      },
+      {
+        "id": "pipeline_parallel_followups_mixed_max1",
+        "successfulRuns": 3,
+        "failedRuns": 0,
+        "averageWallMs": 11446.614555333332,
+        "peakRssBytes": 3979919360,
+        "peakModelBytes": 3848200519,
+        "peakVramBytes": 3848200519,
+        "peakLoadedModels": 1,
+        "scoreRatio": 0.6666666666666666
+      },
+      {
+        "id": "pipeline_parallel_followups_mixed_max2",
+        "successfulRuns": 3,
+        "failedRuns": 0,
+        "averageWallMs": 10370.035764,
+        "peakRssBytes": 6425559040,
+        "peakModelBytes": 6241732524,
+        "peakVramBytes": 6241732524,
+        "peakLoadedModels": 2,
+        "scoreRatio": 0.6666666666666666
+      }
+    ],
+    "quality": []
+  }
+}

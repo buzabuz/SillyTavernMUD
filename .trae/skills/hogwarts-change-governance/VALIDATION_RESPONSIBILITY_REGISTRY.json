@@ -1,0 +1,1463 @@
+{
+  "registryVersion": 1,
+  "establishedAt": "2026-08-16",
+  "authority": "Permanent cross-change registry for Hogwarts model-output and semantic-settlement contracts. Runtime behavior remains authoritative in production code and the living runtime contract.",
+  "expectedActiveModelTaskCount": 16,
+  "expectedSemanticOwnerCount": 12,
+  "legacyContractIds": [
+    "VCON-001",
+    "VCON-002",
+    "VCON-003",
+    "VCON-004",
+    "VCON-005",
+    "VCON-006",
+    "VCON-007",
+    "VCON-008",
+    "VCON-009",
+    "VCON-010",
+    "VCON-011",
+    "VCON-012",
+    "VCON-013",
+    "VCON-014",
+    "VCON-015",
+    "VCON-016",
+    "VCON-017",
+    "VCON-021",
+    "VCON-022",
+    "VCON-023",
+    "VCON-024",
+    "VCON-025",
+    "VCON-026"
+  ],
+  "mechanisms": [
+    {
+      "mechanismId": "regex_shape",
+      "owns": "Character shape and explicitly finite grammar.",
+      "forbidden": "Natural-language intent, truth, injury, perception, relationship, Item, Spell, Calendar or other prose meaning."
+    },
+    {
+      "mechanismId": "embedding_retrieval",
+      "owns": "Candidate recall and ranking over committed canonical records.",
+      "forbidden": "Truth, equality, provenance, authorization, rejection or State mutation."
+    },
+    {
+      "mechanismId": "local_semantic_model",
+      "owns": "Bounded natural-language interpretation emitted as structured proposals with source references.",
+      "forbidden": "Direct State writes, invented authority, automatic repair or semantic regex fallback."
+    },
+    {
+      "mechanismId": "paid_narrative_model",
+      "owns": "Player-facing narrative and explicitly registered legacy proposal tasks.",
+      "forbidden": "Direct State authority or unregistered validation semantics."
+    },
+    {
+      "mechanismId": "deterministic_schema",
+      "owns": "Exact shape, key sets, types, enums and size bounds.",
+      "forbidden": "Guessing missing prose meaning."
+    },
+    {
+      "mechanismId": "deterministic_guard",
+      "owns": "IDs, references, evidence, ACL, provenance, arithmetic, idempotency and legal transitions.",
+      "forbidden": "Replacing semantic interpretation with keywords or similarity thresholds."
+    },
+    {
+      "mechanismId": "reducer",
+      "owns": "Sole atomic State settlement for an approved domain.",
+      "forbidden": "Accepting unvalidated model, embedding or regex claims."
+    },
+    {
+      "mechanismId": "legacy_state_writer",
+      "owns": "Frozen current workflow-owned settlement recorded only to expose migration debt.",
+      "forbidden": "Any new contract or promotion to compliant status."
+    },
+    {
+      "mechanismId": "no_state_writer",
+      "owns": "Display-only or candidate-only output that cannot write world State.",
+      "forbidden": "Implicit persistence or later promotion without a registered contract revision."
+    }
+  ],
+  "writerOwners": [
+    {
+      "writerOwnerId": "none",
+      "mechanismId": "no_state_writer"
+    },
+    {
+      "writerOwnerId": "character_setup_workflow",
+      "mechanismId": "legacy_state_writer"
+    },
+    {
+      "writerOwnerId": "opening_world_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "calendar_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "calendar_medium_horizon_workflow",
+      "mechanismId": "legacy_state_writer"
+    },
+    {
+      "writerOwnerId": "interior_map_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "interior_map_generation_workflow",
+      "mechanismId": "legacy_state_writer"
+    },
+    {
+      "writerOwnerId": "pacing_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "pacing_failure_workflow",
+      "mechanismId": "legacy_state_writer"
+    },
+    {
+      "writerOwnerId": "turn_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "scene_transition_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "scene_opening_message_writer",
+      "mechanismId": "legacy_state_writer"
+    },
+    {
+      "writerOwnerId": "social_v3_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "social_memory_workflow",
+      "mechanismId": "legacy_state_writer"
+    },
+    {
+      "writerOwnerId": "map_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "turn_precondition_settlement",
+      "mechanismId": "legacy_state_writer"
+    },
+    {
+      "writerOwnerId": "turn_post_observation_settlement",
+      "mechanismId": "legacy_state_writer"
+    },
+    {
+      "writerOwnerId": "item_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "memory_synapse_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "translation_table_writer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "spell_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "identity_reducer",
+      "mechanismId": "reducer"
+    },
+    {
+      "writerOwnerId": "migration_writers",
+      "mechanismId": "legacy_state_writer"
+    }
+  ],
+  "semanticOwners": [
+    {
+      "ownerId": "dynamic_4b_inventory",
+      "mechanismId": "local_semantic_model",
+      "responsibility": "Item significance, operation, custody, type, story role and physical form.",
+      "deterministicSettlement": "Item references, transition legality, holder/location, existence invariant and Item Reducer."
+    },
+    {
+      "ownerId": "local_pre_turn_1_7b",
+      "mechanismId": "local_semantic_model",
+      "responsibility": "Check need/mode, movement intent, elapsed-time intent and Calendar commitment.",
+      "deterministicSettlement": "Check arithmetic, route/access, clock legality, Calendar validation and owning Reducers."
+    },
+    {
+      "ownerId": "local_post_core_1_7b",
+      "mechanismId": "local_semantic_model",
+      "responsibility": "Departure, presence, location, event boundaries, perception and general narrative facts.",
+      "deterministicSettlement": "Actor, room, Event, perception evidence and ID guards plus owning Reducers."
+    },
+    {
+      "ownerId": "local_appraisal_1_7b",
+      "mechanismId": "local_semantic_model",
+      "responsibility": "System-role identity, relationship, impression, Actor, Social and Appraisal categories.",
+      "deterministicSettlement": "Actor, Social and Appraisal schemas, evidence checks and owning Reducers."
+    },
+    {
+      "ownerId": "deterministic_migration_no_model",
+      "mechanismId": "deterministic_guard",
+      "responsibility": "Explicit structured legacy values or an approved conservative default; no prose interpretation.",
+      "deterministicSettlement": "Owning one-time atomic migration."
+    },
+    {
+      "ownerId": "dynamic_4b_spell",
+      "mechanismId": "local_semantic_model",
+      "responsibility": "Spell observation, teaching, learning, experiment and custom proposal meaning.",
+      "deterministicSettlement": "Catalog identity, check result, XP, rank, duplicate and Spell Reducer rules."
+    },
+    {
+      "ownerId": "deterministic_error_code_registry",
+      "mechanismId": "deterministic_guard",
+      "responsibility": "Typed rejection reason ownership instead of parsing error prose.",
+      "deterministicSettlement": "Explicit error code mapping."
+    },
+    {
+      "ownerId": "local_translation_4b",
+      "mechanismId": "local_semantic_model",
+      "responsibility": "Contextual source-backed literal role during translation.",
+      "deterministicSettlement": "Exact source-token provenance and translation acceptance."
+    },
+    {
+      "ownerId": "dynamic_4b_identity",
+      "mechanismId": "local_semantic_model",
+      "responsibility": "Routed injury and Identity observations.",
+      "deterministicSettlement": "Actor target, source evidence, access and Identity Reducer rules."
+    },
+    {
+      "ownerId": "embedding_candidate_retrieval",
+      "mechanismId": "embedding_retrieval",
+      "responsibility": "Semantic candidate recall and ranking only.",
+      "deterministicSettlement": "Canonical hydration, ACL, timeline, revision, clock, source and supersession gates."
+    },
+    {
+      "ownerId": "deterministic_sensitive_field_registry",
+      "mechanismId": "deterministic_guard",
+      "responsibility": "Explicit sensitive-field ownership instead of key-name inference.",
+      "deterministicSettlement": "Save and diagnostics field registry."
+    },
+    {
+      "ownerId": "deterministic_process_health_protocol",
+      "mechanismId": "deterministic_guard",
+      "responsibility": "Process readiness and failure from structured health evidence.",
+      "deterministicSettlement": "Exit status and explicit Ollama health protocol."
+    }
+  ],
+  "contracts": [
+    {
+      "contractId": "VCON-001",
+      "domain": "setup_character_polish",
+      "title": "Character polish setup input",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["character_polish"],
+      "outputClass": "setup_input_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "character_setup_workflow",
+      "stateFieldRefs": ["character.inputEvidence.polishedBackground", "character.canonicalEn.polishedBackgroundEn"],
+      "schemaAuthority": "free_text_setup_input",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/ui/setup-controller.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/ui/setup-controller.js", "public/scripts/extensions/hogwarts-mud/domain/character.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/ui/setup-controller.js", "public/scripts/extensions/hogwarts-mud/domain/character.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/ui/setup-controller.js"],
+      "semanticOwnerIds": ["model_task:character_polish"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-001-SHAPE",
+        "semantics": "VCON-001-SEMANTICS",
+        "retrieval": "VCON-001-RETRIEVAL",
+        "authority": "VCON-001-AUTHORITY",
+        "settlement": "VCON-001-SETTLEMENT",
+        "failure": "VCON-001-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "workflow_owned_legacy",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "workflow_owned_legacy",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "none",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "character_draft_unchanged",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": "workflow_owned_legacy",
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-model-language-adoption.test.mjs", "tests/hogwarts-mud-task2-modules.test.mjs"],
+      "currentDebt": ["The model writes a setup draft field that later enters Character V2 through the setup workflow.", "Prompt and output validation remain workflow-owned rather than one executable descriptor."]
+    },
+    {
+      "contractId": "VCON-002",
+      "domain": "opening_world",
+      "title": "Opening world package",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["opening_world"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "opening_world_reducer",
+      "stateFieldRefs": ["phase", "campaign", "actorLibrary[]", "actors[]", "scene", "map", "calendar"],
+      "schemaAuthority": "prompt_literal_duplicated",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/opening.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/workflows/opening.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/initial-world.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/initial-world.js"],
+      "semanticOwnerIds": ["model_task:opening_world"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-002-SHAPE",
+        "semantics": "VCON-002-SEMANTICS",
+        "retrieval": "VCON-002-RETRIEVAL",
+        "authority": "VCON-002-AUTHORITY",
+        "settlement": "VCON-002-SETTLEMENT",
+        "failure": "VCON-002-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "workflow_owned_legacy",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "workflow_owned_legacy",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "opening_package_not_committed",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": "workflow_owned_legacy",
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-task5-workflows.test.mjs"],
+      "currentDebt": ["Prompt literal and validator encode related shape separately.", "Opening semantic regex remains registered for Phase 2 removal."]
+    },
+    {
+      "contractId": "VCON-003",
+      "domain": "calendar_high",
+      "title": "High Calendar proposal",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["calendar_high"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "calendar_reducer",
+      "stateFieldRefs": ["calendar.storylines[]", "calendar.storyBeats[]"],
+      "schemaAuthority": "prompt_literal_with_shared_child_constants",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/high-calendar-director.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/workflows/high-calendar-director.js", "public/scripts/extensions/hogwarts-mud/domain/calendar-reducer.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/calendar-reducer.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/calendar-reducer.js"],
+      "semanticOwnerIds": ["model_task:calendar_high"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-003-SHAPE",
+        "semantics": "VCON-003-SEMANTICS",
+        "retrieval": "VCON-003-RETRIEVAL",
+        "authority": "VCON-003-AUTHORITY",
+        "settlement": "VCON-003-SETTLEMENT",
+        "failure": "VCON-003-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "workflow_owned_legacy",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "workflow_owned_legacy",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "none",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "calendar_unchanged",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": "workflow_owned_legacy",
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-high-calendar-director.test.mjs", "tests/hogwarts-mud-calendar-reducer-projection.test.mjs"],
+      "currentDebt": ["Top-level Prompt shape remains hand-written."]
+    },
+    {
+      "contractId": "VCON-004",
+      "domain": "calendar_medium",
+      "title": "Medium Calendar proposal",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["calendar_medium"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "calendar_reducer",
+      "stateFieldRefs": ["calendar.entries[]"],
+      "schemaAuthority": "prompt_literal_with_shared_child_constants",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/medium-calendar-director.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/workflows/medium-calendar-director.js", "public/scripts/extensions/hogwarts-mud/domain/calendar-reducer.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/calendar-reducer.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/calendar-reducer.js"],
+      "semanticOwnerIds": ["model_task:calendar_medium", "local_pre_turn_1_7b"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-004-SHAPE",
+        "semantics": "VCON-004-SEMANTICS",
+        "retrieval": "VCON-004-RETRIEVAL",
+        "authority": "VCON-004-AUTHORITY",
+        "settlement": "VCON-004-SETTLEMENT",
+        "failure": "VCON-004-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "workflow_owned_legacy",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "workflow_owned_legacy",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_scheduler_gate",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "calendar_entries_unchanged",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": "workflow_owned_legacy",
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-medium-calendar-director.test.mjs", "tests/hogwarts-mud-calendar-reducer-projection.test.mjs"],
+      "currentDebt": ["Commitment routing still has registered prose-semantic regex.", "Top-level Prompt shape remains hand-written."]
+    },
+    {
+      "contractId": "VCON-005",
+      "domain": "interior_cartographer",
+      "title": "Generated interior map",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["interior_cartographer"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "interior_map_reducer",
+      "stateFieldRefs": ["map.customLocalMaps[]", "spatial.player", "scene.itemStates[]"],
+      "schemaAuthority": "prompt_literal_duplicated",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/interior-map.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/workflows/interior-map.js", "public/scripts/extensions/hogwarts-mud/domain/interior-map.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/interior-map.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/interior-map.js"],
+      "semanticOwnerIds": ["model_task:interior_cartographer"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-005-SHAPE",
+        "semantics": "VCON-005-SEMANTICS",
+        "retrieval": "VCON-005-RETRIEVAL",
+        "authority": "VCON-005-AUTHORITY",
+        "settlement": "VCON-005-SETTLEMENT",
+        "failure": "VCON-005-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "workflow_owned_legacy",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "workflow_owned_legacy",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "none",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "map_unchanged_and_generation_status_written_by_VCON_022",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": "workflow_owned_legacy",
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-map-cartography.test.mjs"],
+      "currentDebt": ["Prompt shape and final validator are independently encoded."]
+    },
+    {
+      "contractId": "VCON-006",
+      "domain": "pacing_director",
+      "title": "Causal pacing assessment",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["pacing_director"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "pacing_reducer",
+      "stateFieldRefs": ["pacingDirector", "causalCollapse", "map.roomStates", "items[]", "socialGraph", "actorLibrary[]", "actors[]", "scene.pacingPressureEn"],
+      "schemaAuthority": "prompt_literal_with_defaulting_normalizer",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/directors.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/domain/causal-pacing-contract.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/causal-pacing-contract.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/pacing-reducer.js"],
+      "semanticOwnerIds": ["model_task:pacing_director"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-006-SHAPE",
+        "semantics": "VCON-006-SEMANTICS",
+        "retrieval": "VCON-006-RETRIEVAL",
+        "authority": "VCON-006-AUTHORITY",
+        "settlement": "VCON-006-SETTLEMENT",
+        "failure": "VCON-006-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "workflow_owned_legacy",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "workflow_owned_legacy",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "accepted_pacing_state_unchanged_and_failure_status_written_by_VCON_023",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": "workflow_owned_legacy",
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-pacing-director.test.mjs"],
+      "currentDebt": ["Normalizer supplies omitted defaults before validation.", "Registered semantic regex remains in causal classification."]
+    },
+    {
+      "contractId": "VCON-007",
+      "domain": "scene_performance",
+      "title": "Player-visible Scene performance and turn proposal",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["scene_performance"],
+      "outputClass": "player_narrative_and_state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "turn_reducer",
+      "stateFieldRefs": ["clock", "calendar", "checks", "turn", "actorLibrary[]", "actors[]", "actorMemoryIndex", "items[]", "actorPresentations", "materialState", "spellbook", "pendingSpellProposals[]", "eventKnowledge", "scene.itemStates[]", "scene.timelineEntries[]", "clues[]", "storyArcs[]", "memoryDirector"],
+      "schemaAuthority": "prompt_literal_and_multiple_allowlists",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/turn-performance.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/workflows/turn-performance.js", "public/scripts/extensions/hogwarts-mud/domain/turn-protocol.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/turn-validation.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/turn-reducer.js"],
+      "semanticOwnerIds": ["model_task:scene_performance", "local_post_core_1_7b", "dynamic_4b_inventory", "dynamic_4b_spell", "dynamic_4b_identity"],
+      "retrievalOwnerIds": ["embedding_candidate_retrieval"],
+      "responsibilityIds": {
+        "shape": "VCON-007-SHAPE",
+        "semantics": "VCON-007-SEMANTICS",
+        "retrieval": "VCON-007-RETRIEVAL",
+        "authority": "VCON-007-AUTHORITY",
+        "settlement": "VCON-007-SETTLEMENT",
+        "failure": "VCON-007-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_hard_reject_and_filter",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "turn_transaction_not_committed",
+        "paidNarrativeOnFailure": "phase3_append_only_ledger_required"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": 1,
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-turn-protocol.test.mjs", "tests/hogwarts-mud-turn-validation.test.mjs"],
+      "currentDebt": ["Prompt, raw allowlists, fold and final validator duplicate the proposal contract.", "Semantic regex can reject or filter prose.", "Paid narrative preservation requires the separate Phase 3 ledger."]
+    },
+    {
+      "contractId": "VCON-008",
+      "domain": "scene_transition",
+      "title": "Scene transition package",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["scene_transition"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "scene_transition_reducer",
+      "stateFieldRefs": ["scene", "sceneArchive[]", "globalChronicle.entries[]", "calendar", "map", "clock", "actorLibrary[]", "actorMemoryIndex", "actors[]", "cohorts[]", "activeInteractionActorIds[]", "localPresence", "items[]", "sceneTransition", "pacingDirector", "memoryDirector", "turn", "spatial"],
+      "schemaAuthority": "prompt_literal_with_transforming_normalizer",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/scene-transition.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/domain/scene-transition.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/scene-transition.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/archive-projection.js"],
+      "semanticOwnerIds": ["model_task:scene_transition", "local_post_core_1_7b"],
+      "retrievalOwnerIds": ["embedding_candidate_retrieval"],
+      "responsibilityIds": {
+        "shape": "VCON-008-SHAPE",
+        "semantics": "VCON-008-SEMANTICS",
+        "retrieval": "VCON-008-RETRIEVAL",
+        "authority": "VCON-008-AUTHORITY",
+        "settlement": "VCON-008-SETTLEMENT",
+        "failure": "VCON-008-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "workflow_owned_legacy",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "workflow_owned_legacy",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_hard_reject",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "transition_not_committed",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": "workflow_owned_legacy",
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-scene-transition.test.mjs"],
+      "currentDebt": ["Normalizer deletes and synthesizes fields before validation.", "Semantic prose rejection remains registered."]
+    },
+    {
+      "contractId": "VCON-009",
+      "domain": "scene_opening",
+      "title": "Player-visible Scene opening",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["scene_opening"],
+      "outputClass": "player_narrative",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "scene_opening_message_writer",
+      "stateFieldRefs": ["extra.hogwartsMud.segments[]", "extra.hogwartsMud.sceneId"],
+      "schemaAuthority": "prompt_literal_duplicated",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/scene-transition.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/workflows/scene-transition.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/workflows/scene-transition.js", "public/scripts/extensions/hogwarts-mud/domain/scene-transition.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/workflows/scene-transition.js"],
+      "semanticOwnerIds": ["model_task:scene_opening"],
+      "retrievalOwnerIds": ["embedding_candidate_retrieval"],
+      "responsibilityIds": {
+        "shape": "VCON-009-SHAPE",
+        "semantics": "VCON-009-SEMANTICS",
+        "retrieval": "VCON-009-RETRIEVAL",
+        "authority": "VCON-009-AUTHORITY",
+        "settlement": "VCON-009-SETTLEMENT",
+        "failure": "VCON-009-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_hard_reject",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "opening_message_not_committed",
+        "paidNarrativeOnFailure": "phase3_append_only_ledger_required"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": 1,
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-scene-transition.test.mjs"],
+      "currentDebt": ["Prompt and validator duplicate segment shape.", "Semantic regex can hard-reject opening prose.", "Paid narrative preservation requires the separate Phase 3 ledger."]
+    },
+    {
+      "contractId": "VCON-010",
+      "domain": "social_director",
+      "title": "Social Director transient proposal and V3 settlement",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["social_director"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "social_v3_reducer",
+      "stateFieldRefs": ["eventKnowledge", "actorMemoryIndex.byActorId", "memorySynapse.appraisals[]", "memorySynapse.personSchemas[]", "socialGraph"],
+      "schemaAuthority": "transport_json_schema_with_transient_refs",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/social-memory.js"],
+      "transformSources": ["src/hogwarts-mud/social-director-v3-graph.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/social-v3-reducer.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/social-v3-reducer.js"],
+      "semanticOwnerIds": ["model_task:social_director", "local_appraisal_1_7b"],
+      "retrievalOwnerIds": ["embedding_candidate_retrieval"],
+      "responsibilityIds": {
+        "shape": "VCON-010-SHAPE",
+        "semantics": "VCON-010-SEMANTICS",
+        "retrieval": "VCON-010-RETRIEVAL",
+        "authority": "VCON-010-AUTHORITY",
+        "settlement": "VCON-010-SETTLEMENT",
+        "failure": "VCON-010-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "workflow_owned_legacy",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "workflow_owned_legacy",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_filtering",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "proposal_state_unchanged_and_lifecycle_status_written_by_VCON_024",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": "workflow_owned_legacy",
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-social-v3.test.mjs", "tests/hogwarts-mud-memory-synapse.test.mjs"],
+      "currentDebt": ["Transient refs intentionally resolve to persisted IDs, but shared enums and transform contracts remain distributed.", "Partial proposal rejection is workflow-owned."]
+    },
+    {
+      "contractId": "VCON-011",
+      "domain": "map_expansion",
+      "title": "World Map expansion proposal",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["map_expansion"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "map_reducer",
+      "stateFieldRefs": ["map.generatedNodes[]", "map.proposals[]"],
+      "schemaAuthority": "prompt_literal_duplicated",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/ui/map-renderer.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/ui/map-renderer.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/maps.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/maps.js"],
+      "semanticOwnerIds": ["model_task:map_expansion"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-011-SHAPE",
+        "semantics": "VCON-011-SEMANTICS",
+        "retrieval": "VCON-011-RETRIEVAL",
+        "authority": "VCON-011-AUTHORITY",
+        "settlement": "VCON-011-SETTLEMENT",
+        "failure": "VCON-011-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "workflow_owned_legacy",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "workflow_owned_legacy",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_filtering",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "map_unchanged",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": "workflow_owned_legacy",
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-map-cartography.test.mjs"],
+      "currentDebt": ["Prompt and validator independently encode output shape.", "Language filtering remains a transforming boundary."]
+    },
+    {
+      "contractId": "VCON-012",
+      "domain": "local_pre_turn",
+      "title": "Local pre-turn semantic proposal",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["local_pre_turn_adjudicator"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "turn_precondition_settlement",
+      "stateFieldRefs": ["checks", "spatial.player", "clock", "calendar.entries[]"],
+      "schemaAuthority": "json_schema_plus_zod_duplicated",
+      "schemaSources": ["src/hogwarts-mud/local-semantic-adjudicator.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/adapters/local-semantic.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/checks.js", "public/scripts/extensions/hogwarts-mud/domain/turn-time.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/workflows/turn.js"],
+      "semanticOwnerIds": ["local_pre_turn_1_7b"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-012-SHAPE",
+        "semantics": "VCON-012-SEMANTICS",
+        "retrieval": "VCON-012-RETRIEVAL",
+        "authority": "VCON-012-AUTHORITY",
+        "settlement": "VCON-012-SETTLEMENT",
+        "failure": "VCON-012-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_reconciliation",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "affected_precondition_omitted_or_turn_stopped",
+        "paidNarrativeOnFailure": "paid_request_not_started_when_blocking"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": 1,
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-task8-call-budget.test.mjs", "tests/hogwarts-mud-turn-validation.test.mjs"],
+      "currentDebt": ["Transport JSON Schema and Zod shape are independently maintained.", "Semantic regex can reconcile or override meaning."]
+    },
+    {
+      "contractId": "VCON-013",
+      "domain": "local_post_turn",
+      "title": "Local post-turn event, presence and perception proposal",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["local_post_turn_observer"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "turn_post_observation_settlement",
+      "stateFieldRefs": ["actors[]", "localPresence", "cohorts[]", "actorLibrary[].identity.body.injuryAssessment"],
+      "schemaAuthority": "json_schema_plus_zod_duplicated",
+      "schemaSources": ["src/hogwarts-mud/local-semantic-adjudicator.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/adapters/local-semantic.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/presence-witness-contract.js", "public/scripts/extensions/hogwarts-mud/domain/turn-authority.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/workflows/turn.js", "public/scripts/extensions/hogwarts-mud/domain/npc-identity-observation.js"],
+      "semanticOwnerIds": ["local_post_core_1_7b", "dynamic_4b_identity"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-013-SHAPE",
+        "semantics": "VCON-013-SEMANTICS",
+        "retrieval": "VCON-013-RETRIEVAL",
+        "authority": "VCON-013-AUTHORITY",
+        "settlement": "VCON-013-SETTLEMENT",
+        "failure": "VCON-013-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_override_and_synthesis",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "affected_observation_not_written",
+        "paidNarrativeOnFailure": "existing_narrative_already_generated"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": 1,
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-local-observer-presence.test.mjs", "tests/hogwarts-mud-turn-validation.test.mjs"],
+      "currentDebt": ["Transport JSON Schema and Zod shape are independently maintained.", "Regex fallback can override perception and synthesize Identity or departure facts.", "Target design removes Identity injury meaning from this contract."]
+    },
+    {
+      "contractId": "VCON-014",
+      "domain": "local_inventory",
+      "title": "Local Inventory proposal",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["local_inventory_observer"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "item_reducer",
+      "stateFieldRefs": ["items[]", "actorPresentations[].wornItemIds", "actorPresentations[].heldItemIds"],
+      "schemaAuthority": "json_schema_plus_zod_duplicated",
+      "schemaSources": ["src/hogwarts-mud/local-semantic-adjudicator.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/adapters/local-semantic.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/item-reducer.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/item-reducer.js"],
+      "semanticOwnerIds": ["dynamic_4b_inventory"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-014-SHAPE",
+        "semantics": "VCON-014-SEMANTICS",
+        "retrieval": "VCON-014-RETRIEVAL",
+        "authority": "VCON-014-AUTHORITY",
+        "settlement": "VCON-014-SETTLEMENT",
+        "failure": "VCON-014-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_call_gate_and_filter",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "invalid_item_operations_not_written",
+        "paidNarrativeOnFailure": "existing_narrative_already_generated"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": 1,
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-item-system-v2.test.mjs"],
+      "currentDebt": ["Regex can suppress the model call and filter operation meaning.", "Destroy physical form can still be inferred from prose by regex.", "Transport JSON Schema and Zod shape are independently maintained."]
+    },
+    {
+      "contractId": "VCON-015",
+      "domain": "local_appraisal",
+      "title": "Local Appraisal proposal",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["local_appraisal_proposer"],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "memory_synapse_reducer",
+      "stateFieldRefs": ["memorySynapse", "actorMemoryIndex.byActorId", "socialGraph.relationshipEvidence[]"],
+      "schemaAuthority": "json_schema_plus_zod_duplicated",
+      "schemaSources": ["src/hogwarts-mud/local-appraisal-proposer.js", "src/hogwarts-mud/local-semantic-adjudicator.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/adapters/local-semantic.js", "public/scripts/extensions/hogwarts-mud/domain/memory-synapse-schema.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/memory-synapse-schema.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/memory-synapse-reducer.js"],
+      "semanticOwnerIds": ["local_appraisal_1_7b", "deterministic_error_code_registry"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-015-SHAPE",
+        "semantics": "VCON-015-SEMANTICS",
+        "retrieval": "VCON-015-RETRIEVAL",
+        "authority": "VCON-015-AUTHORITY",
+        "settlement": "VCON-015-SETTLEMENT",
+        "failure": "VCON-015-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_error_prose_classification",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "invalid_appraisal_not_written",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": 1,
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-memory-synapse.test.mjs"],
+      "currentDebt": ["Transport JSON Schema, Zod and proposal allowlist are independently maintained.", "Validator returns the canonical value consumed by the reducer.", "Some rejection categories are inferred from error prose."]
+    },
+    {
+      "contractId": "VCON-016",
+      "domain": "local_translation",
+      "title": "Local display translation",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": ["local_translation"],
+      "outputClass": "external_display_record",
+      "stateWritePolicy": "external_non_world_write",
+      "writerOwnerId": "translation_table_writer",
+      "stateFieldRefs": ["TranslationTableRecordV1"],
+      "schemaAuthority": "json_schema_plus_zod_duplicated",
+      "schemaSources": ["src/hogwarts-mud/local-semantic-adjudicator.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/domain/translation.js", "public/scripts/extensions/hogwarts-mud/adapters/translation.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/adapters/translation.js", "public/scripts/extensions/hogwarts-mud/adapters/localization-table.js", "src/endpoints/hogwarts-mud.js"],
+      "writerSources": ["src/hogwarts-mud/localization-table.js"],
+      "semanticOwnerIds": ["local_translation_4b"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-016-SHAPE",
+        "semantics": "VCON-016-SEMANTICS",
+        "retrieval": "VCON-016-RETRIEVAL",
+        "authority": "VCON-016-AUTHORITY",
+        "settlement": "VCON-016-SETTLEMENT",
+        "failure": "VCON-016-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "explicit_user_retranslation_only",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_contextual_literal_filter",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "world_state_unchanged_translation_error_record_only",
+        "paidNarrativeOnFailure": "source_display_fallback_is_resilience_not_acceptance"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": "one_per_translation_chunk_legacy",
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": ["tests/hogwarts-mud-translation.test.mjs", "tests/hogwarts-mud-localization-table.test.mjs"],
+      "currentDebt": ["Transport JSON Schema and Zod shape are independently maintained.", "Contextual Latin-literal meaning still has registered regex ownership.", "One translation action may issue multiple sequential local calls when values split into tasks or chunks.", "Persistence validation spans the browser adapter, authenticated endpoint and server Translation Table service."]
+    },
+    {
+      "contractId": "VCON-017",
+      "domain": "knowledge_candidate_retrieval",
+      "title": "Knowledge candidate retrieval and canonical hydration",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": [],
+      "outputClass": "candidate_retrieval",
+      "stateWritePolicy": "no_state_write",
+      "writerOwnerId": "none",
+      "stateFieldRefs": ["KnowledgeV2.records[]", "LowTierContextV1.memoryActivations"],
+      "schemaAuthority": "deterministic_retrieval_contract",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/domain/knowledge-retrieval-planner.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/domain/knowledge-projector-v2.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/knowledge-record-v2.js", "public/scripts/extensions/hogwarts-mud/domain/knowledge-projector-v2.js"],
+      "writerSources": [],
+      "semanticOwnerIds": [],
+      "retrievalOwnerIds": ["embedding_candidate_retrieval"],
+      "responsibilityIds": {
+        "shape": "VCON-017-SHAPE",
+        "semantics": "VCON-017-SEMANTICS",
+        "retrieval": "VCON-017-RETRIEVAL",
+        "authority": "VCON-017-AUTHORITY",
+        "settlement": "VCON-017-SETTLEMENT",
+        "failure": "VCON-017-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "candidate_addition_only",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "no_state_write_and_paid_request_stops_when_required_retrieval_fails",
+        "paidNarrativeOnFailure": "paid_request_not_started_when_required_retrieval_fails"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 0,
+        "worstCallsWhenTriggered": 0,
+        "targetWorstCallsWhenTriggered": 0,
+        "targetExecution": "deterministic_and_embedding_backend",
+        "targetMaxLoadedModels": 0
+      },
+      "testSources": ["tests/hogwarts-mud-knowledge-v2.test.mjs"],
+      "currentDebt": ["Candidate-only query-intent regex remains registered for replacement by embedding retrieval; it cannot reject or write State."]
+    },
+    {
+      "contractId": "VCON-018",
+      "domain": "phase2_dynamic_inventory",
+      "title": "Planned dynamic 4B Inventory section",
+      "status": "planned_unapproved",
+      "runtimeModelTaskIds": [],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "item_reducer",
+      "stateFieldRefs": ["items[]", "actorPresentations[].wornItemIds", "actorPresentations[].heldItemIds"],
+      "schemaAuthority": "benchmark_executable_descriptor",
+      "schemaSources": [".trae/specs/hogwarts-validator-governance/benchmarks/ollama-validator-benchmark.mjs"],
+      "transformSources": [".trae/specs/hogwarts-validator-governance/benchmarks/ollama-validator-benchmark.mjs"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/item-reducer.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/item-reducer.js"],
+      "semanticOwnerIds": ["dynamic_4b_inventory"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-018-SHAPE",
+        "semantics": "VCON-018-SEMANTICS",
+        "retrieval": "VCON-018-RETRIEVAL",
+        "authority": "VCON-018-AUTHORITY",
+        "settlement": "VCON-018-SETTLEMENT",
+        "failure": "VCON-018-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "forbidden",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "inventory_proposal_not_written",
+        "paidNarrativeOnFailure": "existing_narrative_already_generated"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": 1,
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial_shared_dynamic_4b_call",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": [".trae/specs/hogwarts-validator-governance/acceptance/phase2-identity-research-report-attempt-3.md"],
+      "currentDebt": ["Research-only contract; production Prompt, Schema and route do not exist and remain unapproved."]
+    },
+    {
+      "contractId": "VCON-019",
+      "domain": "phase2_dynamic_spell",
+      "title": "Planned dynamic 4B Spell section",
+      "status": "planned_unapproved",
+      "runtimeModelTaskIds": [],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "spell_reducer",
+      "stateFieldRefs": ["spellbook", "pendingSpellProposals[]", "spellProposalDecisions[]"],
+      "schemaAuthority": "benchmark_executable_descriptor",
+      "schemaSources": [".trae/specs/hogwarts-validator-governance/benchmarks/ollama-validator-benchmark.mjs"],
+      "transformSources": [".trae/specs/hogwarts-validator-governance/benchmarks/ollama-validator-benchmark.mjs"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/spell-proposals.js", "public/scripts/extensions/hogwarts-mud/domain/spell-state.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/spell-state.js"],
+      "semanticOwnerIds": ["dynamic_4b_spell"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-019-SHAPE",
+        "semantics": "VCON-019-SEMANTICS",
+        "retrieval": "VCON-019-RETRIEVAL",
+        "authority": "VCON-019-AUTHORITY",
+        "settlement": "VCON-019-SETTLEMENT",
+        "failure": "VCON-019-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "forbidden",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "spell_proposal_not_written",
+        "paidNarrativeOnFailure": "existing_narrative_already_generated"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": 1,
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial_shared_dynamic_4b_call",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": [".trae/specs/hogwarts-validator-governance/acceptance/phase2-identity-research-report-attempt-3.md"],
+      "currentDebt": ["Research-only contract; production Prompt, Schema and route do not exist and remain unapproved."]
+    },
+    {
+      "contractId": "VCON-020",
+      "domain": "phase2_dynamic_identity",
+      "title": "Planned dynamic 4B Identity section",
+      "status": "planned_unapproved",
+      "runtimeModelTaskIds": [],
+      "outputClass": "state_proposal",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "identity_reducer",
+      "stateFieldRefs": ["actorLibrary[].identity.body.injuryAssessment", "actorLibrary[].identity.body.injuries[]"],
+      "schemaAuthority": "benchmark_executable_descriptor",
+      "schemaSources": [".trae/specs/hogwarts-validator-governance/benchmarks/ollama-validator-benchmark.mjs"],
+      "transformSources": [".trae/specs/hogwarts-validator-governance/benchmarks/ollama-validator-benchmark.mjs"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/npc-identity-schema.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/npc-identity-observation.js"],
+      "semanticOwnerIds": ["dynamic_4b_identity"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-020-SHAPE",
+        "semantics": "VCON-020-SEMANTICS",
+        "retrieval": "VCON-020-RETRIEVAL",
+        "authority": "VCON-020-AUTHORITY",
+        "settlement": "VCON-020-SETTLEMENT",
+        "failure": "VCON-020-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "forbidden",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "identity_observation_not_written",
+        "paidNarrativeOnFailure": "existing_narrative_already_generated"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 1,
+        "worstCallsWhenTriggered": 1,
+        "targetWorstCallsWhenTriggered": 1,
+        "targetExecution": "serial_shared_dynamic_4b_call",
+        "targetMaxLoadedModels": 1
+      },
+      "testSources": [".trae/specs/hogwarts-validator-governance/acceptance/phase2-identity-research-report-attempt-3.md"],
+      "currentDebt": ["Research-only contract; production Prompt, Schema and route do not exist and remain unapproved."]
+    },
+    {
+      "contractId": "VCON-021",
+      "domain": "calendar_medium_horizon_settlement",
+      "title": "Medium Calendar horizon settlement",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": [],
+      "outputClass": "deterministic_state_settlement",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "calendar_medium_horizon_workflow",
+      "stateFieldRefs": ["calendar.horizon"],
+      "schemaAuthority": "deterministic_runtime_contract",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/medium-calendar-director.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/workflows/medium-calendar-director.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/calendar-schema.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/workflows/medium-calendar-director.js"],
+      "semanticOwnerIds": [],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-021-SHAPE",
+        "semantics": "VCON-021-SEMANTICS",
+        "retrieval": "VCON-021-RETRIEVAL",
+        "authority": "VCON-021-AUTHORITY",
+        "settlement": "VCON-021-SETTLEMENT",
+        "failure": "VCON-021-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "none",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "calendar_horizon_unchanged",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 0,
+        "worstCallsWhenTriggered": 0,
+        "targetWorstCallsWhenTriggered": 0,
+        "targetExecution": "deterministic",
+        "targetMaxLoadedModels": 0
+      },
+      "testSources": ["tests/hogwarts-mud-medium-calendar-director.test.mjs", "tests/hogwarts-mud-calendar-reducer-projection.test.mjs"],
+      "currentDebt": ["The Medium Calendar workflow writes horizon outside the Calendar proposal reducer."]
+    },
+    {
+      "contractId": "VCON-022",
+      "domain": "interior_map_generation_status",
+      "title": "Interior Map generation lifecycle status",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": [],
+      "outputClass": "deterministic_runtime_status",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "interior_map_generation_workflow",
+      "stateFieldRefs": ["map.interiorMapGeneration"],
+      "schemaAuthority": "deterministic_runtime_contract",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/interior-map.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/workflows/interior-map.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/workflows/interior-map.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/workflows/interior-map.js"],
+      "semanticOwnerIds": ["deterministic_process_health_protocol"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-022-SHAPE",
+        "semantics": "VCON-022-SEMANTICS",
+        "retrieval": "VCON-022-RETRIEVAL",
+        "authority": "VCON-022-AUTHORITY",
+        "settlement": "VCON-022-SETTLEMENT",
+        "failure": "VCON-022-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "none",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "failed_status_and_bounded_error_are_written",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 0,
+        "worstCallsWhenTriggered": 0,
+        "targetWorstCallsWhenTriggered": 0,
+        "targetExecution": "deterministic",
+        "targetMaxLoadedModels": 0
+      },
+      "testSources": ["tests/hogwarts-mud-map-cartography.test.mjs"],
+      "currentDebt": ["The workflow directly writes ready, waiting, generating, language-skipped and failed lifecycle states."]
+    },
+    {
+      "contractId": "VCON-023",
+      "domain": "pacing_workflow_status",
+      "title": "Pacing workflow lifecycle status",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": [],
+      "outputClass": "deterministic_runtime_status",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "pacing_failure_workflow",
+      "stateFieldRefs": ["pacingDirector.status", "pacingDirector.error", "pacingDirector.lastAssessedTurn", "pacingDirector.lastAssessedSceneId", "pacingDirector.reassessAfterTurns", "pacingDirector.assessment", "pacingDirector.pendingBeat"],
+      "schemaAuthority": "deterministic_runtime_contract",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/directors.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/workflows/directors.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/workflows/directors.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/workflows/directors.js"],
+      "semanticOwnerIds": ["deterministic_process_health_protocol"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-023-SHAPE",
+        "semantics": "VCON-023-SEMANTICS",
+        "retrieval": "VCON-023-RETRIEVAL",
+        "authority": "VCON-023-AUTHORITY",
+        "settlement": "VCON-023-SETTLEMENT",
+        "failure": "VCON-023-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "none",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "failed_status_error_and_reassessment_metadata_are_written",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 0,
+        "worstCallsWhenTriggered": 0,
+        "targetWorstCallsWhenTriggered": 0,
+        "targetExecution": "deterministic",
+        "targetMaxLoadedModels": 0
+      },
+      "testSources": ["tests/hogwarts-mud-pacing-director.test.mjs"],
+      "currentDebt": ["The workflow writes idle and failed lifecycle status directly outside applyPacingAssessment()."]
+    },
+    {
+      "contractId": "VCON-024",
+      "domain": "social_memory_workflow_status",
+      "title": "Social and Memory Director lifecycle status",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": [],
+      "outputClass": "deterministic_runtime_status",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "social_memory_workflow",
+      "stateFieldRefs": ["socialGraph.status", "socialGraph.error", "socialGraph.extractorVersion", "socialGraph.backfillPendingSceneId", "socialGraph.backfilledSceneIds[]", "socialGraph.languageMismatchCount", "memoryDirector.status", "memoryDirector.error", "memoryDirector.lastReviewedTurn", "memoryDirector.reviewAfterTurns"],
+      "schemaAuthority": "deterministic_runtime_contract",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/workflows/social-memory.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/workflows/social-memory.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/workflows/social-memory.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/workflows/social-memory.js"],
+      "semanticOwnerIds": ["deterministic_process_health_protocol"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-024-SHAPE",
+        "semantics": "VCON-024-SEMANTICS",
+        "retrieval": "VCON-024-RETRIEVAL",
+        "authority": "VCON-024-AUTHORITY",
+        "settlement": "VCON-024-SETTLEMENT",
+        "failure": "VCON-024-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "none",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "failed_or_pending_lifecycle_status_and_bounded_error_are_written",
+        "paidNarrativeOnFailure": "existing_narrative_already_committed"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 0,
+        "worstCallsWhenTriggered": 0,
+        "targetWorstCallsWhenTriggered": 0,
+        "targetExecution": "deterministic",
+        "targetMaxLoadedModels": 0
+      },
+      "testSources": ["tests/hogwarts-mud-social-v3.test.mjs", "tests/hogwarts-mud-memory-synapse.test.mjs"],
+      "currentDebt": ["The workflow writes running, pending, ready and failed Social/Memory lifecycle fields outside the Social V3 reducer."]
+    },
+    {
+      "contractId": "VCON-025",
+      "domain": "deterministic_migration",
+      "title": "Prose-free deterministic migration settlement",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": [],
+      "outputClass": "deterministic_migration",
+      "stateWritePolicy": "validated_single_writer",
+      "writerOwnerId": "migration_writers",
+      "stateFieldRefs": ["actorLibrary[]", "actorMemoryIndex", "actors[]", "items[]", "actorPresentations", "localPresence", "cohorts[]", "spatial", "clock", "runtime contract versions"],
+      "schemaAuthority": "explicit_or_conservative_migration",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js", "public/scripts/extensions/hogwarts-mud/domain/actor-identity.js", "public/scripts/extensions/hogwarts-mud/domain/actor-memory-migration.js", "public/scripts/extensions/hogwarts-mud/domain/inventory.js", "public/scripts/extensions/hogwarts-mud/domain/item-migration.js", "public/scripts/extensions/hogwarts-mud/domain/npc-identity-migration.js", "public/scripts/extensions/hogwarts-mud/domain/npc-identity-observation-migration.js", "public/scripts/extensions/hogwarts-mud/domain/spatial-reconciliation.js", "public/scripts/extensions/hogwarts-mud/domain/time-environment.js", "public/scripts/extensions/hogwarts-mud/runtime/lifecycle.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js", "public/scripts/extensions/hogwarts-mud/domain/actor-memory-migration.js", "public/scripts/extensions/hogwarts-mud/domain/item-migration.js", "public/scripts/extensions/hogwarts-mud/domain/npc-identity-migration.js", "public/scripts/extensions/hogwarts-mud/domain/npc-identity-observation-migration.js", "public/scripts/extensions/hogwarts-mud/domain/spatial-reconciliation.js", "public/scripts/extensions/hogwarts-mud/runtime/lifecycle.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js", "public/scripts/extensions/hogwarts-mud/domain/item-migration.js", "public/scripts/extensions/hogwarts-mud/domain/npc-identity-migration.js", "public/scripts/extensions/hogwarts-mud/domain/spatial-reconciliation.js", "public/scripts/extensions/hogwarts-mud/runtime/lifecycle.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js", "public/scripts/extensions/hogwarts-mud/domain/actor-memory-migration.js", "public/scripts/extensions/hogwarts-mud/domain/item-migration.js", "public/scripts/extensions/hogwarts-mud/domain/npc-identity-migration.js", "public/scripts/extensions/hogwarts-mud/domain/npc-identity-observation-migration.js", "public/scripts/extensions/hogwarts-mud/domain/spatial-reconciliation.js", "public/scripts/extensions/hogwarts-mud/runtime/lifecycle.js"],
+      "semanticOwnerIds": ["deterministic_migration_no_model"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-025-SHAPE",
+        "semantics": "VCON-025-SEMANTICS",
+        "retrieval": "VCON-025-RETRIEVAL",
+        "authority": "VCON-025-AUTHORITY",
+        "settlement": "VCON-025-SETTLEMENT",
+        "failure": "VCON-025-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_migration_heuristics",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "atomic_migration_not_committed",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 0,
+        "worstCallsWhenTriggered": 0,
+        "targetWorstCallsWhenTriggered": 0,
+        "targetExecution": "deterministic",
+        "targetMaxLoadedModels": 0
+      },
+      "testSources": ["tests/hogwarts-mud-actor-context-cutover.test.mjs", "tests/hogwarts-mud-item-system-v2.test.mjs", "tests/hogwarts-mud-presence-migration.test.mjs"],
+      "currentDebt": ["Twenty-six prose-semantic migration regex rows remain frozen for Phase 2 removal.", "The target migration contract uses explicit structured values or approved conservative defaults only."]
+    },
+    {
+      "contractId": "VCON-026",
+      "domain": "sensitive_field_registry",
+      "title": "Explicit sensitive field ownership",
+      "status": "legacy_registered",
+      "runtimeModelTaskIds": [],
+      "outputClass": "deterministic_field_policy",
+      "stateWritePolicy": "no_state_write",
+      "writerOwnerId": "none",
+      "stateFieldRefs": ["revisionHistory[]", "turn diagnostics"],
+      "schemaAuthority": "explicit_sensitive_field_registry_target",
+      "schemaSources": ["public/scripts/extensions/hogwarts-mud/domain/save-revision.js", "public/scripts/extensions/hogwarts-mud/runtime/turn-diagnostics.js"],
+      "transformSources": ["public/scripts/extensions/hogwarts-mud/domain/save-revision.js", "public/scripts/extensions/hogwarts-mud/runtime/turn-diagnostics.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/save-revision.js", "public/scripts/extensions/hogwarts-mud/runtime/turn-diagnostics.js"],
+      "writerSources": [],
+      "semanticOwnerIds": ["deterministic_sensitive_field_registry"],
+      "retrievalOwnerIds": [],
+      "responsibilityIds": {
+        "shape": "VCON-026-SHAPE",
+        "semantics": "VCON-026-SEMANTICS",
+        "retrieval": "VCON-026-RETRIEVAL",
+        "authority": "VCON-026-AUTHORITY",
+        "settlement": "VCON-026-SETTLEMENT",
+        "failure": "VCON-026-FAILURE"
+      },
+      "failurePolicy": {
+        "currentAutomaticRetry": "forbidden",
+        "targetAutomaticRetry": "forbidden",
+        "currentProviderFallback": "forbidden",
+        "targetProviderFallback": "forbidden",
+        "currentSemanticRegexFallback": "present_key_name_inference",
+        "targetSemanticRegexFallback": "forbidden",
+        "stateOnFailure": "sensitive_payload_omitted_or_rejected",
+        "paidNarrativeOnFailure": "not_applicable"
+      },
+      "callPolicy": {
+        "callsWhenNotTriggered": 0,
+        "normalCallsWhenTriggered": 0,
+        "worstCallsWhenTriggered": 0,
+        "targetWorstCallsWhenTriggered": 0,
+        "targetExecution": "deterministic",
+        "targetMaxLoadedModels": 0
+      },
+      "testSources": ["tests/hogwarts-mud-save-revision-integration.test.mjs", "tests/hogwarts-mud-task6-repair-diagnostics.test.mjs"],
+      "currentDebt": ["Two semantic runtime regex rows infer sensitive ownership from key names and remain frozen for Phase 2 replacement."]
+    }
+  ],
+  "newContractPolicy": {
+    "allowedInitialStatuses": ["planned_unapproved"],
+    "forbiddenInitialStatus": "legacy_registered",
+    "requiredResponsibilityKinds": ["shape", "semantics", "retrieval", "authority", "settlement", "failure"],
+    "allowedCompliantSchemaAuthorities": ["shared_executable_descriptor", "free_text_display", "deterministic_retrieval_contract"],
+    "requiredTargetFailurePolicy": {
+      "targetAutomaticRetry": "forbidden",
+      "targetSemanticRegexFallback": "forbidden",
+      "targetProviderFallback": "forbidden"
+    },
+    "requiredCallPolicy": {
+      "callsWhenNotTriggered": 0,
+      "targetExecution": "serial",
+      "targetMaxLoadedModelsMaximum": 1
+    },
+    "stateWriterRule": "A world-State contract names exactly one writerOwnerId and at least one writer source. A no-State contract uses writerOwnerId=none and no writer source.",
+    "approvalRule": "Registration is necessary but never sufficient approval. The owning PRD, living runtime fields, Prompt budget, tests, blind simulation and independent acceptance still apply."
+  }
+}

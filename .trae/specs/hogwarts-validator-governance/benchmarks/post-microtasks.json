@@ -1,0 +1,1777 @@
+{
+  "perceptionSystemCharacters": 376,
+  "identitySystemCharacters": 384,
+  "rows": [
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 0,
+      "caseId": "private_note",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "attempted",
+        "evidenceText": "Tina slid the folded note beneath Harry's hand."
+      },
+      "wallMs": 1328.370167,
+      "loadMs": 658.200875,
+      "promptTokens": 128,
+      "outputTokens": 44
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 0,
+      "caseId": "failed_public_spell",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "attempted",
+        "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+      },
+      "wallMs": 924.490792,
+      "loadMs": 111.885708,
+      "promptTokens": 141,
+      "outputTokens": 61
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 0,
+      "caseId": "public_teaching",
+      "pass": false,
+      "actual": {
+        "visualScope": "nearby",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+      },
+      "wallMs": 737.9897500000002,
+      "loadMs": 121.580208,
+      "promptTokens": 128,
+      "outputTokens": 44
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 0,
+      "caseId": "private_inspection",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+      },
+      "wallMs": 753.442125,
+      "loadMs": 101.61875,
+      "promptTokens": 127,
+      "outputTokens": 48
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 0,
+      "caseId": "visible_injury",
+      "pass": false,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 301.39725,
+      "loadMs": 120.982416,
+      "promptTokens": 116,
+      "outputTokens": 7
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 0,
+      "caseId": "no_visible_injury",
+      "pass": false,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 258.47779200000014,
+      "loadMs": 118.41425,
+      "promptTokens": 116,
+      "outputTokens": 7
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 0,
+      "caseId": "negative_gift",
+      "pass": true,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 224.49349999999959,
+      "loadMs": 102.051208,
+      "promptTokens": 113,
+      "outputTokens": 7
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 1,
+      "caseId": "private_note",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "attempted",
+        "evidenceText": "Tina slid the folded note beneath Harry's hand."
+      },
+      "wallMs": 687.7204579999998,
+      "loadMs": 100.361708,
+      "promptTokens": 128,
+      "outputTokens": 44
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 1,
+      "caseId": "failed_public_spell",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "attempted",
+        "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+      },
+      "wallMs": 879.2215830000005,
+      "loadMs": 99.222042,
+      "promptTokens": 141,
+      "outputTokens": 61
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 1,
+      "caseId": "public_teaching",
+      "pass": false,
+      "actual": {
+        "visualScope": "nearby",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+      },
+      "wallMs": 670.5036659999996,
+      "loadMs": 100.214292,
+      "promptTokens": 128,
+      "outputTokens": 44
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 1,
+      "caseId": "private_inspection",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+      },
+      "wallMs": 712.9500420000004,
+      "loadMs": 99.314958,
+      "promptTokens": 127,
+      "outputTokens": 48
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 1,
+      "caseId": "visible_injury",
+      "pass": false,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 238.18362499999967,
+      "loadMs": 98.604625,
+      "promptTokens": 116,
+      "outputTokens": 7
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 1,
+      "caseId": "no_visible_injury",
+      "pass": false,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 239.09862499999963,
+      "loadMs": 99.110208,
+      "promptTokens": 116,
+      "outputTokens": 7
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 1,
+      "caseId": "negative_gift",
+      "pass": true,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 221.42408400000022,
+      "loadMs": 98.973,
+      "promptTokens": 113,
+      "outputTokens": 7
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 2,
+      "caseId": "private_note",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "attempted",
+        "evidenceText": "Tina slid the folded note beneath Harry's hand."
+      },
+      "wallMs": 687.8438750000005,
+      "loadMs": 100.803708,
+      "promptTokens": 128,
+      "outputTokens": 44
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 2,
+      "caseId": "failed_public_spell",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "attempted",
+        "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+      },
+      "wallMs": 909.2749160000003,
+      "loadMs": 124.429208,
+      "promptTokens": 141,
+      "outputTokens": 61
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 2,
+      "caseId": "public_teaching",
+      "pass": false,
+      "actual": {
+        "visualScope": "nearby",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+      },
+      "wallMs": 682.7599589999991,
+      "loadMs": 98.781958,
+      "promptTokens": 128,
+      "outputTokens": 44
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 2,
+      "caseId": "private_inspection",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+      },
+      "wallMs": 710.0191250000007,
+      "loadMs": 100.0345,
+      "promptTokens": 127,
+      "outputTokens": 48
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 2,
+      "caseId": "visible_injury",
+      "pass": false,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 276.0734170000014,
+      "loadMs": 126.877125,
+      "promptTokens": 116,
+      "outputTokens": 7
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 2,
+      "caseId": "no_visible_injury",
+      "pass": false,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 266.5332920000001,
+      "loadMs": 126.920292,
+      "promptTokens": 116,
+      "outputTokens": 7
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 2,
+      "caseId": "negative_gift",
+      "pass": true,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 222.5654169999998,
+      "loadMs": 99.147916,
+      "promptTokens": 113,
+      "outputTokens": 7
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 3,
+      "caseId": "private_note",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "attempted",
+        "evidenceText": "Tina slid the folded note beneath Harry's hand."
+      },
+      "wallMs": 710.1849999999995,
+      "loadMs": 114.191208,
+      "promptTokens": 128,
+      "outputTokens": 44
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 3,
+      "caseId": "failed_public_spell",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "attempted",
+        "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+      },
+      "wallMs": 908.8553329999995,
+      "loadMs": 121.993708,
+      "promptTokens": 141,
+      "outputTokens": 61
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 3,
+      "caseId": "public_teaching",
+      "pass": false,
+      "actual": {
+        "visualScope": "nearby",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+      },
+      "wallMs": 675.8244589999995,
+      "loadMs": 99.610083,
+      "promptTokens": 128,
+      "outputTokens": 44
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 3,
+      "caseId": "private_inspection",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+      },
+      "wallMs": 724.6656669999993,
+      "loadMs": 105.959292,
+      "promptTokens": 127,
+      "outputTokens": 48
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 3,
+      "caseId": "visible_injury",
+      "pass": false,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 259.0115000000005,
+      "loadMs": 116.63525,
+      "promptTokens": 116,
+      "outputTokens": 7
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 3,
+      "caseId": "no_visible_injury",
+      "pass": false,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 246.20983299999898,
+      "loadMs": 101.582459,
+      "promptTokens": 116,
+      "outputTokens": 7
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 3,
+      "caseId": "negative_gift",
+      "pass": true,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 237.2739590000001,
+      "loadMs": 114.084291,
+      "promptTokens": 113,
+      "outputTokens": 7
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 4,
+      "caseId": "private_note",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "attempted",
+        "evidenceText": "Tina slid the folded note beneath Harry's hand."
+      },
+      "wallMs": 702.5360830000009,
+      "loadMs": 99.753125,
+      "promptTokens": 128,
+      "outputTokens": 44
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 4,
+      "caseId": "failed_public_spell",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "attempted",
+        "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+      },
+      "wallMs": 927.9147499999999,
+      "loadMs": 119.908292,
+      "promptTokens": 141,
+      "outputTokens": 61
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 4,
+      "caseId": "public_teaching",
+      "pass": false,
+      "actual": {
+        "visualScope": "nearby",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+      },
+      "wallMs": 691.6211659999972,
+      "loadMs": 114.616042,
+      "promptTokens": 128,
+      "outputTokens": 44
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "round": 4,
+      "caseId": "private_inspection",
+      "pass": false,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+      },
+      "wallMs": 707.5357089999998,
+      "loadMs": 99.134458,
+      "promptTokens": 127,
+      "outputTokens": 48
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 4,
+      "caseId": "visible_injury",
+      "pass": false,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 239.64916699999958,
+      "loadMs": 99.208167,
+      "promptTokens": 116,
+      "outputTokens": 7
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 4,
+      "caseId": "no_visible_injury",
+      "pass": false,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 240.97495899999922,
+      "loadMs": 98.898417,
+      "promptTokens": 116,
+      "outputTokens": 7
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "round": 4,
+      "caseId": "negative_gift",
+      "pass": true,
+      "actual": {
+        "observations": []
+      },
+      "wallMs": 229.21858300000167,
+      "loadMs": 107.39675,
+      "promptTokens": 113,
+      "outputTokens": 7
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 0,
+      "caseId": "private_note",
+      "pass": true,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed."
+      },
+      "wallMs": 2963.2185000000027,
+      "loadMs": 1421.930292,
+      "promptTokens": 122,
+      "outputTokens": 55
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 0,
+      "caseId": "failed_public_spell",
+      "pass": false,
+      "actual": {
+        "visualScope": "nearby",
+        "audibleScope": "nearby",
+        "concealment": "attempted",
+        "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+      },
+      "wallMs": 1940.6398749999971,
+      "loadMs": 116.8655,
+      "promptTokens": 135,
+      "outputTokens": 72
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 0,
+      "caseId": "public_teaching",
+      "pass": false,
+      "actual": {
+        "visualScope": "none",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+      },
+      "wallMs": 1493.238709000001,
+      "loadMs": 111.447292,
+      "promptTokens": 122,
+      "outputTokens": 55
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 0,
+      "caseId": "private_inspection",
+      "pass": false,
+      "actual": {
+        "visualScope": "none",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+      },
+      "wallMs": 1501.601708000002,
+      "loadMs": 116.516,
+      "promptTokens": 121,
+      "outputTokens": 54
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 0,
+      "caseId": "visible_injury",
+      "pass": true,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "harry",
+            "status": "visible_injury",
+            "evidenceText": "a bleeding cut visible across his palm"
+          }
+        ]
+      },
+      "wallMs": 1422.1044169999986,
+      "loadMs": 110.933375,
+      "promptTokens": 110,
+      "outputTokens": 48
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 0,
+      "caseId": "no_visible_injury",
+      "pass": true,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "ron",
+            "status": "no_visible_injury",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        ]
+      },
+      "wallMs": 1451.8658329999998,
+      "loadMs": 115.933375,
+      "promptTokens": 110,
+      "outputTokens": 55
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 0,
+      "caseId": "negative_gift",
+      "pass": false,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "hermione",
+            "status": "no_visible_injury",
+            "evidenceText": "Hermione demonstrated Lumos and handed Tina a signed parchment."
+          },
+          {
+            "actorId": "harry",
+            "status": "no_visible_injury",
+            "evidenceText": "Herm: Hermione demonstrated Lumos and handed Tina a signed parchment."
+          }
+        ]
+      },
+      "wallMs": 2460.7740419999973,
+      "loadMs": 106.57575,
+      "promptTokens": 107,
+      "outputTokens": 99
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 1,
+      "caseId": "private_note",
+      "pass": true,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed."
+      },
+      "wallMs": 1484.486957999994,
+      "loadMs": 117.352167,
+      "promptTokens": 122,
+      "outputTokens": 55
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 1,
+      "caseId": "failed_public_spell",
+      "pass": false,
+      "actual": {
+        "visualScope": "nearby",
+        "audibleScope": "nearby",
+        "concealment": "attempted",
+        "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+      },
+      "wallMs": 1862.1452080000017,
+      "loadMs": 103.22175,
+      "promptTokens": 135,
+      "outputTokens": 72
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 1,
+      "caseId": "public_teaching",
+      "pass": false,
+      "actual": {
+        "visualScope": "none",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+      },
+      "wallMs": 1392.2799999999988,
+      "loadMs": 101.952291,
+      "promptTokens": 122,
+      "outputTokens": 55
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 1,
+      "caseId": "private_inspection",
+      "pass": false,
+      "actual": {
+        "visualScope": "none",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+      },
+      "wallMs": 1408.4347500000003,
+      "loadMs": 115.677833,
+      "promptTokens": 121,
+      "outputTokens": 54
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 1,
+      "caseId": "visible_injury",
+      "pass": true,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "harry",
+            "status": "visible_injury",
+            "evidenceText": "a bleeding cut visible across his palm"
+          }
+        ]
+      },
+      "wallMs": 1317.6290000000008,
+      "loadMs": 117.117459,
+      "promptTokens": 110,
+      "outputTokens": 48
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 1,
+      "caseId": "no_visible_injury",
+      "pass": true,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "ron",
+            "status": "no_visible_injury",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        ]
+      },
+      "wallMs": 1427.0567919999958,
+      "loadMs": 115.063042,
+      "promptTokens": 110,
+      "outputTokens": 55
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 1,
+      "caseId": "negative_gift",
+      "pass": false,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "hermione",
+            "status": "no_visible_injury",
+            "evidenceText": "Hermione demonstrated Lumos and handed Tina a signed parchment."
+          },
+          {
+            "actorId": "harry",
+            "status": "no_visible_injury",
+            "evidenceText": "Herm: Hermione demonstrated Lumos and handed Tina a signed parchment."
+          }
+        ]
+      },
+      "wallMs": 2424.5893329999963,
+      "loadMs": 116.129167,
+      "promptTokens": 107,
+      "outputTokens": 99
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 2,
+      "caseId": "private_note",
+      "pass": true,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed."
+      },
+      "wallMs": 1433.3662089999998,
+      "loadMs": 119.972084,
+      "promptTokens": 122,
+      "outputTokens": 55
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 2,
+      "caseId": "failed_public_spell",
+      "pass": false,
+      "actual": {
+        "visualScope": "nearby",
+        "audibleScope": "nearby",
+        "concealment": "attempted",
+        "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+      },
+      "wallMs": 1884.938374999998,
+      "loadMs": 116.950042,
+      "promptTokens": 135,
+      "outputTokens": 72
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 2,
+      "caseId": "public_teaching",
+      "pass": false,
+      "actual": {
+        "visualScope": "none",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+      },
+      "wallMs": 1428.297749999998,
+      "loadMs": 117.342708,
+      "promptTokens": 122,
+      "outputTokens": 55
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 2,
+      "caseId": "private_inspection",
+      "pass": false,
+      "actual": {
+        "visualScope": "none",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+      },
+      "wallMs": 1362.2346670000043,
+      "loadMs": 109.968,
+      "promptTokens": 121,
+      "outputTokens": 54
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 2,
+      "caseId": "visible_injury",
+      "pass": true,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "harry",
+            "status": "visible_injury",
+            "evidenceText": "a bleeding cut visible across his palm"
+          }
+        ]
+      },
+      "wallMs": 1279.0097920000044,
+      "loadMs": 115.191583,
+      "promptTokens": 110,
+      "outputTokens": 48
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 2,
+      "caseId": "no_visible_injury",
+      "pass": true,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "ron",
+            "status": "no_visible_injury",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        ]
+      },
+      "wallMs": 1430.6967080000031,
+      "loadMs": 116.139791,
+      "promptTokens": 110,
+      "outputTokens": 55
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 2,
+      "caseId": "negative_gift",
+      "pass": false,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "hermione",
+            "status": "no_visible_injury",
+            "evidenceText": "Hermione demonstrated Lumos and handed Tina a signed parchment."
+          },
+          {
+            "actorId": "harry",
+            "status": "no_visible_injury",
+            "evidenceText": "Herm: Hermione demonstrated Lumos and handed Tina a signed parchment."
+          }
+        ]
+      },
+      "wallMs": 2411.677665999996,
+      "loadMs": 116.202083,
+      "promptTokens": 107,
+      "outputTokens": 99
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 3,
+      "caseId": "private_note",
+      "pass": true,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed."
+      },
+      "wallMs": 1475.9080419999955,
+      "loadMs": 116.137708,
+      "promptTokens": 122,
+      "outputTokens": 55
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 3,
+      "caseId": "failed_public_spell",
+      "pass": false,
+      "actual": {
+        "visualScope": "nearby",
+        "audibleScope": "nearby",
+        "concealment": "attempted",
+        "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+      },
+      "wallMs": 1921.5616660000014,
+      "loadMs": 117.461458,
+      "promptTokens": 135,
+      "outputTokens": 72
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 3,
+      "caseId": "public_teaching",
+      "pass": false,
+      "actual": {
+        "visualScope": "none",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+      },
+      "wallMs": 1518.6919169999965,
+      "loadMs": 114.612875,
+      "promptTokens": 122,
+      "outputTokens": 55
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 3,
+      "caseId": "private_inspection",
+      "pass": false,
+      "actual": {
+        "visualScope": "none",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+      },
+      "wallMs": 1415.4075410000005,
+      "loadMs": 117.382209,
+      "promptTokens": 121,
+      "outputTokens": 54
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 3,
+      "caseId": "visible_injury",
+      "pass": true,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "harry",
+            "status": "visible_injury",
+            "evidenceText": "a bleeding cut visible across his palm"
+          }
+        ]
+      },
+      "wallMs": 1331.7637499999983,
+      "loadMs": 119.881916,
+      "promptTokens": 110,
+      "outputTokens": 48
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 3,
+      "caseId": "no_visible_injury",
+      "pass": true,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "ron",
+            "status": "no_visible_injury",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        ]
+      },
+      "wallMs": 1439.3232080000016,
+      "loadMs": 119.170875,
+      "promptTokens": 110,
+      "outputTokens": 55
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 3,
+      "caseId": "negative_gift",
+      "pass": false,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "hermione",
+            "status": "no_visible_injury",
+            "evidenceText": "Hermione demonstrated Lumos and handed Tina a signed parchment."
+          },
+          {
+            "actorId": "harry",
+            "status": "no_visible_injury",
+            "evidenceText": "Herm: Hermione demonstrated Lumos and handed Tina a signed parchment."
+          }
+        ]
+      },
+      "wallMs": 2387.900499999996,
+      "loadMs": 112.829292,
+      "promptTokens": 107,
+      "outputTokens": 99
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 4,
+      "caseId": "private_note",
+      "pass": true,
+      "actual": {
+        "visualScope": "target",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina slid the folded note beneath Harry's hand. No one else noticed."
+      },
+      "wallMs": 1395.7229999999981,
+      "loadMs": 117.311667,
+      "promptTokens": 122,
+      "outputTokens": 55
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 4,
+      "caseId": "failed_public_spell",
+      "pass": false,
+      "actual": {
+        "visualScope": "nearby",
+        "audibleScope": "nearby",
+        "concealment": "attempted",
+        "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+      },
+      "wallMs": 1790.8813329999975,
+      "loadMs": 101.367584,
+      "promptTokens": 135,
+      "outputTokens": 72
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 4,
+      "caseId": "public_teaching",
+      "pass": false,
+      "actual": {
+        "visualScope": "none",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+      },
+      "wallMs": 1398.7589160000061,
+      "loadMs": 115.489792,
+      "promptTokens": 122,
+      "outputTokens": 55
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "round": 4,
+      "caseId": "private_inspection",
+      "pass": false,
+      "actual": {
+        "visualScope": "none",
+        "audibleScope": "none",
+        "concealment": "successful",
+        "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+      },
+      "wallMs": 1339.6402500000113,
+      "loadMs": 99.657292,
+      "promptTokens": 121,
+      "outputTokens": 54
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 4,
+      "caseId": "visible_injury",
+      "pass": true,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "harry",
+            "status": "visible_injury",
+            "evidenceText": "a bleeding cut visible across his palm"
+          }
+        ]
+      },
+      "wallMs": 1286.9062080000003,
+      "loadMs": 99.679291,
+      "promptTokens": 110,
+      "outputTokens": 48
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 4,
+      "caseId": "no_visible_injury",
+      "pass": true,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "ron",
+            "status": "no_visible_injury",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        ]
+      },
+      "wallMs": 1402.984832999995,
+      "loadMs": 99.107125,
+      "promptTokens": 110,
+      "outputTokens": 55
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "round": 4,
+      "caseId": "negative_gift",
+      "pass": false,
+      "actual": {
+        "observations": [
+          {
+            "actorId": "hermione",
+            "status": "no_visible_injury",
+            "evidenceText": "Hermione demonstrated Lumos and handed Tina a signed parchment."
+          },
+          {
+            "actorId": "harry",
+            "status": "no_visible_injury",
+            "evidenceText": "Herm: Hermione demonstrated Lumos and handed Tina a signed parchment."
+          }
+        ]
+      },
+      "wallMs": 2308.5261670000036,
+      "loadMs": 99.694709,
+      "promptTokens": 107,
+      "outputTokens": 99
+    }
+  ],
+  "summary": [
+    {
+      "task": "perception",
+      "model": "qwen3:1.7b",
+      "passed": 0,
+      "total": 20,
+      "accuracy": 0,
+      "averageWallMs": 786.6862312499998,
+      "averageLoadMs": 134.58070615000003,
+      "failures": [
+        {
+          "caseId": "private_note",
+          "round": 0,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "attempted",
+            "evidenceText": "Tina slid the folded note beneath Harry's hand."
+          }
+        },
+        {
+          "caseId": "failed_public_spell",
+          "round": 0,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "attempted",
+            "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+          }
+        },
+        {
+          "caseId": "public_teaching",
+          "round": 0,
+          "actual": {
+            "visualScope": "nearby",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+          }
+        },
+        {
+          "caseId": "private_inspection",
+          "round": 0,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        },
+        {
+          "caseId": "private_note",
+          "round": 1,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "attempted",
+            "evidenceText": "Tina slid the folded note beneath Harry's hand."
+          }
+        },
+        {
+          "caseId": "failed_public_spell",
+          "round": 1,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "attempted",
+            "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+          }
+        },
+        {
+          "caseId": "public_teaching",
+          "round": 1,
+          "actual": {
+            "visualScope": "nearby",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+          }
+        },
+        {
+          "caseId": "private_inspection",
+          "round": 1,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        },
+        {
+          "caseId": "private_note",
+          "round": 2,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "attempted",
+            "evidenceText": "Tina slid the folded note beneath Harry's hand."
+          }
+        },
+        {
+          "caseId": "failed_public_spell",
+          "round": 2,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "attempted",
+            "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+          }
+        },
+        {
+          "caseId": "public_teaching",
+          "round": 2,
+          "actual": {
+            "visualScope": "nearby",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+          }
+        },
+        {
+          "caseId": "private_inspection",
+          "round": 2,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        },
+        {
+          "caseId": "private_note",
+          "round": 3,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "attempted",
+            "evidenceText": "Tina slid the folded note beneath Harry's hand."
+          }
+        },
+        {
+          "caseId": "failed_public_spell",
+          "round": 3,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "attempted",
+            "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+          }
+        },
+        {
+          "caseId": "public_teaching",
+          "round": 3,
+          "actual": {
+            "visualScope": "nearby",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+          }
+        },
+        {
+          "caseId": "private_inspection",
+          "round": 3,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        },
+        {
+          "caseId": "private_note",
+          "round": 4,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "attempted",
+            "evidenceText": "Tina slid the folded note beneath Harry's hand."
+          }
+        },
+        {
+          "caseId": "failed_public_spell",
+          "round": 4,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "attempted",
+            "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+          }
+        },
+        {
+          "caseId": "public_teaching",
+          "round": 4,
+          "actual": {
+            "visualScope": "nearby",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+          }
+        },
+        {
+          "caseId": "private_inspection",
+          "round": 4,
+          "actual": {
+            "visualScope": "target",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        }
+      ]
+    },
+    {
+      "task": "perception",
+      "model": "qwen3:4b",
+      "passed": 5,
+      "total": 20,
+      "accuracy": 0.25,
+      "averageWallMs": 1620.5727687000003,
+      "averageLoadMs": 178.4308272,
+      "failures": [
+        {
+          "caseId": "failed_public_spell",
+          "round": 0,
+          "actual": {
+            "visualScope": "nearby",
+            "audibleScope": "nearby",
+            "concealment": "attempted",
+            "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+          }
+        },
+        {
+          "caseId": "public_teaching",
+          "round": 0,
+          "actual": {
+            "visualScope": "none",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+          }
+        },
+        {
+          "caseId": "private_inspection",
+          "round": 0,
+          "actual": {
+            "visualScope": "none",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        },
+        {
+          "caseId": "failed_public_spell",
+          "round": 1,
+          "actual": {
+            "visualScope": "nearby",
+            "audibleScope": "nearby",
+            "concealment": "attempted",
+            "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+          }
+        },
+        {
+          "caseId": "public_teaching",
+          "round": 1,
+          "actual": {
+            "visualScope": "none",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+          }
+        },
+        {
+          "caseId": "private_inspection",
+          "round": 1,
+          "actual": {
+            "visualScope": "none",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        },
+        {
+          "caseId": "failed_public_spell",
+          "round": 2,
+          "actual": {
+            "visualScope": "nearby",
+            "audibleScope": "nearby",
+            "concealment": "attempted",
+            "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+          }
+        },
+        {
+          "caseId": "public_teaching",
+          "round": 2,
+          "actual": {
+            "visualScope": "none",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+          }
+        },
+        {
+          "caseId": "private_inspection",
+          "round": 2,
+          "actual": {
+            "visualScope": "none",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        },
+        {
+          "caseId": "failed_public_spell",
+          "round": 3,
+          "actual": {
+            "visualScope": "nearby",
+            "audibleScope": "nearby",
+            "concealment": "attempted",
+            "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+          }
+        },
+        {
+          "caseId": "public_teaching",
+          "round": 3,
+          "actual": {
+            "visualScope": "none",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+          }
+        },
+        {
+          "caseId": "private_inspection",
+          "round": 3,
+          "actual": {
+            "visualScope": "none",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        },
+        {
+          "caseId": "failed_public_spell",
+          "round": 4,
+          "actual": {
+            "visualScope": "nearby",
+            "audibleScope": "nearby",
+            "concealment": "attempted",
+            "evidenceText": "Tina whispered Umbra Flecto, but it failed in a loud flash that sent Ron into the rafters before the whole class."
+          }
+        },
+        {
+          "caseId": "public_teaching",
+          "round": 4,
+          "actual": {
+            "visualScope": "none",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Hermione demonstrated Lumos twice and corrected Tina's pronunciation before the class."
+          }
+        },
+        {
+          "caseId": "private_inspection",
+          "round": 4,
+          "actual": {
+            "visualScope": "none",
+            "audibleScope": "none",
+            "concealment": "successful",
+            "evidenceText": "Tina examined Ron's arms and face; there were no visible injuries."
+          }
+        }
+      ]
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:1.7b",
+      "passed": 5,
+      "total": 15,
+      "accuracy": 0.3333333333333333,
+      "averageWallMs": 246.70566686666672,
+      "averageLoadMs": 108.59242493333332,
+      "failures": [
+        {
+          "caseId": "visible_injury",
+          "round": 0,
+          "actual": {
+            "observations": []
+          }
+        },
+        {
+          "caseId": "no_visible_injury",
+          "round": 0,
+          "actual": {
+            "observations": []
+          }
+        },
+        {
+          "caseId": "visible_injury",
+          "round": 1,
+          "actual": {
+            "observations": []
+          }
+        },
+        {
+          "caseId": "no_visible_injury",
+          "round": 1,
+          "actual": {
+            "observations": []
+          }
+        },
+        {
+          "caseId": "visible_injury",
+          "round": 2,
+          "actual": {
+            "observations": []
+          }
+        },
+        {
+          "caseId": "no_visible_injury",
+          "round": 2,
+          "actual": {
+            "observations": []
+          }
+        },
+        {
+          "caseId": "visible_injury",
+          "round": 3,
+          "actual": {
+            "observations": []
+          }
+        },
+        {
+          "caseId": "no_visible_injury",
+          "round": 3,
+          "actual": {
+            "observations": []
+          }
+        },
+        {
+          "caseId": "visible_injury",
+          "round": 4,
+          "actual": {
+            "observations": []
+          }
+        },
+        {
+          "caseId": "no_visible_injury",
+          "round": 4,
+          "actual": {
+            "observations": []
+          }
+        }
+      ]
+    },
+    {
+      "task": "identity",
+      "model": "qwen3:4b",
+      "passed": 10,
+      "total": 15,
+      "accuracy": 0.6666666666666666,
+      "averageWallMs": 1718.853883266666,
+      "averageLoadMs": 111.97658886666666,
+      "failures": [
+        {
+          "caseId": "negative_gift",
+          "round": 0,
+          "actual": {
+            "observations": [
+              {
+                "actorId": "hermione",
+                "status": "no_visible_injury",
+                "evidenceText": "Hermione demonstrated Lumos and handed Tina a signed parchment."
+              },
+              {
+                "actorId": "harry",
+                "status": "no_visible_injury",
+                "evidenceText": "Herm: Hermione demonstrated Lumos and handed Tina a signed parchment."
+              }
+            ]
+          }
+        },
+        {
+          "caseId": "negative_gift",
+          "round": 1,
+          "actual": {
+            "observations": [
+              {
+                "actorId": "hermione",
+                "status": "no_visible_injury",
+                "evidenceText": "Hermione demonstrated Lumos and handed Tina a signed parchment."
+              },
+              {
+                "actorId": "harry",
+                "status": "no_visible_injury",
+                "evidenceText": "Herm: Hermione demonstrated Lumos and handed Tina a signed parchment."
+              }
+            ]
+          }
+        },
+        {
+          "caseId": "negative_gift",
+          "round": 2,
+          "actual": {
+            "observations": [
+              {
+                "actorId": "hermione",
+                "status": "no_visible_injury",
+                "evidenceText": "Hermione demonstrated Lumos and handed Tina a signed parchment."
+              },
+              {
+                "actorId": "harry",
+                "status": "no_visible_injury",
+                "evidenceText": "Herm: Hermione demonstrated Lumos and handed Tina a signed parchment."
+              }
+            ]
+          }
+        },
+        {
+          "caseId": "negative_gift",
+          "round": 3,
+          "actual": {
+            "observations": [
+              {
+                "actorId": "hermione",
+                "status": "no_visible_injury",
+                "evidenceText": "Hermione demonstrated Lumos and handed Tina a signed parchment."
+              },
+              {
+                "actorId": "harry",
+                "status": "no_visible_injury",
+                "evidenceText": "Herm: Hermione demonstrated Lumos and handed Tina a signed parchment."
+              }
+            ]
+          }
+        },
+        {
+          "caseId": "negative_gift",
+          "round": 4,
+          "actual": {
+            "observations": [
+              {
+                "actorId": "hermione",
+                "status": "no_visible_injury",
+                "evidenceText": "Hermione demonstrated Lumos and handed Tina a signed parchment."
+              },
+              {
+                "actorId": "harry",
+                "status": "no_visible_injury",
+                "evidenceText": "Herm: Hermione demonstrated Lumos and handed Tina a signed parchment."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

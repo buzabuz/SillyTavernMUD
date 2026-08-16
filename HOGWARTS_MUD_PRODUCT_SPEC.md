@@ -1,6 +1,6 @@
 # Hogwarts MUD Product PRD Registry
 
-Last updated: 2026-08-14
+Last updated: 2026-08-16
 
 ## Purpose
 
@@ -26,6 +26,7 @@ linked authority wins and this registry must be corrected in the same change.
 | --- | --- | --- |
 | `hogwarts-documentation-governance` | Revision 3 approved; implementation in progress | [PRD](.trae/specs/hogwarts-documentation-governance/prd.md) |
 | `hogwarts-language-structured-input-identity-codes` | Revision 4 approved; Phase 2 implementation in progress | [PRD](.trae/specs/hogwarts-language-structured-input-identity-codes/prd.md) |
+| `hogwarts-validator-governance` | Revision 7 responsibility table established; future systems own their registry updates and focused tests; Phase 2 production pending approval | [PRD](.trae/specs/hogwarts-validator-governance/prd.md) |
 
 ## Implemented And Accepted PRDs
 
