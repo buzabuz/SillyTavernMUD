@@ -77,10 +77,7 @@ function addCurrentExpiredStoryBeat(
         `${id}_storyline`;
     next.calendar.storylines.push({
         id: storylineId,
-        title: storylineId,
         titleEn: storylineId,
-        summary:
-            '用于统一时钟结算回归的公开故事线。',
         summaryEn:
             'A public storyline for shared clock-settlement regression.',
         tags: [],
@@ -98,10 +95,7 @@ function addCurrentExpiredStoryBeat(
     next.calendar.storyBeats.push({
         id,
         storylineId,
-        title: id,
         titleEn: id,
-        summary:
-            '正文错误地宣称四个场景已经全部完成。',
         summaryEn:
             'The prose incorrectly claims that all four Scenes are complete.',
         tags: [],

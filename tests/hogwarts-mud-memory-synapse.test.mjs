@@ -109,8 +109,6 @@ function proposal({
     observerId = 'hermione',
     targetId = 'player',
     eventId,
-    sceneId,
-    messageId,
     summaryEn,
     confidence = 0.8,
     supersedesAppraisalId,
@@ -120,8 +118,6 @@ function proposal({
         targetId,
         summaryEn,
         sourceEventIds: [eventId],
-        sourceMessageIds: [messageId],
-        sceneId,
         contextTags: ['help', 'pressure'],
         confidence,
         ...(supersedesAppraisalId
@@ -264,27 +260,17 @@ test('normalizers produce stable IDs, ordering, confidence bounds, and strict va
     const firstId = createAppraisalId({
         observerId: 'Hermione',
         targetId: 'PLAYER',
-        sceneId: 'scene_library',
         sourceEventIds: [
             'event_b',
             'event_a',
-        ],
-        sourceMessageIds: [
-            9,
-            7,
         ],
     });
     const secondId = createAppraisalId({
         observerId: 'hermione',
         targetId: 'player',
-        sceneId: 'scene_library',
         sourceEventIds: [
             'event_a',
             'event_b',
-        ],
-        sourceMessageIds: [
-            7,
-            9,
         ],
     });
     assert.equal(firstId, secondId);
@@ -304,12 +290,6 @@ test('normalizers produce stable IDs, ordering, confidence bounds, and strict va
                         'event_b',
                         'event_a',
                     ],
-                    sourceMessageIds: [
-                        9,
-                        7,
-                    ],
-                    sceneId:
-                        'scene_library',
                     confidence: 4,
                     status:
                         'provisional',
@@ -351,8 +331,22 @@ test('normalizers produce stable IDs, ordering, confidence bounds, and strict va
     );
 });
 
-test('observer access distinguishes participant, witness, authorized rumor recipient, and outsider', () => {
+test('observer access distinguishes participant, witness, reported recipient, and outsider', () => {
     const world = createWorld();
+    world.eventKnowledge.push({
+        eventKind: 'reported',
+        eventId:
+            'event_reported_help',
+        sceneId: 'scene_corridor',
+        summaryEn:
+            'Ron reports the corridor event to Luna.',
+        participantActorIds: [],
+        witnessActorIds: [],
+        report: {
+            speakerId: 'ron',
+            recipientIds: ['luna'],
+        },
+    });
     const base = {
         targetId: 'player',
         summaryEn:
@@ -360,8 +354,6 @@ test('observer access distinguishes participant, witness, authorized rumor recip
         sourceEventIds: [
             'event_corridor_help',
         ],
-        sourceMessageIds: [101],
-        sceneId: 'scene_corridor',
         confidence: 0.7,
         status: 'provisional',
     };
@@ -397,33 +389,21 @@ test('observer access distinguishes participant, witness, authorized rumor recip
         'witness',
     );
 
-    const rumorOptions = {
-        authorizedRumors: [{
-            id: 'rumor_help_1',
-            sourceEventIds: [
-                'event_corridor_help',
-            ],
-            sourceMessageIds: [101],
-            audienceActorIds: ['luna'],
-        }],
-    };
-    const rumor =
+    const reported =
         validateAppraisalObserverAccess(
             normalizeAppraisal({
                 ...base,
                 observerId: 'luna',
+                sourceEventIds: [
+                    'event_reported_help',
+                ],
             }),
             world,
-            rumorOptions,
         );
-    assert.equal(rumor.valid, true);
+    assert.equal(reported.valid, true);
     assert.equal(
-        rumor.basis,
-        'authorized_rumor',
-    );
-    assert.deepEqual(
-        rumor.sourceRumorIds,
-        ['rumor_help_1'],
+        reported.basis,
+        'reported',
     );
 
     const outsider =
@@ -431,9 +411,11 @@ test('observer access distinguishes participant, witness, authorized rumor recip
             normalizeAppraisal({
                 ...base,
                 observerId: 'draco',
+                sourceEventIds: [
+                    'event_reported_help',
+                ],
             }),
             world,
-            rumorOptions,
         );
     assert.equal(
         outsider.valid,
@@ -441,26 +423,28 @@ test('observer access distinguishes participant, witness, authorized rumor recip
     );
     assert.match(
         outsider.errors.join(' '),
-        /no authorized access/u,
+        /did not receive reported Event/u,
     );
 
-    const wrongMessage =
+    const missingEvent =
         validateAppraisalObserverAccess(
             normalizeAppraisal({
                 ...base,
                 observerId:
                     'hermione',
-                sourceMessageIds: [999],
+                sourceEventIds: [
+                    'event_missing',
+                ],
             }),
             world,
         );
     assert.equal(
-        wrongMessage.valid,
+        missingEvent.valid,
         false,
     );
     assert.match(
-        wrongMessage.errors.join(' '),
-        /message provenance/u,
+        missingEvent.errors.join(' '),
+        /uncommitted event/u,
     );
 });
 
@@ -751,8 +735,15 @@ test('Person Schema promotion requires three accepted Appraisals across two scen
     assert.equal(
         new Set(
             supportProposals()
-                .map(item =>
-                    item.sceneId),
+                .flatMap(item =>
+                    item.sourceEventIds)
+                .map(eventId =>
+                    createWorld()
+                        .eventKnowledge
+                        .find(event =>
+                            event.eventId ===
+                            eventId)
+                        ?.sceneId),
         ).size,
         2,
     );
@@ -774,12 +765,12 @@ test('counterevidence lowers confidence, accumulated contradictions contest a Sc
             .appraisals
             .filter(appraisal =>
                 [
-                    101,
-                    102,
-                    103,
+                    'event_corridor_help',
+                    'event_library_help',
+                    'event_classroom_help',
                 ].includes(
                     appraisal
-                        .sourceMessageIds[0],
+                        .sourceEventIds[0],
                 ))
             .map(appraisal =>
                 appraisal.id);
@@ -789,11 +780,11 @@ test('counterevidence lowers confidence, accumulated contradictions contest a Sc
             .appraisals
             .filter(appraisal =>
                 [
-                    104,
-                    105,
+                    'event_accepts_help',
+                    'event_requests_help',
                 ].includes(
                     appraisal
-                        .sourceMessageIds[0],
+                        .sourceEventIds[0],
                 ))
             .map(appraisal =>
                 appraisal.id);

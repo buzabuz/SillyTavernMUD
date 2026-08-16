@@ -64,7 +64,7 @@ function buildCalendarDestinationHint(
         ].join(' ');
     }
     return [
-        `Calendar moment: ${context.target.titleEn || context.target.title}.`,
+        `Calendar moment: ${context.target.titleEn}.`,
         `Target clock: ${context.targetClock}.`,
         `Suggested location only: ${context.suggestedDestination.mapId}/${context.suggestedDestination.roomId}.`,
     ].join(' ');
@@ -88,9 +88,6 @@ export function createCalendarMomentWorkflow(
         getMudState,
         guardedSaveTransaction,
         jobRegistry = {},
-        localizeSceneTransitionPackage =
-        async payload =>
-            payload,
         renderAll =
         () => {},
         resolveRoleSlots,
@@ -253,7 +250,7 @@ export function createCalendarMomentWorkflow(
                 : null;
         const knowledgeQuery =
             moment.target
-                ? `Enter ${moment.target.titleEn || moment.target.title} at ${moment.targetClock}.`
+                ? `Enter ${moment.target.titleEn} at ${moment.targetClock}.`
                 : `Begin a free scene at ${moment.targetClock} in ${moment.suggestedDestination.mapId}/${moment.suggestedDestination.roomId}.`;
 
         setMomentPhase(
@@ -318,17 +315,6 @@ export function createCalendarMomentWorkflow(
             setMomentPhase(
                 'saving',
             );
-            try {
-                payload =
-                    await localizeSceneTransitionPackage(
-                        payload,
-                    );
-            } catch (error) {
-                console.warn(
-                    '[Hogwarts MUD] Moment translation failed; using English',
-                    error,
-                );
-            }
             const archiveEntry = {
                 ...buildSceneArchiveEntry(
                     state,

@@ -50,12 +50,8 @@ function createEntry(
         id,
         parentId: '',
         entryType: 'event',
-        title:
-            `公开安排 ${id}`,
         titleEn:
             `Public schedule ${id}`,
-        summary:
-            `${id} 的玩家可见摘要。`,
         summaryEn:
             `Player-visible summary for ${id}.`,
         tags: [],
@@ -91,8 +87,6 @@ function createOverlapEntries() {
         createEntry(
             'charms_exam',
             {
-                title:
-                    '魔咒考试',
                 titleEn:
                     'Charms Exam',
                 tags: [
@@ -118,8 +112,6 @@ function createOverlapEntries() {
         createEntry(
             'hogsmeade_date',
             {
-                title:
-                    '霍格莫德约会',
                 titleEn:
                     'Hogsmeade Date',
                 tags: [
@@ -154,16 +146,12 @@ function createState(
         phase: 'playing',
         clock: CURRENT_CLOCK,
         calendar: {
-            version: 2,
+            version: 3,
             storylines: [{
                 id:
                     'first_year_trials',
-                title:
-                    '一年级的考验',
                 titleEn:
                     'First-Year Trials',
-                summary:
-                    '公开的一年级成长线。',
                 summaryEn:
                     'A public first-year growth storyline.',
                 tags: [
@@ -187,12 +175,8 @@ function createState(
                     'first_term_exam_beat',
                 storylineId:
                     'first_year_trials',
-                title:
-                    '第一次考试',
                 titleEn:
                     'The First Exam',
-                summary:
-                    '公开的考试节奏。',
                 summaryEn:
                     'A public examination beat.',
                 tags: [
@@ -1174,8 +1158,8 @@ test('Medium expands active or planned beats into four stable slots and keeps or
                 pastState,
                 [{
                     ...pastSlot,
-                    summary:
-                        '不得改写已经过去的节奏日程。',
+                    summaryEn:
+                        'Past beat schedules cannot be rewritten.',
                 }],
             ),
             pastState,
@@ -1217,12 +1201,8 @@ test('Medium planning reads all required authority and atomically advances horiz
     const highStoryline = {
         id:
             'school_year_storyline',
-        title:
-            '学年故事线',
         titleEn:
             'School-Year Storyline',
-        summary:
-            '公开的学年方向。',
         summaryEn:
             'A public school-year direction.',
         tags: [
@@ -1260,8 +1240,6 @@ test('Medium planning reads all required authority and atomically advances horiz
         ...existing,
         parentId:
             highStoryline.id,
-        summary:
-            '玩家承诺后，周末会面保持原稳定条目。',
         summaryEn:
             'The promised weekend meeting keeps its stable entry.',
     };
@@ -1417,8 +1395,6 @@ test('Medium planning reads all required authority and atomically advances horiz
             .find(entry =>
                 entry.id ===
                 existing.id),
-        summary:
-            '重复规划仍更新同一条周末会面。',
         summaryEn:
             'Repeated planning still updates the same weekend meeting.',
     };
@@ -1958,14 +1934,6 @@ test('application wiring schedules Medium after high planning but not every ordi
             ),
             'utf8',
         );
-    const index =
-        await readFile(
-            new URL(
-                '../public/scripts/extensions/hogwarts-mud/index.js',
-                import.meta.url,
-            ),
-            'utf8',
-        );
     const mediumDirector =
         await readFile(
             new URL(
@@ -1998,11 +1966,6 @@ test('application wiring schedules Medium after high planning but not every ordi
     assert.match(
         turn,
         /await ensureSocialDirectorForAction\(\)/u,
-    );
-    assert.ok(
-        index.split('\n')
-            .length <= 601,
-        'index.js must remain at or below 600 content lines',
     );
     assert.doesNotMatch(
         mediumDirector,

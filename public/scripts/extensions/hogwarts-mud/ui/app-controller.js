@@ -15,7 +15,16 @@ export function createAppController(ports) {
         extension_prompt_types,
         extractStreamingSceneSegments,
         getContext,
+        getLocalizedField =
+        field => ({
+            text:
+                    field.sourceTextEn ||
+                    '',
+        }),
         getMudState,
+        getRoomName =
+        (_state, _mapId, roomId) =>
+            roomId || '',
         getSettings,
         hasOpeningNarrative,
         initializeOpeningWorld,
@@ -72,9 +81,21 @@ export function createAppController(ports) {
         root.querySelector('#hpmud_calendar').hidden = !showGame;
         root.querySelector('#hpmud_reopen_setup').hidden = !showGame;
         if (showHome) {
-            root.querySelector('#hpmud_location').textContent = '档案大厅';
+            root.querySelector('#hpmud_location').textContent =
+                getLocalizedField({
+                    staticKey:
+                        'ui.nav.archive_hall',
+                    sourceTextEn:
+                        'Archive Hall',
+                }).text;
             root.querySelector('#hpmud_chapter').textContent = 'Hogwarts MUD';
-            root.querySelector('#hpmud_clock').textContent = '选择一条时间线';
+            root.querySelector('#hpmud_clock').textContent =
+                getLocalizedField({
+                    staticKey:
+                        'ui.home.select_timeline',
+                    sourceTextEn:
+                        'Choose a timeline',
+                }).text;
             root.querySelector('#hpmud_character').textContent = 'HP';
             syncCampaignUi();
             void renderSaveLibrary();
@@ -125,8 +146,19 @@ export function createAppController(ports) {
             button.classList.toggle('active', selected);
             button.setAttribute('aria-checked', String(selected));
         });
+        const difficultyName =
+            getLocalizedField({
+                staticKey:
+                    `difficulty.${session.activeCampaign.difficulty}.name`,
+                sourceTextEn:
+                    session
+                        .activeCampaign
+                        .difficulty,
+            }).text;
         root.querySelector('#hpmud_campaign_summary').textContent =
-            `${session.activeCampaign.startYear} · ${session.activeCampaign.grade} 年级 · ${session.activeCampaign.difficultyName}难度`;
+            session.displayLocale === 'en'
+                ? `${session.activeCampaign.startYear} · Grade ${session.activeCampaign.grade} · ${difficultyName}`
+                : `${session.activeCampaign.startYear} · ${session.activeCampaign.grade} 年级 · ${difficultyName}难度`;
     }
 
     function updateCampaign(patch = {}) {
@@ -204,7 +236,15 @@ Continue from this exact state. actorCards contain the only shared NPC performan
         refs.launcher.id = 'hpmud_launcher';
         refs.launcher.type = 'button';
         refs.launcher.className = 'hpmud-launcher';
-        refs.launcher.setAttribute('aria-label', '打开 Hogwarts MUD');
+        refs.launcher.setAttribute(
+            'aria-label',
+            getLocalizedField({
+                staticKey:
+                    'ui.game.launcher.open',
+                sourceTextEn:
+                    'Open Hogwarts MUD',
+            }).text,
+        );
         refs.launcher.innerHTML = '<i class="fa-solid fa-hat-wizard"></i><span>Hogwarts MUD</span>';
         const onClick = () => setUiVisible(true);
         refs.launcher.addEventListener('click', onClick);
@@ -270,11 +310,55 @@ Continue from this exact state. actorCards contain the only shared NPC performan
     function getWorldState() {
         const context = getContext();
         const state = context.chatMetadata?.hogwartsMud ?? {};
+        const mapId =
+            state.scene?.mapId ||
+            state.map?.activeMapId ||
+            '';
+        const roomId =
+            state.scene?.roomId ||
+            state.map
+                ?.currentLocalNodeId ||
+            '';
+        const chapterEn =
+            state.chapterEn ||
+            'Opening World';
         return {
             phase: state.phase || 'initializing',
-            location: state.location || '世界建档中',
-            chapter: state.chapter || '正在编排首幕',
-            clock: state.clock || `${state.campaign?.startYear || 1991} · 时间待定`,
+            location:
+                mapId &&
+                roomId
+                    ? getRoomName(
+                        state,
+                        mapId,
+                        roomId,
+                    )
+                    : getLocalizedField({
+                        staticKey:
+                            'map.status.world_setup',
+                        sourceTextEn:
+                            'World setup in progress',
+                    }).text,
+            chapter:
+                getLocalizedField({
+                    ...(
+                        state.scene?.id
+                            ? {}
+                            : {
+                                staticKey:
+                                    'story.chapter.opening_world',
+                            }
+                    ),
+                    recordKind:
+                        'world_state',
+                    recordId: 'root',
+                    fieldPath:
+                        'chapterEn',
+                    sourceTextEn:
+                        chapterEn,
+                }).text ||
+                chapterEn,
+            chapterEn,
+            clock: state.clock || `${state.campaign?.startYear || 1991} · Time pending`,
             character: state.character || null,
             campaign: state.campaign || null,
             modelSlots: state.modelSlots || getSettings().modelSlots,

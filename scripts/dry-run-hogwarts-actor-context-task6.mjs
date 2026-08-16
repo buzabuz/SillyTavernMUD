@@ -138,14 +138,6 @@ export const DEFAULT_TINA_FILE =
         'data/default-user/chats/Hogwarts_World_Director/' +
         'Hogwarts World Director - 2026-08-02@22h16m07s339ms.jsonl',
     );
-export const DEFAULT_TINA_LEGACY_FILE =
-    path.resolve(
-        'data/default-user/backups/chat_hogwarts_world_director_20260812-183453.jsonl',
-    );
-export const DEFAULT_TINA_LIFECYCLE_FILE =
-    path.resolve(
-        'data/default-user/backups/chat_hogwarts_world_director_20260813-124742.jsonl',
-    );
 
 const LEGACY_PROMPT_BASELINE =
     Object.freeze({
@@ -361,9 +353,9 @@ function runMigrationEvidence(
     sourceState,
     chat,
     lifecycleSourceState =
-        null,
+    null,
     lifecycleChat =
-        chat,
+    chat,
 ) {
     const sourceBytes =
         Buffer.from(json(sourceState));
@@ -2626,6 +2618,10 @@ async function buildPromptEvidence(
 export async function runTask6Acceptance(
     file =
     DEFAULT_TINA_FILE,
+    {
+        includeMigrationEvidence =
+        false,
+    } = {},
 ) {
     const resolved =
         path.resolve(file);
@@ -2645,33 +2641,42 @@ export async function runTask6Acceptance(
                 .actorMemoryIndex,
         );
     const migrationArchive =
-        activeHasActorContext &&
-        resolved ===
-            DEFAULT_TINA_FILE
-            ? await readArchive(
-                DEFAULT_TINA_LEGACY_FILE,
-            )
-            : before;
+        before;
     const lifecycleArchive =
-        activeHasActorContext &&
-        resolved ===
-            DEFAULT_TINA_FILE
-            ? await readArchive(
-                DEFAULT_TINA_LIFECYCLE_FILE,
-            )
-            : migrationArchive;
+        migrationArchive;
     const migration =
-        runMigrationEvidence(
-            migrationArchive.state,
-            migrationArchive.chat,
-            lifecycleArchive.state,
-            lifecycleArchive.chat,
-        );
+        includeMigrationEvidence
+            ? runMigrationEvidence(
+                migrationArchive.state,
+                migrationArchive.chat,
+                lifecycleArchive.state,
+                lifecycleArchive.chat,
+            )
+            : {
+                migratedState:
+                    structuredClone(
+                        before.state,
+                    ),
+                lifecycleState:
+                    structuredClone(
+                        before.state,
+                    ),
+                report: {
+                    skipped:
+                        'current_state_prompt_only',
+                },
+            };
     const snapshots =
-        buildSnapshotEvidence(
-            migrationArchive.state,
-            migration.migratedState,
-        );
+        includeMigrationEvidence
+            ? buildSnapshotEvidence(
+                migrationArchive.state,
+                migration
+                    .migratedState,
+            )
+            : {
+                skipped:
+                    'current_state_prompt_only',
+            };
     const memoryReferenceUpgrade =
         activeHasActorContext
             ? runMemoryReferenceUpgradeEvidence(

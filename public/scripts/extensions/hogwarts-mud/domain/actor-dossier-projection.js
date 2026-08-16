@@ -16,6 +16,10 @@ import {
 import {
     buildNpcIdentityDossierViewModel,
 } from './npc-identity-dossier.js';
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from './localized-view-model.js';
 
 function asArray(value) {
     return Array.isArray(value)
@@ -28,6 +32,20 @@ function text(value) {
         .normalize('NFKC')
         .replace(/\s+/gu, ' ')
         .trim();
+}
+
+function staticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+) {
+    return getStaticLocaleText(
+        staticKey,
+        normalizeDisplayLocale(
+            displayLocale,
+        ),
+    ) ||
+        sourceTextEn;
 }
 
 function clone(value) {
@@ -56,6 +74,7 @@ function relationshipEvidenceView(
         appraisals,
         events,
         viewerId,
+        displayLocale,
     },
 ) {
     const appraisal =
@@ -92,6 +111,19 @@ function relationshipEvidenceView(
     return {
         recordId:
             text(evidence?.id),
+        sourceRecordType:
+            appraisalVisible
+                ? 'appraisal'
+                : 'event',
+        sourceRecordId:
+            appraisalVisible
+                ? text(
+                    appraisal?.id,
+                )
+                : text(
+                    event
+                        ?.eventId,
+                ),
         summary:
             text(
                 appraisalVisible
@@ -128,11 +160,18 @@ function relationshipEvidenceView(
 function emptyRelationship(
     sourceActorId,
     targetActorId,
+    displayLocale,
 ) {
     return {
         sourceActorId,
         targetActorId,
-        labels: ['无关系'],
+        labels: [
+            staticText(
+                displayLocale,
+                'ui.inspector.relationship.none',
+                'No relationship',
+            ),
+        ],
         dimensions:
             Object.fromEntries(
                 SOCIAL_RELATIONSHIP_DIMENSIONS
@@ -157,11 +196,16 @@ function emptyRelationship(
 export function buildRelationshipProjection(
     state = {},
     viewerId = 'player',
+    displayLocale =
+    'zh-CN',
 ) {
     const projection =
         buildSocialAudienceProjection(
             state,
             viewerId,
+            {
+                displayLocale,
+            },
         );
     const directories = {
         appraisals:
@@ -232,6 +276,7 @@ function selectActorRelationship(
     relationshipProjection,
     actorId,
     viewerId,
+    displayLocale,
 ) {
     return relationshipProjection
         .relationships
@@ -243,6 +288,7 @@ function selectActorRelationship(
         emptyRelationship(
             actorId,
             viewerId,
+            displayLocale,
         );
 }
 
@@ -296,6 +342,7 @@ function hydrateMemoryRef(
         appraisals,
         events,
         viewerId,
+        displayLocale,
     },
 ) {
     const recordType =
@@ -329,8 +376,16 @@ function hydrateMemoryRef(
             sourceBadge:
                 event.eventKind ===
                     'reported'
-                    ? '听闻/转述'
-                    : '共同事件',
+                    ? staticText(
+                        displayLocale,
+                        'ui.inspector.memory.source.reported',
+                        'Reported',
+                    )
+                    : staticText(
+                        displayLocale,
+                        'ui.inspector.memory.source.event',
+                        'Shared event',
+                    ),
         };
     }
     if (
@@ -379,7 +434,12 @@ function hydrateMemoryRef(
                         .committedClock ||
                     reference.addedClock,
                 ),
-            sourceBadge: '人物感受',
+            sourceBadge:
+                staticText(
+                    displayLocale,
+                    'ui.inspector.memory.source.appraisal',
+                    'Character appraisal',
+                ),
         };
     }
     return null;
@@ -389,6 +449,7 @@ function buildMemories(
     state,
     actorId,
     viewerId,
+    displayLocale,
 ) {
     const entry =
         state?.actorMemoryIndex
@@ -403,6 +464,7 @@ function buildMemories(
         events:
             eventDirectory(state),
         viewerId,
+        displayLocale,
     };
     return Object.fromEntries(
         [
@@ -537,11 +599,13 @@ function buildIdentity(
     state,
     actorId,
     viewerId,
+    displayLocale,
 ) {
     const dossier =
         buildNpcIdentityDossierViewModel({
             worldState: state,
             actorId,
+            displayLocale,
             buildIdentityProjection:
                 (
                     worldState,
@@ -577,7 +641,9 @@ function presentationView(
             ?.[actorId] || {};
     return {
         outfit:
-            text(source.outfit),
+            text(
+                source.outfitEn,
+            ),
         accessories:
             Object.values(
                 source.accessories ||
@@ -604,9 +670,9 @@ function presentationView(
                         'string'
                         ? condition
                         : condition
-                            ?.value ||
+                            ?.valueEn ||
                             condition
-                                ?.resultText,
+                                ?.resultTextEn,
                 ))
                 .filter(Boolean),
     };
@@ -631,13 +697,20 @@ export function buildActorDossierViewModel(
             _mapId,
             roomId,
         ) => roomId,
+        getLocalizedField,
+        displayLocale = 'zh-CN',
         relationshipProjection =
         buildRelationshipProjection(
             state,
             viewerId,
+            displayLocale,
         ),
     } = {},
 ) {
+    const locale =
+        normalizeDisplayLocale(
+            displayLocale,
+        );
     const core =
         actorCore(
             state,
@@ -654,6 +727,7 @@ export function buildActorDossierViewModel(
             relationshipProjection,
             actorId,
             viewerId,
+            locale,
         );
     const projected = {
         schemaVersion:
@@ -667,10 +741,21 @@ export function buildActorDossierViewModel(
             role:
                 text(core.roleEn),
             portrait: '',
+            present:
+                runtime.present ===
+                true,
             presenceLabel:
                 runtime.present
-                    ? '当前在场'
-                    : '当前不在场',
+                    ? staticText(
+                        locale,
+                        'ui.inspector.presence.present',
+                        'Currently present',
+                    )
+                    : staticText(
+                        locale,
+                        'ui.inspector.presence.absent',
+                        'Currently absent',
+                    ),
         },
         core: {
             publicBackground:
@@ -699,6 +784,7 @@ export function buildActorDossierViewModel(
                 state,
                 actorId,
                 viewerId,
+                locale,
             ),
         current: {
             location:
@@ -772,12 +858,18 @@ export function buildActorDossierViewModel(
                 state,
                 actorId,
                 viewerId,
+                locale,
             ),
         items:
             clone(
                 projectActorItems(
                     state,
                     actorId,
+                    locale,
+                    {
+                        getLocalizedField,
+                        getRoomName,
+                    },
                 ),
             ),
     };
@@ -793,6 +885,8 @@ export function buildActorDossierDirectory(
         buildRelationshipProjection(
             state,
             viewerId,
+            options
+                .displayLocale,
         );
     return asArray(
         state?.actorLibrary,

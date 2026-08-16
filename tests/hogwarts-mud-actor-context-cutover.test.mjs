@@ -622,6 +622,8 @@ function lifecyclePorts(
             unchanged,
         migrateSpellbookState:
             unchanged,
+        migrateTimelineAppraisalState:
+            unchanged,
         normalizeCausalCollapseState:
             value => value,
         normalizeModelSlots:

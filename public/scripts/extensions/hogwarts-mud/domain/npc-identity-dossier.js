@@ -1,98 +1,109 @@
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from './localized-view-model.js';
+
 export const IDENTITY_SOURCE_LABELS =
     Object.freeze({
-        authority: '权威',
-        derived: '派生',
-        observation: '观察',
-        self: '自称',
-        other: '他称',
+        authority:
+            'ui.dossier.source.authority',
+        derived:
+            'ui.dossier.source.derived',
+        observation:
+            'ui.dossier.source.observation',
+        self:
+            'ui.dossier.source.self',
+        other:
+            'ui.dossier.source.other',
     });
 
 const GENDER_LABELS = Object.freeze({
-    female: '女',
-    male: '男',
-    nonbinary: '非二元',
-    other: '其他',
-    unknown: '未知',
+    female: 'Female',
+    male: 'Male',
+    nonbinary: 'Nonbinary',
+    other: 'Other',
+    unknown: 'Unknown',
 });
 
 const LINEAGE_LABELS = Object.freeze({
-    pure_blood: '纯血',
-    half_blood: '混血',
-    muggle_born: '麻瓜出身',
-    muggle: '麻瓜',
-    unknown: '未知',
+    pure_blood: 'Pure-blood',
+    half_blood: 'Half-blood',
+    muggle_born: 'Muggle-born',
+    muggle: 'Muggle',
+    unknown: 'Unknown',
 });
 
 const EDUCATION_STATUS_LABELS =
     Object.freeze({
-        prospective: '待入学',
-        enrolled: '在学',
-        graduated: '已毕业',
-        left: '离校',
-        expelled: '被开除',
-        unknown: '未知',
+        prospective:
+            'Prospective student',
+        enrolled: 'Enrolled',
+        graduated: 'Graduated',
+        left: 'Left school',
+        expelled: 'Expelled',
+        unknown: 'Unknown',
     });
 
 const HEIGHT_LABELS = Object.freeze({
-    very_short: '很矮',
-    short: '偏矮',
-    average: '中等',
-    tall: '偏高',
-    very_tall: '很高',
-    unknown: '未知',
+    very_short: 'Very short',
+    short: 'Short',
+    average: 'Average',
+    tall: 'Tall',
+    very_tall: 'Very tall',
+    unknown: 'Unknown',
 });
 
 const FEATURE_STATUS_LABELS =
     Object.freeze({
-        active: '当前',
-        resolved: '已恢复',
-        permanent: '永久',
-        unknown: '状态未知',
+        active: 'Current',
+        resolved: 'Resolved',
+        permanent: 'Permanent',
+        unknown: 'Status unknown',
     });
 
 const INJURY_STATUS_LABELS =
     Object.freeze({
-        active: '未愈',
-        resolved: '已恢复',
-        chronic: '长期',
-        unknown: '状态未知',
+        active: 'Unhealed',
+        resolved: 'Resolved',
+        chronic: 'Chronic',
+        unknown: 'Status unknown',
     });
 
 const SCHOOL_LABELS = Object.freeze({
-    hogwarts: '霍格沃茨',
-    beauxbatons: '布斯巴顿',
-    durmstrang: '德姆斯特朗',
-    unknown: '未知',
+    hogwarts: 'Hogwarts',
+    beauxbatons: 'Beauxbatons',
+    durmstrang: 'Durmstrang',
+    unknown: 'Unknown',
 });
 
 const HOUSE_LABELS = Object.freeze({
-    gryffindor: '格兰芬多',
-    slytherin: '斯莱特林',
-    ravenclaw: '拉文克劳',
-    hufflepuff: '赫奇帕奇',
-    unknown: '未知',
+    gryffindor: 'Gryffindor',
+    slytherin: 'Slytherin',
+    ravenclaw: 'Ravenclaw',
+    hufflepuff: 'Hufflepuff',
+    unknown: 'Unknown',
 });
 
 const RELATIONSHIP_LABELS =
     Object.freeze({
-        family: '亲属',
-        parent: '父母',
-        child: '子女',
-        sibling: '兄弟姐妹',
-        brother: '兄弟',
-        sister: '姐妹',
-        guardian: '监护人',
-        ward: '被监护人',
-        spouse: '配偶',
-        partner: '伴侣',
-        relative: '亲属',
-        cousin: '堂表亲',
-        grandparent: '祖辈',
-        grandchild: '孙辈',
-        aunt: '姨姑',
-        uncle: '叔舅',
-        niece: '侄甥女',
-        nephew: '侄甥',
+        family: 'Family',
+        parent: 'Parent',
+        child: 'Child',
+        sibling: 'Sibling',
+        brother: 'Brother',
+        sister: 'Sister',
+        guardian: 'Guardian',
+        ward: 'Ward',
+        spouse: 'Spouse',
+        partner: 'Partner',
+        relative: 'Relative',
+        cousin: 'Cousin',
+        grandparent: 'Grandparent',
+        grandchild: 'Grandchild',
+        aunt: 'Aunt',
+        uncle: 'Uncle',
+        niece: 'Niece',
+        nephew: 'Nephew',
     });
 
 function asArray(value) {
@@ -117,17 +128,89 @@ function knownText(value) {
         : '';
 }
 
+function staticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+) {
+    return getStaticLocaleText(
+        staticKey,
+        normalizeDisplayLocale(
+            displayLocale,
+        ),
+    ) ||
+        sourceTextEn;
+}
+
+function formatStaticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+    values = {},
+) {
+    return Object.entries(
+        values,
+    ).reduce(
+        (
+            output,
+            [
+                key,
+                value,
+            ],
+        ) =>
+            output.replaceAll(
+                `{${key}}`,
+                String(value),
+            ),
+        staticText(
+            displayLocale,
+            staticKey,
+            sourceTextEn,
+        ),
+    );
+}
+
+export function getIdentitySourceLabel(
+    sourceKind,
+    displayLocale = 'zh-CN',
+) {
+    const staticKey =
+        IDENTITY_SOURCE_LABELS[
+            sourceKind
+        ];
+    return staticKey
+        ? staticText(
+            displayLocale,
+            staticKey,
+            sourceKind,
+        )
+        : '';
+}
+
 function localizedValue(
     value,
     labels,
+    keyPrefix,
+    displayLocale,
 ) {
     const normalized =
         knownText(value);
     if (!normalized) return '';
-    return labels[
+    const code =
         normalized
-            .toLocaleLowerCase()
-    ] || normalized;
+            .toLocaleLowerCase();
+    const sourceTextEn =
+        labels[
+            code
+        ] ||
+        normalized;
+    return labels[code]
+        ? staticText(
+            displayLocale,
+            `${keyPrefix}.${code}`,
+            sourceTextEn,
+        )
+        : normalized;
 }
 
 function viewEntry(
@@ -137,6 +220,8 @@ function viewEntry(
         detail = '',
         sourceKind =
         'authority',
+        displayLocale =
+        'zh-CN',
     } = {},
 ) {
     const normalized =
@@ -145,7 +230,11 @@ function viewEntry(
         label,
         value:
             normalized ||
-            '未知',
+            staticText(
+                displayLocale,
+                'ui.dossier.unknown',
+                'Unknown',
+            ),
         detail: text(detail),
         sourceKind:
             normalized
@@ -157,6 +246,7 @@ function viewEntry(
 
 function actorDirectory(
     worldState,
+    displayLocale,
 ) {
     const directory =
         new Map();
@@ -185,7 +275,11 @@ function actorDirectory(
         name:
             worldState?.character
                 ?.identity?.name ||
-            '你',
+            staticText(
+                displayLocale,
+                'ui.dossier.you',
+                'You',
+            ),
     });
     return directory;
 }
@@ -193,13 +287,18 @@ function actorDirectory(
 function actorName(
     directory,
     actorId,
+    displayLocale,
 ) {
     const actor =
         directory.get(actorId);
     return actor?.name ||
         actor?.nameEn ||
         actorId ||
-        '未知人物';
+        staticText(
+            displayLocale,
+            'ui.dossier.unknown_actor',
+            'Unknown character',
+        );
 }
 
 function formatBirth(birth) {
@@ -225,18 +324,32 @@ function formatBirth(birth) {
     return '';
 }
 
-function formatAge(age) {
+function formatAge(
+    age,
+    displayLocale,
+) {
     if (
         Number.isFinite(
             age?.years,
         )
     ) {
-        return `${age.years} 岁`;
+        return formatStaticText(
+            displayLocale,
+            'ui.dossier.age',
+            '{age} years old',
+            {
+                age:
+                    age.years,
+            },
+        );
     }
     return '';
 }
 
-function formatHeight(height) {
+function formatHeight(
+    height,
+    displayLocale,
+) {
     if (
         Number.isFinite(
             height?.centimeters,
@@ -245,18 +358,25 @@ function formatHeight(height) {
         const prefix =
             height.precision ===
                 'approximate'
-                ? '约 '
+                ? staticText(
+                    displayLocale,
+                    'ui.dossier.approximate',
+                    'approximately ',
+                )
                 : '';
         return `${prefix}${height.centimeters} cm`;
     }
     return localizedValue(
         height?.category,
         HEIGHT_LABELS,
+        'ui.dossier.height',
+        displayLocale,
     );
 }
 
 function formatFeature(
     feature,
+    displayLocale,
 ) {
     const description =
         knownText(
@@ -267,16 +387,25 @@ function formatFeature(
         localizedValue(
             feature?.status,
             FEATURE_STATUS_LABELS,
+            'ui.dossier.feature_status',
+            displayLocale,
         );
-    return [
-        description,
-        status &&
-            `（${status}）`,
-    ].filter(Boolean).join('');
+    return status
+        ? formatStaticText(
+            displayLocale,
+            'ui.dossier.status_parenthetical',
+            '{description} ({status})',
+            {
+                description,
+                status,
+            },
+        )
+        : description;
 }
 
 function formatInjury(
     injury,
+    displayLocale,
 ) {
     const description =
         knownText(
@@ -287,16 +416,25 @@ function formatInjury(
         localizedValue(
             injury?.status,
             INJURY_STATUS_LABELS,
+            'ui.dossier.injury_status',
+            displayLocale,
         );
-    return [
-        description,
-        status &&
-            `（${status}）`,
-    ].filter(Boolean).join('');
+    return status
+        ? formatStaticText(
+            displayLocale,
+            'ui.dossier.status_parenthetical',
+            '{description} ({status})',
+            {
+                description,
+                status,
+            },
+        )
+        : description;
 }
 
 function formatEducationStatus(
     record,
+    displayLocale,
 ) {
     const current =
         record?.current || {};
@@ -305,31 +443,64 @@ function formatEducationStatus(
             current.currentYear,
         )
     ) {
-        return `${current.currentYear} 年级 · 在学`;
+        return formatStaticText(
+            displayLocale,
+            'ui.dossier.grade_enrolled',
+            'Year {year} · Enrolled',
+            {
+                year:
+                    current
+                        .currentYear,
+            },
+        );
     }
     return localizedValue(
         current.status ||
             record?.status,
         EDUCATION_STATUS_LABELS,
+        'ui.dossier.education_status',
+        displayLocale,
     );
 }
 
 function educationEntries(
     education,
+    displayLocale,
 ) {
     if (!education.length) {
         return [
             viewEntry(
-                '学校',
+                staticText(
+                    displayLocale,
+                    'ui.dossier.field.school',
+                    'School',
+                ),
                 '',
+                {
+                    displayLocale,
+                },
             ),
             viewEntry(
-                '学院',
+                staticText(
+                    displayLocale,
+                    'ui.dossier.field.house',
+                    'House',
+                ),
                 '',
+                {
+                    displayLocale,
+                },
             ),
             viewEntry(
-                '当前学籍',
+                staticText(
+                    displayLocale,
+                    'ui.dossier.field.enrollment',
+                    'Current enrollment',
+                ),
                 '',
+                {
+                    displayLocale,
+                },
             ),
         ];
     }
@@ -341,27 +512,51 @@ function educationEntries(
                     : '';
             return [
                 viewEntry(
-                    `学校${suffix}`,
+                    `${staticText(
+                        displayLocale,
+                        'ui.dossier.field.school',
+                        'School',
+                    )}${suffix}`,
                     localizedValue(
                         record.schoolId,
                         SCHOOL_LABELS,
+                        'ui.dossier.school',
+                        displayLocale,
                     ),
+                    {
+                        displayLocale,
+                    },
                 ),
                 viewEntry(
-                    `学院${suffix}`,
+                    `${staticText(
+                        displayLocale,
+                        'ui.dossier.field.house',
+                        'House',
+                    )}${suffix}`,
                     localizedValue(
                         record.houseId,
                         HOUSE_LABELS,
+                        'ui.dossier.house',
+                        displayLocale,
                     ),
+                    {
+                        displayLocale,
+                    },
                 ),
                 viewEntry(
-                    `当前学籍${suffix}`,
+                    `${staticText(
+                        displayLocale,
+                        'ui.dossier.field.enrollment',
+                        'Current enrollment',
+                    )}${suffix}`,
                     formatEducationStatus(
                         record,
+                        displayLocale,
                     ),
                     {
                         sourceKind:
                             'derived',
+                        displayLocale,
                     },
                 ),
             ];
@@ -369,7 +564,10 @@ function educationEntries(
     );
 }
 
-function bodyEntries(body = {}) {
+function bodyEntries(
+    body = {},
+    displayLocale,
+) {
     const features =
         asArray(body.features);
     const scars =
@@ -377,29 +575,53 @@ function bodyEntries(body = {}) {
             .filter(feature =>
                 feature.type ===
                     'scar')
-            .map(formatFeature)
+            .map(feature =>
+                formatFeature(
+                    feature,
+                    displayLocale,
+                ))
             .filter(Boolean);
     const otherFeatures =
         features
             .filter(feature =>
                 feature.type !==
                     'scar')
-            .map(formatFeature)
+            .map(feature =>
+                formatFeature(
+                    feature,
+                    displayLocale,
+                ))
             .filter(Boolean);
     const injuries =
         asArray(body.injuries)
-            .map(formatInjury)
+            .map(injury =>
+                formatInjury(
+                    injury,
+                    displayLocale,
+                ))
             .filter(Boolean);
+    const listSeparator =
+        staticText(
+            displayLocale,
+            'ui.dossier.list_separator',
+            '; ',
+        );
     const injuryAssessment =
         body.injuryAssessment ||
         {};
     const injuryValue =
-        injuries.join('；') ||
+        injuries.join(
+            listSeparator,
+        ) ||
         (
             injuryAssessment
                 .status ===
                 'no_visible_injury'
-                ? '未观察到伤势'
+                ? staticText(
+                    displayLocale,
+                    'ui.dossier.no_visible_injury',
+                    'No visible injury observed',
+                )
                 : ''
         );
     const injuryObserved =
@@ -409,48 +631,104 @@ function bodyEntries(body = {}) {
             'visible_injury';
     return [
         viewEntry(
-            '身高',
+            staticText(
+                displayLocale,
+                'ui.dossier.field.height',
+                'Height',
+            ),
             formatHeight(
                 body.height,
+                displayLocale,
             ),
+            {
+                displayLocale,
+            },
         ),
         viewEntry(
-            '体型',
+            staticText(
+                displayLocale,
+                'ui.dossier.field.build',
+                'Build',
+            ),
             knownText(
                 body.build,
             ),
+            {
+                displayLocale,
+            },
         ),
         viewEntry(
-            '自然发色',
+            staticText(
+                displayLocale,
+                'ui.dossier.field.natural_hair',
+                'Natural hair color',
+            ),
             knownText(
                 body
                     .naturalHairColor,
             ),
+            {
+                displayLocale,
+            },
         ),
         viewEntry(
-            '当前发色 / 染发',
+            staticText(
+                displayLocale,
+                'ui.dossier.field.current_hair',
+                'Current hair color / dye',
+            ),
             knownText(
                 body.hairColor,
             ),
+            {
+                displayLocale,
+            },
         ),
         viewEntry(
-            '发型',
+            staticText(
+                displayLocale,
+                'ui.dossier.field.hair_style',
+                'Hair style',
+            ),
             knownText(
                 body.hairStyle,
             ),
+            {
+                displayLocale,
+            },
         ),
         viewEntry(
-            '眼睛',
+            staticText(
+                displayLocale,
+                'ui.dossier.field.eyes',
+                'Eyes',
+            ),
             knownText(
                 body.eyeColor,
             ),
+            {
+                displayLocale,
+            },
         ),
         viewEntry(
-            '疤痕',
-            scars.join('；'),
+            staticText(
+                displayLocale,
+                'ui.dossier.field.scars',
+                'Scars',
+            ),
+            scars.join(
+                listSeparator,
+            ),
+            {
+                displayLocale,
+            },
         ),
         viewEntry(
-            '伤势',
+            staticText(
+                displayLocale,
+                'ui.dossier.field.injuries',
+                'Injuries',
+            ),
             injuryValue,
             injuryObserved
                 ? {
@@ -461,31 +739,58 @@ function bodyEntries(body = {}) {
                             injuryAssessment
                                 .asOfClock,
                         )
-                            ? `截至 ${injuryAssessment.asOfClock}`
+                            ? formatStaticText(
+                                displayLocale,
+                                'ui.dossier.as_of',
+                                'As of {clock}',
+                                {
+                                    clock:
+                                        injuryAssessment
+                                            .asOfClock,
+                                },
+                            )
                             : '',
+                    displayLocale,
                 }
-                : {},
+                : {
+                    displayLocale,
+                },
         ),
         viewEntry(
-            '其他身体特征',
-            otherFeatures.join(
-                '；',
+            staticText(
+                displayLocale,
+                'ui.dossier.field.other_features',
+                'Other physical features',
             ),
+            otherFeatures.join(
+                listSeparator,
+            ),
+            {
+                displayLocale,
+            },
         ),
         viewEntry(
-            '当前形态',
+            staticText(
+                displayLocale,
+                'ui.dossier.field.form',
+                'Current form',
+            ),
             knownText(
                 body.form?.label,
             ) ||
             knownText(
                 body.form?.code,
             ),
+            {
+                displayLocale,
+            },
         ),
     ];
 }
 
 function claimFieldLabel(
     fieldPath,
+    displayLocale,
 ) {
     const path =
         text(fieldPath)
@@ -498,72 +803,116 @@ function claimFieldLabel(
             'gender',
         )
     ) {
-        return '性别';
+        return staticText(
+            displayLocale,
+            'ui.dossier.field.gender',
+            'Gender',
+        );
     }
     if (
         path.startsWith(
             'birth',
         )
     ) {
-        return '出生';
+        return staticText(
+            displayLocale,
+            'ui.dossier.field.birth',
+            'Birth',
+        );
     }
     if (
         path.startsWith(
             'education',
         )
     ) {
-        return '教育';
+        return staticText(
+            displayLocale,
+            'ui.dossier.field.education',
+            'Education',
+        );
     }
     if (
         path.startsWith(
             'lineage',
         )
     ) {
-        return '血统';
+        return staticText(
+            displayLocale,
+            'ui.dossier.field.lineage',
+            'Lineage',
+        );
     }
     if (
         path.includes(
             'hairStyle',
         )
     ) {
-        return '发型';
+        return staticText(
+            displayLocale,
+            'ui.dossier.field.hair_style',
+            'Hair style',
+        );
     }
     if (
         path.includes(
             'hairColor',
         )
     ) {
-        return '发色';
+        return staticText(
+            displayLocale,
+            'ui.dossier.field.hair_color',
+            'Hair color',
+        );
     }
     if (
         path.includes(
             'injur',
         )
     ) {
-        return '伤势';
+        return staticText(
+            displayLocale,
+            'ui.dossier.field.injuries',
+            'Injuries',
+        );
     }
     if (
         path.includes(
             'feature',
         )
     ) {
-        return '身体特征';
+        return staticText(
+            displayLocale,
+            'ui.dossier.field.body_features',
+            'Physical features',
+        );
     }
     if (
         path.includes(
             'form',
         )
     ) {
-        return '当前形态';
+        return staticText(
+            displayLocale,
+            'ui.dossier.field.form',
+            'Current form',
+        );
     }
     if (
         path.startsWith(
             'body',
         )
     ) {
-        return '身体状态';
+        return staticText(
+            displayLocale,
+            'ui.dossier.field.body_status',
+            'Physical status',
+        );
     }
-    return '身份';
+    return staticText(
+        displayLocale,
+        'ui.dossier.field.identity',
+        'Identity',
+    );
 }
 
 function objectClaimValue(
@@ -588,6 +937,7 @@ function objectClaimValue(
 
 function formatClaimValue(
     claim,
+    displayLocale,
 ) {
     const path =
         text(claim.fieldPath);
@@ -609,6 +959,8 @@ function formatClaimValue(
             value?.code ||
                 raw,
             GENDER_LABELS,
+            'ui.dossier.gender',
+            displayLocale,
         );
     }
     if (
@@ -620,6 +972,8 @@ function formatClaimValue(
             value?.status ||
                 raw,
             LINEAGE_LABELS,
+            'ui.dossier.lineage',
+            displayLocale,
         );
     }
     if (
@@ -637,6 +991,7 @@ function formatClaimValue(
 function identityClaimEntries(
     claims,
     directory,
+    displayLocale,
 ) {
     if (!claims.length) {
         return [];
@@ -645,9 +1000,11 @@ function identityClaimEntries(
         viewEntry(
             claimFieldLabel(
                 claim.fieldPath,
+                displayLocale,
             ),
             formatClaimValue(
                 claim,
+                displayLocale,
             ),
             {
                 sourceKind:
@@ -655,11 +1012,26 @@ function identityClaimEntries(
                 detail:
                     claim.sourceKind ===
                         'self'
-                        ? '由本人说出'
-                        : `由 ${actorName(
-                            directory,
-                            claim.speakerId,
-                        )} 提及`,
+                        ? staticText(
+                            displayLocale,
+                            'ui.dossier.claim.self',
+                            'Said by the character',
+                        )
+                        : formatStaticText(
+                            displayLocale,
+                            'ui.dossier.claim.other',
+                            'Mentioned by {actor}',
+                            {
+                                actor:
+                                    actorName(
+                                        directory,
+                                        claim
+                                            .speakerId,
+                                        displayLocale,
+                                    ),
+                            },
+                        ),
+                displayLocale,
             },
         ));
 }
@@ -668,6 +1040,7 @@ function relationshipClaimEntries(
     claims,
     references,
     directory,
+    displayLocale,
 ) {
     const referenceById =
         new Map(
@@ -687,29 +1060,62 @@ function relationshipClaimEntries(
             knownText(
                 reference?.label,
             ) ||
-            '未具名人物';
+            staticText(
+                displayLocale,
+                'ui.dossier.unnamed_person',
+                'Unnamed person',
+            );
+        const relationshipKind =
+            claim.relationshipKind;
         return {
             label: [
                 RELATIONSHIP_LABELS[
-                    claim
-                        .relationshipKind
-                ] ||
-                claim
-                    .relationshipKind ||
-                '关系',
+                    relationshipKind
+                ]
+                    ? staticText(
+                        displayLocale,
+                        `ui.dossier.relationship.${relationshipKind}`,
+                        RELATIONSHIP_LABELS[
+                            relationshipKind
+                        ],
+                    )
+                    : relationshipKind ||
+                        staticText(
+                            displayLocale,
+                            'ui.dossier.relationship.generic',
+                            'Relationship',
+                        ),
                 target,
             ].join(' · '),
             detail:
                 claim.sourceKind ===
                     'self'
-                    ? '由本人说出'
+                    ? staticText(
+                        displayLocale,
+                        'ui.dossier.claim.self',
+                        'Said by the character',
+                    )
                     : claim.sourceKind ===
                         'other'
-                        ? `由 ${actorName(
-                            directory,
-                            claim.speakerId,
-                        )} 提及`
-                        : '已确认的关系记录',
+                        ? formatStaticText(
+                            displayLocale,
+                            'ui.dossier.claim.other',
+                            'Mentioned by {actor}',
+                            {
+                                actor:
+                                    actorName(
+                                        directory,
+                                        claim
+                                            .speakerId,
+                                        displayLocale,
+                                    ),
+                            },
+                        )
+                        : staticText(
+                            displayLocale,
+                            'ui.dossier.claim.confirmed',
+                            'Confirmed relationship record',
+                        ),
             sourceKind:
                 claim.sourceKind,
         };
@@ -767,10 +1173,17 @@ export function buildNpcIdentityDossierViewModel({
     worldState = {},
     actorId,
     buildIdentityProjection,
+    displayLocale =
+    'zh-CN',
 }) {
+    const locale =
+        normalizeDisplayLocale(
+            displayLocale,
+        );
     const directory =
         actorDirectory(
             worldState,
+            locale,
         );
     const actor =
         directory.get(actorId) ||
@@ -817,6 +1230,7 @@ export function buildNpcIdentityDossierViewModel({
         actorName(
             directory,
             actorId,
+            locale,
         );
     const subtitle = [
         actor.role ||
@@ -828,94 +1242,167 @@ export function buildNpcIdentityDossierViewModel({
     return {
         actorId:
             text(actorId),
+        displayLocale:
+            locale,
         name,
         subtitle:
             subtitle ||
-            '人物身份档案',
+            staticText(
+                locale,
+                'ui.dossier.subtitle',
+                'Character identity dossier',
+            ),
         groups: [
             {
                 id: 'basic',
-                title: '基本身份',
+                title:
+                    staticText(
+                        locale,
+                        'ui.dossier.group.basic',
+                        'Basic identity',
+                    ),
                 entries: [
                     viewEntry(
-                        '性别',
+                        staticText(
+                            locale,
+                            'ui.dossier.field.gender',
+                            'Gender',
+                        ),
                         localizedValue(
                             authority
                                 .gender
                                 ?.code,
                             GENDER_LABELS,
+                            'ui.dossier.gender',
+                            locale,
                         ) ||
                         knownText(
                             authority
                                 .gender
                                 ?.label,
                         ),
+                        {
+                            displayLocale:
+                                locale,
+                        },
                     ),
                     viewEntry(
-                        '出生',
+                        staticText(
+                            locale,
+                            'ui.dossier.field.birth',
+                            'Birth',
+                        ),
                         formatBirth(
                             authority
                                 .birth,
                         ),
+                        {
+                            displayLocale:
+                                locale,
+                        },
                     ),
                     viewEntry(
-                        '当前年龄',
+                        staticText(
+                            locale,
+                            'ui.dossier.field.age',
+                            'Current age',
+                        ),
                         formatAge(
                             authority
                                 .derived
                                 ?.age,
+                            locale,
                         ),
                         {
                             sourceKind:
                                 'derived',
+                            displayLocale:
+                                locale,
                         },
                     ),
                 ],
             },
             {
                 id: 'education',
-                title: '教育',
+                title:
+                    staticText(
+                        locale,
+                        'ui.dossier.group.education',
+                        'Education',
+                    ),
                 entries:
                     educationEntries(
                         authority
                             .education ||
                         [],
+                        locale,
                     ),
             },
             {
                 id: 'lineage',
-                title: '血统',
+                title:
+                    staticText(
+                        locale,
+                        'ui.dossier.group.lineage',
+                        'Lineage',
+                    ),
                 entries: [
                     viewEntry(
-                        '血统状态',
+                        staticText(
+                            locale,
+                            'ui.dossier.field.lineage_status',
+                            'Lineage status',
+                        ),
                         localizedValue(
                             authority
                                 .lineage
                                 ?.status,
                             LINEAGE_LABELS,
+                            'ui.dossier.lineage',
+                            locale,
                         ),
+                        {
+                            displayLocale:
+                                locale,
+                        },
                     ),
                 ],
             },
             {
                 id: 'body',
-                title: '身体状态',
+                title:
+                    staticText(
+                        locale,
+                        'ui.dossier.group.body',
+                        'Physical status',
+                    ),
                 entries:
                     bodyEntries(
                         authority.body,
+                        locale,
                     ),
             },
             {
                 id: 'claims',
-                title: '已知说法',
+                title:
+                    staticText(
+                        locale,
+                        'ui.dossier.group.claims',
+                        'Known claims',
+                    ),
                 emptyText:
-                    '暂无已知说法',
+                    staticText(
+                        locale,
+                        'ui.dossier.no_known_claims',
+                        'No known claims',
+                    ),
                 entries:
                     identityClaimEntries(
                         claims
                             .identityClaims ||
                         [],
                         directory,
+                        locale,
                     ),
             },
         ],
@@ -928,6 +1415,7 @@ export function buildNpcIdentityDossierViewModel({
                     .personReferences ||
                 [],
                 directory,
+                locale,
             ),
     };
 }
@@ -935,11 +1423,13 @@ export function buildNpcIdentityDossierViewModel({
 function createSourceTag(
     documentRef,
     sourceKind,
+    displayLocale,
 ) {
     const label =
-        IDENTITY_SOURCE_LABELS[
-            sourceKind
-        ];
+        getIdentitySourceLabel(
+            sourceKind,
+            displayLocale,
+        );
     if (!label) return null;
     const tag =
         documentRef.createElement(
@@ -976,6 +1466,11 @@ export function createNpcIdentityDossierElement(
     documentRef =
     globalThis.document,
 ) {
+    const displayLocale =
+        normalizeDisplayLocale(
+            viewModel
+                ?.displayLocale,
+        );
     const dossier =
         documentRef.createElement(
             'section',
@@ -988,7 +1483,15 @@ export function createNpcIdentityDossierElement(
     );
     dossier.setAttribute(
         'aria-label',
-        `${viewModel.name}的只读身份档案`,
+        formatStaticText(
+            displayLocale,
+            'ui.dossier.aria',
+            '{name} read-only identity dossier',
+            {
+                name:
+                    viewModel.name,
+            },
+        ),
     );
 
     const header =
@@ -1087,7 +1590,11 @@ export function createNpcIdentityDossierElement(
                 'hpmud-identity-empty';
             fields.textContent =
                 group.emptyText ||
-                '暂无';
+                staticText(
+                    displayLocale,
+                    'ui.inspector.empty',
+                    'None yet',
+                );
         }
         for (
             const entry
@@ -1135,6 +1642,7 @@ export function createNpcIdentityDossierElement(
                 createSourceTag(
                     documentRef,
                     entry.sourceKind,
+                    displayLocale,
                 );
             if (entrySource) {
                 description.append(

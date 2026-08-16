@@ -162,7 +162,6 @@ export function applyCommittedSceneOpeningExperience(
                 actor.id,
                 String(
                     actor.nameEn ||
-                    actor.name ||
                     actor.id,
                 ).trim(),
             ]),
@@ -171,7 +170,6 @@ export function applyCommittedSceneOpeningExperience(
         String(
             worldState.scene
                 ?.nameEn ||
-            worldState.location ||
             worldState.scene
                 ?.roomId ||
             sceneId,
@@ -346,7 +344,12 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
     const nextClock = payload.nextClock;
     const closureTimelineEntry = {
         clock: archiveEntry.endedClock || worldState.clock,
-        label: archiveEntry.closureSummary || payload.closureSummaryEn,
+        summaryEn:
+            archiveEntry
+                .closureSummaryEn ||
+            payload.closureSummaryEn,
+        sourceRef:
+            `scene:${worldState.scene?.id || 'unknown'}:closure`,
     };
     const archivedTimelineEntries = structuredClone(
         archiveEntry.timelineEntries?.length
@@ -356,7 +359,9 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
     const lastArchivedEntry =
         archivedTimelineEntries[archivedTimelineEntries.length - 1];
     if (lastArchivedEntry?.clock !== closureTimelineEntry.clock ||
-        lastArchivedEntry?.label !== closureTimelineEntry.label) {
+        lastArchivedEntry?.summaryEn !==
+            closureTimelineEntry
+                .summaryEn) {
         archivedTimelineEntries.push(closureTimelineEntry);
     }
     const committedArchiveEntry = {
@@ -405,27 +410,16 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
         0,
         Number(next.turn?.count || 0),
     );
-    next.chapter = nextScene.chapter || nextScene.chapterEn;
-    next.location = room.name || nextScene.name || nextScene.nameEn;
+    next.chapterEn =
+        nextScene.chapterEn;
     next.scene = {
         id: nextScene.id,
-        name: nextScene.name || nextScene.nameEn,
         nameEn: nextScene.nameEn,
-        summary: nextScene.summary || nextScene.summaryEn,
         summaryEn: nextScene.summaryEn,
-        explorationHook:
-            nextScene.explorationHook ||
-            nextScene.explorationHookEn,
         explorationHookEn:
             nextScene.explorationHookEn,
-        crowdDirection:
-            nextScene.crowdDirection ||
-            nextScene.crowdDirectionEn,
         crowdDirectionEn:
             nextScene.crowdDirectionEn,
-        temporalFacts:
-            nextScene.temporalFacts ||
-            nextScene.temporalFactsEn,
         temporalFactsEn:
             nextScene.temporalFactsEn,
         temporalGroundingVersion:
@@ -434,7 +428,10 @@ export function applySceneTransition(worldState, payload, archiveEntry = {}, opt
         startedMessageId: Number(options.startedMessageId || 0),
         timelineEntries: [{
             clock: nextClock,
-            label: nextScene.summary || nextScene.summaryEn,
+            summaryEn:
+                nextScene.summaryEn,
+            sourceRef:
+                `scene:${nextScene.id}:opening`,
         }],
         mapId: nextScene.mapId,
         roomId: nextScene.roomId,

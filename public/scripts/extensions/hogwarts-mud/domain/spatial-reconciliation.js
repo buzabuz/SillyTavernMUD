@@ -100,10 +100,6 @@ export function reconcileSpatialState(
                 next.scene.roomId =
                     openingRoom.id;
             }
-            next.location =
-                openingRoom.name ||
-                openingRoom.nameEn ||
-                next.location;
             next.actors = (next.actors || [])
                 .map(actor =>
                     actor.present !== false &&
@@ -163,9 +159,7 @@ export function reconcileSpatialState(
                 'gryffindor_girls_dormitory');
     const sceneDormitoryText = [
         next.scene?.id,
-        next.scene?.name,
         next.scene?.nameEn,
-        next.scene?.summary,
         next.scene?.summaryEn,
         sceneOpeningText,
     ].filter(Boolean).join(' ');
@@ -195,10 +189,6 @@ export function reconcileSpatialState(
                 ),
                 `${mapId}:${dormitoryRoom.id}`,
             ])];
-        next.location =
-            dormitoryRoom.name ||
-            dormitoryRoom.nameEn ||
-            next.location;
         if (next.scene) {
             next.scene.mapId = mapId;
             next.scene.roomId =
@@ -482,9 +472,14 @@ export function reconcileSpatialState(
 
 function roomReferencesRoom(room, target) {
     const description = normalizeSpatialText(
-        room?.descriptionEn || room?.description || '',
+        room?.descriptionEn ||
+        '',
     );
-    return [target?.id, target?.name, target?.nameEn]
+    return [
+        target?.id,
+        target?.nameEn,
+        ...(target?.aliases || []),
+    ]
         .map(normalizeSpatialText)
         .filter(label => label.length >= 4)
         .some(label => description.includes(label));
@@ -529,7 +524,9 @@ export function buildSpatialContext(worldState) {
                 nameEn: actor.nameEn,
                 mapId: actorMapId,
                 roomId: actorRoomId,
-                roomName: actorRoom?.name || actorRoom?.nameEn || actorRoomId,
+                roomNameEn:
+                    actorRoom?.nameEn ||
+                    actorRoomId,
                 canSeePlayer: Boolean(
                     sameRoom || directRoute || describedSightline,
                 ),
@@ -547,7 +544,9 @@ export function buildSpatialContext(worldState) {
         player: {
             mapId: playerMapId,
             roomId: playerRoomId,
-            roomName: playerRoom?.name || playerRoom?.nameEn || playerRoomId,
+            roomNameEn:
+                playerRoom?.nameEn ||
+                playerRoomId,
         },
         actors,
     };

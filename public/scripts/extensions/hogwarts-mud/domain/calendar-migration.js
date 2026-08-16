@@ -91,9 +91,14 @@ function normalizeLegacyEntry(
         LEGACY_ENTRY_FIELDS,
         `Calendar V1 entries[${index}]`,
     );
+    const englishSource = {
+        ...source,
+    };
+    delete englishSource.title;
+    delete englishSource.summary;
     const entry =
         normalizeCalendarEntry({
-            ...source,
+            ...englishSource,
             sourceBeatId: '',
             beatSlot: null,
             scheduleKind: 'personal',
@@ -178,9 +183,7 @@ function migrateLegacyStoryline(
 ) {
     return {
         id: entry.id,
-        title: entry.title,
         titleEn: entry.titleEn,
-        summary: entry.summary,
         summaryEn: entry.summaryEn,
         tags: entry.tags,
         startClock: entry.startClock,
@@ -262,6 +265,62 @@ function migrateLegacyCalendar(
     };
 }
 
+function migrateV2Record(record) {
+    const englishRecord = {
+        ...(
+            record &&
+            typeof record === 'object' &&
+            !Array.isArray(record)
+                ? record
+                : {}
+        ),
+    };
+    delete englishRecord.title;
+    delete englishRecord.summary;
+    return englishRecord;
+}
+
+function migrateV2Calendar(source) {
+    if (
+        !isRecord(source) ||
+        source.version !== 2 ||
+        !Array.isArray(
+            source.storylines,
+        ) ||
+        !Array.isArray(
+            source.storyBeats,
+        ) ||
+        !Array.isArray(
+            source.entries,
+        )
+    ) {
+        throw new TypeError(
+            'Calendar V2 migration 只接受合法 version=2 结构。',
+        );
+    }
+    return {
+        version:
+            CALENDAR_VERSION,
+        storylines:
+            source.storylines
+                .map(
+                    migrateV2Record,
+                ),
+        storyBeats:
+            source.storyBeats
+                .map(
+                    migrateV2Record,
+                ),
+        entries:
+            source.entries
+                .map(
+                    migrateV2Record,
+                ),
+        horizon:
+            source.horizon,
+    };
+}
+
 export function migrateCalendarState(
     worldState,
 ) {
@@ -295,7 +354,15 @@ export function migrateCalendarState(
                 ? migrateLegacyCalendar(
                     worldState.calendar,
                 )
-                : worldState.calendar;
+                : worldState
+                    .calendar
+                    ?.version === 2
+                    ? migrateV2Calendar(
+                        worldState
+                            .calendar,
+                    )
+                    : worldState
+                        .calendar;
     const calendar =
         validateCalendarState(
             candidate,

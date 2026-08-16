@@ -1,6 +1,39 @@
 import {
     getCanonSettingProfile,
 } from '../canon-characters.js';
+import {
+    isEnglishAuthorityText,
+} from './model-language-adoption.js';
+
+export const CHARACTER_LANGUAGE_VERSION =
+    2;
+
+const CHARACTER_CODE_MAP =
+    Object.freeze({
+        '麻瓜出身': 'muggle_born',
+        '混血': 'half_blood',
+        '纯血': 'pure_blood',
+        '未知或复杂': 'unknown_complex',
+        '魔咒': 'charms',
+        '变形': 'transfiguration',
+        '魔药': 'potions',
+        '草药': 'herbology',
+        '飞行': 'flying',
+        '心灵': 'mind',
+        '防御': 'defence',
+        '蛇佬腔': 'parseltongue',
+        '易容马格斯倾向':
+            'metamorphmagus_tendency',
+        '预言倾向':
+            'divination_tendency',
+        '自定义，写入背景':
+            'custom_in_background',
+        none: 'none',
+        balanced: 'balanced',
+        volatile: 'volatile',
+        patient: 'patient',
+        focused: 'focused',
+    });
 
 export const CHARACTER_ATTRIBUTE_KEYS = Object.freeze([
     'physique',
@@ -44,6 +77,309 @@ export const RELATIONSHIP_FOCUS_VALUES =
         'mentorship',
         'family',
     ]);
+
+function englishText(value) {
+    return isEnglishAuthorityText(
+        value,
+    )
+        ? String(value)
+            .trim()
+        : '';
+}
+
+export function normalizeCharacterCode(
+    value,
+) {
+    const normalized =
+        String(value || '').trim();
+    return CHARACTER_CODE_MAP[
+        normalized
+    ] ||
+        (
+            /^[a-z][a-z0-9_]*$/u
+                .test(normalized)
+                ? normalized
+                : ''
+        );
+}
+
+function legacyCharacterEvidence(
+    source,
+) {
+    return {
+        locale:
+            String(
+                source
+                    ?.inputEvidence
+                    ?.locale ||
+                'zh-CN',
+            ),
+        identity:
+            structuredClone(
+                source
+                    ?.inputEvidence
+                    ?.identity ||
+                source?.identity ||
+                {},
+            ),
+        background:
+            structuredClone(
+                source
+                    ?.inputEvidence
+                    ?.background ||
+                source?.background ||
+                {},
+            ),
+        aptitudes:
+            structuredClone(
+                source
+                    ?.inputEvidence
+                    ?.aptitudes ||
+                source?.aptitudes ||
+                {},
+            ),
+        polishedBackground:
+            String(
+                source
+                    ?.inputEvidence
+                    ?.polishedBackground ??
+                source
+                    ?.polishedBackground ??
+                '',
+            ),
+    };
+}
+
+export function normalizeCharacterV2(
+    source = {},
+) {
+    const inputEvidence =
+        legacyCharacterEvidence(
+            source,
+        );
+    const canonicalSource =
+        source.canonicalEn &&
+        typeof source.canonicalEn ===
+            'object' &&
+        !Array.isArray(
+            source.canonicalEn,
+        )
+            ? source.canonicalEn
+            : {};
+    const identityEvidence =
+        inputEvidence.identity;
+    const backgroundEvidence =
+        inputEvidence.background;
+    const aptitudeEvidence =
+        inputEvidence.aptitudes;
+    return {
+        version:
+            CHARACTER_LANGUAGE_VERSION,
+        inputEvidence,
+        canonicalEn: {
+            identity: {
+                nameEn:
+                    englishText(
+                        canonicalSource
+                            .identity
+                            ?.nameEn ||
+                        identityEvidence
+                            .name,
+                    ),
+                pronounsEn:
+                    englishText(
+                        canonicalSource
+                            .identity
+                            ?.pronounsEn ||
+                        identityEvidence
+                            .pronouns,
+                    ),
+                appearanceEn:
+                    englishText(
+                        canonicalSource
+                            .identity
+                            ?.appearanceEn ||
+                        identityEvidence
+                            .appearance,
+                    ),
+                birthDate:
+                    String(
+                        canonicalSource
+                            .identity
+                            ?.birthDate ||
+                        identityEvidence
+                            .birthDate ||
+                        '',
+                    ),
+                age:
+                    Number(
+                        canonicalSource
+                            .identity
+                            ?.age ??
+                        identityEvidence
+                            .age ??
+                        11,
+                    ),
+                heritageEn:
+                    englishText(
+                        canonicalSource
+                            .identity
+                            ?.heritageEn ||
+                        identityEvidence
+                            .heritage,
+                    ),
+            },
+            background: {
+                bloodStatusCode:
+                    normalizeCharacterCode(
+                        canonicalSource
+                            .background
+                            ?.bloodStatusCode ||
+                        backgroundEvidence
+                            .bloodStatus,
+                    ),
+                guardianEn:
+                    englishText(
+                        canonicalSource
+                            .background
+                            ?.guardianEn ||
+                        backgroundEvidence
+                            .guardian,
+                    ),
+                homeEn:
+                    englishText(
+                        canonicalSource
+                            .background
+                            ?.homeEn ||
+                        backgroundEvidence
+                            .home,
+                    ),
+                economyEn:
+                    englishText(
+                        canonicalSource
+                            .background
+                            ?.economyEn ||
+                        backgroundEvidence
+                            .economy,
+                    ),
+                desireEn:
+                    englishText(
+                        canonicalSource
+                            .background
+                            ?.desireEn ||
+                        backgroundEvidence
+                            .desire,
+                    ),
+                fearEn:
+                    englishText(
+                        canonicalSource
+                            .background
+                            ?.fearEn ||
+                        backgroundEvidence
+                            .fear,
+                    ),
+                habitEn:
+                    englishText(
+                        canonicalSource
+                            .background
+                            ?.habitEn ||
+                        backgroundEvidence
+                            .habit,
+                    ),
+                formativeEventEn:
+                    englishText(
+                        canonicalSource
+                            .background
+                            ?.formativeEventEn ||
+                        backgroundEvidence
+                            .formativeEvent,
+                    ),
+            },
+            aptitudes: {
+                magicalPotentialCode:
+                    normalizeCharacterCode(
+                        canonicalSource
+                            .aptitudes
+                            ?.magicalPotentialCode ||
+                        aptitudeEvidence
+                            .magicalPotential,
+                    ),
+                strongDomainCode:
+                    normalizeCharacterCode(
+                        canonicalSource
+                            .aptitudes
+                            ?.strongDomainCode ||
+                        aptitudeEvidence
+                            .strongDomain,
+                    ),
+                weakDomainCode:
+                    normalizeCharacterCode(
+                        canonicalSource
+                            .aptitudes
+                            ?.weakDomainCode ||
+                        aptitudeEvidence
+                            .weakDomain,
+                    ),
+                rareTalentCode:
+                    normalizeCharacterCode(
+                        canonicalSource
+                            .aptitudes
+                            ?.rareTalentCode ||
+                        aptitudeEvidence
+                            .rareTalent,
+                    ) || 'none',
+            },
+            polishedBackgroundEn:
+                englishText(
+                    canonicalSource
+                        .polishedBackgroundEn ||
+                    inputEvidence
+                        .polishedBackground,
+                ),
+        },
+        attributes:
+            structuredClone(
+                source.attributes ||
+                {},
+            ),
+        storyPreferences:
+            normalizeStoryPreferences(
+                source
+                    .storyPreferences,
+            ),
+        confirmed:
+            source.confirmed === true,
+    };
+}
+
+export function getCharacterInputDraft(
+    character,
+) {
+    const normalized =
+        normalizeCharacterV2(
+            character,
+        );
+    return {
+        ...structuredClone(
+            normalized.inputEvidence,
+        ),
+        attributes:
+            structuredClone(
+                normalized.attributes,
+            ),
+        storyPreferences:
+            structuredClone(
+                normalized
+                    .storyPreferences,
+            ),
+        polishedBackground:
+            normalized
+                .inputEvidence
+                .polishedBackground,
+        confirmed:
+            normalized.confirmed,
+    };
+}
 
 export function normalizeStoryPreferences(
     preferences = {},
@@ -144,17 +480,21 @@ function calculateAgeOnDate(
 export function getPlayerAgeAtClock(
     worldState,
 ) {
+    const character =
+        normalizeCharacterV2(
+            worldState.character,
+        );
     const exact = calculateAgeOnDate(
-        worldState.character?.identity
-            ?.birthDate,
+        character.canonicalEn
+            .identity.birthDate,
         worldState.clock,
     );
     if (Number.isFinite(exact)) {
         return exact;
     }
     const baseAge = Number(
-        worldState.character?.identity
-            ?.age,
+        character.canonicalEn
+            .identity.age,
     );
     const currentYear = Number(
         String(worldState.clock || '')
@@ -267,11 +607,16 @@ export function getRelativeAgeProfile(
 export function buildPlayerVisibleProfile(
     worldState = {},
 ) {
+    const character =
+        normalizeCharacterV2(
+            worldState.character,
+        );
     const identity =
-        worldState.character?.identity || {};
+        character.inputEvidence
+            .identity;
     const background =
-        worldState.character?.background ||
-        {};
+        character.inputEvidence
+            .background;
     return {
         name:
             String(identity.name || '').trim(),
@@ -388,11 +733,56 @@ export function validateCharacterDraft(character) {
 }
 
 export function buildCharacterContext(character) {
-    if (!character?.confirmed) {
+    const normalized =
+        normalizeCharacterV2(
+            character,
+        );
+    if (!normalized.confirmed) {
         return '';
     }
+    const projection = {
+        version:
+            CHARACTER_LANGUAGE_VERSION,
+        playerId: 'player',
+        canonicalEn:
+            normalized.canonicalEn,
+        attributes:
+            normalized.attributes,
+        storyPreferences:
+            normalized
+                .storyPreferences,
+    };
     return `PLAYER CHARACTER (binding state):
-${JSON.stringify(character, null, 2)}
+${JSON.stringify(projection)}
 
 Do not alter confirmed player facts. Never speak, decide, or act on behalf of this character beyond actions explicitly supplied by the player.`;
+}
+
+export function projectCharacterForPrompt(
+    character,
+) {
+    const normalized =
+        normalizeCharacterV2(
+            character,
+        );
+    return {
+        version:
+            CHARACTER_LANGUAGE_VERSION,
+        playerId: 'player',
+        canonicalEn:
+            structuredClone(
+                normalized
+                    .canonicalEn,
+            ),
+        attributes:
+            structuredClone(
+                normalized
+                    .attributes,
+            ),
+        storyPreferences:
+            structuredClone(
+                normalized
+                    .storyPreferences,
+            ),
+    };
 }

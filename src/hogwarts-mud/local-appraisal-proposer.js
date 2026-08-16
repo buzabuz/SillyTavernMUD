@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
 import {
+    adoptEnglishFields,
+} from '../../public/scripts/extensions/hogwarts-mud/domain/model-language-adoption.js';
+import {
     callStructuredModel,
     enqueueLocalSemanticOperation,
 } from './local-semantic-adjudicator.js';
@@ -115,6 +118,50 @@ Rules:
 - Emit no proposal when the event gives an observer no meaningful interpretation. Do not invent missing reactions.
 - Use concise English and at most eight neutral contextTags.`;
 
+export function adoptLocalAppraisalLanguage(
+    result,
+) {
+    const diagnostics = [];
+    const appraisalProposals = (
+        result?.appraisalProposals ||
+        []
+    ).filter((proposal, index) => {
+        const adoption =
+            adoptEnglishFields(
+                proposal,
+                {
+                    taskId:
+                        'local_appraisal_proposer',
+                    recordId:
+                        String(
+                            proposal
+                                ?.observerId ||
+                            index,
+                        ),
+                    requiredFields: [
+                        'summaryEn',
+                    ],
+                },
+            );
+        diagnostics.push(
+            ...adoption.diagnostics
+                .map(diagnostic => ({
+                    ...diagnostic,
+                    fieldPath:
+                        `appraisalProposals[${index}].${diagnostic.fieldPath}`,
+                })),
+        );
+        return adoption.admissible;
+    });
+    return {
+        result: {
+            ...result,
+            appraisalProposals,
+        },
+        diagnostics,
+    };
+}
+
 export function proposeTurnAppraisals(
     input,
     {
@@ -122,20 +169,38 @@ export function proposeTurnAppraisals(
     } = {},
 ) {
     return enqueueLocalSemanticOperation(
-        () =>
-            callStructuredModel({
-                taskId:
+        async () => {
+            const modeled =
+                await callStructuredModel({
+                    taskId:
                     'local_appraisal_proposer',
-                system:
+                    system:
                     APPRAISAL_SYSTEM,
-                input,
-                jsonSchema:
+                    input,
+                    jsonSchema:
                     appraisalBatchJsonSchema,
-                resultSchema:
+                    resultSchema:
                     appraisalBatchResultSchema,
-                unload: true,
-                modelOverride:
+                    unload: true,
+                    modelOverride:
                     model,
-            }),
+                });
+            const adopted =
+                adoptLocalAppraisalLanguage(
+                    modeled.result,
+                );
+            return {
+                ...modeled,
+                result: adopted.result,
+                diagnostics: {
+                    ...modeled.diagnostics,
+                    languageMismatches:
+                        adopted.diagnostics,
+                    languageMismatchCount:
+                        adopted.diagnostics
+                            .length,
+                },
+            };
+        },
     );
 }

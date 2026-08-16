@@ -1,6 +1,116 @@
 import {
     getInteriorMount,
 } from '../domain/interior-mount.js';
+import {
+    adoptEnglishFields,
+} from '../domain/model-language-adoption.js';
+
+function adoptInteriorMapLanguage(
+    payload,
+) {
+    const diagnostics = [];
+    const root =
+        adoptEnglishFields(
+            payload || {},
+            {
+                taskId:
+                    'interior_cartographer',
+                recordId:
+                    payload?.id,
+                requiredFields: [
+                    'nameEn',
+                ],
+            },
+        );
+    diagnostics.push(
+        ...root.diagnostics,
+    );
+    const levels =
+        (
+            Array.isArray(
+                payload?.levels,
+            )
+                ? payload.levels
+                : []
+        )
+            .map(level => {
+                const result =
+                    adoptEnglishFields(
+                        level,
+                        {
+                            taskId:
+                                'interior_cartographer',
+                            recordId:
+                                level?.id,
+                            requiredFields: [
+                                'nameEn',
+                            ],
+                        },
+                    );
+                diagnostics.push(
+                    ...result
+                        .diagnostics,
+                );
+                return result.admissible
+                    ? result.accepted
+                    : null;
+            })
+            .filter(Boolean);
+    const rooms =
+        (
+            Array.isArray(
+                payload?.rooms,
+            )
+                ? payload.rooms
+                : []
+        )
+            .map(room => {
+                const result =
+                    adoptEnglishFields(
+                        room,
+                        {
+                            taskId:
+                                'interior_cartographer',
+                            recordId:
+                                room?.id,
+                            requiredFields: [
+                                'nameEn',
+                                'descriptionEn',
+                            ],
+                        },
+                    );
+                diagnostics.push(
+                    ...result
+                        .diagnostics,
+                );
+                return result.admissible
+                    ? result.accepted
+                    : null;
+            })
+            .filter(Boolean);
+    const accepted = {
+        ...root.accepted,
+        levels,
+        rooms,
+    };
+    delete accepted.display;
+    return {
+        payload: accepted,
+        diagnostics,
+        admissible:
+            root.admissible &&
+            levels.length ===
+                (
+                    payload?.levels ||
+                    []
+                ).length &&
+            rooms.length ===
+                (
+                    payload?.rooms ||
+                    []
+                ).length,
+    };
+}
 
 export function createInteriorMapWorkflow(ports) {
     const {
@@ -13,64 +123,14 @@ export function createInteriorMapWorkflow(ports) {
         getInteriorMapRequest,
         getLocalMapDefinition,
         getMudState,
-        getSettings,
         jobRegistry,
-        normalizeGeneratedInteriorMapLabels,
         parseJsonObject,
         renderAll,
         resetInspectorMapScope,
         resolveRoleSlots,
         sendModelTaskRequest,
-        translateOpeningValues,
         validateGeneratedInteriorMap,
     } = ports;
-
-    async function localizeGeneratedInteriorMapPackage(
-        generatedMap,
-    ) {
-        if (!getSettings().translationEnabled) {
-            return generatedMap;
-        }
-        const values = [
-            generatedMap.nameEn,
-            ...generatedMap.levels
-                .map(level =>
-                    level.nameEn),
-            ...generatedMap.rooms
-                .flatMap(room => [
-                    room.nameEn,
-                    room.descriptionEn,
-                ]),
-        ];
-        const translated =
-        await translateOpeningValues(
-            values,
-        );
-        let cursor = 0;
-        return {
-            ...generatedMap,
-            display: {
-                mapName:
-                translated[cursor++],
-                levelNames:
-                generatedMap.levels
-                    .map(() =>
-                        translated[
-                            cursor++
-                        ]),
-                roomNames:
-                generatedMap.rooms
-                    .map(() => {
-                        const name =
-                            translated[
-                                cursor++
-                            ];
-                        cursor += 1;
-                        return name;
-                    }),
-            },
-        };
-    }
 
     function createInteriorMapPrompt(
         state,
@@ -93,7 +153,7 @@ Rules:
 
 Schema:
 {
-  "version":1,
+  "version":2,
   "id":"exact_requested_map_id",
   "nameEn":"English interior map name",
   "currentLevelId":"level_id",
@@ -179,97 +239,43 @@ Schema:
             state,
             request,
         );
-        let response =
-        await sendModelTaskRequest(
-            roleSlot,
-            prompt,
-            { json: true },
-        );
-        let raw =
-        extractRoleResponseText(
-            response,
-        );
-        let lastError = null;
-        for (
-            let attempt = 0;
-            attempt < 2;
-            attempt++
-        ) {
-            try {
-                let payload =
-                parseJsonObject(raw);
-                const validation =
-                validateGeneratedInteriorMap(
-                    payload,
-                    state,
-                    request,
-                );
-                if (!validation.valid) {
-                    throw new Error(
-                        validation.errors
-                            .join('；'),
-                    );
-                }
-                try {
-                    payload =
-                    await localizeGeneratedInteriorMapPackage(
-                        payload,
-                    );
-                } catch (
-                    translationError
-                ) {
-                    console.warn(
-                        '[Hogwarts MUD] Interior map translation failed; using English labels',
-                        translationError,
-                    );
-                }
-                return payload;
-            } catch (error) {
-                lastError = error;
-                if (attempt > 0) {
-                    break;
-                }
-                response =
-                await sendModelTaskRequest(
-                    roleSlot,
-                    [
-                        {
-                            role:
-                                'system',
-                            content:
-                                'Repair the interior map JSON. Use the exact requested map ID, 1–4 levels, 2–16 fully connected rooms, valid snake_case IDs, and coordinates from 5 to 95. Do not add characters, items, events, or facts. Return JSON only.',
-                        },
-                        {
-                            role: 'user',
-                            content:
-                                JSON.stringify({
-                                    validationError:
-                                        String(
-                                            error
-                                                ?.message ||
-                                            error,
-                                        ),
-                                    invalidOutput:
-                                        raw,
-                                    originalRequest:
-                                        JSON.parse(
-                                            prompt[1]
-                                                .content,
-                                        ),
-                                }),
-                        },
-                    ],
-                    { json: true },
-                );
-                raw =
-                extractRoleResponseText(
-                    response,
-                );
-            }
+        const response =
+            await sendModelTaskRequest(
+                roleSlot,
+                prompt,
+                {
+                    json: true,
+                },
+            );
+        const adoption =
+            adoptInteriorMapLanguage(
+                parseJsonObject(
+                    extractRoleResponseText(
+                        response,
+                    ),
+                ),
+            );
+        if (!adoption.admissible) {
+            return {
+                languageSkipped: true,
+                diagnostics:
+                    adoption
+                        .diagnostics,
+            };
         }
-        throw new Error(
-            `中档室内制图连续两次无效：${String(lastError?.message || lastError)}`,
-        );
+        const validation =
+            validateGeneratedInteriorMap(
+                adoption.payload,
+                state,
+                request,
+            );
+        if (!validation.valid) {
+            throw new Error(
+                validation.errors
+                    .join('；'),
+            );
+        }
+        return adoption.payload;
     }
 
     async function ensureCurrentInteriorMap() {
@@ -310,16 +316,11 @@ Schema:
             request.status ===
             'ready'
         ) {
-            let next =
+            const next =
             enterBoundInteriorMap(
                 state,
                 request,
             );
-            const normalized =
-            normalizeGeneratedInteriorMapLabels(
-                next,
-            );
-            next = normalized.state;
             next.map.interiorMapGeneration = {
                 status: 'ready',
                 error: '',
@@ -366,12 +367,18 @@ Schema:
             ?.interiorMapGeneration;
         if (
             previousGeneration
-                ?.status === 'failed' &&
-        previousGeneration
-            ?.bindingKey ===
-            request.bindingKey
+                ?.status === 'failed' ||
+            previousGeneration
+                ?.status ===
+                'language_skipped'
         ) {
-            return null;
+            if (
+                previousGeneration
+                    ?.bindingKey ===
+                request.bindingKey
+            ) {
+                return null;
+            }
         }
         const slots =
         resolveRoleSlots(
@@ -417,17 +424,40 @@ Schema:
                         state,
                         request,
                     );
-                let next =
+                if (
+                    generatedMap
+                        ?.languageSkipped
+                ) {
+                    state =
+                        getMudState();
+                    state.map
+                        .interiorMapGeneration = {
+                            status:
+                                'language_skipped',
+                            error: '',
+                            bindingKey:
+                                request
+                                    .bindingKey,
+                            mapId: '',
+                            languageMismatchCount:
+                                generatedMap
+                                    .diagnostics
+                                    .length,
+                            settledAt:
+                                new Date()
+                                    .toISOString(),
+                        };
+                    await context
+                        .saveMetadata();
+                    renderAll();
+                    return null;
+                }
+                const next =
                     applyGeneratedInteriorMap(
                         state,
                         generatedMap,
                         request,
                     );
-                const normalized =
-                    normalizeGeneratedInteriorMapLabels(
-                        next,
-                    );
-                next = normalized.state;
                 next.map
                     .interiorMapGeneration = {
                         status: 'ready',
@@ -485,7 +515,6 @@ Schema:
     }
 
     return {
-        localizeGeneratedInteriorMapPackage,
         createInteriorMapPrompt,
         generateInteriorMapPackage,
         ensureCurrentInteriorMap,

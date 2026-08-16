@@ -1,0 +1,28 @@
+{
+  "BUG_MAP": [
+    {
+      "defect_type": "Business Gaps",
+      "scenario": "[defect-probing] 窄屏用户点击迷你地图展开按钮时应看到 Map Inspector。",
+      "description": "迷你地图只重绘 Inspector 内容，没有打开响应式 Inspector。",
+      "file_path": "public/scripts/extensions/hogwarts-mud/ui/map-renderer.js",
+      "target_func": "renderMiniMap",
+      "bug_range": "line 930",
+      "evidence": "真实点击后 Inspector 已生成中文地图内容，但根节点没有 hpmud-inspector-open，计算样式仍为 display:none；同一 UI 的侧栏标题按钮会先添加打开类。",
+      "expect_outcome": "正确结果：点击后打开 Inspector、同步 aria-expanded 并显示 Map tab；当前错误结果：内容已渲染但不可见；验证：移动端展开按钮的行为测试应通过。",
+      "severity": "P1",
+      "status": "confirmed"
+    },
+    {
+      "defect_type": "Business Gaps",
+      "scenario": "[defect-probing] 390×844 视口加载正常游戏时正文与 Composer 应保持可读且不重叠。",
+      "description": "移动端场景栏参与主网格，Composer 工具组又继承桌面 flex-basis，导致正文被压缩并与输入框重叠。",
+      "file_path": "public/scripts/extensions/hogwarts-mud/style.css",
+      "target_func": "mobile workspace and composer rules",
+      "bug_range": "lines 7943-7983",
+      "evidence": "真实 390px 视口中 story clientHeight=44，heading 范围 y=474..676，textarea 范围 y=468..568，重叠确定为 true；工具组高度分别为 250px 和 390px。",
+      "expect_outcome": "正确结果：正文独占移动端主网格、场景栏覆盖显示、工具组按内容高度布局；当前错误结果：正文仅 44px 且标题与输入框重叠；验证：移动端 CSS 合同测试应通过。",
+      "severity": "P0",
+      "status": "confirmed"
+    }
+  ]
+}

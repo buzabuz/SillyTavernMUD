@@ -1,3 +1,7 @@
+import {
+    applyStaticUiLocale,
+} from '../locales/ui-static.js';
+
 export function createSettingsProfileController(ports) {
     const {
         refs,
@@ -24,6 +28,12 @@ export function createSettingsProfileController(ports) {
         getContext,
         getCurrentPresetAPI,
         getCurrentPresetName,
+        getLocalizedField =
+        field => ({
+            text:
+                field.sourceTextEn ||
+                '',
+        }),
         getMudState,
         getPresetManager,
         getRequestHeaders,
@@ -49,6 +59,43 @@ export function createSettingsProfileController(ports) {
         root,
         profileEditorDialog,
     } = refs;
+
+    function staticText(
+        staticKey,
+        sourceTextEn,
+    ) {
+        return getLocalizedField({
+            staticKey,
+            sourceTextEn,
+        }).text ||
+            sourceTextEn;
+    }
+
+    function formatStaticText(
+        staticKey,
+        sourceTextEn,
+        values = {},
+    ) {
+        return Object.entries(
+            values,
+        ).reduce(
+            (
+                text,
+                [
+                    key,
+                    value,
+                ],
+            ) =>
+                text.replaceAll(
+                    `{${key}}`,
+                    String(value),
+                ),
+            staticText(
+                staticKey,
+                sourceTextEn,
+            ),
+        );
+    }
 
     function getConnectionProfiles() {
         const manager = getContext().extensionSettings?.connectionManager;
@@ -77,10 +124,30 @@ export function createSettingsProfileController(ports) {
             .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
         select.replaceChildren();
         if (selectedModel && !normalized.includes(selectedModel)) {
-            select.add(new Option(`当前 · ${selectedModel}`, selectedModel));
+            select.add(
+                new Option(
+                    formatStaticText(
+                        'ui.profile.current_model',
+                        'Current · {model}',
+                        {
+                            model:
+                                selectedModel,
+                        },
+                    ),
+                    selectedModel,
+                ),
+            );
         }
         normalized.forEach(model => select.add(new Option(model, model)));
-        select.add(new Option('手动输入其他 Model ID…', MANUAL_MODEL_VALUE));
+        select.add(
+            new Option(
+                staticText(
+                    'ui.profile.manual_model',
+                    'Enter Model ID manually...',
+                ),
+                MANUAL_MODEL_VALUE,
+            ),
+        );
         if (selectedModel) {
             select.value = selectedModel;
         } else if (normalized.length) {
@@ -93,7 +160,15 @@ export function createSettingsProfileController(ports) {
 
     function populateProfilePresetOptions(selectedPreset = '') {
         const select = root.querySelector('#hpmud_profile_preset');
-        select.replaceChildren(new Option('使用当前/默认 Preset', ''));
+        select.replaceChildren(
+            new Option(
+                staticText(
+                    'ui.profile.use_default_preset',
+                    'Use current/default Preset',
+                ),
+                '',
+            ),
+        );
         const manager = getPresetManager('openai');
         const nativeSelect = manager?.select?.[0] || manager?.select;
         if (nativeSelect instanceof HTMLSelectElement) {
@@ -141,8 +216,14 @@ export function createSettingsProfileController(ports) {
         session.profileEditorTargetRole = targetRole;
         session.profileEditorTempSecret = null;
         root.querySelector('#hpmud_profile_editor_title').textContent = profile
-            ? '编辑 Connection Profile'
-            : '新建 Connection Profile';
+            ? staticText(
+                'ui.profile.title.edit',
+                'Edit Connection Profile',
+            )
+            : staticText(
+                'ui.profile.title.new',
+                'New Connection Profile',
+            );
         root.querySelector('#hpmud_profile_id').value = profile?.id || '';
         root.querySelector('#hpmud_profile_name').value = profile?.name || '';
         root.querySelector('#hpmud_profile_api_type').value = 'openai';
@@ -153,8 +234,14 @@ export function createSettingsProfileController(ports) {
         populateProfileModels([], profile?.model || '');
         root.querySelector('#hpmud_profile_post_processing').value = profile?.['prompt-post-processing'] || '';
         root.querySelector('#hpmud_profile_test_status').textContent = profile?.['secret-id']
-            ? '已关联酒馆密钥；留空 API Key 可继续使用'
-            : '保存前可以测试连接并获取模型列表';
+            ? staticText(
+                'ui.profile.key_existing',
+                'A Tavern key is linked. Leave API Key blank to keep using it.',
+            )
+            : staticText(
+                'ui.profile.test_before_save',
+                'You can test the connection and fetch models before saving.',
+            );
         root.querySelector('#hpmud_profile_delete').hidden = !profile;
         populateProfilePresetOptions(profile?.preset || '');
         syncProfileEndpointVisibility();
@@ -164,7 +251,10 @@ export function createSettingsProfileController(ports) {
             void testProfileConnection().catch(error => {
                 console.warn('[Hogwarts MUD] Could not preload profile models', error);
                 root.querySelector('#hpmud_profile_test_status').textContent =
-                    '模型列表自动加载失败，可点击右侧按钮重试';
+                    staticText(
+                        'ui.profile.models_failed',
+                        'Automatic model loading failed. Use the button on the right to retry.',
+                    );
             });
         }
     }
@@ -196,12 +286,25 @@ export function createSettingsProfileController(ports) {
         const source = root.querySelector('#hpmud_profile_source').value;
         const key = PROFILE_SECRET_KEYS[source];
         if (!key) {
-            throw new Error(`当前 Source “${source}” 没有对应的酒馆密钥类型。`);
+            throw new Error(
+                formatStaticText(
+                    'ui.profile.error.secret_type',
+                    'Source "{source}" has no matching Tavern secret type.',
+                    {
+                        source,
+                    },
+                ),
+            );
         }
         const label = `${root.querySelector('#hpmud_profile_name').value.trim()} · Hogwarts MUD`;
         const id = await writeSecret(key, value, label);
         if (!id) {
-            throw new Error('API Key 写入 SillyTavern Secret Storage 失败。');
+            throw new Error(
+                staticText(
+                    'ui.profile.error.secret_write',
+                    'Failed to write API Key to SillyTavern Secret Storage.',
+                ),
+            );
         }
         return id;
     }
@@ -233,14 +336,29 @@ export function createSettingsProfileController(ports) {
         const endpoint = root.querySelector('#hpmud_profile_endpoint').value.trim();
         const model = getProfileEditorModel();
         if (!name || !model) {
-            throw new Error('Profile 名称和 Model ID 必填。');
+            throw new Error(
+                staticText(
+                    'ui.profile.error.required',
+                    'Profile name and Model ID are required.',
+                ),
+            );
         }
         if (source === 'custom' && !endpoint) {
-            throw new Error('Custom Source 必须填写 Base URL。');
+            throw new Error(
+                staticText(
+                    'ui.profile.error.endpoint',
+                    'Custom Source requires a Base URL.',
+                ),
+            );
         }
         const duplicate = profiles.some(item => item.name === name && item.id !== id);
         if (duplicate) {
-            throw new Error('已经存在同名 Connection Profile。');
+            throw new Error(
+                staticText(
+                    'ui.profile.error.duplicate',
+                    'A Connection Profile with this name already exists.',
+                ),
+            );
         }
         const secretId = await writeProfileSecretIfNeeded(existing);
         const profile = {
@@ -268,7 +386,16 @@ export function createSettingsProfileController(ports) {
         bindSavedProfile(profile);
         saveSettingsDebounced();
         profileEditorDialog.close();
-        toastr.success(`Connection Profile “${profile.name}” 已保存。`);
+        toastr.success(
+            formatStaticText(
+                'ui.profile.saved',
+                'Connection Profile "{name}" saved.',
+                {
+                    name:
+                        profile.name,
+                },
+            ),
+        );
     }
 
     async function getOrCreateEditorSecretId() {
@@ -281,11 +408,28 @@ export function createSettingsProfileController(ports) {
         const source = root.querySelector('#hpmud_profile_source').value;
         const key = PROFILE_SECRET_KEYS[source];
         if (!key) {
-            throw new Error('当前 Source 不支持保存密钥。');
+            throw new Error(
+                staticText(
+                    'ui.profile.error.secret_unsupported',
+                    'This Source does not support saving a key.',
+                ),
+            );
         }
-        const id = await writeSecret(key, value, 'Hogwarts MUD · 连接测试');
+        const id = await writeSecret(
+            key,
+            value,
+            staticText(
+                'ui.profile.secret_test_label',
+                'Hogwarts MUD · Connection test',
+            ),
+        );
         if (!id) {
-            throw new Error('测试密钥写入失败。');
+            throw new Error(
+                staticText(
+                    'ui.profile.error.test_key',
+                    'Failed to write the test key.',
+                ),
+            );
         }
         session.profileEditorTempSecret = { key, id };
         return id;
@@ -297,10 +441,19 @@ export function createSettingsProfileController(ports) {
         const source = root.querySelector('#hpmud_profile_source').value;
         const endpoint = root.querySelector('#hpmud_profile_endpoint').value.trim();
         if (source === 'custom' && !endpoint) {
-            throw new Error('请先填写 Custom Endpoint。');
+            throw new Error(
+                staticText(
+                    'ui.profile.error.custom_endpoint',
+                    'Enter a Custom Endpoint first.',
+                ),
+            );
         }
         button.disabled = true;
-        status.textContent = '正在连接并获取模型…';
+        status.textContent =
+            staticText(
+                'ui.profile.connecting',
+                'Connecting and fetching models...',
+            );
         try {
             const secretId = await getOrCreateEditorSecretId();
             const response = await fetch('/api/backends/chat-completions/status', {
@@ -322,8 +475,18 @@ export function createSettingsProfileController(ports) {
             const currentModel = getProfileEditorModel();
             populateProfileModels(models, currentModel || models[0] || '');
             status.textContent = models.length
-                ? `连接成功，获取到 ${models.length} 个模型`
-                : '连接成功；服务没有返回模型列表，请手工输入 Model ID';
+                ? formatStaticText(
+                    'ui.profile.connected_models',
+                    'Connected. Fetched {count} models.',
+                    {
+                        count:
+                            models.length,
+                    },
+                )
+                : staticText(
+                    'ui.profile.connected_manual',
+                    'Connected. The service returned no model list; enter a Model ID manually.',
+                );
         } finally {
             button.disabled = false;
         }
@@ -337,7 +500,18 @@ export function createSettingsProfileController(ports) {
             return;
         }
         const target = settings.profiles[index];
-        if (!window.confirm(`确定删除 Connection Profile “${target.name}” 吗？`)) {
+        if (
+            !window.confirm(
+                formatStaticText(
+                    'ui.profile.delete_confirm',
+                    'Delete Connection Profile "{name}"?',
+                    {
+                        name:
+                            target.name,
+                    },
+                ),
+            )
+        ) {
             return;
         }
         const [profile] = settings.profiles.splice(index, 1);
@@ -351,7 +525,16 @@ export function createSettingsProfileController(ports) {
         saveSettingsDebounced();
         syncModelSlotControls();
         profileEditorDialog.close();
-        toastr.success(`Connection Profile “${profile.name}” 已删除。`);
+        toastr.success(
+            formatStaticText(
+                'ui.profile.deleted',
+                'Connection Profile "{name}" deleted.',
+                {
+                    name:
+                        profile.name,
+                },
+            ),
+        );
     }
 
     function renderProfileDetail(role, profileId, profiles) {
@@ -359,21 +542,39 @@ export function createSettingsProfileController(ports) {
         const profile = profiles.find(item => item.id === profileId);
         if (!profile) {
             const fallback = role === 'low'
-                ? '尚未选择 Connection Profile'
+                ? staticText(
+                    'ui.setup.profile.low_empty',
+                    'No Connection Profile selected',
+                )
                 : role === 'medium'
-                    ? '留空时复用低档连接；仍执行中档职责与参数'
-                    : '留空时复用场景与规则导演';
+                    ? staticText(
+                        'ui.setup.profile.medium_empty',
+                        'Leave empty to reuse the low-tier connection; medium-tier responsibility and parameters remain independent.',
+                    )
+                    : staticText(
+                        'ui.setup.profile.high_empty',
+                        'Leave empty to reuse the Actor and Scene Director.',
+                    );
             detail.textContent = fallback;
             detail.classList.remove('configured');
             return;
         }
         const values = [
             profile.api && `API · ${profile.api}`,
-            profile.model && `模型 · ${profile.model}`,
+            profile.model &&
+                `${staticText(
+                    'ui.setup.profile.model',
+                    'Model',
+                )} · ${profile.model}`,
             profile.preset && `Preset · ${profile.preset}`,
             profile.instruct && `Instruct · ${profile.instruct}`,
         ].filter(Boolean);
-        detail.textContent = values.join('　') || 'Profile 已配置';
+        detail.textContent =
+            values.join(' · ') ||
+            staticText(
+                'ui.profile.configured',
+                'Profile configured',
+            );
         detail.classList.add('configured');
     }
 
@@ -387,14 +588,25 @@ export function createSettingsProfileController(ports) {
     function populateRolePresetControl(role, slot, profile) {
         const presetSelect = getSetupControl(`preset_${role}`);
         presetSelect.replaceChildren(new Option(
-            profile?.preset ? `使用 Profile Preset · ${profile.preset}` : '使用 Profile/默认 Preset',
+            profile?.preset
+                ? `Profile Preset · ${profile.preset}`
+                : staticText(
+                    'ui.setup.profile.default_preset',
+                    'Use Profile/default Preset',
+                ),
             '',
         ));
         getChatCompletionPresetNames().forEach(name => presetSelect.add(new Option(name, name)));
         presetSelect.value = slot.presetName;
 
         const regexSelect = getSetupControl(`regex_${role}`);
-        regexSelect.replaceChildren(new Option('不覆盖 Regex Preset', ''));
+        regexSelect.replaceChildren(new Option(
+            staticText(
+                'ui.setup.profile.no_regex',
+                'Do not override Regex Preset',
+            ),
+            '',
+        ));
         const regexPresets = Array.isArray(extension_settings.regex_presets)
             ? extension_settings.regex_presets
             : [];
@@ -407,16 +619,31 @@ export function createSettingsProfileController(ports) {
         const slots = normalizeModelSlots(isGameStarted() ? getMudState().modelSlots : settings.modelSlots);
         const profiles = getConnectionProfiles();
         root.querySelector('#hpmud_profile_count').textContent = profiles.length
-            ? `已读取 ${profiles.length} 个酒馆 Connection Profile`
-            : '酒馆中还没有 Connection Profile，请先新建';
+            ? `${profiles.length} ${staticText(
+                'ui.setup.profiles.loaded',
+                'tavern Connection Profiles loaded',
+            )}`
+            : staticText(
+                'ui.setup.profiles.none',
+                'No Connection Profiles exist in the tavern; create one first.',
+            );
         root.querySelectorAll('[data-hpmud-profile-slot]').forEach(select => {
             const role = select.dataset.hpmudProfileSlot;
             const selected = slots?.[role]?.profileId || '';
             const emptyLabel = role === 'low'
-                ? '请选择 Profile'
+                ? staticText(
+                    'ui.setup.profile.select',
+                    'Select Profile',
+                )
                 : role === 'medium'
-                    ? '复用低档 Profile'
-                    : '复用中档 Profile';
+                    ? staticText(
+                        'ui.setup.profile.reuse_low',
+                        'Reuse low-tier Profile',
+                    )
+                    : staticText(
+                        'ui.setup.profile.reuse_medium',
+                        'Reuse medium-tier Profile',
+                    );
             select.replaceChildren(new Option(emptyLabel, ''));
             profiles.forEach(profile => {
                 const detail = [profile.name, profile.model].filter(Boolean).join(' · ');
@@ -450,12 +677,30 @@ export function createSettingsProfileController(ports) {
             );
             if (summary) {
                 summary.textContent = [
-                    `${plan.label}模式`,
-                    `输入 ${formatTokenCount(plan.inputBudget)}`,
-                    `输出余量 ${formatTokenCount(plan.maxResponseLength)}`,
-                    `系统预留 ${formatTokenCount(plan.mandatoryReserveTokens)}`,
+                    `${staticText(
+                        `ui.setup.context.${plan.mode}`,
+                        plan.mode,
+                    )} ${staticText(
+                        'ui.setup.context.mode',
+                        'mode',
+                    )}`,
+                    `${staticText(
+                        'ui.setup.context.input',
+                        'Input',
+                    )} ${formatTokenCount(plan.inputBudget)}`,
+                    `${staticText(
+                        'ui.setup.context.output',
+                        'Output headroom',
+                    )} ${formatTokenCount(plan.maxResponseLength)}`,
+                    `${staticText(
+                        'ui.setup.context.system',
+                        'System reserve',
+                    )} ${formatTokenCount(plan.mandatoryReserveTokens)}`,
                     `RAG ${plan.ragLimit}`,
-                    `记忆 ${plan.memoryLimits.core}/${plan.memoryLimits.recent}/${plan.memoryLimits.everyday}`,
+                    `${staticText(
+                        'ui.setup.context.memory',
+                        'Memory',
+                    )} ${plan.memoryLimits.core}/${plan.memoryLimits.recent}/${plan.memoryLimits.everyday}`,
                 ].join(' · ');
             }
         }
@@ -486,7 +731,16 @@ export function createSettingsProfileController(ports) {
         const normalized = persistModelSlots(slots);
         syncModelSlotControls();
         toastr.success(
-            `三档上下文已切换为 ${formatTokenCount(contextSize)}。`,
+            formatStaticText(
+                'ui.profile.context_changed',
+                'All three context tiers changed to {size}.',
+                {
+                    size:
+                        formatTokenCount(
+                            contextSize,
+                        ),
+                },
+            ),
         );
         return normalized;
     }
@@ -497,7 +751,10 @@ export function createSettingsProfileController(ports) {
         );
         if (!slots.low.profileId) {
             toastr.warning(
-                '低档现场表演者必须绑定 Connection Profile。',
+                staticText(
+                    'ui.profile.low_required',
+                    'The low-tier Scene Performer requires a Connection Profile.',
+                ),
             );
             return;
         }
@@ -506,7 +763,10 @@ export function createSettingsProfileController(ports) {
         applySystemPrompt();
         setAppScreen('game');
         toastr.success(
-            '三档 AI 与上下文策略已保存到当前时间线。',
+            staticText(
+                'ui.profile.timeline_saved',
+                'Three-tier AI and context policy saved to the current timeline.',
+            ),
         );
     }
 
@@ -516,10 +776,20 @@ export function createSettingsProfileController(ports) {
         }
         const nativeSelect = document.querySelector('#connection_profiles');
         if (!(nativeSelect instanceof HTMLSelectElement)) {
-            throw new Error('Connection Profiles 扩展尚未加载。');
+            throw new Error(
+                staticText(
+                    'ui.profile.error.extension_missing',
+                    'The Connection Profiles extension is not loaded.',
+                ),
+            );
         }
         if (!Array.from(nativeSelect.options).some(option => option.value === profileId)) {
-            throw new Error('选择的 Connection Profile 已不存在。');
+            throw new Error(
+                staticText(
+                    'ui.profile.error.missing',
+                    'The selected Connection Profile no longer exists.',
+                ),
+            );
         }
         await new Promise((resolve, reject) => {
             let settled = false;
@@ -531,7 +801,14 @@ export function createSettingsProfileController(ports) {
             nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
             setTimeout(() => {
                 if (!settled) {
-                    reject(new Error('Connection Profile 应用超时。'));
+                    reject(
+                        new Error(
+                            staticText(
+                                'ui.profile.error.timeout',
+                                'Applying the Connection Profile timed out.',
+                            ),
+                        ),
+                    );
                 }
             }, 15000);
         });
@@ -630,7 +907,15 @@ export function createSettingsProfileController(ports) {
         const apiId = selected === 'auto' ? detectPresetApi(clean, fallback) : selected;
         const manager = getPresetManager(apiId);
         if (!manager) {
-            throw new Error(`当前酒馆没有可用的 ${apiId} Preset Manager。`);
+            throw new Error(
+                formatStaticText(
+                    'ui.profile.error.preset_manager',
+                    'No {apiId} Preset Manager is available in the Tavern.',
+                    {
+                        apiId,
+                    },
+                ),
+            );
         }
 
         const fileName = file.name.replace(/\.(json|settings)$/i, '');
@@ -662,7 +947,12 @@ export function createSettingsProfileController(ports) {
         const { clean } = sanitizePresetData(raw);
         const manager = getPresetManager('openai');
         if (!manager) {
-            throw new Error('当前酒馆没有可用的 Chat Completion Preset Manager。');
+            throw new Error(
+                staticText(
+                    'ui.profile.error.chat_preset_manager',
+                    'No Chat Completion Preset Manager is available in the Tavern.',
+                ),
+            );
         }
         const fileName = file.name.replace(/\.(json|settings)$/i, '');
         const name = String(clean.name || fileName || `Imported ${role} Preset`);
@@ -757,6 +1047,15 @@ export function createSettingsProfileController(ports) {
 
     function syncSettingsUi() {
         const settings = getSettings();
+        if (root.dataset) {
+            root.dataset
+                .hpmudDisplayLocale =
+                session.displayLocale;
+        }
+        applyStaticUiLocale(
+            root,
+            getLocalizedField,
+        );
         root.querySelector('#hpmud_prompt_enabled').checked = settings.enabled;
         root.querySelector(
             '#hpmud_translation_provider',
@@ -764,10 +1063,22 @@ export function createSettingsProfileController(ports) {
             settings.translationProvider;
         root.querySelector('#hpmud_world_prompt').value = settings.worldPrompt;
         const labels = {
-            local: '本地 4B',
+            local:
+                getLocalizedField({
+                    staticKey:
+                        'ui.translation.local',
+                    sourceTextEn:
+                        'Local 4B',
+                }).text,
             google: 'Google',
             bing: 'Bing',
-            off: '不开',
+            off:
+                getLocalizedField({
+                    staticKey:
+                        'ui.translation.off',
+                    sourceTextEn:
+                        'Off',
+                }).text,
         };
         root.querySelector(
             '#hpmud_translation_provider_status',
@@ -780,6 +1091,22 @@ export function createSettingsProfileController(ports) {
                 button.dataset
                     .hpmudTranslationProvider ===
                 settings.translationProvider;
+            button.classList.toggle(
+                'active',
+                selected,
+            );
+            button.setAttribute(
+                'aria-checked',
+                String(selected),
+            );
+        });
+        root.querySelectorAll(
+            '[data-hpmud-display-locale]',
+        ).forEach(button => {
+            const selected =
+                button.dataset
+                    .hpmudDisplayLocale ===
+                session.displayLocale;
             button.classList.toggle(
                 'active',
                 selected,

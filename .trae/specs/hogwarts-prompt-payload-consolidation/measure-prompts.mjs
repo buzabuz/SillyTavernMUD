@@ -5,8 +5,10 @@ import {
     createHash,
 } from 'node:crypto';
 import {
+    mkdir,
     readFile,
     stat,
+    writeFile,
 } from 'node:fs/promises';
 import {
     parse as parseJavaScript,
@@ -23,6 +25,9 @@ import {
 import {
     migrateInteriorMountAuthority,
 } from '../../../public/scripts/extensions/hogwarts-mud/domain/interior-mount.js';
+import {
+    migrateLanguageAuthorityV1,
+} from '../../../public/scripts/extensions/hogwarts-mud/domain/language-authority-migration.js';
 import {
     NPC_IDENTITY_PROMPT_BOUNDARY,
     buildNpcIdentityPromptProjection,
@@ -75,8 +80,12 @@ import {
 } from '../../../src/hogwarts-mud/identity-observation-contract.js';
 
 const TINA_FILE = path.resolve(
-    'data/default-user/chats/Hogwarts_World_Director/' +
-    'Hogwarts World Director - 2026-08-02@22h16m07s339ms.jsonl',
+    process.env
+        .HOGWARTS_PROMPT_MEASURE_ARCHIVE_PATH ||
+    (
+        'data/default-user/chats/Hogwarts_World_Director/' +
+        'Hogwarts World Director - 2026-08-02@22h16m07s339ms.jsonl'
+    ),
 );
 const encoder = new TextEncoder();
 
@@ -653,6 +662,109 @@ function createPromptCapture() {
     };
 }
 
+async function writeBlindRequests(
+    outputDirectory,
+    requests,
+) {
+    if (!outputDirectory) {
+        return null;
+    }
+    const resolved =
+        path.resolve(
+            outputDirectory,
+        );
+    await mkdir(
+        resolved,
+        {
+            recursive: true,
+        },
+    );
+    const manifest = [];
+    for (const request of requests) {
+        const serialized =
+            `${JSON.stringify(
+                request,
+                null,
+                2,
+            )}\n`;
+        const fileName =
+            `${request.caseId}.json`;
+        await writeFile(
+            path.join(
+                resolved,
+                fileName,
+            ),
+            serialized,
+            'utf8',
+        );
+        manifest.push({
+            caseId:
+                request.caseId,
+            fileName,
+            sha256:
+                sha256(serialized),
+            bytes:
+                encoder
+                    .encode(serialized)
+                    .length,
+        });
+    }
+    await writeFile(
+        path.join(
+            resolved,
+            'manifest.json',
+        ),
+        `${JSON.stringify(
+            {
+                schemaVersion: 1,
+                cases: manifest,
+            },
+            null,
+            2,
+        )}\n`,
+        'utf8',
+    );
+    return {
+        directory: resolved,
+        cases: manifest,
+    };
+}
+
+function createBlindRequest({
+    caseId,
+    taskId,
+    tier,
+    mode,
+    prompt,
+    options = {},
+}) {
+    return {
+        schemaVersion: 1,
+        caseId,
+        taskId,
+        tier,
+        mode,
+        messages:
+            structuredClone(
+                prompt,
+            ),
+        transport: {
+            json:
+                options.json ===
+                true,
+            stream:
+                options.stream ===
+                true,
+            jsonSchema:
+                options.jsonSchema
+                    ? structuredClone(
+                        options.jsonSchema,
+                    )
+                    : null,
+        },
+    };
+}
+
 function invalidValidation() {
     return {
         valid: false,
@@ -844,21 +956,58 @@ async function captureRepairs({
             validatePacingAssessment:
                 invalidValidation,
         });
+        const pacingState =
+            structuredClone(
+                state,
+            );
+        pacingState.items = [
+            ...(
+                pacingState.items ||
+                []
+            ),
+            {
+                id:
+                    'blind_audit_key',
+                labelEn:
+                    'Blind Audit Key',
+                importance: 'key',
+            },
+        ];
+        pacingState.pacingDirector = {
+            status: 'idle',
+            lastAssessedTurn: null,
+            lastAssessedSceneId:
+                '',
+            reassessAfterTurns: 6,
+            assessment: null,
+            pendingBeat: null,
+        };
+        pacingState.causalCollapse =
+            domain
+                .normalizeCausalCollapseState();
+        const pacingPlayerAction =
+            'Inspect the Blind Audit Key.';
         const pacingSignals =
             domain.analyzePacingSignals(
-                state,
-                playerAction,
+                pacingState,
+                pacingPlayerAction,
             );
+        assert.equal(
+            pacingSignals
+                .shouldAssess,
+            true,
+            'Pacing blind fixture must reach an active causal-collapse opportunity.',
+        );
         pacingSignals.playerAction =
-            playerAction;
+            pacingPlayerAction;
         pacingSignals.selectionPlayerAction =
-            playerAction;
+            pacingPlayerAction;
         pacingSignals.currentAddressing =
             null;
         capture.captures.length = 0;
         await workflow.generatePacingAssessment(
             slots.medium,
-            state,
+            pacingState,
             pacingSignals,
             [],
             contextPlans.medium,
@@ -870,6 +1019,7 @@ async function captureRepairs({
         repairs.directorBuilders = {
             workflow,
             pacingSignals,
+            state: pacingState,
         };
     }
 
@@ -893,21 +1043,73 @@ async function captureRepairs({
                 validateGeneratedInteriorMap:
                     invalidValidation,
             });
-        const request = {
-            bindingKey:
-                'audit_current_container',
-            suggestedMapId:
-                'audit_current_container_interior',
-            containerMapId:
-                state.map?.activeMapId || '',
-            containerRoomId:
-                state.map?.currentLocalNodeId || '',
-            nameEn:
-                state.location || 'Current interior',
-        };
+        const interiorState =
+            structuredClone(
+                state,
+            );
+        interiorState.map
+            .activeMapId =
+            'blind_container_map';
+        interiorState.map
+            .currentLocalNodeId =
+            'blind_carriage';
+        interiorState.map
+            .currentLevelId =
+            'ground';
+        interiorState.map
+            .customLocalMaps = [
+                ...(
+                    interiorState
+                        .map
+                        .customLocalMaps ||
+                    []
+                ),
+                {
+                    id:
+                        'blind_container_map',
+                    nameEn:
+                        'Blind Test Rail Map',
+                    defaultLevelId:
+                        'ground',
+                    levels: [{
+                        id: 'ground',
+                        nameEn:
+                            'Ground',
+                        z: 0,
+                    }],
+                    nodes: [{
+                        id:
+                            'blind_carriage',
+                        nameEn:
+                            'Blind Test Carriage',
+                        levelId:
+                            'ground',
+                        kind:
+                            'carriage',
+                        descriptionEn:
+                            'A stable passenger carriage that requires a mounted interior.',
+                        tags: [
+                            'requires_interior_map',
+                        ],
+                        x: 50,
+                        y: 50,
+                    }],
+                    exits: [],
+                },
+            ];
+        const request =
+            domain
+                .getInteriorMapRequest(
+                    interiorState,
+                );
+        assert.equal(
+            request?.status,
+            'missing',
+            'Interior blind fixture must reach the production missing-interior trigger.',
+        );
         await workflow.generateInteriorMapPackage(
             slots.medium,
-            state,
+            interiorState,
             request,
         ).catch(() => {});
         repairs.interiorMap =
@@ -917,6 +1119,8 @@ async function captureRepairs({
         repairs.interiorBuilder = {
             workflow,
             request,
+            state:
+                interiorState,
         };
     }
 
@@ -1051,11 +1255,53 @@ async function captureRepairs({
                 capture.captures,
             );
 
+        let runtimeOpeningPayload =
+            sceneTransitionPayload(
+                state,
+            );
+        const blindTransitionResponsePath =
+            String(
+                process.env
+                    .HOGWARTS_BLIND_SCENE_TRANSITION_RESPONSE ||
+                '',
+            ).trim();
+        if (blindTransitionResponsePath) {
+            const parsed =
+                domain
+                    .parseCompleteJsonObject(
+                        await readFile(
+                            path.resolve(
+                                blindTransitionResponsePath,
+                            ),
+                            'utf8',
+                        ),
+                    );
+            if (
+                parsed.nextScene &&
+                typeof parsed
+                    .nextScene ===
+                    'object'
+            ) {
+                delete parsed
+                    .nextScene
+                    .openingSegments;
+            }
+            runtimeOpeningPayload =
+                domain
+                    .normalizeSceneTransitionPackage(
+                        parsed,
+                        state,
+                        {
+                            tier:
+                                'medium',
+                        },
+                    );
+        }
         capture.captures.length = 0;
         await workflow.generateSceneTransitionOpening(
             slots.low,
             state,
-            sceneTransitionPayload(state),
+            runtimeOpeningPayload,
             expectedDestination,
             contextPlans.low,
             {},
@@ -1181,7 +1427,7 @@ async function main() {
             .split(/\r?\n/u)
             .map(line =>
                 JSON.parse(line));
-    const chat =
+    const sourceChat =
         structuredClone(
             rows.slice(1),
         );
@@ -1192,14 +1438,42 @@ async function main() {
                     .chat_metadata
                     .hogwartsMud,
             ),
-            chat,
+            sourceChat,
         );
+    const languageMigration =
+        migration.state
+            .languageAuthorityVersion ===
+        1
+            ? {
+                changed: false,
+                nextState:
+                    migration.state,
+                nextChat:
+                    sourceChat,
+                report: {
+                    schemaVersion: 1,
+                    timelineEntries: 0,
+                    changes: [],
+                    rawSegmentCount: 0,
+                    skippedRecordCount: 0,
+                },
+            }
+            : migrateLanguageAuthorityV1({
+                worldState:
+                    migration.state,
+                chat:
+                    sourceChat,
+            });
     const interiorMountMigration =
         migrateInteriorMountAuthority(
-            migration.state,
+            languageMigration
+                .nextState,
         );
     const state =
         interiorMountMigration.state;
+    const chat =
+        languageMigration
+            .nextChat;
     const slots =
         domain.normalizeModelSlots(
             state.modelSlots,
@@ -1456,15 +1730,17 @@ async function main() {
         domain.analyzeMemoryConsolidation(
             socialState,
         );
+    const socialPrompt =
+        socialWorkflow
+            .createMemoryConsolidationPrompt(
+                socialState,
+                signals,
+                evidence,
+                contextPlans.medium,
+            );
     prompts.social =
         promptMetric(
-            socialWorkflow
-                .createMemoryConsolidationPrompt(
-                    socialState,
-                    signals,
-                    evidence,
-                    contextPlans.medium,
-                ),
+            socialPrompt,
             {
                 slot: slots.medium,
                 transportSchema:
@@ -1480,21 +1756,37 @@ async function main() {
         {
             role: 'system',
             content:
-                `You are the World Director for a persistent Harry Potter RPG. First search the supplied preset world and local-map catalog. Propose a new top-level location only when no preset room or location can represent the physical place created by the event. Output one JSON object and no prose:
-{"id":"string","reason":"string","changes":[{"operation":"add|update","node":{"id":"snake_case","regionId":"existing region id","name":"Chinese display name","kind":"string","summary":"Chinese summary","access":"public|student|restricted|dangerous|forbidden","x":0,"y":0}}]}
+                `You are the World Director for a persistent Harry Potter RPG. First search the supplied preset world and local-map catalog. Propose a new top-level location only when no preset room or location can represent the physical place created by the event. Use English for every semantic prose field. Output one JSON object and no prose:
+{"id":"string","reasonEn":"English reason","changes":[{"operation":"add|update","node":{"id":"snake_case","regionId":"existing region id","nameEn":"English canonical name","kind":"string","summaryEn":"English canonical summary","access":"public|student|restricted|dangerous|forbidden","x":0,"y":0}}]}
 Never delete or rename a preset location. Ordinary movement and scene description require no proposal.`,
         },
         {
             role: 'user',
             content: JSON.stringify({
                 trigger: 'exploration',
-                currentLocation:
-                    state.location,
+                currentLocation: {
+                    mapId:
+                        state.map
+                            ?.activeMapId ||
+                        '',
+                    roomId:
+                        state.map
+                            ?.currentLocalNodeId ||
+                        '',
+                },
                 character:
-                    state.character,
+                    domain
+                        .projectCharacterForPrompt(
+                            state
+                                .character,
+                        ),
                 mapAuthority:
                     domain.buildMapAuthorityContext(
                         state,
+                        {
+                            purpose:
+                                'expansion',
+                        },
                     ),
             }),
         },
@@ -1507,6 +1799,13 @@ Never delete or rename a preset location. Ordinary movement and scene descriptio
             audience: 'high',
         });
 
+    const polishCharacter =
+        domain
+            .getCharacterInputDraft(
+                state.character,
+            );
+    delete polishCharacter
+        .polishedBackground;
     const polishPrompt = [
         {
             role: 'system',
@@ -1517,7 +1816,7 @@ Never delete or rename a preset location. Ordinary movement and scene descriptio
             role: 'user',
             content:
                 JSON.stringify(
-                    state.character,
+                    polishCharacter,
                 ),
         },
     ];
@@ -1813,9 +2112,32 @@ Continue from this exact state. actorCards contain the only shared NPC performan
         ],
     };
     const translationInput = {
-        text:
-            narrativeText
-                .slice(0, 3_600),
+        segments: [
+            {
+                index: 0,
+                partIndex: 0,
+                text:
+                    narrativeText
+                        .slice(
+                            0,
+                            2_400,
+                        ),
+            },
+            {
+                index: 1,
+                partIndex: 0,
+                text:
+                    String(
+                        state.scene
+                            ?.summaryEn ||
+                        state.chapterEn ||
+                        'Current Scene',
+                    ).slice(
+                        0,
+                        1_000,
+                    ),
+            },
+        ],
         glossary: [],
     };
     const localSemanticSource =
@@ -1835,8 +2157,8 @@ Continue from this exact state. actorCards contain the only shared NPC performan
                 'postTurnJsonSchema',
                 'INVENTORY_TURN_SYSTEM',
                 'inventoryTurnJsonSchema',
-                'TRANSLATION_SYSTEM',
-                'translationJsonSchema',
+                'TRANSLATION_BATCH_SYSTEM',
+                'translationBatchJsonSchema',
             ],
             {
                 IDENTITY_OBSERVATION_JSON_SCHEMA,
@@ -1939,12 +2261,12 @@ Continue from this exact state. actorCards contain the only shared NPC performan
             localPromptMetric({
                 system:
                     localConstants
-                        .TRANSLATION_SYSTEM,
+                        .TRANSLATION_BATCH_SYSTEM,
                 input:
                     translationInput,
                 jsonSchema:
                     localConstants
-                        .translationJsonSchema,
+                        .translationBatchJsonSchema,
                 contextTokens:
                     8_192,
                 endpointInputLimit:
@@ -1955,6 +2277,248 @@ Continue from this exact state. actorCards contain the only shared NPC performan
                     'local translation model',
             }),
     };
+    const hostedPrompt = (
+        tier,
+        prompt,
+    ) =>
+        domain.limitMessagesToContext(
+            prompt,
+            slots[tier]
+                .contextSize,
+            slots[tier]
+                .maxResponseLength,
+        );
+    const capturedRequest = (
+        caseId,
+        taskId,
+        tier,
+        mode,
+        entries,
+    ) => {
+        assert.equal(
+            entries.length,
+            1,
+            `${caseId} must capture exactly one request.`,
+        );
+        return createBlindRequest({
+            caseId,
+            taskId,
+            tier,
+            mode,
+            prompt:
+                hostedPrompt(
+                    tier,
+                    entries[0]
+                        .prompt,
+                ),
+            options:
+                entries[0].options,
+        });
+    };
+    const localRequest = (
+        caseId,
+        taskId,
+        mode,
+        system,
+        input,
+        jsonSchema,
+    ) =>
+        createBlindRequest({
+            caseId,
+            taskId,
+            tier: 'local',
+            mode,
+            prompt: [{
+                role: 'system',
+                content: system,
+            }, {
+                role: 'user',
+                content:
+                    JSON.stringify(
+                        input,
+                    ),
+            }],
+            options: {
+                json: true,
+                jsonSchema,
+            },
+        });
+    const blindRequests = [
+        capturedRequest(
+            'character_polish',
+            'character_polish',
+            'medium',
+            'setup',
+            [{
+                prompt:
+                    polishPrompt,
+                options: {},
+            }],
+        ),
+        capturedRequest(
+            'opening_world',
+            'opening_world',
+            'high',
+            'bootstrap',
+            captures.openingWorld,
+        ),
+        capturedRequest(
+            'calendar_high',
+            'calendar_high',
+            'high',
+            'high_transition',
+            captures.highCalendar,
+        ),
+        capturedRequest(
+            'calendar_medium',
+            'calendar_medium',
+            'medium',
+            'runtime',
+            captures.mediumCalendar,
+        ),
+        capturedRequest(
+            'interior_cartographer',
+            'interior_cartographer',
+            'medium',
+            'runtime',
+            captures.interiorMap,
+        ),
+        capturedRequest(
+            'pacing_director',
+            'pacing_director',
+            'medium',
+            'runtime',
+            captures.pacingDirector,
+        ),
+        capturedRequest(
+            'scene_performance',
+            'scene_performance',
+            'low',
+            'runtime',
+            captures.scenePerformance,
+        ),
+        capturedRequest(
+            'scene_transition',
+            'scene_transition',
+            'medium',
+            'runtime',
+            captures.sceneTransition,
+        ),
+        createBlindRequest({
+            caseId:
+                'scene_opening_bootstrap',
+            taskId:
+                'scene_opening',
+            tier: 'low',
+            mode: 'bootstrap',
+            prompt:
+                hostedPrompt(
+                    'low',
+                    openingPrompt,
+                ),
+            options: {
+                json: true,
+            },
+        }),
+        capturedRequest(
+            'scene_opening_runtime',
+            'scene_opening',
+            'low',
+            'runtime',
+            captures.sceneOpening,
+        ),
+        createBlindRequest({
+            caseId:
+                'social_director',
+            taskId:
+                'social_director',
+            tier: 'medium',
+            mode: 'runtime',
+            prompt:
+                hostedPrompt(
+                    'medium',
+                    socialPrompt,
+                ),
+            options: {
+                json: true,
+                jsonSchema:
+                    socialWorkflow
+                        .SOCIAL_DIRECTOR_RESPONSE_SCHEMA,
+            },
+        }),
+        createBlindRequest({
+            caseId:
+                'map_expansion',
+            taskId:
+                'map_expansion',
+            tier: 'high',
+            mode: 'runtime',
+            prompt:
+                hostedPrompt(
+                    'high',
+                    mapPrompt,
+                ),
+            options: {
+                json: true,
+            },
+        }),
+        localRequest(
+            'local_pre_turn_adjudicator',
+            'local_pre_turn_adjudicator',
+            'runtime',
+            localConstants
+                .PRE_TURN_SYSTEM,
+            preTurnInput,
+            localConstants
+                .preTurnJsonSchema,
+        ),
+        localRequest(
+            'local_post_turn_observer',
+            'local_post_turn_observer',
+            'runtime',
+            localConstants
+                .POST_TURN_SYSTEM,
+            postTurnInput,
+            localConstants
+                .postTurnJsonSchema,
+        ),
+        localRequest(
+            'local_inventory_observer',
+            'local_inventory_observer',
+            'runtime',
+            localConstants
+                .INVENTORY_TURN_SYSTEM,
+            inventoryInput,
+            localConstants
+                .inventoryTurnJsonSchema,
+        ),
+        localRequest(
+            'local_appraisal_proposer',
+            'local_appraisal_proposer',
+            'runtime',
+            appraisalConstants
+                .APPRAISAL_SYSTEM,
+            appraisalInput,
+            appraisalConstants
+                .appraisalBatchJsonSchema,
+        ),
+        localRequest(
+            'local_translation_zh_cn',
+            'local_translation',
+            'zh-CN_batch',
+            localConstants
+                .TRANSLATION_BATCH_SYSTEM,
+            translationInput,
+            localConstants
+                .translationBatchJsonSchema,
+        ),
+    ];
+    const blindRequestExport =
+        await writeBlindRequests(
+            process.env
+                .HOGWARTS_BLIND_REQUEST_DIR,
+            blindRequests,
+        );
 
     const afterContents =
         await readFile(TINA_FILE);
@@ -1964,6 +2528,11 @@ Continue from this exact state. actorCards contain the only shared NPC performan
         version: 1,
         generatedAt:
             new Date().toISOString(),
+        ...(blindRequestExport
+            ? {
+                blindRequestExport,
+            }
+            : {}),
         archive: {
             path: TINA_FILE,
             sha256:
@@ -1980,10 +2549,20 @@ Continue from this exact state. actorCards contain the only shared NPC performan
                     afterStat.mtimeMs,
         },
         cutover: {
-            changed:
-                migration.changed,
-            stats:
-                migration.stats,
+            timelineAppraisal: {
+                changed:
+                    migration.changed,
+                stats:
+                    migration.stats,
+            },
+            languageAuthority: {
+                changed:
+                    languageMigration
+                        .changed,
+                stats:
+                    languageMigration
+                        .report,
+            },
         },
         interiorMountMigration: {
             changed:
@@ -2021,38 +2600,25 @@ Continue from this exact state. actorCards contain the only shared NPC performan
         localPrompts,
     };
     const roleTargets = {
-        'opening.world': 20_000,
-        'opening.world.repair1':
-            30_000,
+        'opening.world': 14_358,
         pacing: 65_000,
-        'pacing.repair1': 75_000,
         interiorMap: 10_000,
-        'interiorMap.repair1':
-            30_000,
-        'calendar.high': 20_000,
-        'calendar.high.repair1':
-            30_000,
+        'calendar.high': 14_358,
         'calendar.high.openingWorld':
-            20_000,
-        'calendar.medium': 50_000,
-        'calendar.medium.repair1':
-            60_000,
+            14_358,
+        'calendar.medium': 36_893,
         'calendar.medium.builder':
-            50_000,
-        sceneTransition: 95_000,
-        'sceneTransition.repair1':
-            110_000,
-        'sceneTransition.repair2':
-            110_000,
-        sceneOpening: 40_000,
-        scenePerformance: 80_000,
+            36_893,
+        sceneTransition: 76_100,
+        sceneOpening: 28_319,
+        scenePerformance: 47_626,
         'opening.bootstrapScene':
-            40_000,
+            28_319,
         social: 80_000,
-        mapExpansion: 45_000,
+        mapExpansion: 39_344,
         characterPolish: 4_000,
         hostSystemInjection:
-            20_000,
+            19_319,
     };
     const roleBudgetChecks =
         Object.fromEntries(
@@ -2200,20 +2766,23 @@ Continue from this exact state. actorCards contain the only shared NPC performan
             27_221,
         'LowTier System Prompt exceeded the approved 27,221-character ceiling.',
     );
-    assert.equal(
-        prompts[
-            'scenePerformance.repair1'
-        ],
-        undefined,
-        'Scene Performance must not issue an automatic Low repair request.',
-    );
-    assert.equal(
-        prompts[
-            'sceneOpening.repair1'
-        ],
-        undefined,
-        'Scene Opening must not issue an automatic Low repair request.',
-    );
+    for (const key of [
+        'opening.world.repair1',
+        'pacing.repair1',
+        'interiorMap.repair1',
+        'calendar.high.repair1',
+        'calendar.medium.repair1',
+        'sceneTransition.repair1',
+        'sceneTransition.repair2',
+        'sceneOpening.repair1',
+        'scenePerformance.repair1',
+    ]) {
+        assert.equal(
+            prompts[key],
+            undefined,
+            `${key} must not exist; invalid output surfaces without an automatic model repair request.`,
+        );
+    }
     assert.equal(
         report.archive.unchanged,
         true,

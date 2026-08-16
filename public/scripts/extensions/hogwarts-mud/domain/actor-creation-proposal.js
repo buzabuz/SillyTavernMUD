@@ -252,46 +252,46 @@ export function validateActorCreationProposal(
         candidate,
         keys,
     ] of [
-        [
-            'publicProfile',
-            source?.publicProfile,
             [
-                'descriptionEn',
-                'backgroundEn',
+                'publicProfile',
+                source?.publicProfile,
+                [
+                    'descriptionEn',
+                    'backgroundEn',
+                ],
             ],
-        ],
-        [
-            'performanceCore',
-            source?.performanceCore,
             [
-                'temperamentEn',
-                'speechStyleEn',
-                'motivesEn',
-                'socialStrategiesEn',
-                'boundariesEn',
-                'vulnerabilitiesEn',
+                'performanceCore',
+                source?.performanceCore,
+                [
+                    'temperamentEn',
+                    'speechStyleEn',
+                    'motivesEn',
+                    'socialStrategiesEn',
+                    'boundariesEn',
+                    'vulnerabilitiesEn',
+                ],
             ],
-        ],
-        [
-            'privateFacts',
-            source?.privateFacts,
             [
-                'secretEn',
-                'knowledgeEn',
+                'privateFacts',
+                source?.privateFacts,
+                [
+                    'secretEn',
+                    'knowledgeEn',
+                ],
             ],
-        ],
-        [
-            'runtime',
-            source?.runtime,
             [
-                'present',
-                'roomId',
-                'currentActivityEn',
-                'currentIntentEn',
-                'currentGoalEn',
+                'runtime',
+                source?.runtime,
+                [
+                    'present',
+                    'roomId',
+                    'currentActivityEn',
+                    'currentIntentEn',
+                    'currentGoalEn',
+                ],
             ],
-        ],
-    ]) {
+        ]) {
         if (
             !hasExactKeys(
                 candidate,
@@ -353,29 +353,29 @@ export function validateActorCreationProposal(
         label,
         candidate,
     ] of [
-        ['nameEn', value.nameEn],
-        ['roleEn', value.roleEn],
-        [
-            'publicProfile.descriptionEn',
-            value.publicProfile
-                .descriptionEn,
-        ],
-        [
-            'performanceCore.temperamentEn',
-            value.performanceCore
-                .temperamentEn,
-        ],
-        [
-            'performanceCore.speechStyleEn',
-            value.performanceCore
-                .speechStyleEn,
-        ],
-        [
-            'runtime.currentActivityEn',
-            value.runtime
-                .currentActivityEn,
-        ],
-    ]) {
+            ['nameEn', value.nameEn],
+            ['roleEn', value.roleEn],
+            [
+                'publicProfile.descriptionEn',
+                value.publicProfile
+                    .descriptionEn,
+            ],
+            [
+                'performanceCore.temperamentEn',
+                value.performanceCore
+                    .temperamentEn,
+            ],
+            [
+                'performanceCore.speechStyleEn',
+                value.performanceCore
+                    .speechStyleEn,
+            ],
+            [
+                'runtime.currentActivityEn',
+                value.runtime
+                    .currentActivityEn,
+            ],
+        ]) {
         if (!candidate) {
             errors.push(
                 `Actor creation proposal requires ${label}.`,

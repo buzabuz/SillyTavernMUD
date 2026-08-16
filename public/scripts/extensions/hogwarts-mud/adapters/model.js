@@ -1,20 +1,3 @@
-const RATE_LIMIT_MESSAGE_PATTERN =
-    /\b(?:429|too many requests|rate[\s_-]*limit(?:ed|ing)?)\b/iu;
-
-function isRateLimitError(error) {
-    const statuses = [
-        error?.status,
-        error?.statusCode,
-        error?.response?.status,
-        error?.cause?.status,
-    ];
-    if (statuses.some(status => Number(status) === 429)) {
-        return true;
-    }
-    const message = String(error?.message || error || '');
-    return RATE_LIMIT_MESSAGE_PATTERN.test(message);
-}
-
 export function createModelAdapter(ports) {
     const {
         ConnectionManagerRequestService,
@@ -360,36 +343,39 @@ export function createModelAdapter(ports) {
         };
         try {
             if (stream) {
-                try {
-                    const response = await execute(true);
-                    if (typeof response === 'function') {
-                        let content = '';
-                        let reasoning = '';
-                        for await (const chunk of response()) {
-                            content = chunk.text || content;
-                            reasoning =
+                const response =
+                    await execute(true);
+                if (
+                    typeof response ===
+                    'function'
+                ) {
+                    let content = '';
+                    let reasoning = '';
+                    for await (
+                        const chunk
+                        of response()
+                    ) {
+                        content =
+                            chunk.text ||
+                            content;
+                        reasoning =
                             chunk.state?.reasoning || reasoning;
-                            onProgress?.(
-                                content,
-                                chunk.state || {},
-                            );
-                        }
-                        return { content, reasoning };
+                        onProgress?.(
+                            content,
+                            chunk.state || {},
+                        );
                     }
-                    onProgress?.(
-                        response?.content || '',
-                        {},
-                    );
-                    return response;
-                } catch (error) {
-                    if (isRateLimitError(error)) {
-                        throw error;
-                    }
-                    console.warn(
-                        '[Hogwarts MUD] Streaming unavailable; falling back to one-shot request',
-                        error,
-                    );
+                    return {
+                        content,
+                        reasoning,
+                    };
                 }
+                onProgress?.(
+                    response?.content ||
+                    '',
+                    {},
+                );
+                return response;
             }
             return await execute(false);
         } finally {

@@ -41,9 +41,7 @@ function createEntry(id, patch = {}) {
         id,
         parentId: '',
         entryType: 'event',
-        title: id,
         titleEn: id,
-        summary: `${id} 的公开安排。`,
         summaryEn: `Public schedule for ${id}.`,
         tags: [],
         startClock: TARGET_CLOCK,
@@ -65,9 +63,9 @@ function createEntry(id, patch = {}) {
 
 function createWorldState() {
     const exam = createEntry('charms_exam', {
-        title: '魔咒考试',
         titleEn: 'Charms Exam',
-        summary: '在魔咒教室完成公开考试。',
+        summaryEn:
+            'Complete the public exam in the Charms classroom.',
         tags: ['exam'],
         participantIds: [
             HARRY_ID,
@@ -82,9 +80,9 @@ function createWorldState() {
         scheduleKind: 'story',
     });
     const date = createEntry('charms_date', {
-        title: '考试中的约会',
         titleEn: 'A Date During the Exam',
-        summary: '同一时刻存在的另一项公开安排。',
+        summaryEn:
+            'Another public commitment at the same time.',
         tags: ['date'],
         participantIds: [HERMIONE_ID],
         mapId: 'hogsmeade',
@@ -94,19 +92,20 @@ function createWorldState() {
         scheduleKind: 'social',
     });
     const completed = createEntry('morning_class', {
-        title: '上午课程',
+        titleEn: 'Morning Class',
         startClock: '1991-09-03 · 08:00',
         endClock: '1991-09-03 · 09:00',
         status: 'completed',
     });
     const cancelled = createEntry('cancelled_training', {
-        title: '取消的训练',
+        titleEn:
+            'Cancelled Training',
         startClock: '1991-09-03 · 14:00',
         endClock: '1991-09-03 · 15:00',
         status: 'cancelled',
     });
     const pastPlanned = createEntry('stale_planned', {
-        title: '过去的计划',
+        titleEn: 'Past Plan',
         startClock: '1991-09-02 · 08:00',
         endClock: '1991-09-02 · 09:00',
         status: 'planned',
@@ -115,12 +114,10 @@ function createWorldState() {
         timelineEpoch: 'calendar_ui_timeline_one',
         clock: CURRENT_CLOCK,
         calendar: {
-            version: 2,
+            version: 3,
             storylines: [{
                 id: STORYLINE_ID,
-                title: '一年级的秘密',
                 titleEn: 'First-year Secrets',
-                summary: '贯穿第一学年的公开长期线路。',
                 summaryEn: 'A public long-running first-year thread.',
                 tags: ['mystery'],
                 startClock: '1991-09-01 · 00:00',
@@ -133,9 +130,7 @@ function createWorldState() {
             storyBeats: [{
                 id: BEAT_ID,
                 storylineId: STORYLINE_ID,
-                title: '秋季线索',
                 titleEn: 'Autumn Clues',
-                summary: '四个场景逐步显露第一条线索。',
                 summaryEn: 'Four scenes reveal the first clue.',
                 tags: ['term'],
                 termKey: '1991_autumn',
@@ -159,10 +154,11 @@ function createWorldState() {
         },
         actorLibrary: [{
             id: HARRY_ID,
-            name: '哈利·波特',
+            nameEn: 'Harry Potter',
         }, {
             id: HERMIONE_ID,
-            name: '赫敏·格兰杰',
+            nameEn:
+                'Hermione Granger',
         }],
         actors: [],
         map: {
@@ -172,21 +168,24 @@ function createWorldState() {
                 id: 'hogwarts_castle',
                 nodes: [{
                     id: 'charms_classroom',
-                    name: '魔咒教室',
+                    nameEn:
+                        'Charms Classroom',
                 }],
             }, {
                 id: 'hogsmeade',
                 nodes: [{
                     id: 'three_broomsticks',
-                    name: '三把扫帚',
+                    nameEn:
+                        'Three Broomsticks',
                 }],
             }],
             generatedLocalNodes: [],
         },
         sceneArchive: [{
             id: 'archive_exam_one',
-            name: '考试第一幕',
-            summary: '第一段封存摘要。',
+            nameEn: 'Exam Act One',
+            summaryEn:
+                'The first archived exam scene.',
             startedClock: '1991-09-03 · 11:00',
             endedClock: '1991-09-03 · 11:20',
             mapId: 'hogwarts_castle',
@@ -197,17 +196,20 @@ function createWorldState() {
             ],
             timelineEntries: [{
                 clock: '1991-09-03 · 11:00',
-                label: '考试开始。',
+                summaryEn:
+                    'The exam begins.',
             }, {
                 clock: '1991-09-03 · 11:20',
-                label: '第一幕结束。',
+                summaryEn:
+                    'The first scene ends.',
             }],
             messageIds: [11, 12],
             authorQuillEn: 'Archive body one.',
         }, {
             id: 'archive_exam_two',
-            name: '考试第二幕',
-            summary: '第二段封存摘要。',
+            nameEn: 'Exam Act Two',
+            summaryEn:
+                'The second archived exam scene.',
             startedClock: '1991-09-03 · 11:20',
             endedClock: '1991-09-03 · 12:00',
             mapId: 'hogwarts_castle',
@@ -217,8 +219,10 @@ function createWorldState() {
             authorQuillEn: 'Archive body two.',
         }, {
             id: 'archive_four_states',
-            name: '四态认领档案',
-            summary: '只展示存档明确认领的四项计划。',
+            nameEn:
+                'Four-state Claims Archive',
+            summaryEn:
+                'Only four explicitly claimed plans are shown.',
             startedClock: '1991-09-03 · 12:10',
             endedClock: '1991-09-03 · 12:30',
             mapId: 'hogwarts_castle',
@@ -233,19 +237,25 @@ function createWorldState() {
             authorQuillEn: 'Four explicit claims.',
         }, {
             id: 'empty_claim_archive',
-            name: '空认领旧档案',
-            summary: '显式空计划字段的旧场景。',
+            nameEn:
+                'Empty Claims Archive',
+            summaryEn:
+                'A Scene with an explicit empty claim list.',
             startedClock: '1991-09-03 · 11:00',
             endedClock: '1991-09-03 · 11:10',
             calendarEntryIds: [],
             messageIds: [],
         }, {
             id: 'legacy_archive',
-            name: '旧档案',
-            summary: '没有计划关联的旧场景。',
+            nameEn: 'Legacy Archive',
+            summaryEn:
+                'An older Scene without plan links.',
             startedClock: '1991-09-03 · 11:00',
             endedClock: '1991-09-03 · 11:30',
-            location: '礼堂',
+            mapId:
+                'hogwarts_castle',
+            roomId:
+                'great_hall',
             messageIds: [1, 2],
             authorQuillEn: 'Legacy archive body.',
         }],
@@ -255,7 +265,18 @@ function createWorldState() {
 function getRoomName(state, mapId, roomId) {
     const map = state.map.customLocalMaps
         .find(candidate => candidate.id === mapId);
-    return map?.nodes.find(room => room.id === roomId)?.name ||
+    const names = {
+        charms_classroom:
+            '魔咒教室',
+        three_broomsticks:
+            '三把扫帚',
+        great_hall:
+            '礼堂',
+    };
+    return names[roomId] ||
+        map?.nodes.find(room =>
+            room.id === roomId)
+            ?.nameEn ||
         roomId ||
         '位置未知';
 }
@@ -560,7 +581,7 @@ function createControllerDom() {
 test('day-grid pure functions calculate visible hours, duration height, offsets, and stable overlap lanes', () => {
     const entries = [
         createEntry('lane_a', {
-            title: '短计划',
+            titleEn: 'Short Plan',
             startClock: '1991-09-03 · 08:30',
             endClock: '1991-09-03 · 09:00',
             statusLabel: '计划中',
@@ -927,11 +948,17 @@ test('scene projection reads exact plan claims without copying transcript body',
         timelineView.preview.timelineEntries,
         [{
             clock: '1991-09-03 · 11:00',
-            label: '考试开始。',
+            summaryEn:
+                'The exam begins.',
+            label:
+                'The exam begins.',
             timeLabel: '11:00',
         }, {
             clock: '1991-09-03 · 11:20',
-            label: '第一幕结束。',
+            summaryEn:
+                'The first scene ends.',
+            label:
+                'The first scene ends.',
             timeLabel: '11:20',
         }],
     );
@@ -1126,7 +1153,7 @@ test('controller DOM flow previews each item, moves list focus, reads archives, 
     storylineButton.click();
     assert.match(
         nodes.hpmud_calendar_preview.textContent,
-        /秋季线索/u,
+        /Autumn Clues/u,
     );
     assert.match(
         nodes.hpmud_calendar_preview.textContent,
@@ -1135,11 +1162,11 @@ test('controller DOM flow previews each item, moves list focus, reads archives, 
     controller.setCalendarView('agenda');
     assert.match(
         nodes.hpmud_calendar_preview.textContent,
-        /魔咒考试/u,
+        /Charms Exam/u,
     );
     assert.doesNotMatch(
         nodes.hpmud_calendar_preview.textContent,
-        /考试中的约会/u,
+        /A Date During the Exam/u,
         'the compact detail must not repeat simultaneous plans',
     );
 
@@ -1172,7 +1199,7 @@ test('controller DOM flow previews each item, moves list focus, reads archives, 
     entryButton.click();
     assert.match(
         nodes.hpmud_calendar_preview.textContent,
-        /考试中的约会/u,
+        /A Date During the Exam/u,
     );
     assert.equal(
         session.calendarSelectedEntryId,
@@ -1250,7 +1277,7 @@ test('controller DOM flow previews each item, moves list focus, reads archives, 
     );
     assert.match(
         nodes.hpmud_calendar_preview.textContent,
-        /考试开始。/u,
+        /The exam begins\./u,
     );
     assert.ok(
         nodes.hpmud_calendar_preview.querySelector(
@@ -1293,8 +1320,8 @@ test('controller DOM flow previews each item, moves list focus, reads archives, 
     );
     const claimedCard = nodes.hpmud_calendar_scene_list
         .querySelector('[data-calendar-scene-card="archive_exam_one"]');
-    assert.match(claimedCard.textContent, /魔咒考试计划中/u);
-    assert.match(claimedCard.textContent, /考试中的约会计划中/u);
+    assert.match(claimedCard.textContent, /Charms Exam计划中/u);
+    assert.match(claimedCard.textContent, /A Date During the Exam计划中/u);
 
     nodes.hpmud_calendar_scene_list
         .querySelector('[data-calendar-scene-id="legacy_archive"]')
@@ -1302,14 +1329,14 @@ test('controller DOM flow previews each item, moves list focus, reads archives, 
     const legacyCard = nodes.hpmud_calendar_scene_list
         .querySelector('[data-calendar-scene-card="legacy_archive"]');
     assert.match(legacyCard.textContent, /未关联计划/u);
-    assert.doesNotMatch(legacyCard.textContent, /魔咒考试/u);
+    assert.doesNotMatch(legacyCard.textContent, /Charms Exam/u);
     nodes.hpmud_calendar_scene_list
         .querySelector('[data-calendar-scene-id="empty_claim_archive"]')
         .click();
     const emptyClaimCard = nodes.hpmud_calendar_scene_list
         .querySelector('[data-calendar-scene-card="empty_claim_archive"]');
     assert.match(emptyClaimCard.textContent, /未关联计划/u);
-    assert.doesNotMatch(emptyClaimCard.textContent, /魔咒考试/u);
+    assert.doesNotMatch(emptyClaimCard.textContent, /Charms Exam/u);
     assert.doesNotMatch(
         nodes.hpmud_calendar_items.textContent,
         /\bScene\b|attendance|去了|没去/u,
@@ -1373,7 +1400,7 @@ test('controller DOM flow previews each item, moves list focus, reads archives, 
                 '.hpmud-calendar-action-feedback',
             )
             .textContent,
-        /Connection Profile 不存在/u,
+        /无法打开该场景/u,
     );
     assert.equal(
         nodes.hpmud_calendar_status.getAttribute('role'),
@@ -1493,12 +1520,13 @@ test('controller invalidates date, month, entry, and Scene selection when timeli
         timelineEpoch: 'calendar_ui_timeline_two',
         clock: nextClock,
         calendar: {
-            version: 2,
+            version: 3,
             storylines: [],
             storyBeats: [],
             entries: [
                 createEntry('new_timeline_class', {
-                    title: '新时间线课程',
+                    titleEn:
+                        'New Timeline Class',
                     startClock: '1991-10-05 · 10:00',
                     endClock: '1991-10-05 · 11:00',
                     createdClock: nextClock,
@@ -1713,6 +1741,18 @@ test('controller uses action and archive ports without writing authority or scro
         controllerSource,
         /restoreBackgroundScroll/u,
     );
+    assert.match(
+        controllerSource,
+        /hpmud-calendar-localization-retry/u,
+    );
+    assert.match(
+        controllerSource,
+        /requestFieldRetranslation\([\s\S]*?errorFields/u,
+    );
+    assert.match(
+        controllerSource,
+        /translation\.status\.partial_error/u,
+    );
     assert.match(scenePreviewSource, /readSceneArchiveRecord\(state, scene\.id\)/u);
     assert.match(
         scenePreviewSource,
@@ -1724,7 +1764,7 @@ test('controller uses action and archive ports without writing authority or scro
     );
     assert.match(
         messageSource,
-        /if \(!readOnly\) \{\s*menu\.append\(retranslate\)/u,
+        /menu\.append\(retranslate\)/u,
     );
     assert.match(
         bindingsSource,

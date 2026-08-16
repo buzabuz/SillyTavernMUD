@@ -3,11 +3,25 @@ import {
     createItemLedger,
 } from './item-components.js';
 import {
-    IDENTITY_SOURCE_LABELS,
+    getIdentitySourceLabel,
 } from './npc-identity-dossier.js';
 import {
     buildActorDossierViewModel,
 } from '../domain/actor-dossier-projection.js';
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from '../domain/localized-view-model.js';
+import {
+    getVisibleItemLocalizationFields,
+    localizeItemCard,
+} from '../domain/item-localization.js';
+import {
+    createSpellLocalizationFields,
+} from '../domain/spell-localization.js';
+import {
+    createCharacterInputLocalizationField,
+} from '../domain/localization-candidates.js';
 
 export function createInspectorController(ports) {
     const {
@@ -16,9 +30,16 @@ export function createInspectorController(ports) {
     } = ports;
 
     const {
-        SPELL_LEARNING_SOURCE_LABELS,
         createItemReferenceDirective,
+        ensureLocalizedFields =
+        async () => [],
         getKnownSpellMap,
+        getLocalizedField =
+        field => ({
+            text:
+                    field.sourceTextEn ||
+                    '',
+        }),
         getRoomName,
         getSpellDefinition,
         getSpellProficiency,
@@ -26,6 +47,8 @@ export function createInspectorController(ports) {
         initials,
         insertAtCursor,
         projectItemLedger,
+        requestFieldRetranslation =
+        async () => [],
         renderInspectorMap,
         setComposerSpell,
     } = ports;
@@ -34,6 +57,45 @@ export function createInspectorController(ports) {
         root,
         inspectorElement,
     } = refs;
+
+    function staticText(
+        staticKey,
+        sourceTextEn,
+    ) {
+        return getStaticLocaleText(
+            staticKey,
+            normalizeDisplayLocale(
+                session.displayLocale,
+            ),
+        ) ||
+            sourceTextEn;
+    }
+
+    function formatStaticText(
+        staticKey,
+        sourceTextEn,
+        values = {},
+    ) {
+        return Object.entries(
+            values,
+        ).reduce(
+            (
+                text,
+                [
+                    key,
+                    value,
+                ],
+            ) =>
+                text.replaceAll(
+                    `{${key}}`,
+                    String(value),
+                ),
+            staticText(
+                staticKey,
+                sourceTextEn,
+            ),
+        );
+    }
 
     function createInspectorCard(title, content) {
         const card = document.createElement('section');
@@ -47,7 +109,14 @@ export function createInspectorController(ports) {
         return card;
     }
 
-    function createList(entries, emptyText = '暂无') {
+    function createList(
+        entries,
+        emptyText =
+        staticText(
+            'ui.inspector.empty',
+            'None yet',
+        ),
+    ) {
         const list = document.createElement('ul');
         list.className = 'hpmud-inspector-list';
         if (!entries.length) {
@@ -73,9 +142,11 @@ export function createInspectorController(ports) {
                     '';
                 item.append(label);
                 const sourceLabel =
-                    IDENTITY_SOURCE_LABELS[
-                        entry.sourceKind
-                    ];
+                    getIdentitySourceLabel(
+                        entry.sourceKind,
+                        session
+                            .displayLocale,
+                    );
                 if (sourceLabel) {
                     const source =
                         document.createElement(
@@ -98,24 +169,383 @@ export function createInspectorController(ports) {
         return list;
     }
 
+    function createLocalizationStatus(
+        fields,
+        className,
+    ) {
+        const statuses =
+            (fields || [])
+                .map(field =>
+                    getLocalizedField(
+                        field,
+                    ).status);
+        const status =
+            statuses.includes(
+                'error',
+            )
+                ? 'error'
+                : statuses.includes(
+                    'pending',
+                )
+                    ? 'pending'
+                    : '';
+        const control =
+            document.createElement(
+                'div',
+            );
+        control.className =
+            `${className}-control`;
+        const indicator =
+            document.createElement(
+                'small',
+            );
+        indicator.className =
+            className;
+        indicator.classList.toggle(
+            'is-visible',
+            Boolean(status),
+        );
+        indicator.classList.toggle(
+            'is-error',
+            status === 'error',
+        );
+        indicator.textContent =
+            status
+                ? getLocalizedField({
+                    staticKey:
+                        status ===
+                            'error'
+                            ? 'translation.status.partial_error'
+                            : 'translation.status.pending',
+                    sourceTextEn:
+                        status === 'error'
+                            ? 'Some fields are showing English source'
+                            : 'Translating',
+                }).text
+                : '\u00a0';
+        control.append(indicator);
+        if (status === 'error') {
+            const retry =
+                document.createElement(
+                    'button',
+                );
+            retry.type = 'button';
+            retry.className =
+                'hpmud-dossier-localization-retry';
+            retry.textContent =
+                getLocalizedField({
+                    staticKey:
+                        'translation.action.retranslate',
+                    sourceTextEn:
+                        'Retranslate',
+                }).text;
+            retry.addEventListener(
+                'click',
+                async () => {
+                    retry.disabled =
+                        true;
+                    const errorFields =
+                        (fields || [])
+                            .filter(field =>
+                                getLocalizedField(
+                                    field,
+                                ).status ===
+                                    'error');
+                    try {
+                        await requestFieldRetranslation(
+                            errorFields,
+                            {
+                                priority: 1,
+                            },
+                        );
+                    } finally {
+                        retry.disabled =
+                            false;
+                    }
+                },
+            );
+            control.append(retry);
+        }
+        return control;
+    }
+
+    function needsTranslation(
+        value,
+    ) {
+        return /[A-Za-z]/u.test(
+            String(
+                value ||
+                '',
+            ),
+        );
+    }
+
+    function localizeIdentity(
+        identity,
+        actorId,
+    ) {
+        const localized =
+            structuredClone(
+                identity,
+            );
+        const fields = [];
+        localized.groups
+            .forEach(group => {
+                group.entries
+                    .forEach((
+                        entry,
+                        index,
+                    ) => {
+                        for (const key of [
+                            'value',
+                            'detail',
+                        ]) {
+                            if (
+                                !needsTranslation(
+                                    entry[key],
+                                )
+                            ) {
+                                continue;
+                            }
+                            const field = {
+                                recordKind:
+                                    'actor_identity',
+                                recordId:
+                                    actorId,
+                                fieldPath:
+                                    `groups.${group.id}.entries[${index}].${key}`,
+                                sourceTextEn:
+                                    entry[key],
+                            };
+                            fields.push(
+                                field,
+                            );
+                            entry[key] =
+                                getLocalizedField(
+                                    field,
+                                ).text;
+                        }
+                    });
+            });
+        localized.claims
+            .forEach((
+                claim,
+                index,
+            ) => {
+                for (const key of [
+                    'label',
+                    'detail',
+                ]) {
+                    if (
+                        !needsTranslation(
+                            claim[key],
+                        )
+                    ) {
+                        continue;
+                    }
+                    const field = {
+                        recordKind:
+                            'actor_identity',
+                        recordId:
+                            actorId,
+                        fieldPath:
+                            `claims[${index}].${key}`,
+                        sourceTextEn:
+                            claim[key],
+                    };
+                    fields.push(
+                        field,
+                    );
+                    claim[key] =
+                        getLocalizedField(
+                            field,
+                        ).text;
+                }
+            });
+        return {
+            fields,
+            identity:
+                localized,
+        };
+    }
+
+    function localizeGenericEntries(
+        recordKind,
+        entries,
+    ) {
+        const fields = [];
+        const localized =
+            (entries || [])
+                .map((
+                    entry,
+                    index,
+                ) => {
+                    const recordId =
+                        String(
+                            entry?.id ||
+                            `${recordKind}:${index}`,
+                        );
+                    if (
+                        typeof entry ===
+                            'string'
+                    ) {
+                        const field = {
+                            recordKind,
+                            recordId,
+                            fieldPath:
+                                'textEn',
+                            sourceTextEn:
+                                entry,
+                        };
+                        fields.push(
+                            field,
+                        );
+                        return getLocalizedField(
+                            field,
+                        ).text;
+                    }
+                    const labelSource =
+                        entry?.nameEn ||
+                        entry?.titleEn ||
+                        entry?.labelEn ||
+                        entry?.name ||
+                        entry?.title ||
+                        entry?.label ||
+                        '';
+                    const detailSource =
+                        entry
+                            ?.summaryEn ||
+                        entry
+                            ?.descriptionEn ||
+                        entry?.detailEn ||
+                        entry?.summary ||
+                        entry
+                            ?.description ||
+                        entry?.detail ||
+                        '';
+                    const labelField = {
+                        recordKind,
+                        recordId,
+                        fieldPath:
+                            entry?.nameEn
+                                ? 'nameEn'
+                                : entry?.titleEn
+                                    ? 'titleEn'
+                                    : 'labelEn',
+                        sourceTextEn:
+                            labelSource,
+                    };
+                    const detailField = {
+                        recordKind,
+                        recordId,
+                        fieldPath:
+                            entry?.summaryEn
+                                ? 'summaryEn'
+                                : entry
+                                    ?.descriptionEn
+                                    ? 'descriptionEn'
+                                    : 'detailEn',
+                        sourceTextEn:
+                            detailSource,
+                    };
+                    fields.push(
+                        labelField,
+                        detailField,
+                    );
+                    return {
+                        ...entry,
+                        label:
+                            getLocalizedField(
+                                labelField,
+                            ).text,
+                        detail:
+                            getLocalizedField(
+                                detailField,
+                            ).text,
+                    };
+                });
+        return {
+            fields,
+            entries:
+                localized,
+        };
+    }
+
     function renderMemoryLedger(memories) {
         const ledger = document.createElement('div');
         ledger.className = 'hpmud-memory-ledger';
+        const memoryFields =
+            Object.values(
+                memories || {},
+            )
+                .flat()
+                .map(memory => ({
+                    recordKind:
+                        memory.recordType,
+                    recordId:
+                        memory.recordId,
+                    fieldPath:
+                        'summaryEn',
+                    sourceTextEn:
+                        memory.summary,
+                }));
+        void Promise.resolve(
+            ensureLocalizedFields(
+                memoryFields,
+                {
+                    priority: 1,
+                },
+            ),
+        ).catch(error =>
+            console.warn(
+                '[Hogwarts MUD] Actor memory localization query failed',
+                error,
+            ));
+        ledger.append(
+            createLocalizationStatus(
+                memoryFields,
+                'hpmud-dossier-localization-status',
+            ),
+        );
         const tiers = [
             {
                 id: 'core',
-                label: '最深刻的',
-                hint: '长期留存',
+                label:
+                    staticText(
+                        'ui.inspector.memory.core',
+                        'Most memorable',
+                    ),
+                hint:
+                    staticText(
+                        'ui.inspector.memory.core_hint',
+                        'Long-term retention',
+                    ),
             },
             {
                 id: 'recent',
-                label: '近期大事',
-                hint: '仍在影响当下',
+                label:
+                    staticText(
+                        'ui.inspector.memory.recent',
+                        'Recent events',
+                    ),
+                hint:
+                    staticText(
+                        'ui.inspector.memory.recent_hint',
+                        'Still shaping the present',
+                    ),
             },
             {
                 id: 'everyday',
-                label: '日常小事',
-                hint: '相处留下的细节',
+                label:
+                    staticText(
+                        'ui.inspector.memory.everyday',
+                        'Everyday moments',
+                    ),
+                hint:
+                    staticText(
+                        'ui.inspector.memory.everyday_hint',
+                        'Details left by time together',
+                    ),
             },
         ];
         tiers.forEach(tier => {
@@ -139,8 +569,14 @@ export function createInspectorController(ports) {
                 empty.className = 'hpmud-memory-empty';
                 empty.textContent =
                     tier.id === 'core'
-                        ? '还没有足以长久留下的共同经历。'
-                        : '这一层暂时没有记录。';
+                        ? staticText(
+                            'ui.inspector.memory.empty_core',
+                            'No shared experience has left a lasting mark yet.',
+                        )
+                        : staticText(
+                            'ui.inspector.memory.empty_tier',
+                            'No records in this tier yet.',
+                        );
                 entries.append(empty);
             } else {
                 [...entriesForTier].reverse().forEach(memory => {
@@ -148,14 +584,28 @@ export function createInspectorController(ports) {
                     const summary = document.createElement('p');
                     const time = document.createElement('time');
                     summary.textContent =
-                        memory.summary;
+                        getLocalizedField({
+                            recordKind:
+                                memory
+                                    .recordType,
+                            recordId:
+                                memory
+                                    .recordId,
+                            fieldPath:
+                                'summaryEn',
+                            sourceTextEn:
+                                memory.summary,
+                        }).text;
                     time.textContent =
                         [
                             memory.sourceBadge,
                             memory.clock,
                         ].filter(Boolean)
                             .join(' · ') ||
-                        '时间未记';
+                        staticText(
+                            'ui.inspector.memory.time_unknown',
+                            'Time not recorded',
+                        );
                     entry.append(summary, time);
                     entries.append(entry);
                 });
@@ -206,22 +656,26 @@ export function createInspectorController(ports) {
                 labels.append(tag);
             });
         const dimensions = [
-            ['familiarity', '熟悉'],
-            ['closeness', '亲近'],
-            ['warmth', '温暖'],
-            ['trust', '信任'],
-            ['respect', '尊重'],
-            ['influence', '影响'],
-            ['tension', '张力'],
-            ['resentment', '积怨'],
-            ['fear', '恐惧'],
-            ['protectiveness', '保护'],
+            'familiarity',
+            'closeness',
+            'warmth',
+            'trust',
+            'respect',
+            'influence',
+            'tension',
+            'resentment',
+            'fear',
+            'protectiveness',
         ];
         const metricList =
             createList(
                 dimensions.map(
-                    ([key, label]) => ({
-                        label,
+                    key => ({
+                        label:
+                            staticText(
+                                `ui.inspector.dimension.${key}`,
+                                key,
+                            ),
                         detail: String(
                             Math.round(
                                 Number(
@@ -238,34 +692,58 @@ export function createInspectorController(ports) {
         const impressions =
             createList([
                 {
-                    label: '初见印象',
+                    label:
+                        staticText(
+                            'ui.inspector.first_impression',
+                            'First impression',
+                        ),
                     detail:
                         relationship
                             .firstImpression
                             ?.summary ||
-                        '尚无初见印象记录。',
+                        staticText(
+                            'ui.inspector.first_impression_empty',
+                            'No first-impression record.',
+                        ),
                 },
                 {
-                    label: '当前看法',
+                    label:
+                        staticText(
+                            'ui.inspector.current_schema',
+                            'Current view',
+                        ),
                     detail:
                         relationship
                             .currentSchema
                             ?.interpretation ||
-                        '尚未形成稳定看法。',
+                        staticText(
+                            'ui.inspector.current_schema_empty',
+                            'No stable view has formed.',
+                        ),
                 },
                 {
-                    label: '行为预期',
+                    label:
+                        staticText(
+                            'ui.inspector.expectation',
+                            'Behavioral expectation',
+                        ),
                     detail:
                         relationship
                             .currentSchema
                             ?.expectation ||
-                        '暂无稳定预期。',
+                        staticText(
+                            'ui.inspector.expectation_empty',
+                            'No stable expectation.',
+                        ),
                 },
                 relationship
                     .currentSchema
                     ? {
                         label:
-                            'Schema 依据',
+                            staticText(
+                                'ui.inspector.schema_basis',
+                                'Schema basis',
+                            ),
                         detail:
                             `${Math.round(
                                 relationship
@@ -273,9 +751,26 @@ export function createInspectorController(ports) {
                                     .confidence *
                                 100,
                             )}% · ` +
-                            `${relationship.currentSchema.status} · ` +
-                            `${relationship.currentSchema.supportingCount} 条支持 · ` +
-                            `${relationship.currentSchema.counterexampleCount} 条反例`,
+                            `${staticText(
+                                `ui.inspector.schema_status.${relationship.currentSchema.status}`,
+                                relationship
+                                    .currentSchema
+                                    .status,
+                            )} · ` +
+                            formatStaticText(
+                                'ui.inspector.schema_counts',
+                                '{supporting} supporting · {counterexamples} counterexamples',
+                                {
+                                    supporting:
+                                        relationship
+                                            .currentSchema
+                                            .supportingCount,
+                                    counterexamples:
+                                        relationship
+                                            .currentSchema
+                                            .counterexampleCount,
+                                },
+                            ),
                     }
                     : null,
             ].filter(Boolean));
@@ -284,8 +779,14 @@ export function createInspectorController(ports) {
                 .activeSentiments
                 .map(sentiment => ({
                     label:
-                        sentiment.emotion ||
-                        '短期情绪',
+                        staticText(
+                            `ui.inspector.emotion.${sentiment.emotion}`,
+                            sentiment.emotion,
+                        ) ||
+                        staticText(
+                            'ui.inspector.short_sentiment',
+                            'Short-term emotion',
+                        ),
                     detail:
                         String(
                             sentiment
@@ -299,7 +800,10 @@ export function createInspectorController(ports) {
                 .map(reference => ({
                     label:
                         [
-                            '关系证据',
+                            staticText(
+                                'ui.inspector.relationship_evidence',
+                                'Relationship evidence',
+                            ),
                             reference.clock,
                         ].filter(Boolean)
                             .join(' · '),
@@ -309,25 +813,43 @@ export function createInspectorController(ports) {
         panel.append(
             labels,
             subsection(
-                '印象与预期',
+                staticText(
+                    'ui.inspector.impressions',
+                    'Impressions and expectations',
+                ),
                 impressions,
             ),
             subsection(
-                '关系维度',
+                staticText(
+                    'ui.inspector.relationship_dimensions',
+                    'Relationship dimensions',
+                ),
                 metricList,
             ),
             subsection(
-                '当前情绪',
+                staticText(
+                    'ui.inspector.current_emotions',
+                    'Current emotions',
+                ),
                 createList(
                     sentiments,
-                    '当前没有活跃情绪。',
+                    staticText(
+                        'ui.inspector.current_emotions_empty',
+                        'No active emotions.',
+                    ),
                 ),
             ),
             subsection(
-                '关系证据',
+                staticText(
+                    'ui.inspector.relationship_evidence',
+                    'Relationship evidence',
+                ),
                 createList(
                     evidence,
-                    '尚无玩家可见的关系证据。',
+                    staticText(
+                        'ui.inspector.relationship_evidence_empty',
+                        'No player-visible relationship evidence.',
+                    ),
                 ),
             ),
         );
@@ -365,19 +887,28 @@ export function createInspectorController(ports) {
                                         .sourceKind,
                             })),
                         group.emptyText ||
-                        '暂无',
+                        staticText(
+                            'ui.inspector.empty',
+                            'None yet',
+                        ),
                     ),
                 );
             });
         const claimsHeading =
             document.createElement('h4');
         claimsHeading.textContent =
-            '关系说法';
+            staticText(
+                'ui.inspector.relationship_claims',
+                'Relationship claims',
+            );
         panel.append(
             claimsHeading,
             createList(
                 identity.claims,
-                '暂无已知关系说法。',
+                staticText(
+                    'ui.inspector.relationship_claims_empty',
+                    'No known relationship claims.',
+                ),
             ),
         );
         return panel;
@@ -387,7 +918,22 @@ export function createInspectorController(ports) {
         const state = getWorldState();
         const character = state.character;
         inspectorElement.replaceChildren();
+        root.querySelector(
+            '.hpmud-inspector-tabs',
+        )?.setAttribute?.(
+            'aria-label',
+            staticText(
+                'ui.inspector.tabs_aria',
+                'Inspector',
+            ),
+        );
         root.querySelectorAll('[data-hpmud-tab]').forEach(button => {
+            button.textContent =
+                staticText(
+                    `ui.inspector.tab.${button.dataset.hpmudTab}`,
+                    button.dataset
+                        .hpmudTab,
+                );
             button.classList.toggle('active', button.dataset.hpmudTab === tab);
         });
 
@@ -399,6 +945,10 @@ export function createInspectorController(ports) {
                     'player',
                     {
                         getRoomName,
+                        getLocalizedField,
+                        displayLocale:
+                            session
+                                .displayLocale,
                     },
                 );
             if (!dossier) {
@@ -406,69 +956,426 @@ export function createInspectorController(ports) {
                 renderInspector('character');
                 return;
             }
+            const actorFields = {
+                background: {
+                    recordKind:
+                        'actor_core',
+                    recordId:
+                        dossier.actorId,
+                    fieldPath:
+                        'publicProfile.backgroundEn',
+                    sourceTextEn:
+                        dossier.core
+                            .publicBackground,
+                },
+                personality: {
+                    recordKind:
+                        'actor_core',
+                    recordId:
+                        dossier.actorId,
+                    fieldPath:
+                        'performanceCore.temperamentEn',
+                    sourceTextEn:
+                        dossier.core
+                            .personality,
+                },
+                speechStyle: {
+                    recordKind:
+                        'actor_core',
+                    recordId:
+                        dossier.actorId,
+                    fieldPath:
+                        'performanceCore.speechStyleEn',
+                    sourceTextEn:
+                        dossier.core
+                            .speechStyle,
+                },
+                visibleDescription: {
+                    recordKind:
+                        'actor_core',
+                    recordId:
+                        dossier.actorId,
+                    fieldPath:
+                        'publicProfile.descriptionEn',
+                    sourceTextEn:
+                        dossier.core
+                            .visibleDescription,
+                },
+                activity: {
+                    recordKind:
+                        'actor_runtime',
+                    recordId:
+                        dossier.actorId,
+                    fieldPath:
+                        'currentActivityEn',
+                    sourceTextEn:
+                        dossier.current
+                            .activity,
+                },
+                intent: {
+                    recordKind:
+                        'actor_runtime',
+                    recordId:
+                        dossier.actorId,
+                    fieldPath:
+                        'currentIntentEn',
+                    sourceTextEn:
+                        dossier.current
+                            .intent,
+                },
+                lifeStatusDetail: {
+                    recordKind:
+                        'actor_runtime',
+                    recordId:
+                        dossier.actorId,
+                    fieldPath:
+                        'lifeStatusDetailEn',
+                    sourceTextEn:
+                        dossier.current
+                            .lifeStatusDetail,
+                },
+                outfit: {
+                    recordKind:
+                        'actor_presentation',
+                    recordId:
+                        dossier.actorId,
+                    fieldPath:
+                        'outfitEn',
+                    sourceTextEn:
+                        dossier.current
+                            .presentation
+                            .outfit,
+                },
+            };
+            const firstImpressionField =
+                dossier.relationship
+                    .firstImpression
+                    ? {
+                        recordKind:
+                            'appraisal',
+                        recordId:
+                            dossier
+                                .relationship
+                                .firstImpression
+                                .recordId,
+                        fieldPath:
+                            'summaryEn',
+                        sourceTextEn:
+                            dossier
+                                .relationship
+                                .firstImpression
+                                .summary,
+                    }
+                    : null;
+            const identityLocalization =
+                localizeIdentity(
+                    dossier.identity,
+                    dossier.actorId,
+                );
+            const schemaFields =
+                dossier.relationship
+                    .currentSchema
+                    ? {
+                        interpretation: {
+                            recordKind:
+                                'person_schema',
+                            recordId:
+                                dossier
+                                    .relationship
+                                    .currentSchema
+                                    .schemaId,
+                            fieldPath:
+                                'interpretationEn',
+                            sourceTextEn:
+                                dossier
+                                    .relationship
+                                    .currentSchema
+                                    .interpretation,
+                        },
+                        expectation: {
+                            recordKind:
+                                'person_schema',
+                            recordId:
+                                dossier
+                                    .relationship
+                                    .currentSchema
+                                    .schemaId,
+                            fieldPath:
+                                'expectationEn',
+                            sourceTextEn:
+                                dossier
+                                    .relationship
+                                    .currentSchema
+                                    .expectation,
+                        },
+                    }
+                    : null;
+            const relationshipEvidenceFields =
+                dossier.relationship
+                    .evidenceRefs
+                    .map(reference => ({
+                        recordKind:
+                            reference
+                                .sourceRecordType ||
+                            'relationship_evidence',
+                        recordId:
+                            reference
+                                .sourceRecordId ||
+                            reference
+                                .recordId,
+                        fieldPath:
+                            'summaryEn',
+                        sourceTextEn:
+                            reference.summary,
+                    }));
+            const presentationAccessoryFields =
+                dossier.current
+                    .presentation
+                    .accessories
+                    .map((
+                        value,
+                        index,
+                    ) => ({
+                        recordKind:
+                            'actor_presentation',
+                        recordId:
+                            dossier.actorId,
+                        fieldPath:
+                            `accessories[${index}]`,
+                        sourceTextEn:
+                            value,
+                    }));
+            const itemSourceById =
+                new Map(
+                    (state.items || [])
+                        .map(item => [
+                            item.id,
+                            item,
+                        ]),
+                );
+            const itemFieldsById =
+                new Map(
+                    dossier.items
+                        .map(item => {
+                            const source =
+                                itemSourceById
+                                    .get(
+                                        item.id,
+                                    ) ||
+                                {};
+                            return [
+                                item.id,
+                                {
+                                    label: {
+                                        recordKind:
+                                            'item',
+                                        recordId:
+                                            item.id,
+                                        fieldPath:
+                                            'labelEn',
+                                        sourceTextEn:
+                                            source
+                                                .labelEn ||
+                                            item.label,
+                                    },
+                                    appearance: {
+                                        recordKind:
+                                            'item',
+                                        recordId:
+                                            item.id,
+                                        fieldPath:
+                                            'appearanceEn',
+                                        sourceTextEn:
+                                            source
+                                                .appearanceEn ||
+                                            item.appearance,
+                                    },
+                                },
+                            ];
+                        }),
+                );
+            const dossierFields = [
+                ...Object.values(
+                    actorFields,
+                ),
+                ...identityLocalization
+                    .fields,
+                ...(
+                    schemaFields
+                        ? Object.values(
+                            schemaFields,
+                        )
+                        : []
+                ),
+                ...relationshipEvidenceFields,
+                ...presentationAccessoryFields,
+                ...(
+                    firstImpressionField
+                        ? [
+                            firstImpressionField,
+                        ]
+                        : []
+                ),
+                ...[
+                    ...itemFieldsById
+                        .values(),
+                ].flatMap(fields =>
+                    Object.values(
+                        fields,
+                    )),
+            ];
+            void Promise.resolve(
+                ensureLocalizedFields(
+                    dossierFields,
+                    {
+                        priority: 1,
+                    },
+                ),
+            ).catch(error =>
+                console.warn(
+                    '[Hogwarts MUD] Actor Dossier localization query failed',
+                    error,
+                ));
+            const display =
+                key =>
+                    getLocalizedField(
+                        actorFields[key],
+                    ).text;
+            inspectorElement.append(
+                createLocalizationStatus(
+                    dossierFields,
+                    'hpmud-dossier-localization-status',
+                ),
+            );
             inspectorElement.append(
                 createInspectorCard(
-                    '人物本色',
+                    staticText(
+                        'ui.inspector.actor.core',
+                        'Character core',
+                    ),
                     createList([
                         {
-                            label: '公开背景',
+                            label:
+                                staticText(
+                                    'ui.inspector.actor.public_background',
+                                    'Public background',
+                                ),
                             detail:
-                                dossier.core
-                                    .publicBackground ||
-                                '暂无公开背景。',
+                                display(
+                                    'background',
+                                ) ||
+                                staticText(
+                                    'ui.inspector.actor.public_background_empty',
+                                    'No public background.',
+                                ),
                         },
                         {
-                            label: '性格',
+                            label:
+                                staticText(
+                                    'ui.inspector.actor.personality',
+                                    'Personality',
+                                ),
                             detail:
-                                dossier.core
-                                    .personality ||
-                                '暂无性格记录。',
+                                display(
+                                    'personality',
+                                ) ||
+                                staticText(
+                                    'ui.inspector.actor.personality_empty',
+                                    'No personality record.',
+                                ),
                         },
                         {
-                            label: '说话方式',
+                            label:
+                                staticText(
+                                    'ui.inspector.actor.speech',
+                                    'Speech style',
+                                ),
                             detail:
-                                dossier.core
-                                    .speechStyle ||
-                                '暂无说话方式记录。',
+                                display(
+                                    'speechStyle',
+                                ) ||
+                                staticText(
+                                    'ui.inspector.actor.speech_empty',
+                                    'No speech-style record.',
+                                ),
                         },
                         {
-                            label: '可见外貌',
+                            label:
+                                staticText(
+                                    'ui.inspector.actor.appearance',
+                                    'Visible appearance',
+                                ),
                             detail:
-                                dossier.core
-                                    .visibleDescription ||
-                                '暂无外貌记录。',
+                                display(
+                                    'visibleDescription',
+                                ) ||
+                                staticText(
+                                    'ui.inspector.actor.appearance_empty',
+                                    'No appearance record.',
+                                ),
                         },
                     ]),
                 ),
             );
             inspectorElement.append(
                 createInspectorCard(
-                    '身份与已知说法',
+                    staticText(
+                        'ui.inspector.actor.identity',
+                        'Identity and known claims',
+                    ),
                     renderIdentity(
-                        dossier.identity,
+                        identityLocalization
+                            .identity,
                     ),
                 ),
             );
             const presentation =
                 dossier.current
                     .presentation;
+            const itemLabelById =
+                new Map(
+                    dossier.items
+                        .map(item => [
+                            item.id,
+                            getLocalizedField(
+                                itemFieldsById
+                                    .get(
+                                        item.id,
+                                    )
+                                    .label,
+                            ).text ||
+                            item.label,
+                        ]),
+                );
             const currentPresentation = [
-                presentation.outfit
+                display('outfit')
                     ? {
-                        label: '服装',
+                        label:
+                            staticText(
+                                'ui.inspector.actor.outfit',
+                                'Outfit',
+                            ),
                         detail:
-                            presentation
-                                .outfit,
+                            display(
+                                'outfit',
+                            ),
                     }
                     : null,
                 presentation.wornItemIds
                     .length
                     ? {
                         label:
-                            '正式穿戴 Item',
+                            staticText(
+                                'ui.inspector.actor.worn_items',
+                                'Worn Items',
+                            ),
                         detail:
                             presentation
                                 .wornItemIds
+                                .map(id =>
+                                    itemLabelById
+                                        .get(id))
+                                .filter(Boolean)
                                 .join(' · '),
                     }
                     : null,
@@ -476,72 +1383,131 @@ export function createInspectorController(ports) {
                     .length
                     ? {
                         label:
-                            '帽子与饰品',
+                            staticText(
+                                'ui.inspector.actor.accessories',
+                                'Hats and accessories',
+                            ),
                         detail:
                             presentation
                                 .accessories
+                                .map((
+                                    _value,
+                                    index,
+                                ) =>
+                                    getLocalizedField(
+                                        presentationAccessoryFields[
+                                            index
+                                        ],
+                                    ).text)
+                                .filter(Boolean)
                                 .join(' · '),
                     }
                     : null,
                 presentation.heldItemIds
                     .length
                     ? {
-                        label: '手持 Item',
+                        label:
+                            staticText(
+                                'ui.inspector.actor.held_items',
+                                'Held Items',
+                            ),
                         detail:
                             presentation
                                 .heldItemIds
+                                .map(id =>
+                                    itemLabelById
+                                        .get(id))
+                                .filter(Boolean)
                                 .join(' · '),
                     }
                     : null,
             ].filter(Boolean);
             inspectorElement.append(
                 createInspectorCard(
-                    '当前状态',
+                    staticText(
+                        'ui.inspector.actor.current_status',
+                        'Current status',
+                    ),
                     createList([
                         {
-                            label: '所在位置',
+                            label:
+                                staticText(
+                                    'ui.inspector.actor.location',
+                                    'Location',
+                                ),
                             detail:
                                 dossier.current
                                     .location ||
-                                '位置未知',
+                                staticText(
+                                    'map.location.unknown',
+                                    'Unknown location',
+                                ),
                         },
                         {
-                            label: '正在做',
+                            label:
+                                staticText(
+                                    'ui.inspector.actor.activity',
+                                    'Current activity',
+                                ),
                             detail:
-                                dossier.current
-                                    .activity ||
-                                '当前没有活动记录。',
+                                display(
+                                    'activity',
+                                ) ||
+                                staticText(
+                                    'ui.inspector.actor.activity_empty',
+                                    'No current activity record.',
+                                ),
                         },
                         {
-                            label: '当前意图',
+                            label:
+                                staticText(
+                                    'ui.inspector.actor.intent',
+                                    'Current intent',
+                                ),
                             detail:
-                                dossier.current
-                                    .intent ||
-                                '当前没有意图记录。',
+                                display(
+                                    'intent',
+                                ) ||
+                                staticText(
+                                    'ui.inspector.actor.intent_empty',
+                                    'No current intent record.',
+                                ),
                         },
                         {
-                            label: '生命状态',
-                            detail: {
-                                alive: '存活',
-                                injured: '受伤',
-                                incapacitated:
-                                    '失去行动能力',
-                                missing: '失踪',
-                                dead: '死亡',
-                            }[
-                                dossier.current
-                                    .lifeStatus
-                            ] ||
+                            label:
+                                staticText(
+                                    'ui.inspector.actor.life_status',
+                                    'Life status',
+                                ),
+                            detail:
+                                getLocalizedField({
+                                    staticKey:
+                                        `actor.life_status.${dossier.current.lifeStatus}`,
+                                    sourceTextEn:
+                                        dossier.current
+                                            .lifeStatus,
+                                }).text ||
                                 dossier.current
                                     .lifeStatus ||
-                                '未知',
+                                staticText(
+                                    'ui.dossier.unknown',
+                                    'Unknown',
+                                ),
                         },
                         {
-                            label: '状态说明',
+                            label:
+                                staticText(
+                                    'ui.inspector.actor.status_detail',
+                                    'Status detail',
+                                ),
                             detail:
-                                dossier.current
-                                    .lifeStatusDetail ||
-                                '暂无状态说明。',
+                                display(
+                                    'lifeStatusDetail',
+                                ) ||
+                                staticText(
+                                    'ui.inspector.actor.status_detail_empty',
+                                    'No status detail.',
+                                ),
                         },
                         ...currentPresentation,
                     ]),
@@ -549,16 +1515,74 @@ export function createInspectorController(ports) {
             );
             inspectorElement.append(
                 createInspectorCard(
-                    '对你的关系',
+                    staticText(
+                        'ui.inspector.actor.relationship',
+                        'Relationship to you',
+                    ),
                     renderRelationship(
-                        dossier
-                            .relationship,
+                        {
+                            ...dossier
+                                .relationship,
+                            currentSchema:
+                                dossier
+                                    .relationship
+                                    .currentSchema
+                                    ? {
+                                        ...dossier
+                                            .relationship
+                                            .currentSchema,
+                                        interpretation:
+                                            getLocalizedField(
+                                                schemaFields
+                                                    .interpretation,
+                                            ).text,
+                                        expectation:
+                                            getLocalizedField(
+                                                schemaFields
+                                                    .expectation,
+                                            ).text,
+                                    }
+                                    : null,
+                            evidenceRefs:
+                                dossier
+                                    .relationship
+                                    .evidenceRefs
+                                    .map((
+                                        reference,
+                                        index,
+                                    ) => ({
+                                        ...reference,
+                                        summary:
+                                            getLocalizedField(
+                                                relationshipEvidenceFields[
+                                                    index
+                                                ],
+                                            ).text,
+                                    })),
+                            firstImpression:
+                                dossier
+                                    .relationship
+                                    .firstImpression
+                                    ? {
+                                        ...dossier
+                                            .relationship
+                                            .firstImpression,
+                                        summary:
+                                            getLocalizedField(
+                                                firstImpressionField,
+                                            ).text,
+                                    }
+                                    : null,
+                        },
                     ),
                 ),
             );
             inspectorElement.append(
                 createInspectorCard(
-                    '共同经历',
+                    staticText(
+                        'ui.inspector.actor.memories',
+                        'Shared experiences',
+                    ),
                     renderMemoryLedger(
                         dossier.memories,
                     ),
@@ -575,10 +1599,34 @@ export function createInspectorController(ports) {
                     .forEach(item =>
                         itemList.append(
                             createItemCard(
-                                item,
+                                {
+                                    ...item,
+                                    label:
+                                        getLocalizedField(
+                                            itemFieldsById
+                                                .get(
+                                                    item.id,
+                                                )
+                                                .label,
+                                        ).text ||
+                                        item.label,
+                                    appearance:
+                                        getLocalizedField(
+                                            itemFieldsById
+                                                .get(
+                                                    item.id,
+                                                )
+                                                .appearance,
+                                        ).text ||
+                                        item
+                                            .appearance,
+                                },
                                 {
                                     compact:
                                         true,
+                                    displayLocale:
+                                        session
+                                            .displayLocale,
                                 },
                             ),
                         ));
@@ -586,13 +1634,19 @@ export function createInspectorController(ports) {
                 itemList.append(
                     createList(
                         [],
-                        '暂无玩家可见的正式物品。',
+                        staticText(
+                            'ui.inspector.actor.items_empty',
+                            'No player-visible formal Items.',
+                        ),
                     ),
                 );
             }
             inspectorElement.append(
                 createInspectorCard(
-                    '正式物品',
+                    staticText(
+                        'ui.inspector.actor.items',
+                        'Formal Items',
+                    ),
                     itemList,
                 ),
             );
@@ -600,39 +1654,145 @@ export function createInspectorController(ports) {
         }
 
         if (tab === 'character') {
+            const evidence =
+                character
+                    ?.inputEvidence ||
+                {};
+            const identity =
+                evidence.identity ||
+                {};
+            const background =
+                evidence.background ||
+                {};
+            const aptitudes =
+                evidence.aptitudes ||
+                {};
+            const characterFields = {
+                name:
+                    createCharacterInputLocalizationField(
+                        'identity.name',
+                        identity.name,
+                    ),
+                desire:
+                    createCharacterInputLocalizationField(
+                        'background.desire',
+                        background
+                            .desire,
+                    ),
+                fear:
+                    createCharacterInputLocalizationField(
+                        'background.fear',
+                        background
+                            .fear,
+                    ),
+            };
+            void Promise.resolve(
+                ensureLocalizedFields(
+                    Object.values(
+                        characterFields,
+                    ),
+                    {
+                        priority: 1,
+                    },
+                ),
+            ).catch(() => {});
+            const displayName =
+                getLocalizedField(
+                    characterFields.name,
+                ).text ||
+                staticText(
+                    'ui.inspector.character.unnamed',
+                    'Unnamed character',
+                );
             const profile = document.createElement('div');
             profile.className = 'hpmud-profile';
             profile.innerHTML = `
-            <span class="hpmud-profile-avatar">${initials(character?.identity?.name)}</span>
+            <span class="hpmud-profile-avatar">${initials(displayName)}</span>
             <span><h2></h2><p></p></span>
         `;
-            profile.querySelector('h2').textContent = character?.identity?.name || '未命名角色';
+            profile.querySelector('h2').textContent =
+                displayName;
             profile.querySelector('p').textContent = [
-                character?.background?.bloodStatus,
-                character?.aptitudes?.strongDomain && `优势：${character.aptitudes.strongDomain}`,
-            ].filter(Boolean).join(' · ') || '一年级新生';
+                background.bloodStatus,
+                aptitudes.strongDomain &&
+                    formatStaticText(
+                        'ui.inspector.character.strength',
+                        'Strength: {value}',
+                        {
+                            value:
+                                aptitudes
+                                    .strongDomain,
+                        },
+                    ),
+            ].filter(Boolean).join(' · ') ||
+                staticText(
+                    'ui.inspector.character.first_year',
+                    'First-year student',
+                );
             inspectorElement.append(createInspectorCard('', profile));
 
             const tags = document.createElement('div');
             tags.className = 'hpmud-tags';
             Object.entries(character?.attributes || {}).forEach(([key, value]) => {
                 const tag = document.createElement('span');
-                const names = {
-                    physique: '体魄',
-                    agility: '灵巧',
-                    perception: '感知',
-                    intellect: '智识',
-                    willpower: '意志',
-                    charisma: '魅力',
-                };
-                tag.textContent = `${names[key] || key} ${value}`;
+                tag.textContent =
+                    `${staticText(
+                        `ui.inspector.attribute.${key}`,
+                        key,
+                    )} ${value}`;
                 tags.append(tag);
             });
-            inspectorElement.append(createInspectorCard('基础属性', tags));
-            inspectorElement.append(createInspectorCard('人物背景', createList([
-                { label: '欲望', detail: character?.background?.desire || '未记录' },
-                { label: '恐惧', detail: character?.background?.fear || '未记录' },
-            ])));
+            inspectorElement.append(
+                createInspectorCard(
+                    staticText(
+                        'ui.inspector.character.attributes',
+                        'Base attributes',
+                    ),
+                    tags,
+                ),
+            );
+            inspectorElement.append(
+                createInspectorCard(
+                    staticText(
+                        'ui.inspector.character.background',
+                        'Character background',
+                    ),
+                    createList([
+                        {
+                            label:
+                                staticText(
+                                    'ui.inspector.character.desire',
+                                    'Desire',
+                                ),
+                            detail:
+                                getLocalizedField(
+                                    characterFields
+                                        .desire,
+                                ).text ||
+                                staticText(
+                                    'ui.inspector.unrecorded',
+                                    'Not recorded',
+                                ),
+                        },
+                        {
+                            label:
+                                staticText(
+                                    'ui.inspector.character.fear',
+                                    'Fear',
+                                ),
+                            detail:
+                                getLocalizedField(
+                                    characterFields
+                                        .fear,
+                                ).text ||
+                                staticText(
+                                    'ui.inspector.unrecorded',
+                                    'Not recorded',
+                                ),
+                        },
+                    ]),
+                ),
+            );
             return;
         }
 
@@ -646,6 +1806,57 @@ export function createInspectorController(ports) {
                 getKnownSpellMap(
                     state,
                 );
+            const knownEntries = [
+                ...knownById
+                    .values(),
+            ]
+                .sort((left, right) =>
+                    right
+                        .proficiencyXp -
+                    left
+                        .proficiencyXp);
+            const spellFieldsById =
+                new Map(
+                    knownEntries
+                        .map(entry => {
+                            const spell =
+                                getSpellDefinition(
+                                    entry
+                                        .spellId,
+                                    state,
+                                );
+                            return [
+                                entry
+                                    .spellId,
+                                createSpellLocalizationFields(
+                                    spell,
+                                ),
+                            ];
+                        }),
+                );
+            const spellFields = [
+                ...spellFieldsById
+                    .values(),
+            ].flatMap(fields =>
+                fields);
+            void Promise.resolve(
+                ensureLocalizedFields(
+                    spellFields,
+                    {
+                        priority: 1,
+                    },
+                ),
+            ).catch(error =>
+                console.warn(
+                    '[Hogwarts MUD] Spellbook localization query failed',
+                    error,
+                ));
+            inspectorElement.append(
+                createLocalizationStatus(
+                    spellFields,
+                    'hpmud-dossier-localization-status',
+                ),
+            );
             const ledger =
                 document.createElement(
                     'div',
@@ -660,18 +1871,13 @@ export function createInspectorController(ports) {
                 empty.className =
                     'hpmud-memory-empty';
                 empty.textContent =
-                    '还没有已学咒语。课堂、自学和实验都会写入这里。';
+                    staticText(
+                        'ui.inspector.spells.empty',
+                        'No learned spells yet. Classes, self-study, and experiments appear here.',
+                    );
                 ledger.append(empty);
             } else {
-                [
-                    ...knownById
-                        .values(),
-                ]
-                    .sort((left, right) =>
-                        right
-                            .proficiencyXp -
-                        left
-                            .proficiencyXp)
+                knownEntries
                     .forEach(entry => {
                         const spell =
                             getSpellDefinition(
@@ -681,6 +1887,11 @@ export function createInspectorController(ports) {
                         if (!spell) {
                             return;
                         }
+                        const fields =
+                            spellFieldsById
+                                .get(
+                                    spell.id,
+                                );
                         const rank =
                             getSpellProficiency(
                                 entry
@@ -716,7 +1927,10 @@ export function createInspectorController(ports) {
                         use.type =
                             'button';
                         use.textContent =
-                            '插入';
+                            staticText(
+                                'ui.inspector.spells.insert',
+                                'Insert',
+                            );
                         use.addEventListener(
                             'click',
                             () =>
@@ -725,22 +1939,38 @@ export function createInspectorController(ports) {
                                 ),
                         );
                         detail.textContent =
-                            `${spell.name} · ${spell.effect}`;
+                            `${getLocalizedField(
+                                fields[0],
+                            ).text} · ${getLocalizedField(
+                                fields[1],
+                            ).text}`;
                         meta.textContent = [
-                            rank.label,
+                            getLocalizedField({
+                                staticKey:
+                                    `spell.rank.${rank.id}`,
+                                sourceTextEn:
+                                    rank.id,
+                            }).text,
                             `${
                                 entry
                                     .proficiencyXp
                             } XP`,
-                            SPELL_LEARNING_SOURCE_LABELS[
-                                entry
-                                    .learnedSource
-                            ] ||
-                            entry
-                                .learnedSource,
-                            `尝试 ${
-                                entry.attempts
-                            } 次`,
+                            getLocalizedField({
+                                staticKey:
+                                    `spell.source.${entry.learnedSource}`,
+                                sourceTextEn:
+                                    entry
+                                        .learnedSource,
+                            }).text,
+                            formatStaticText(
+                                'ui.inspector.spells.attempts',
+                                '{count} attempts',
+                                {
+                                    count:
+                                        entry
+                                            .attempts,
+                                },
+                            ),
                         ].join(' · ');
                         heading.append(
                             title,
@@ -756,25 +1986,43 @@ export function createInspectorController(ports) {
             }
             inspectorElement.append(
                 createInspectorCard(
-                    '已学咒语',
+                    staticText(
+                        'ui.inspector.spells.learned',
+                        'Learned spells',
+                    ),
                     ledger,
                 ),
             );
             inspectorElement.append(
                 createInspectorCard(
-                    '学习规则',
+                    staticText(
+                        'ui.inspector.spells.rules',
+                        'Learning rules',
+                    ),
                     createList([
                         {
                             label:
-                                '课程年级仅供参考',
+                                staticText(
+                                    'ui.inspector.spells.curriculum_reference',
+                                    'Curriculum year is only a reference',
+                                ),
                             detail:
-                                '不会阻断自学、私授或自行实验。',
+                                staticText(
+                                    'ui.inspector.spells.curriculum_detail',
+                                    'It never blocks self-study, private instruction, or experimentation.',
+                                ),
                         },
                         {
                             label:
-                                '所有结构化施法必定骰点',
+                                staticText(
+                                    'ui.inspector.spells.roll_required',
+                                    'Every structured cast rolls a check',
+                                ),
                             detail:
-                                '成功、失败和重大成功都会改变熟练度。',
+                                staticText(
+                                    'ui.inspector.spells.roll_detail',
+                                    'Success, failure, and critical success all change proficiency.',
+                                ),
                         },
                     ]),
                 ),
@@ -804,19 +2052,110 @@ export function createInspectorController(ports) {
                         'false',
                     );
                     toastr.success(
-                        `已引用 ${item.label} · ${item.id}`,
+                        formatStaticText(
+                            'ui.inspector.items.referenced',
+                            'Referenced {label}',
+                            {
+                                label:
+                                    item.label,
+                            },
+                        ),
                     );
                 };
+            const projection =
+                projectItemLedger(
+                    state,
+                    session
+                        .displayLocale,
+                    {
+                        getLocalizedField,
+                        getRoomName,
+                    },
+                );
+            const itemSourceById =
+                new Map(
+                    (state.items || [])
+                        .map(item => [
+                            item.id,
+                            item,
+                        ]),
+                );
+            const itemFields =
+                projection.cards
+                    .flatMap(card =>
+                        getVisibleItemLocalizationFields(
+                            itemSourceById
+                                .get(
+                                    card.id,
+                                ),
+                        ));
+            void Promise.resolve(
+                ensureLocalizedFields(
+                    itemFields,
+                    {
+                        priority: 1,
+                    },
+                ),
+            ).catch(error =>
+                console.warn(
+                    '[Hogwarts MUD] Item ledger localization query failed',
+                    error,
+                ));
+            const localizedCards =
+                new Map(
+                    projection.cards
+                        .map(card => [
+                            card.id,
+                            localizeItemCard(
+                                card,
+                                itemSourceById
+                                    .get(
+                                        card.id,
+                                    ),
+                                getLocalizedField,
+                            ),
+                        ]),
+                );
+            const localizedProjection = {
+                cards:
+                    projection.cards
+                        .map(card =>
+                            localizedCards
+                                .get(
+                                    card.id,
+                                )),
+                active:
+                    projection.active
+                        .map(card =>
+                            localizedCards
+                                .get(
+                                    card.id,
+                                )),
+                history:
+                    projection.history
+                        .map(card =>
+                            localizedCards
+                                .get(
+                                    card.id,
+                                )),
+            };
+            inspectorElement.append(
+                createLocalizationStatus(
+                    itemFields,
+                    'hpmud-dossier-localization-status',
+                ),
+            );
             inspectorElement.append(
                 createInspectorCard(
                     '',
                     createItemLedger(
-                        projectItemLedger(
-                            state,
-                        ),
+                        localizedProjection,
                         {
                             onReferenceItem:
                                 referenceItem,
+                            displayLocale:
+                                session
+                                    .displayLocale,
                         },
                     ),
                 ),
@@ -824,25 +2163,115 @@ export function createInspectorController(ports) {
             return;
         }
 
+        const clues =
+            localizeGenericEntries(
+                'clue',
+                state.clues
+                    .filter(clue =>
+                        clue.discovered ===
+                            true),
+            );
+        const statuses =
+            localizeGenericEntries(
+                'status',
+                state.status,
+            );
+        const genericFields = [
+            ...clues.fields,
+            ...statuses.fields,
+        ];
+        void Promise.resolve(
+            ensureLocalizedFields(
+                genericFields,
+                {
+                    priority: 1,
+                },
+            ),
+        ).catch(() => {});
+        inspectorElement.append(
+            createLocalizationStatus(
+                tab === 'status'
+                    ? statuses.fields
+                    : clues.fields,
+                'hpmud-dossier-localization-status',
+            ),
+        );
         const map = {
-            clues: ['线索', state.clues.filter(clue => clue.discovered === true)],
-            status: ['状态', state.status],
+            clues: [
+                staticText(
+                    'ui.inspector.tab.clues',
+                    'Clues',
+                ),
+                clues.entries,
+            ],
+            status: [
+                staticText(
+                    'ui.inspector.tab.status',
+                    'Status',
+                ),
+                statuses.entries,
+            ],
         };
         const [title, entries] = map[tab] ?? map.clues;
         inspectorElement.append(createInspectorCard(title, createList(entries)));
         if (tab === 'status') {
             const knowledge = state.knowledgeBase || {};
             const counts = knowledge.categories || {};
-            inspectorElement.append(createInspectorCard('本地世界档案', createList([
-                {
-                    label: knowledge.vectorStatus === 'ready' ? 'RAG 索引就绪' : 'RAG 索引待同步',
-                    detail: `人物 ${counts.actors || 0} · 场景 ${counts.scenes || 0} · 事件 ${counts.events || 0} · 线索 ${counts.clues || 0}`,
-                },
-                {
-                    label: '本地目录',
-                    detail: knowledge.rootPath || '首次同步后生成',
-                },
-            ])));
+            inspectorElement.append(
+                createInspectorCard(
+                    staticText(
+                        'ui.inspector.knowledge.title',
+                        'Local world archive',
+                    ),
+                    createList([
+                        {
+                            label:
+                                knowledge.vectorStatus ===
+                                    'ready'
+                                    ? staticText(
+                                        'ui.inspector.knowledge.ready',
+                                        'RAG index ready',
+                                    )
+                                    : staticText(
+                                        'ui.inspector.knowledge.pending',
+                                        'RAG index awaiting sync',
+                                    ),
+                            detail:
+                                formatStaticText(
+                                    'ui.inspector.knowledge.counts',
+                                    'Characters {actors} · Scenes {scenes} · Events {events} · Clues {clues}',
+                                    {
+                                        actors:
+                                            counts.actors ||
+                                            0,
+                                        scenes:
+                                            counts.scenes ||
+                                            0,
+                                        events:
+                                            counts.events ||
+                                            0,
+                                        clues:
+                                            counts.clues ||
+                                            0,
+                                    },
+                                ),
+                        },
+                        {
+                            label:
+                                staticText(
+                                    'ui.inspector.knowledge.local_directory',
+                                    'Local directory',
+                                ),
+                            detail:
+                                knowledge.rootPath ||
+                                staticText(
+                                    'ui.inspector.knowledge.created_after_sync',
+                                    'Created after the first sync',
+                                ),
+                        },
+                    ]),
+                ),
+            );
         }
     }
 

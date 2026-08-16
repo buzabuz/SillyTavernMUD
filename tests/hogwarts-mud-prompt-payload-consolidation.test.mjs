@@ -25,7 +25,6 @@ import {
 import {
     enterBoundInteriorMap,
     getInteriorMapRequest,
-    normalizeGeneratedInteriorMapLabels,
 } from '../public/scripts/extensions/hogwarts-mud/domain/interior-map.js';
 import {
     applyPlayerMovement,
@@ -1218,7 +1217,6 @@ test(
                 jobRegistry: {
                     interiorMap: null,
                 },
-                normalizeGeneratedInteriorMapLabels,
                 renderAll:
                     () => {},
                 resetInspectorMapScope:

@@ -594,6 +594,8 @@ export const CANON_IDENTITY_REDIRECTS =
             'canon_albus_dumbledore',
         canon_bill_william_arthur_weasley:
             'canon_bill_weasley',
+        canon_charles_weasley:
+            'canon_charlie_weasley',
         canon_dolores_jane_umbridge:
             'canon_dolores_umbridge',
         canon_fleur_isabelle_delacour:

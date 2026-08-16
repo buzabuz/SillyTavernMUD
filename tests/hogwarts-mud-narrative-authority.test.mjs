@@ -365,11 +365,6 @@ test('Narrative Authority Snapshot deterministically projects revision, scene, a
                 'remains',
                 'canon_harry_james_potter',
             ],
-            [
-                'vanished_quill',
-                'absent',
-                '',
-            ],
         ],
     );
     assert.deepEqual(

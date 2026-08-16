@@ -40,7 +40,6 @@ export function findSceneDestination(text, worldState) {
         ];
         for (const room of nodes) {
             for (const label of [
-                room.name,
                 room.nameEn,
                 room.id,
                 ...(room.aliases || []),
@@ -50,24 +49,29 @@ export function findSceneDestination(text, worldState) {
                     consider({
                         mapId: map.id,
                         roomId: room.id,
-                        mapName: map.name,
+                        mapName:
+                            map.nameEn,
                         mapNameEn: map.nameEn,
-                        roomName: room.name || room.nameEn,
+                        roomName:
+                            room.nameEn,
                         roomNameEn:
                             room.nameEn ||
                             (room.aliases || []).find(alias =>
                                 /[a-z]/i.test(alias)) ||
                             formatSceneLocationId(
                                 room.id,
-                            ) ||
-                            room.name,
+                            ),
                         levelId: room.levelId,
                         score: 100 + activeBonus + normalized.length,
                     });
                 }
             }
         }
-        for (const label of [map.name, map.nameEn, map.id]) {
+        for (const label of [
+            map.nameEn,
+            map.id,
+            ...(map.aliases || []),
+        ]) {
             const normalized = String(label || '').normalize('NFKC').toLocaleLowerCase();
             if (normalized.length < 2 || !query.includes(normalized)) continue;
             const room = nodes.find(node => node.id === map.defaultLevelId) ||
@@ -77,15 +81,16 @@ export function findSceneDestination(text, worldState) {
                 consider({
                     mapId: map.id,
                     roomId: room.id,
-                    mapName: map.name,
+                    mapName:
+                        map.nameEn,
                     mapNameEn: map.nameEn,
-                    roomName: room.name || room.nameEn,
+                    roomName:
+                        room.nameEn,
                     roomNameEn:
                         room.nameEn ||
                         formatSceneLocationId(
                             room.id,
-                        ) ||
-                        room.name,
+                        ),
                     levelId: room.levelId,
                     score: 10 + activeBonus + normalized.length,
                 });
@@ -152,7 +157,6 @@ export function findExplicitRoomReference(
     getMapRooms(map, mapState).forEach(room => {
         [
             room.id,
-            room.name,
             room.nameEn,
             ...(room.aliases || []),
         ].forEach(label => {
@@ -188,28 +192,19 @@ export function createFallbackNextSceneIntent(worldState) {
         actor.present !== false &&
         (actor.mapId || mapId) === mapId &&
         actor.roomId === roomId);
-    const roomName = room?.name || room?.nameEn || roomId || '当前地点';
     const roomNameEn = room?.nameEn ||
         formatSceneLocationId(roomId) ||
-        room?.name ||
         'Current Location';
-    const actorName = focusActor?.name || focusActor?.nameEn || '';
-    const actorNameEn = focusActor?.nameEn || focusActor?.name || '';
+    const actorNameEn =
+        focusActor?.nameEn || '';
     return {
         titleEn: actorNameEn
             ? `${roomNameEn}: ${actorNameEn}`
             : `The Next Beat in ${roomNameEn}`,
-        title: actorName
-            ? `${roomName} · ${actorName}`
-            : `${roomName}的下一幕`,
         summaryEn: actorNameEn
             ? `Continue the immediate public interaction with ${actorNameEn} in ${roomNameEn}.`
             : `Continue the unresolved public action in ${roomNameEn}.`,
-        summary: actorName
-            ? `继续推进你与${actorName}在${roomName}的当前互动。`
-            : `继续推进${roomName}尚未完成的公开行动。`,
         triggerEn: 'When the player chooses to close the current scene.',
-        trigger: '玩家主动结束当前场景时。',
         mapId,
         roomId,
         tier: 'medium',
@@ -251,9 +246,6 @@ export function validateEventBoundaryNextSceneIntent(
         });
     const allowedKeys = new Set([
         ...Object.keys(limits),
-        'title',
-        'summary',
-        'trigger',
     ]);
     const unauthorizedKeys =
         Object.keys(value)
@@ -302,18 +294,9 @@ export function applyEventBoundaryNextSceneIntent(
     next.scene.nextSceneIntent = {
         ...currentIntent,
         titleEn: intentUpdate.titleEn,
-        title:
-            intentUpdate.title ||
-            intentUpdate.titleEn,
         summaryEn:
             intentUpdate.summaryEn,
-        summary:
-            intentUpdate.summary ||
-            intentUpdate.summaryEn,
         triggerEn:
-            intentUpdate.triggerEn,
-        trigger:
-            intentUpdate.trigger ||
             intentUpdate.triggerEn,
         source:
             'medium_event_boundary',
@@ -350,11 +333,21 @@ export function getSceneDestinationAuthority(
     return {
         mapId,
         roomId,
-        mapName: map.name || map.nameEn || mapId,
+        mapName:
+            map.nameEn ||
+            formatSceneLocationId(
+                mapId,
+            ),
         mapNameEn: map.nameEn || formatSceneLocationId(mapId),
-        roomName: room.name || room.nameEn || roomId,
+        roomName:
+            room.nameEn ||
+            formatSceneLocationId(
+                roomId,
+            ),
         roomNameEn: room.nameEn || formatSceneLocationId(roomId),
-        roomDescriptionEn: room.descriptionEn || room.description || '',
+        roomDescriptionEn:
+            room.descriptionEn ||
+            '',
     };
 }
 

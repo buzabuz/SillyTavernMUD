@@ -266,3 +266,92 @@ test('observer accepts an explicit actor departure into a named room', () => {
         },
     );
 });
+
+test('observer skips a non-English actor activity without blocking an independent English update', () => {
+    const {
+        adapter,
+        state,
+    } = createHarness();
+    const transaction = {
+        actorPresence: {
+            presentActorIdsAfterTurn: [
+                'minerva_mcgonagall',
+                'canon_lavender_brown',
+            ],
+        },
+        actorUpdates: [],
+    };
+    const mcgonagallEvidence =
+        'Professor McGonagall remained beside the demonstration desk.';
+    const lavenderEvidence =
+        'Lavender Brown sat down beside Tina.';
+    const observation = {
+        result: {
+            eventBoundary: {
+                ended: false,
+                confidence: 0,
+                evidenceText: '',
+            },
+            actorUpdates: [
+                {
+                    actorId:
+                        'minerva_mcgonagall',
+                    currentActivityEn:
+                        '站在演示桌旁。',
+                    presence:
+                        'unchanged',
+                    roomId:
+                        'transfiguration_classroom',
+                    evidenceText:
+                        mcgonagallEvidence,
+                    confidence: 0.9,
+                },
+                {
+                    actorId:
+                        'canon_lavender_brown',
+                    currentActivityEn:
+                        'Sitting beside Tina.',
+                    presence:
+                        'unchanged',
+                    roomId:
+                        'transfiguration_classroom',
+                    evidenceText:
+                        lavenderEvidence,
+                    confidence: 0.9,
+                },
+            ],
+        },
+    };
+
+    adapter.applyObservedActorUpdates(
+        transaction,
+        observation,
+        state,
+        `${mcgonagallEvidence} ${lavenderEvidence}`,
+    );
+
+    assert.deepEqual(
+        transaction.actorUpdates,
+        [{
+            id:
+                'canon_lavender_brown',
+            currentActivityEn:
+                'Sitting beside Tina.',
+            mapId:
+                'hogwarts_castle',
+            roomId:
+                'transfiguration_classroom',
+        }],
+    );
+    assert.equal(
+        observation.diagnostics
+            .languageMismatchCount,
+        1,
+    );
+    assert.equal(
+        observation.diagnostics
+            .languageMismatches[0]
+            .code,
+        'model_language_mismatch',
+    );
+});

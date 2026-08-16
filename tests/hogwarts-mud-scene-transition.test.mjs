@@ -15,6 +15,10 @@ import {
     validateSceneTransitionPackage,
 } from '../public/scripts/extensions/hogwarts-mud/domain/scene-transition.js';
 import {
+    createSceneTransitionWorkflow,
+    getSceneTransitionRetrievalOptions,
+} from '../public/scripts/extensions/hogwarts-mud/workflows/scene-transition.js';
+import {
     createCurrentKingsCrossState,
     createCurrentPlayingState,
     createCurrentTransitionPackage,
@@ -81,10 +85,7 @@ function addCurrentExpiredStoryBeat(
         `${id}_storyline`;
     next.calendar.storylines.push({
         id: storylineId,
-        title: storylineId,
         titleEn: storylineId,
-        summary:
-            '用于统一时钟结算回归的公开故事线。',
         summaryEn:
             'A public storyline for shared clock-settlement regression.',
         tags: [],
@@ -102,10 +103,7 @@ function addCurrentExpiredStoryBeat(
     next.calendar.storyBeats.push({
         id,
         storylineId,
-        title: id,
         titleEn: id,
-        summary:
-            '正文错误地宣称四个场景已经全部完成。',
         summaryEn:
             'The prose incorrectly claims that all four Scenes are complete.',
         tags: [],
@@ -364,7 +362,7 @@ test('scene transition validation locks an explicit player destination', () => {
 
 });
 
-test('compact scene-seal core normalizes into a valid transition without optional prose or enrichments', () => {
+test('compact scene-seal core defers opening only for the staged low performer', () => {
     const state =
         createCurrentPlayingState();
     const core =
@@ -395,18 +393,9 @@ test('compact scene-seal core normalizes into a valid transition without optiona
     );
     assert.equal(
         normalized.nextScene
-            .openingSegments.length >=
-            2,
-        true,
-    );
-    assert.equal(
-        normalized.nextScene
-            .openingSegments.some(
-                segment =>
-                    segment.type ===
-                    'narration',
-            ),
-        true,
+            .openingSegments
+            .length,
+        0,
     );
     assert.equal(
         validateSceneTransitionPackage(
@@ -418,7 +407,54 @@ test('compact scene-seal core normalizes into a valid transition without optiona
                     true,
             },
         ).valid,
+        false,
+    );
+    assert.match(
+        validateSceneTransitionPackage(
+            normalized,
+            state,
+            {
+                tier: 'medium',
+                deferWorldChanges:
+                    true,
+            },
+        ).errors.join('；'),
+        /开场必须包含 2–8 个分段/,
+    );
+    const deferredState =
+        structuredClone(
+            state,
+        );
+    deferredState.actorLibrary.push({
+        id:
+            'generic_gryffindor',
+        nameEn: 'Phillip',
+        aliases: [
+            'Gryffindor',
+        ],
+        roleEn:
+            'Gryffindor student',
+        publicProfile: {
+            descriptionEn:
+                'A tall Gryffindor boy.',
+        },
+    });
+    normalized.nextScene.summaryEn +=
+        ' Other Gryffindor students leave the room.';
+    const deferred =
+        validateSceneTransitionPackage(
+            normalized,
+            deferredState,
+            {
+                tier: 'medium',
+                deferOpeningSegments:
+                    true,
+            },
+        );
+    assert.equal(
+        deferred.valid,
         true,
+        deferred.errors.join('；'),
     );
 });
 
@@ -934,11 +970,8 @@ test('scene transition rejects a structured room ID that differs from destinatio
                 requireDestinationGrounding:
                     true,
             },
-        ).errors.some(error =>
-            error.includes(
-                'platform_barrier',
-            )),
-        false,
+        ).valid,
+        true,
     );
 });
 
@@ -1036,14 +1069,14 @@ test('scene transition atomically archives the old scene and commits the next ro
             turn: state.turn.count,
         };
     const payload = createCurrentTransitionPackage();
-    payload.nextScene.name = '后花园里的猫头鹰';
-    payload.nextScene.summary = '蒂娜抵达围墙边，猫头鹰仍在等候。';
-    payload.nextScene.chapter = '早餐时的信';
-    payload.nextScene.actorStates[0].currentActivity = '拿着回条站在花园门边。';
     const archive = {
         id: state.scene.id,
-        name: state.scene.name,
-        closureSummary: '助学金表格已经签好，蒂娜跑进了花园。',
+        nameEn:
+            state.scene.nameEn,
+        summaryEn:
+            state.scene.summaryEn,
+        closureSummaryEn:
+            payload.closureSummaryEn,
         startedClock: state.scene.startedClock,
         endedClock: state.clock,
         messageIds: [1, 2, 3],
@@ -1063,7 +1096,11 @@ test('scene transition atomically archives the old scene and commits the next ro
             .timelineEntries[0],
         {
             clock: '1991-07-24 · 11:15',
-            label: '助学金表格已经签好，蒂娜跑进了花园。',
+            summaryEn:
+                payload
+                    .closureSummaryEn,
+            sourceRef:
+                'scene:zhang_home_kitchen:closure',
         },
     ]);
     assert.equal(next.scene.id, 'zhang_home_garden_owl');
@@ -1075,9 +1112,34 @@ test('scene transition atomically archives the old scene and commits the next ro
     assert.equal(next.scene.nextSceneIntent.titleEn, 'The Signed Reply');
     assert.deepEqual(next.scene.timelineEntries, [{
         clock: '1991-07-24 · 11:15',
-        label: '蒂娜抵达围墙边，猫头鹰仍在等候。',
+        summaryEn:
+            payload.nextScene
+                .summaryEn,
+        sourceRef:
+            'scene:zhang_home_garden_owl:opening',
     }]);
-    assert.equal(next.location, '后花园');
+    assert.equal(
+        Object.hasOwn(
+            next,
+            'location',
+        ),
+        false,
+    );
+    for (const field of [
+        'name',
+        'summary',
+        'explorationHook',
+        'crowdDirection',
+        'temporalFacts',
+    ]) {
+        assert.equal(
+            Object.hasOwn(
+                next.scene,
+                field,
+            ),
+            false,
+        );
+    }
     assert.equal(next.map.currentLocalNodeId, 'back_garden');
     assert.equal(next.actors.find(actor =>
         actor.id === 'minerva_mcgonagall').present, true);
@@ -1634,5 +1696,165 @@ test('mid-tier transition director may settle reversible NPC status', () => {
     assert.equal(
         actor.lifeStatusSinceClock,
         next.clock,
+    );
+});
+
+test('[defect-probing] scene transition prompt requires an explicit next-scene intent for every active actor', () => {
+    const workflow =
+        createSceneTransitionWorkflow({
+            CANON_CAST_IDENTITY_CONTRACT:
+                '',
+            CANON_WIT_TONE_CONTRACT: '',
+            buildActorContinuityCapsules:
+                () => [],
+            buildBehavioralEnvironment:
+                () => ({}),
+            buildMapAuthorityContext:
+                () => ({}),
+            buildSceneCastRotationPolicy:
+                () => ({}),
+            formatRetrievedKnowledge:
+                () => '',
+            getContext:
+                () => ({
+                    chat: [],
+                }),
+            projectActorLibraryForContext:
+                () => [],
+        });
+    const prompt =
+        workflow
+            .createSceneTransitionPrompt(
+                {
+                    clock:
+                        '1991-09-03 · 17:00',
+                    scene: {
+                        id: 'scene_old',
+                    },
+                    map: {},
+                    actors: [{
+                        id: 'hermione',
+                        present: true,
+                        currentIntentEn:
+                            'Finish the old argument.',
+                    }],
+                    actorLibrary: [{
+                        id: 'hermione',
+                    }],
+                    items: [],
+                    clues: [],
+                    storyArcs: [],
+                },
+                'medium',
+                '',
+                null,
+                {
+                    changed: false,
+                },
+                [],
+                {
+                    chapterMessageLimit:
+                        20,
+                },
+            );
+    assert.match(
+        prompt[0].content,
+        /active actor.*currentIntentEn.*explicit/u,
+    );
+    assert.match(
+        prompt[0].content,
+        /"currentIntentEn":/u,
+    );
+});
+
+test('[defect-probing] scene transition prompt requires active actors to submit or clear currentIntentEn', () => {
+    const workflow =
+        createSceneTransitionWorkflow({
+            CANON_CAST_IDENTITY_CONTRACT:
+                '',
+            CANON_WIT_TONE_CONTRACT: '',
+            buildActorContinuityCapsules:
+                () => [],
+            buildBehavioralEnvironment:
+                () => ({}),
+            buildMapAuthorityContext:
+                () => ({}),
+            buildSceneCastRotationPolicy:
+                () => ({}),
+            formatRetrievedKnowledge:
+                () => '',
+            getContext:
+                () => ({
+                    chat: [],
+                }),
+            projectActorLibraryForContext:
+                () => [],
+        });
+    const prompt =
+        workflow
+            .createSceneTransitionPrompt(
+                {
+                    clock:
+                        '1991-09-03 · 17:00',
+                    scene: {
+                        id: 'scene_old',
+                    },
+                    map: {},
+                    actors: [{
+                        id: 'hermione',
+                        present: true,
+                        currentIntentEn:
+                            'Finish the old argument.',
+                    }],
+                    actorLibrary: [{
+                        id: 'hermione',
+                    }],
+                    items: [],
+                    clues: [],
+                    storyArcs: [],
+                },
+                'medium',
+                '',
+                null,
+                {
+                    changed: false,
+                },
+                [],
+                {
+                    ragLimit: 4,
+                },
+            );
+    assert.match(
+        prompt[0].content,
+        /"currentIntentEn":/u,
+    );
+    assert.match(
+        prompt[0].content,
+        /explicitly (?:submit|clear).*currentIntentEn/iu,
+    );
+});
+
+test('medium Scene retrieval excludes locked records while high transition may request them', () => {
+    assert.deepEqual(
+        getSceneTransitionRetrievalOptions(
+            'medium',
+            6,
+        ),
+        {
+            includeLockedClues:
+                false,
+            limit: 6,
+        },
+    );
+    assert.deepEqual(
+        getSceneTransitionRetrievalOptions(
+            'high',
+            6,
+        ),
+        {
+            includeLockedClues:
+                true,
+            limit: 6,
+        },
     );
 });

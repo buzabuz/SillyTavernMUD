@@ -1,6 +1,82 @@
 import {
     getEventKnowledgeSourceMessageIds,
 } from '../presence-witness-contract.js';
+import {
+    collectNonEnglishAuthorityFields,
+    createModelLanguageMismatch,
+} from '../domain/model-language-adoption.js';
+
+const SOCIAL_LANGUAGE_ARRAY_FIELDS =
+    Object.freeze([
+        'reviews',
+        'reportedEvents',
+        'recipientAppraisals',
+        'identityClaims',
+        'relationshipClaims',
+        'personReferences',
+        'relationshipEvidence',
+        'schemaOperations',
+    ]);
+
+export function adoptSocialDirectorLanguage(
+    payload,
+) {
+    const diagnostics = [];
+    const accepted = {
+        ...payload,
+    };
+    SOCIAL_LANGUAGE_ARRAY_FIELDS
+        .forEach(field => {
+            accepted[field] =
+                (
+                    Array.isArray(
+                        payload?.[field],
+                    )
+                        ? payload[field]
+                        : []
+                ).filter((
+                    record,
+                    index,
+                ) => {
+                    const mismatches =
+                        collectNonEnglishAuthorityFields(
+                            record,
+                            {
+                                path:
+                                    `${field}[${index}]`,
+                            },
+                        );
+                    diagnostics.push(
+                        ...mismatches.map(
+                            fieldPath =>
+                                createModelLanguageMismatch({
+                                    taskId:
+                                        'social_director',
+                                    fieldPath,
+                                    recordId:
+                                        record?.id ||
+                                        record?.eventId ||
+                                        String(index),
+                                }),
+                        ),
+                    );
+                    return (
+                        mismatches
+                            .length === 0
+                    );
+                });
+        });
+    Object.defineProperty(
+        accepted,
+        'modelLanguageDiagnostics',
+        {
+            value:
+                diagnostics,
+            enumerable: false,
+        },
+    );
+    return accepted;
+}
 
 function projectSocialEvent(
     event,
@@ -63,11 +139,12 @@ export function createSocialMemoryWorkflow(ports) {
         buildSocialAudienceProjection,
         captureMemoryBoundaryGuard,
         createContextBudgetPlan,
+        enqueueLocalizationCandidates =
+        async () => {},
         extractRoleResponseText,
         getContext,
         getMudState,
         getRequestHeaders,
-        getSettings,
         isMemoryBoundaryGuardCurrent,
         jobRegistry,
         normalizeMemoryConsolidationPayload,
@@ -78,7 +155,6 @@ export function createSocialMemoryWorkflow(ports) {
         resolveRoleSlots,
         sendModelTaskRequest,
         syncLocalKnowledge,
-        translateOpeningValues,
         validateMemoryConsolidation,
         validateSocialDirectorResult,
     } = ports;
@@ -588,20 +664,42 @@ export function createSocialMemoryWorkflow(ports) {
                         item.targetActorId,
                     eventId:
                         item.eventId,
-                    appraisalId:
-                        item.appraisalId,
                     eventKind:
                         item.eventKind,
                     dimensionDeltas:
                         item.dimensionDeltas ||
                         [],
-                    structuralTags:
-                        item.structuralTags ||
-                        [],
-                    emotionEffects:
+                    ...(
+                        item.appraisalId
+                            ? {
+                                appraisalId:
+                                    item
+                                        .appraisalId,
+                            }
+                            : {}
+                    ),
+                    ...(
                         item
-                            .emotionEffects ||
-                        [],
+                            .structuralTags
+                            ?.length
+                            ? {
+                                structuralTags:
+                                    item
+                                        .structuralTags,
+                            }
+                            : {}
+                    ),
+                    ...(
+                        item
+                            .emotionEffects
+                            ?.length
+                            ? {
+                                emotionEffects:
+                                    item
+                                        .emotionEffects,
+                            }
+                            : {}
+                    ),
                 })),
             relationships:
             existingGraph
@@ -637,9 +735,17 @@ export function createSocialMemoryWorkflow(ports) {
                     protectiveness:
                         edge
                             .protectiveness,
-                    structuralTags:
-                        edge.structuralTags ||
-                        [],
+                    ...(
+                        edge
+                            .structuralTags
+                            ?.length
+                            ? {
+                                structuralTags:
+                                    edge
+                                        .structuralTags,
+                            }
+                            : {}
+                    ),
                 })),
             lastProcessedMessageId:
             existingGraph
@@ -1443,11 +1549,27 @@ The transport JSON Schema is the sole output shape authority.`,
         extractRoleResponseText(
             response,
         );
+        const normalizedPayload =
+            normalizeMemoryConsolidationPayload(
+                extracted,
+                state,
+            );
+        const originalValidation =
+            validateMemoryConsolidation(
+                normalizedPayload,
+                state,
+            );
+        if (!originalValidation.valid) {
+            throw new Error(
+                originalValidation
+                    .errors
+                    .join('；'),
+            );
+        }
         const payload =
-        normalizeMemoryConsolidationPayload(
-            extracted,
-            state,
-        );
+            adoptSocialDirectorLanguage(
+                normalizedPayload,
+            );
         const allowedMessageIds =
             evidence
                 .allowedMessageIds;
@@ -1489,44 +1611,24 @@ The transport JSON Schema is the sole output shape authority.`,
             state,
         );
         if (!validation.valid) {
+            if (
+                payload
+                    .modelLanguageDiagnostics
+                    .length
+            ) {
+                return {
+                    languageSkipped:
+                        true,
+                    diagnostics:
+                        payload
+                            .modelLanguageDiagnostics,
+                };
+            }
             throw new Error(
                 validation.errors.join('；'),
             );
         }
         return payload;
-    }
-
-    async function localizeMemoryConsolidation(payload) {
-        if (!getSettings().translationEnabled) {
-            return payload;
-        }
-        const values = payload.reviews.flatMap(review =>
-            (review.operations || []).map(
-                operation => operation.summaryEn || '',
-            ));
-        const translated =
-        await translateOpeningValues(values);
-        let cursor = 0;
-        const localized = {
-            ...payload,
-            reviews: payload.reviews.map(review => {
-                return {
-                    ...review,
-                    operations: (
-                        review.operations || []
-                    ).map(operation => {
-                        const summary = translated[cursor++];
-                        return {
-                            ...operation,
-                            ...(operation.summaryEn
-                                ? { summary }
-                                : {}),
-                        };
-                    }),
-                };
-            }),
-        };
-        return localized;
     }
 
     async function resolveSocialDirectorGraph(
@@ -1751,21 +1853,47 @@ The transport JSON Schema is the sole output shape authority.`,
                     evidence,
                     contextPlan,
                 );
+                if (
+                    payload
+                        ?.languageSkipped
+                ) {
+                    state =
+                        getMudState();
+                    state.socialGraph =
+                        normalizeSocialGraph(
+                            state
+                                .socialGraph,
+                        );
+                    state.socialGraph.status =
+                        'pending';
+                    state.socialGraph.error =
+                        '';
+                    state.socialGraph
+                        .languageMismatchCount =
+                        payload
+                            .diagnostics
+                            .length;
+                    if (!backfill) {
+                        state.memoryDirector = {
+                            ...(
+                                state
+                                    .memoryDirector ||
+                                {}
+                            ),
+                            status:
+                                'pending',
+                            error: '',
+                        };
+                    }
+                    await context
+                        .saveMetadata();
+                    renderAll();
+                    return null;
+                }
                 proposedSchemaOperations =
                     payload
                         .schemaOperations
                         .length;
-                try {
-                    payload =
-                    await localizeMemoryConsolidation(
-                        payload,
-                    );
-                } catch (translationError) {
-                    console.warn(
-                        '[Hogwarts MUD] Memory consolidation translation failed; using English',
-                        translationError,
-                    );
-                }
                 state = getMudState();
                 const graphResult =
                 await resolveSocialDirectorGraph(
@@ -1846,6 +1974,13 @@ The transport JSON Schema is the sole output shape authority.`,
                     .hogwartsMud =
                 next;
                 await context.saveMetadata();
+                void enqueueLocalizationCandidates(
+                    [],
+                ).catch(error =>
+                    console.warn(
+                        '[Hogwarts MUD] Social localization candidate enqueue failed',
+                        error,
+                    ));
                 applySystemPrompt();
                 renderAll();
                 await syncLocalKnowledge();
@@ -2054,7 +2189,6 @@ The transport JSON Schema is the sole output shape authority.`,
         SOCIAL_DIRECTOR_EMOTIONS,
         SOCIAL_DIRECTOR_RESPONSE_SCHEMA,
         generateMemoryConsolidation,
-        localizeMemoryConsolidation,
         resolveSocialDirectorGraph,
         ensureMemoryConsolidation,
         ensureSocialDirectorCatchup,

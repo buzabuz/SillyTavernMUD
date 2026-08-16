@@ -2,6 +2,10 @@ import {
     getLegalAppraisalObserverIds,
 } from '../domain/memory-synapse-schema.js';
 import {
+    createModelLanguageMismatch,
+    isEnglishAuthorityText,
+} from '../domain/model-language-adoption.js';
+import {
     getDeterministicTimePolicy,
 } from '../domain/turn-time.js';
 
@@ -37,6 +41,52 @@ export function createLocalSemanticAdapter(ports) {
     const VISIBLE_INJURY_PATTERN =
         /(?:\b(?:injur|wound|bruise|cut|burn|fracture|sprain|bleed|swollen|gash)\w*\b|受伤|伤口|伤势|擦伤|割伤|烧伤|骨折|扭伤|淤青|流血|肿胀)/iu;
 
+    function rejectNonEnglishObservation(
+        observation,
+        source,
+        fields,
+        {
+            taskId,
+            fieldPrefix,
+            recordId,
+        },
+    ) {
+        const rejectedFields =
+            fields.filter(field => {
+                const value =
+                    String(
+                        source?.[field] ||
+                        '',
+                    ).trim();
+                return value &&
+                    !isEnglishAuthorityText(
+                        value,
+                    );
+            });
+        if (!rejectedFields.length) {
+            return false;
+        }
+        observation.diagnostics ??= {};
+        observation.diagnostics
+            .languageMismatches ??= [];
+        observation.diagnostics
+            .languageMismatches.push(
+                ...rejectedFields.map(field =>
+                    createModelLanguageMismatch({
+                        taskId,
+                        fieldPath:
+                            `${fieldPrefix}.${field}`,
+                        recordId,
+                    })),
+            );
+        observation.diagnostics
+            .languageMismatchCount =
+            observation.diagnostics
+                .languageMismatches
+                .length;
+        return true;
+    }
+
     function buildLocalSemanticActorContext(
         state,
     ) {
@@ -61,8 +111,9 @@ export function createLocalSemanticAdapter(ports) {
                 id: 'player',
                 nameEn:
                 state.character
+                    ?.canonicalEn
                     ?.identity
-                    ?.name ||
+                    ?.nameEn ||
                 'Player',
                 roleEn:
                 'Player character',
@@ -145,7 +196,6 @@ export function createLocalSemanticAdapter(ports) {
                     id: room.id,
                     nameEn:
                         room.nameEn ||
-                        room.name ||
                         room.id,
                     kind:
                         room.kind ||
@@ -251,50 +301,50 @@ export function createLocalSemanticAdapter(ports) {
                                 getRequestHeaders(),
                             body:
                                 JSON.stringify({
-                            input: {
-                                playerTurnSequence:
+                                    input: {
+                                        playerTurnSequence:
                                     buildStructuredPlayerTurnSequence(
                                         playerAction,
                                         addressing,
                                     ),
-                                forcedCheck:
+                                        forcedCheck:
                                     Boolean(
                                         forceCheck,
                                     ),
-                                clock:
+                                        clock:
                                     state.clock,
-                                scene: {
-                                    id:
+                                        scene: {
+                                            id:
                                         state.scene
                                             ?.id ||
                                         '',
-                                    summaryEn:
+                                            summaryEn:
                                         state.scene
                                             ?.summaryEn ||
                                         '',
-                                    nextSceneIntent:
+                                            nextSceneIntent:
                                         state.scene
                                             ?.nextSceneIntent ||
                                         null,
-                                    recentSceneEvents:
+                                            recentSceneEvents:
                                         (
                                             state.scene
                                                 ?.timelineEntries ||
                                             []
                                         ).slice(-4),
-                                },
-                                room:
+                                        },
+                                        room:
                                     buildLocalSemanticRoomContext(
                                         state,
                                     ),
-                                actors:
+                                        actors:
                                     buildLocalSemanticActorContext(
                                         state,
                                     ),
-                                movementResolution:
+                                        movementResolution:
                                     movementResolution ||
                                     null,
-                                timePolicy:
+                                        timePolicy:
                                     getDeterministicTimePolicy(),
                                     },
                                 }),
@@ -341,6 +391,56 @@ export function createLocalSemanticAdapter(ports) {
                 temporal.elapsedMinutes =
                 15;
             }
+            for (
+                const [
+                    fieldPath,
+                    decision,
+                ] of [
+                    [
+                        'temporal.reasonEn',
+                        temporal,
+                    ],
+                    [
+                        'check.reasonEn',
+                        adjudication
+                            ?.result
+                            ?.check,
+                    ],
+                ]
+            ) {
+                if (
+                    decision
+                        ?.reasonEn &&
+                    !isEnglishAuthorityText(
+                        decision
+                            .reasonEn,
+                    )
+                ) {
+                    delete decision
+                        .reasonEn;
+                    adjudication
+                        .diagnostics ??= {};
+                    adjudication
+                        .diagnostics
+                        .languageMismatches ??=
+                        [];
+                    adjudication
+                        .diagnostics
+                        .languageMismatches
+                        .push(
+                            createModelLanguageMismatch({
+                                taskId:
+                                    'local_pre_turn_adjudicator',
+                                fieldPath,
+                                recordId:
+                                    state
+                                        .scene
+                                        ?.id ||
+                                    'current_turn',
+                            }),
+                        );
+                }
+            }
             return adjudication;
         } catch (error) {
             console.warn(
@@ -357,7 +457,7 @@ export function createLocalSemanticAdapter(ports) {
     }
 
     function findObservationEvidence(
-        sourceText,
+        sourceTextEn,
         evidenceText,
     ) {
         const evidence =
@@ -368,7 +468,7 @@ export function createLocalSemanticAdapter(ports) {
             return null;
         }
         const start =
-        String(sourceText || '')
+        String(sourceTextEn || '')
             .indexOf(evidence);
         if (start < 0) {
             return null;
@@ -508,7 +608,31 @@ export function createLocalSemanticAdapter(ports) {
                 ?.identityObservations ||
             []
         )
-            .map(source => {
+            .map((source, index) => {
+                if (
+                    rejectNonEnglishObservation(
+                        observation,
+                        source,
+                        [
+                            'injuryType',
+                            'description',
+                        ],
+                        {
+                            taskId:
+                                'local_post_turn_observer',
+                            fieldPrefix:
+                                `identityObservations[${index}]`,
+                            recordId:
+                                String(
+                                    source
+                                        ?.actorId ||
+                                    index,
+                                ),
+                        },
+                    )
+                ) {
+                    return null;
+                }
                 const actor =
                     actorById.get(
                         source.actorId,
@@ -676,8 +800,9 @@ export function createLocalSemanticAdapter(ports) {
                 id: 'player',
                 names: [
                     state.character
+                        ?.canonicalEn
                         ?.identity
-                        ?.name,
+                        ?.nameEn,
                     'Tina',
                     '蒂娜',
                 ],
@@ -745,20 +870,44 @@ export function createLocalSemanticAdapter(ports) {
                 ?.materialEvents ||
         []
         )
+            .filter((event, index) =>
+                !rejectNonEnglishObservation(
+                    observation,
+                    event,
+                    [
+                        'objectTextEn',
+                        'sourceTextEn',
+                        'targetTextEn',
+                        'valueTextEn',
+                        'previousValueTextEn',
+                        'resultTextEn',
+                    ],
+                    {
+                        taskId:
+                            'local_post_turn_observer',
+                        fieldPrefix:
+                            `materialEvents[${index}]`,
+                        recordId:
+                            String(
+                                event?.id ||
+                                index,
+                            ),
+                    },
+                ))
             .filter(event =>
                 Number(
                     event.confidence ||
                 0,
                 ) >= 0.55)
             .map(event => {
-                const sourceText =
+                const sourceTextEn =
                 event.sourceKind ===
                     'player'
                     ? playerAction
                     : narrativeText;
                 const evidence =
                 findObservationEvidence(
-                    sourceText,
+                    sourceTextEn,
                     event.evidenceText,
                 );
                 if (!evidence) {
@@ -791,7 +940,7 @@ export function createLocalSemanticAdapter(ports) {
                     .some(name =>
                         String(
                             event
-                                .objectText ||
+                                .objectTextEn ||
                             '',
                         )
                             .toLocaleLowerCase()
@@ -982,7 +1131,7 @@ export function createLocalSemanticAdapter(ports) {
                         .some(name =>
                             String(
                                 event
-                                    .targetText ||
+                                    .targetTextEn ||
                                 '',
                             )
                                 .replace(
@@ -1148,6 +1297,29 @@ export function createLocalSemanticAdapter(ports) {
             []
             )
         ) {
+            if (
+                rejectNonEnglishObservation(
+                    observation,
+                    observed,
+                    [
+                        'currentActivityEn',
+                    ],
+                    {
+                        taskId:
+                            'local_post_turn_observer',
+                        fieldPrefix:
+                            `actorUpdates[${observed.actorId || 'unknown'}]`,
+                        recordId:
+                            String(
+                                observed
+                                    .actorId ||
+                                '',
+                            ),
+                    },
+                )
+            ) {
+                continue;
+            }
             const actor =
             actors.get(
                 observed.actorId,
@@ -1415,27 +1587,27 @@ export function createLocalSemanticAdapter(ports) {
                                 getRequestHeaders(),
                             body:
                                 JSON.stringify({
-                            input: {
-                                clock:
+                                    input: {
+                                        clock:
                                     state.clock,
-                                playerAction:
+                                        playerAction:
                                     String(
                                         playerAction ||
                                         '',
                                     ),
-                                playerTurnSequence,
-                                targetActorIds,
-                                narrativeSegments,
-                                room:
+                                        playerTurnSequence,
+                                        targetActorIds,
+                                        narrativeSegments,
+                                        room:
                                     buildLocalSemanticRoomContext(
                                         state,
                                     ),
-                                actors,
-                                localPresence:
+                                        actors,
+                                        localPresence:
                                     state
                                         .localPresence ||
                                     null,
-                                inventory:
+                                        inventory:
                                     (
                                         state.items ||
                                         []
@@ -1500,7 +1672,7 @@ export function createLocalSemanticAdapter(ports) {
                                                     'equipped',
                                         }),
                                     ),
-                                existingActorPresence:
+                                        existingActorPresence:
                                     transaction
                                         .actorPresence ||
                                     null,
@@ -1604,6 +1776,32 @@ export function createLocalSemanticAdapter(ports) {
                     narrativeSegments,
                     targetActorIds,
                 );
+            const observedInventoryUpdates =
+                (
+                    observation
+                        ?.result
+                        ?.inventoryUpdates ||
+                    []
+                ).filter((update, index) =>
+                    !rejectNonEnglishObservation(
+                        observation,
+                        update,
+                        [
+                            'labelEn',
+                            'appearanceEn',
+                        ],
+                        {
+                            taskId:
+                                'local_inventory_observer',
+                            fieldPrefix:
+                                `inventoryUpdates[${index}]`,
+                            recordId:
+                                String(
+                                    update?.id ||
+                                    index,
+                                ),
+                        },
+                    ));
             return {
                 observation,
                 narrativeText,
@@ -1616,9 +1814,7 @@ export function createLocalSemanticAdapter(ports) {
                 ),
                 itemUpdates:
                 projectObservedInventoryUpdates(
-                    observation
-                        ?.result
-                        ?.inventoryUpdates,
+                    observedInventoryUpdates,
                     state,
                     playerAction,
                     narrativeText,
@@ -1764,20 +1960,20 @@ export function createLocalSemanticAdapter(ports) {
                                     getRequestHeaders(),
                                 body:
                                     JSON.stringify({
-                                input: {
-                                    clock:
+                                        input: {
+                                            clock:
                                         state.clock,
-                                    event: {
-                                        eventId:
+                                            event: {
+                                                eventId:
                                             event
                                                 .eventId,
-                                        summaryEn:
+                                                summaryEn:
                                             event
                                                 .summaryEn ||
                                             '',
-                                    },
-                                    observers,
-                                    targetActorIds,
+                                            },
+                                            observers,
+                                            targetActorIds,
                                         },
                                     }),
                             },
@@ -1807,16 +2003,67 @@ export function createLocalSemanticAdapter(ports) {
                     ? payload.result
                         .appraisalProposals
                     : [];
+            const languageMismatches = [
+                ...(
+                    payload
+                        ?.diagnostics
+                        ?.languageMismatches ||
+                    []
+                ),
+            ];
+            const adoptedProposals =
+                proposals.filter((
+                    proposal,
+                    index,
+                ) => {
+                    if (
+                        isEnglishAuthorityText(
+                            proposal
+                                ?.summaryEn,
+                        )
+                    ) {
+                        return true;
+                    }
+                    if (
+                        String(
+                            proposal
+                                ?.summaryEn ||
+                            '',
+                        ).trim()
+                    ) {
+                        languageMismatches
+                            .push(
+                                createModelLanguageMismatch({
+                                    taskId:
+                                        'local_appraisal_proposer',
+                                    fieldPath:
+                                        `appraisalProposals[${index}].summaryEn`,
+                                    recordId:
+                                        String(
+                                            proposal
+                                                ?.observerId ||
+                                            index,
+                                        ),
+                                }),
+                            );
+                    }
+                    return false;
+                });
             return {
                 appraisalProposals:
-                    proposals,
+                    adoptedProposals,
                 diagnostics: {
                     called: true,
                     fallback: false,
                     observerCount:
                         observerIds.length,
                     proposalCount:
-                        proposals.length,
+                        adoptedProposals
+                            .length,
+                    languageMismatches,
+                    languageMismatchCount:
+                        languageMismatches
+                            .length,
                     model:
                         String(
                             payload

@@ -6,6 +6,7 @@ import {
     validateGeneratedInteriorMap,
 } from '../public/scripts/extensions/hogwarts-mud/domain/interior-map.js';
 import {
+    adoptMapProposalLanguage,
     applyLocalMapMutation,
     applyMapProposal,
     buildLocalMapModel,
@@ -24,10 +25,15 @@ import {
 import {
     findPresetLocalMapInText,
     LOCAL_MAP_CATALOG,
+    MAP_STATIC_LOCALE_EN,
+    MAP_STATIC_LOCALE_ZH_CN,
     PRESET_LOCAL_MAPS,
+    PRESET_LOCATION_ACTORS,
 } from '../public/scripts/extensions/hogwarts-mud/map-pack.js';
 import {
     PRESET_WORLD_MAP,
+    WORLD_MAP_STATIC_LOCALE_EN,
+    WORLD_MAP_STATIC_LOCALE_ZH_CN,
 } from '../public/scripts/extensions/hogwarts-mud/world-data.js';
 import {
     createCurrentKingsCrossState,
@@ -54,18 +60,47 @@ test('map proposals cannot rewrite a canon location during exploration', () => {
     assert.match(result.errors.join(' '), /改写原著地点身份或坐标/);
 });
 
+test('map expansion accepts a no-change result when preset topology already fits', () => {
+    const validation =
+        validateMapProposal(
+            {
+                id:
+                    'map_expansion',
+                reasonEn:
+                    'The existing preset room already represents the explored place.',
+                changes: [],
+            },
+            {
+                trigger:
+                    'exploration',
+                baseMap:
+                    PRESET_WORLD_MAP,
+            },
+        );
+    assert.deepEqual(
+        validation,
+        {
+            valid: true,
+            errors: [],
+        },
+    );
+});
+
 test('validated World Director additions are committed as generated map nodes', () => {
     const proposal = {
         id: 'proposal-1',
-        reason: 'The player deliberately searched behind the old tapestry.',
+        reasonEn:
+            'The player deliberately searched behind the old tapestry.',
         changes: [{
             operation: 'add',
             node: {
                 id: 'forgotten_tapestry_room',
                 regionId: 'hogwarts',
-                name: '旧挂毯后的房间',
+                nameEn:
+                    'Room Behind the Old Tapestry',
                 kind: 'secret_room',
-                summary: '一间没有出现在公开校舍图上的狭小房间。',
+                summaryEn:
+                    'A narrow room absent from the public castle plans.',
                 access: 'restricted',
                 x: 44,
                 y: 51,
@@ -84,8 +119,146 @@ test('validated World Director additions are committed as generated map nodes', 
         proposals: [],
     }, proposal);
     assert.equal(next.generatedNodes[0].id, 'forgotten_tapestry_room');
+    assert.equal(
+        next.generatedNodes[0]
+            .nameEn,
+        'Room Behind the Old Tapestry',
+    );
     assert.equal(next.generatedNodes[0].locked, false);
     assert.equal(next.proposals[0].id, 'proposal-1');
+});
+
+test('preset Map semantics are English-only while static locale resources remain aligned', () => {
+    assert.deepEqual(
+        Object.keys(
+            MAP_STATIC_LOCALE_EN,
+        ).sort(),
+        Object.keys(
+            MAP_STATIC_LOCALE_ZH_CN,
+        ).sort(),
+    );
+    assert.deepEqual(
+        Object.keys(
+            WORLD_MAP_STATIC_LOCALE_EN,
+        ).sort(),
+        Object.keys(
+            WORLD_MAP_STATIC_LOCALE_ZH_CN,
+        ).sort(),
+    );
+    for (const map of
+        Object.values(
+            PRESET_LOCAL_MAPS,
+        )) {
+        assert.equal(
+            Object.hasOwn(
+                map,
+                'name',
+            ),
+            false,
+        );
+        assert.equal(
+            Object.hasOwn(
+                map,
+                'layoutRule',
+            ),
+            false,
+        );
+        assert.match(
+            map.nameEn,
+            /^[^\u3400-\u9FFF]+$/u,
+        );
+        for (const level of
+            map.levels) {
+            assert.equal(
+                Object.hasOwn(
+                    level,
+                    'name',
+                ),
+                false,
+            );
+        }
+        for (const room of
+            map.nodes) {
+            assert.equal(
+                Object.hasOwn(
+                    room,
+                    'name',
+                ),
+                false,
+            );
+            assert.equal(
+                Object.hasOwn(
+                    room,
+                    'description',
+                ),
+                false,
+            );
+            assert.match(
+                room.nameEn,
+                /^[^\u3400-\u9FFF]+$/u,
+            );
+        }
+    }
+    assert.equal(
+        Object.values(
+            PRESET_LOCAL_MAPS,
+        ).flatMap(map =>
+            map.nodes)
+            .filter(room =>
+                room.descriptionEn)
+            .length,
+        28,
+    );
+    for (const actor of
+        Object.values(
+            PRESET_LOCATION_ACTORS,
+        )) {
+        for (const key of
+            Object.keys(actor)) {
+            assert.equal(
+                !key.endsWith('En') &&
+                Object.hasOwn(
+                    actor,
+                    `${key}En`,
+                ),
+                false,
+            );
+        }
+    }
+    for (const region of
+        PRESET_WORLD_MAP.regions) {
+        assert.equal(
+            Object.hasOwn(
+                region,
+                'name',
+            ),
+            false,
+        );
+        assert.equal(
+            Object.hasOwn(
+                region,
+                'subtitle',
+            ),
+            false,
+        );
+    }
+    for (const node of
+        PRESET_WORLD_MAP.nodes) {
+        assert.equal(
+            Object.hasOwn(
+                node,
+                'name',
+            ),
+            false,
+        );
+        assert.equal(
+            Object.hasOwn(
+                node,
+                'summary',
+            ),
+            false,
+        );
+    }
 });
 
 test('medium cartographer creates and reuses a missing container interior map', () => {
@@ -103,7 +276,7 @@ test('medium cartographer creates and reuses a missing container interior map', 
         'kings_cross_hogwarts_express_interior',
     );
     const generatedMap = {
-        version: 1,
+        version: 2,
         id: request.suggestedMapId,
         nameEn:
             'Hogwarts Express Interior',
@@ -228,17 +401,46 @@ test('medium cartographer creates and reuses a missing container interior map', 
         entered.scene.mapId,
         generatedMap.id,
     );
-    assert.equal(
-        entered.location,
-        '霍格沃茨特快 · 内部',
-    );
-    assert.equal(
+    const storedMap =
         entered.map.customLocalMaps
             .find(map =>
                 map.id ===
-                    generatedMap.id)
-            .name,
-        '霍格沃茨特快 · 内部',
+                    generatedMap.id);
+    assert.equal(
+        storedMap.nameEn,
+        generatedMap.nameEn,
+    );
+    assert.equal(
+        Object.hasOwn(
+            storedMap,
+            'name',
+        ),
+        false,
+    );
+    assert.equal(
+        Object.hasOwn(
+            storedMap,
+            'layoutRule',
+        ),
+        false,
+    );
+    assert.ok(
+        storedMap.levels.every(level =>
+            !Object.hasOwn(
+                level,
+                'name',
+            )),
+    );
+    assert.ok(
+        storedMap.nodes.every(room =>
+            !Object.hasOwn(
+                room,
+                'name',
+            ) &&
+            !Object.hasOwn(
+                room,
+                'description',
+            )),
     );
     assert.ok(
         entered.actors.every(actor =>
@@ -297,6 +499,52 @@ test('medium cartographer creates and reuses a missing container interior map', 
     assert.equal(
         getInteriorMapRequest(reused),
         null,
+    );
+});
+
+test('World Map expansion skips non-English nodes without blocking an independent English node', () => {
+    const adoption =
+        adoptMapProposalLanguage({
+            id: 'mixed_map_proposal',
+            reasonEn:
+                'The event created one new location.',
+            changes: [
+                {
+                    operation: 'add',
+                    node: {
+                        id:
+                            'english_location',
+                        nameEn:
+                            'English Location',
+                        summaryEn:
+                            'A grounded English description.',
+                    },
+                },
+                {
+                    operation: 'add',
+                    node: {
+                        id:
+                            'chinese_location',
+                        nameEn:
+                            '中文地点',
+                        summaryEn:
+                            '中文说明。',
+                    },
+                },
+            ],
+        });
+
+    assert.deepEqual(
+        adoption.proposal.changes
+            .map(change =>
+                change.node.id),
+        [
+            'english_location',
+        ],
+    );
+    assert.equal(
+        adoption.diagnostics.length,
+        2,
     );
 });
 
@@ -419,7 +667,7 @@ test('legacy Gryffindor dormitory scenes repair the parent room and request a pe
         'gryffindor_girls_dormitory',
     );
     const generatedMap = {
-        version: 1,
+        version: 2,
         id:
             request
                 .suggestedMapId,
@@ -543,8 +791,10 @@ test('generated map nodes receive a visible route to their nearest regional node
         generatedNodes: [{
             id: 'forgotten_tapestry_room',
             regionId: 'hogwarts',
-            name: '旧挂毯后的房间',
-            summary: '隐藏房间',
+            nameEn:
+                'Room Behind the Old Tapestry',
+            summaryEn:
+                'A hidden room.',
             x: 48,
             y: 40,
             locked: false,

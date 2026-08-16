@@ -3,14 +3,12 @@ import {
     getMapRooms,
 } from './map-access.js';
 
-export const CALENDAR_VERSION = 2;
+export const CALENDAR_VERSION = 3;
 
 export const CALENDAR_STORYLINE_FIELDS =
     Object.freeze([
         'id',
-        'title',
         'titleEn',
-        'summary',
         'summaryEn',
         'tags',
         'startClock',
@@ -25,9 +23,7 @@ export const CALENDAR_STORY_BEAT_FIELDS =
     Object.freeze([
         'id',
         'storylineId',
-        'title',
         'titleEn',
-        'summary',
         'summaryEn',
         'tags',
         'termKey',
@@ -46,9 +42,7 @@ export const CALENDAR_SCHEDULE_FIELDS =
         'id',
         'parentId',
         'entryType',
-        'title',
         'titleEn',
-        'summary',
         'summaryEn',
         'tags',
         'startClock',
@@ -330,20 +324,10 @@ export function normalizeCalendarStoryline(
                 source.id,
                 'Calendar storyline id',
             ),
-        title:
-            normalizedText(
-                source.title,
-                'Calendar storyline title',
-            ),
         titleEn:
             normalizedText(
                 source.titleEn,
                 'Calendar storyline titleEn',
-            ),
-        summary:
-            normalizedText(
-                source.summary,
-                'Calendar storyline summary',
             ),
         summaryEn:
             normalizedText(
@@ -413,20 +397,10 @@ export function normalizeCalendarStoryBeat(
                 source.storylineId,
                 'Calendar storyBeat storylineId',
             ),
-        title:
-            normalizedText(
-                source.title,
-                'Calendar storyBeat title',
-            ),
         titleEn:
             normalizedText(
                 source.titleEn,
                 'Calendar storyBeat titleEn',
-            ),
-        summary:
-            normalizedText(
-                source.summary,
-                'Calendar storyBeat summary',
             ),
         summaryEn:
             normalizedText(
@@ -527,20 +501,10 @@ export function normalizeCalendarSchedule(
                     lowerCase: true,
                 },
             ),
-        title:
-            normalizedText(
-                source.title,
-                'Calendar schedule title',
-            ),
         titleEn:
             normalizedText(
                 source.titleEn,
                 'Calendar schedule titleEn',
-            ),
-        summary:
-            normalizedText(
-                source.summary,
-                'Calendar schedule summary',
             ),
         summaryEn:
             normalizedText(

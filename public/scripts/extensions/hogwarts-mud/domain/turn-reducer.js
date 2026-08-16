@@ -100,7 +100,14 @@ export function createPendingEventBoundary(
     };
 }
 
-export function applyTurnTransaction(worldState, transaction, playerAction = '') {
+export function applyTurnTransaction(
+    worldState,
+    transaction,
+    playerAction = '',
+    {
+        sourceMessageId = null,
+    } = {},
+) {
     const validation = validateTurnTransaction(
         transaction,
         worldState,
@@ -421,7 +428,16 @@ export function applyTurnTransaction(worldState, transaction, playerAction = '')
     } : arc);
     const timelineEntry = {
         clock: next.clock,
-        label: transaction.publicEvent || transaction.publicEventEn,
+        summaryEn:
+            transaction
+                .publicEventEn,
+        sourceRef:
+            Number.isInteger(
+                sourceMessageId,
+            ) &&
+            sourceMessageId >= 0
+                ? `message:${sourceMessageId}:public_event`
+                : `turn:${committedTurn}:public_event`,
     };
     if (next.scene) {
         next.scene.timelineEntries = [

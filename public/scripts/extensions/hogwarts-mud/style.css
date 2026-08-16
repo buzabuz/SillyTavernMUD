@@ -2023,6 +2023,35 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
     line-height: 1.45;
 }
 
+.hpmud-map-localization-status {
+    position: absolute;
+    z-index: 2;
+    top: 7px;
+    right: 7px;
+    max-width: calc(100% - 14px);
+    overflow: hidden;
+    border-radius: 5px;
+    padding: 3px 5px;
+    color: var(--hp-text-3);
+    background: rgb(6 9 12 / 82%);
+    font-size: 7px;
+    line-height: var(--hp-leading-snug);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.hpmud-map-localization-status.is-error {
+    color: var(--hp-danger);
+}
+
+.hpmud-map-localization-retry {
+    position: absolute;
+    z-index: 3;
+    top: 29px;
+    right: 7px;
+}
+
 .hpmud-map .hpmud-map-caption {
     position: absolute;
     z-index: 1;
@@ -2347,6 +2376,41 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
 .hpmud-current-scene-heading span {
     color: var(--hp-text-3);
     letter-spacing: 0.04em;
+}
+
+.hpmud-current-scene-heading .hpmud-story-localization-status {
+    min-height: 11px;
+    margin-top: 4px;
+    visibility: hidden;
+    color: var(--hp-text-3);
+    letter-spacing: 0;
+    line-height: 11px;
+}
+
+.hpmud-current-scene-heading .hpmud-story-localization-status.is-visible {
+    visibility: visible;
+}
+
+.hpmud-current-scene-heading .hpmud-story-localization-status.is-error {
+    color: var(--hp-danger);
+}
+
+.hpmud-story-localization-control {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.hpmud-story-localization-retry,
+.hpmud-map-localization-retry {
+    min-height: 24px;
+    border: 1px solid rgb(225 196 119 / 22%);
+    border-radius: 5px;
+    padding: 3px 8px;
+    color: var(--hp-gold);
+    background: rgb(225 196 119 / 7%);
+    font-size: 9px;
+    cursor: pointer;
 }
 
 .hpmud-load-earlier {
@@ -5248,6 +5312,8 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
 
 .hpmud-profile-editor {
     width: min(820px, 94vw);
+    max-height: min(820px, 92vh);
+    overflow: hidden;
 }
 
 .hpmud-profile-editor .hpmud-dialog-frame {
@@ -7914,8 +7980,36 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
     .hpmud-workspace,
     .hpmud-app.scene-collapsed .hpmud-workspace {
         grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
         min-width: 0;
         width: 100%;
+        position: relative;
+    }
+
+    .hpmud-story-column {
+        grid-row: 1;
+        grid-column: 1;
+    }
+
+    .hpmud-scene-panel {
+        position: absolute;
+        z-index: 8;
+        top: 8px;
+        bottom: 8px;
+        left: 8px;
+        width: min(284px, calc(100% - 16px));
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .hpmud-app.scene-open .hpmud-scene-panel {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .hpmud-app.hpmud-inspector-open .hpmud-inspector,
+    .hpmud-app.hpmud-relationship-inspector-open .hpmud-inspector {
+        inset: 8px;
     }
 
     .hpmud-story {
@@ -7937,6 +8031,7 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
 
     .hpmud-expression-tools,
     .hpmud-turn-actions {
+        flex: 0 0 auto;
         flex-wrap: wrap;
     }
 }
@@ -9298,6 +9393,41 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
     font-size: 23px;
     font-weight: 400;
     letter-spacing: .14em;
+}
+
+.hpmud-calendar-title .hpmud-calendar-localization-status {
+    min-height: 11px;
+    margin-top: 2px;
+    visibility: hidden;
+    color: var(--hp-text-3);
+    font-size: 8px !important;
+    letter-spacing: 0;
+    line-height: 11px;
+    text-transform: none;
+}
+
+.hpmud-calendar-title .hpmud-calendar-localization-status.is-visible {
+    visibility: visible;
+}
+
+.hpmud-calendar-title .hpmud-calendar-localization-status.is-error {
+    color: var(--hp-danger);
+}
+
+.hpmud-calendar-localization-retry {
+    min-height: 24px;
+    margin-top: 4px;
+    border: 1px solid rgb(225 196 119 / 22%);
+    border-radius: 5px;
+    padding: 3px 8px;
+    color: var(--hp-gold);
+    background: rgb(225 196 119 / 7%);
+    font-size: 9px;
+    cursor: pointer;
+}
+
+.hpmud-calendar-localization-retry[hidden] {
+    display: none;
 }
 
 .hpmud-calendar-seal {
@@ -12303,4 +12433,60 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
     .hpmud-calendar-date-modal {
         animation: none !important;
     }
+}
+
+.hpmud-scene-segment-body {
+    position: relative;
+}
+
+.hpmud-localization-status {
+    position: absolute;
+    right: 17px;
+    bottom: 3px;
+    color: var(--hp-text-3);
+    font-family: var(--hp-font-ui);
+    font-size: var(--hp-type-caption);
+    line-height: var(--hp-leading-snug);
+    pointer-events: none;
+}
+
+.hpmud-localization-status.is-error {
+    color: var(--hp-danger);
+}
+
+.hpmud-dossier-localization-status {
+    min-height: 11px;
+    display: block;
+    visibility: hidden;
+    color: var(--hp-text-3);
+    font-size: 8px;
+    letter-spacing: 0;
+    line-height: 11px;
+}
+
+.hpmud-dossier-localization-status.is-visible {
+    visibility: visible;
+}
+
+.hpmud-dossier-localization-status.is-error {
+    color: var(--hp-danger);
+}
+
+.hpmud-dossier-localization-status-control {
+    min-height: 24px;
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.hpmud-dossier-localization-retry {
+    min-height: 24px;
+    border: 1px solid rgb(225 196 119 / 22%);
+    border-radius: 5px;
+    padding: 3px 8px;
+    color: var(--hp-gold);
+    background: rgb(225 196 119 / 7%);
+    font-size: 9px;
+    cursor: pointer;
 }

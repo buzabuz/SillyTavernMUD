@@ -94,7 +94,7 @@ function fixture() {
         }],
         actorPresentations: {
             [actorId]: {
-                outfit:
+                outfitEn:
                     'School robes',
                 accessories: {},
                 wornItemIds: [],
@@ -104,7 +104,7 @@ function fixture() {
         },
         items: [],
         actorMemoryIndex: {
-            version: 2,
+            version: 3,
             byActorId: {
                 [actorId]: {
                     firstImpressionRef:
@@ -143,6 +143,20 @@ function fixture() {
             ],
             witnessActorIds: [],
             sourceMessageIds: [41],
+        }, {
+            eventId:
+                'event_private',
+            sceneId:
+                'scene_private',
+            clock:
+                '1991-09-03 · 16:30',
+            summaryEn:
+                'Hermione privately reviewed the repair.',
+            participantActorIds: [
+                actorId,
+            ],
+            witnessActorIds: [],
+            sourceMessageIds: [42],
         }],
         memorySynapse: {
             version: 1,
@@ -211,29 +225,37 @@ function fixture() {
             }],
         },
         socialGraph: {
-            version: 2,
+            version: 3,
             relationshipEvidence: [{
                 id: 'evidence_visible',
                 sourceActorId: actorId,
                 targetActorId: 'player',
-                sceneId: 'scene_library',
-                sourceMessageIds: [41],
-                witnessedBy: ['player'],
-                summaryEn:
-                    'Hermione trusted Ivy with the repair.',
-                summary:
-                    '赫敏把修复工作交给了艾薇。',
+                eventId:
+                    'event_library',
+                appraisalId: '',
+                eventKind:
+                    'cooperation',
                 dimensionDeltas: [],
+                structuralTags: [],
+                emotionEffects: [],
+                clock:
+                    '1991-09-03 · 16:00',
+                turn: 2,
             }, {
                 id: 'evidence_private',
                 sourceActorId: actorId,
                 targetActorId: 'player',
-                sceneId: 'scene_private',
-                sourceMessageIds: [42],
-                witnessedBy: [actorId],
-                summaryEn:
-                    'Private evidence.',
+                eventId:
+                    'event_private',
+                appraisalId: '',
+                eventKind:
+                    'private_review',
                 dimensionDeltas: [],
+                structuralTags: [],
+                emotionEffects: [],
+                clock:
+                    '1991-09-03 · 16:30',
+                turn: 2,
             }],
             relationships: [{
                 id: 'hermione_player',
@@ -320,7 +342,7 @@ test('ActorDossierViewModelV1 has exactly eight business fields and player ACL',
         dossier.relationship
             .evidenceRefs[0]
             .summary,
-        '赫敏把修复工作交给了艾薇。',
+        'Ivy and Hermione repaired a damaged index together.',
     );
     assert.deepEqual(
         dossier.memories.recent,
@@ -351,6 +373,80 @@ test('ActorDossierViewModelV1 has exactly eight business fields and player ACL',
             .find(entry =>
                 entry.label === '性别')
             .unknown,
+        false,
+    );
+});
+
+test('Actor Dossier projects English static labels without changing actor identity', () => {
+    const dossier =
+        buildActorDossierViewModel(
+            fixture(),
+            actorId,
+            'authority',
+            {
+                displayLocale: 'en',
+            },
+        );
+    const basic =
+        dossier.identity.groups
+            .find(group =>
+                group.id ===
+                    'basic');
+    const gender =
+        basic.entries
+            .find(entry =>
+                entry.label ===
+                    'Gender');
+    const sourceBadges =
+        Object.values(
+            dossier.memories,
+        )
+            .flat()
+            .map(memory =>
+                memory.sourceBadge);
+
+    assert.equal(
+        dossier.actorId,
+        actorId,
+    );
+    assert.equal(
+        dossier.header
+            .presenceLabel,
+        'Currently present',
+    );
+    assert.deepEqual(
+        dossier.identity.groups
+            .map(group =>
+                group.title),
+        [
+            'Basic identity',
+            'Education',
+            'Lineage',
+            'Physical status',
+            'Known claims',
+        ],
+    );
+    assert.equal(
+        gender.value,
+        'Female',
+    );
+    assert.equal(
+        /[\u3400-\u9fff]/u.test(
+            [
+                dossier.header
+                    .presenceLabel,
+                ...dossier.identity.groups
+                    .flatMap(group => [
+                        group.title,
+                        ...group.entries
+                            .map(entry =>
+                                entry.label),
+                    ]),
+                ...sourceBadges,
+                ...dossier.relationship
+                    .labels,
+            ].join(' '),
+        ),
         false,
     );
 });
@@ -479,30 +575,58 @@ test('inspector and graph source enforce the six-section unified projection cuto
         ).length,
         6,
     );
-    for (const title of [
-        '人物本色',
-        '身份与已知说法',
-        '当前状态',
-        '对你的关系',
-        '共同经历',
-        '正式物品',
+    for (const staticKey of [
+        'ui.inspector.actor.core',
+        'ui.inspector.actor.identity',
+        'ui.inspector.actor.current_status',
+        'ui.inspector.actor.relationship',
+        'ui.inspector.actor.memories',
+        'ui.inspector.actor.items',
     ]) {
         assert.equal(
             actorBranch.includes(
-                `'${title}'`,
+                `'${staticKey}'`,
             ),
             true,
         );
     }
-    for (const subsection of [
-        '印象与预期',
-        '关系维度',
-        '当前情绪',
-        '关系证据',
+    for (const localizationOwner of [
+        'firstImpressionField',
+        'itemFieldsById',
+        '\'appraisal\'',
+        '\'summaryEn\'',
+        '\'item\'',
+        '\'labelEn\'',
+        '\'appearanceEn\'',
+    ]) {
+        assert.equal(
+            actorBranch.includes(
+                localizationOwner,
+            ),
+            true,
+        );
+    }
+    for (const retryContract of [
+        'requestFieldRetranslation',
+        'translation.status.partial_error',
+        'hpmud-dossier-localization-retry',
     ]) {
         assert.equal(
             inspector.includes(
-                `'${subsection}'`,
+                retryContract,
+            ),
+            true,
+        );
+    }
+    for (const staticKey of [
+        'ui.inspector.impressions',
+        'ui.inspector.relationship_dimensions',
+        'ui.inspector.current_emotions',
+        'ui.inspector.relationship_evidence',
+    ]) {
+        assert.equal(
+            inspector.includes(
+                `'${staticKey}'`,
             ),
             true,
         );

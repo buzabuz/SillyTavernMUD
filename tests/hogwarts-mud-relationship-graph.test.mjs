@@ -37,8 +37,11 @@ test('social audience projections preserve source knowledge without leaking hidd
         'minerva_mcgonagall';
     const state = {
         character: {
-            identity: {
-                name: 'Tina Zhang',
+            inputEvidence: {
+                identity: {
+                    name:
+                        'Tina Zhang',
+                },
             },
         },
         actorLibrary: [
@@ -888,6 +891,18 @@ test('relationship graph projects actor house affiliations with their player-vis
     const projection =
         buildPlayerKnownRelationshipProjection(
             state,
+            'zh-CN',
+            {
+                getLocalizedField:
+                    field => ({
+                        text:
+                            field.recordKind ===
+                                'character_input'
+                                ? '蒂娜·张'
+                                : field
+                                    .sourceTextEn,
+                    }),
+            },
         );
     const houseNodes =
         projection.nodes
@@ -912,10 +927,10 @@ test('relationship graph projects actor house affiliations with their player-vis
             ]),
         ),
         {
-            harry: 'Gryffindor',
-            hermione: 'Gryffindor',
-            luna: 'Ravenclaw',
-            ron: 'Gryffindor',
+            harry: '格兰芬多',
+            hermione: '格兰芬多',
+            luna: '拉文克劳',
+            ron: '格兰芬多',
         },
     );
     assert.deepEqual(
@@ -958,6 +973,12 @@ test('relationship graph projects actor house affiliations with their player-vis
             'hermione->ron',
             'ron->luna',
         ],
+    );
+    assert.equal(
+        projection.nodeById
+            .get('player')
+            .name,
+        '蒂娜·张',
     );
 });
 

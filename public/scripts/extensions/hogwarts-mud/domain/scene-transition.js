@@ -21,9 +21,6 @@ import {
 import {
     validateNarrationConsistency,
 } from './narrative-authority.js';
-import {
-    validateHistoricalClaimProvenance,
-} from './narrative-memory-provenance.js';
 
 import {
     createFallbackNextSceneIntent,
@@ -286,7 +283,7 @@ export function normalizeSceneTransitionPackage(
     ).trim();
     nextScene.chapterEn = String(
         nextScene.chapterEn ||
-        worldState.chapter ||
+        worldState.chapterEn ||
         nextScene.nameEn,
     ).trim();
     nextScene.temporalFactsEn =
@@ -487,7 +484,9 @@ export function normalizeSceneTransitionPackage(
                     ['narration', 'dialogue']
                         .includes(segment?.type) &&
                     String(
-                        segment?.textEn || '',
+                        segment?.textEn ||
+                        segment?.rawText ||
+                        '',
                     ).trim())
                 .slice(0, 8)
             : [];
@@ -503,25 +502,6 @@ export function normalizeSceneTransitionPackage(
                 presentIds.has(
                     segment.actorId,
                 ));
-    if (!nextScene.openingSegments.some(
-        segment =>
-            segment.type === 'narration',
-    )) {
-        nextScene.openingSegments.unshift({
-            type: 'narration',
-            textEn:
-                `${nextScene.nameEn}: ${nextScene.summaryEn}`,
-        });
-    }
-    if (nextScene.openingSegments.length < 2) {
-        nextScene.openingSegments.push({
-            type: 'narration',
-            textEn:
-                nextScene
-                    .crowdDirectionEn ||
-                'The immediate surroundings remain visible and available for the player to inspect or ignore.',
-        });
-    }
     projected.actors = nextScene.actorStates.map(actor => ({
         ...actor,
         nameEn: (worldState.actorLibrary || []).find(item =>
@@ -858,13 +838,29 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
         worldState.actorLibrary ||
         []
     ).forEach(profile => {
+        const descriptiveText =
+            `${
+                profile.roleEn ||
+                ''
+            } ${
+                profile
+                    .publicProfile
+                    ?.descriptionEn ||
+                ''
+            }`
+                .toLocaleLowerCase();
         const explicitlyNamed =
             [
                 profile.nameEn,
                 ...(
                     profile.aliases ||
                     []
-                ),
+                ).filter(alias =>
+                    !descriptiveText
+                        .includes(
+                            String(alias)
+                                .toLocaleLowerCase(),
+                        )),
             ]
                 .filter(name =>
                     String(name || '')
@@ -889,29 +885,51 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
     const segments = Array.isArray(nextScene.openingSegments)
         ? nextScene.openingSegments
         : [];
-    if (segments.length < 2 || segments.length > 8) {
-        errors.push('下一场景开场必须包含 2–8 个分段。');
-    }
-    if (!segments.some(segment => segment.type === 'narration')) {
-        errors.push('下一场景开场至少需要一个环境或动作描写分段。');
-    }
-    segments.forEach(segment => {
-        if (!['narration', 'dialogue'].includes(segment.type) ||
-            !String(segment.textEn || '').trim()) {
-            errors.push('下一场景开场包含无效或空白分段。');
+    if (
+        options
+            .deferOpeningSegments !==
+        true
+    ) {
+        if (segments.length < 2 || segments.length > 8) {
+            errors.push('下一场景开场必须包含 2–8 个分段。');
         }
-        if (segment.type === 'dialogue' && !presentActorIds.has(segment.actorId)) {
-            errors.push(`下一场景对白引用了不在场人物 ${segment.actorId || '?'}。`);
+        if (!segments.some(segment => segment.type === 'narration')) {
+            errors.push('下一场景开场至少需要一个环境或动作描写分段。');
         }
-    });
-    const openingExperienceValidation =
-        validateSceneOpeningExperienceSegments(
-            segments,
+        segments.forEach(segment => {
+            if (!['narration', 'dialogue'].includes(segment.type) ||
+                !String(
+                    segment.textEn ||
+                    segment.rawText ||
+                    '',
+                ).trim()) {
+                errors.push('下一场景开场包含无效或空白分段。');
+            }
+            if (
+                segment.rawText &&
+                (
+                    segment.authority !==
+                        'model_output_evidence' ||
+                    !segment.language
+                )
+            ) {
+                errors.push(
+                    '下一场景 rawText 分段缺少语言证据标记。',
+                );
+            }
+            if (segment.type === 'dialogue' && !presentActorIds.has(segment.actorId)) {
+                errors.push(`下一场景对白引用了不在场人物 ${segment.actorId || '?'}。`);
+            }
+        });
+        const openingExperienceValidation =
+            validateSceneOpeningExperienceSegments(
+                segments,
+            );
+        errors.push(
+            ...openingExperienceValidation
+                .errors,
         );
-    errors.push(
-        ...openingExperienceValidation
-            .errors,
-    );
+    }
     const actorActivitySegments =
         actorStates
             .filter(actor =>
@@ -958,16 +976,6 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
         );
     errors.push(
         ...narrationConsistency
-            .errors,
-    );
-    const historicalClaimValidation =
-        validateHistoricalClaimProvenance(
-            segments,
-            options
-                .memoryActivationCapsules,
-        );
-    errors.push(
-        ...historicalClaimValidation
             .errors,
     );
     const followingIntent = validateNextSceneIntent(

@@ -317,7 +317,7 @@ function buildActorCards(
                     presentation:
                         text(
                             presentation
-                                .outfit,
+                                .outfitEn,
                             500,
                         ),
                 },

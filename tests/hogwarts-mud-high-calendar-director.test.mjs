@@ -108,12 +108,8 @@ function createStoryline(
 ) {
     return {
         id,
-        title:
-            '蒂娜的秘密',
         titleEn:
             'Tina Secret',
-        summary:
-            '一条跨越四学年的公开成长线。',
         summaryEn:
             'A public growth storyline spanning four school years.',
         tags: [
@@ -154,12 +150,8 @@ function createBeat(
             }`,
         storylineId:
             STORYLINE_ID,
-        title:
-            `第 ${sequence} 学期节奏`,
         titleEn:
             `Term ${sequence} Beat`,
-        summary:
-            `第 ${sequence} 学期推进公开剧情方向。`,
         summaryEn:
             `Term ${sequence} advances the public story direction.`,
         tags: [
@@ -197,12 +189,8 @@ function createSchedule(
         id,
         parentId: '',
         entryType: 'event',
-        title:
-            `公开日程 ${id}`,
         titleEn:
             `Public schedule ${id}`,
-        summary:
-            `${id} 的玩家可见摘要。`,
         summaryEn:
             `Player-visible summary for ${id}.`,
         tags: [],
@@ -243,7 +231,7 @@ function createState(
         clock: CURRENT_CLOCK,
         modelSlots: {},
         calendar: {
-            version: 2,
+            version: 3,
             storylines: [],
             storyBeats: [],
             entries: [],
@@ -859,8 +847,6 @@ test('[defect-probing] high-tier refresh sees and updates only current or future
         );
     const updatedCurrent = {
         ...current,
-        summary:
-            '重大转折后，当前学期进入公开的新阶段。',
         summaryEn:
             'After the major turn, the current term enters a new public phase.',
         updatedClock:
@@ -908,8 +894,8 @@ test('[defect-probing] high-tier refresh sees and updates only current or future
     assert.equal(
         committed.calendar
             .storyBeats[1]
-            .summary,
-        updatedCurrent.summary
+            .summaryEn,
+        updatedCurrent.summaryEn
             .normalize('NFKC'),
     );
     assert.deepEqual(
@@ -1047,8 +1033,8 @@ test('High refresh rejects realized and elapsed beat rewrites without mutating s
                     [],
                     [{
                         ...beat,
-                        summary:
-                            '试图改写已经固定的节奏。',
+                        summaryEn:
+                            'Attempt to rewrite a fixed beat.',
                         updatedClock:
                             CURRENT_CLOCK,
                     }],

@@ -533,11 +533,11 @@ test('Social V3 cursor preserves an unprocessed suffix', async () => {
         'library_evening';
     input
         .witnessActorIdsByMessageId[
-        11
-    ] = [
-        'hermione',
-        'ron',
-    ];
+            11
+        ] = [
+            'hermione',
+            'ron',
+        ];
     input.sceneEvidence.push({
         ...structuredClone(
             input.sceneEvidence[0],
@@ -685,18 +685,18 @@ test('Social V3 correction requires a known parent report and exact historical E
     );
     input.sceneEvidence[0]
         .segments[0] = {
-        type: 'dialogue',
-        actorId: 'ron',
-        textEn:
+            type: 'dialogue',
+            actorId: 'ron',
+            textEn:
             'Hermione, that map story was wrong.',
-        historicalClaims: [{
-            claimTextEn:
+            historicalClaims: [{
+                claimTextEn:
                 'that map story',
-            sourceEventIds: [
-                parent.eventId,
-            ],
-        }],
-    };
+                sourceEventIds: [
+                    parent.eventId,
+                ],
+            }],
+        };
     const correction =
         input.extraction
             .reportedEvents[0];

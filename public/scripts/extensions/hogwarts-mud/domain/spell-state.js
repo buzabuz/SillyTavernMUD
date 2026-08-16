@@ -60,15 +60,10 @@ export function resolveSpellObservation(
         );
     const contextValues = [
         scene.nameEn,
-        scene.name,
         scene.summaryEn,
-        scene.summary,
         intent.titleEn,
-        intent.title,
         intent.summaryEn,
-        intent.summary,
         intent.triggerEn,
-        intent.trigger,
     ].filter(Boolean);
     const contextReferences =
         findSpellReferences(
@@ -84,8 +79,6 @@ export function resolveSpellObservation(
         version: 1,
         spellId:
             spell.id,
-        name:
-            spell.name,
         nameEn:
             spell.nameEn,
         incantation:
@@ -267,7 +260,6 @@ function getSpellTextFromMessage(
         message?.extra
             ?.hogwartsMud;
     return [
-        mud?.sourceEn,
         message?.mes,
         ...(
             mud?.segments ||
@@ -558,7 +550,6 @@ export function settleSpellProgress(
         );
     const sceneLabel =
         next.scene?.nameEn ||
-        next.scene?.name ||
         'the current scene';
     const classObservation =
         /(?:class|lesson|教室|课堂|课)/iu

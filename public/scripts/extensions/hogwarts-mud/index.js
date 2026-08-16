@@ -95,7 +95,13 @@ import { normalizeCausalCollapseState } from './domain/causal-state.js';
 import { migrateNpcIdentityState } from './domain/npc-identity-migration.js';
 import { migrateNpcIdentityObservations } from './domain/npc-identity-observation-migration.js';
 import { NPC_IDENTITY_PROMPT_BOUNDARY, buildNpcIdentityPromptProjection, projectNpcRuntimeActorsForPrompt } from './domain/npc-identity-prompt-projection.js';
-import { buildCharacterContext, createDefaultCharacterDraft, validateCharacterDraft } from './domain/character.js';
+import {
+    buildCharacterContext,
+    createDefaultCharacterDraft,
+    getCharacterInputDraft, normalizeCharacterCode,
+    normalizeCharacterV2,
+    validateCharacterDraft,
+} from './domain/character.js';
 import { resolveActionCheck } from './domain/checks.js';
 import { applyOpeningWorldPackage, buildMandatorySceneState, createInitialWorldState, validateOpeningWorldPackage } from './domain/initial-world.js';
 import {
@@ -369,6 +375,7 @@ const platform = {
     createContextBudgetPlan,
     createDefaultCampaign,
     createDefaultCharacterDraft,
+    getCharacterInputDraft,
     createDeterministicPerceptionFallback,
     createFallbackNextSceneIntent,
     createInitialWorldState, createItemOperationDirective, createItemReferenceDirective,
@@ -425,6 +432,7 @@ const platform = {
     migrateSpellbookState,
     normalizeActorMemoryProfile,
     normalizeCampaign,
+    normalizeCharacterCode, normalizeCharacterV2,
     normalizeCausalCollapseState,
     normalizeEventKnowledge,
     normalizeGeneratedInteriorMapLabels,
@@ -545,6 +553,12 @@ async function initialize() {
     refs.relationshipGraphController =
         createRelationshipGraphController({
             root: refs.root,
+            ensureLocalizedFields:
+                application
+                    .ensureLocalizedFields,
+            getLocalizedField:
+                application
+                    .getLocalizedField,
             getState: () =>
                 workflows.getMudState() || {},
             getTimelineKey: () => {

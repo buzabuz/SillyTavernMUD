@@ -1922,7 +1922,7 @@ export function buildSealedActivationCapsules(
         commonFactLimit = 6,
         queryAnchors = [],
         retainedEventIdsByActorId =
-            {},
+        {},
     } = {},
 ) {
     const entries =

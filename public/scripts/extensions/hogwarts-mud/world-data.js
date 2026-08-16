@@ -4,7 +4,125 @@ export const MAP_DIRECTOR_TRIGGERS = Object.freeze([
     'world_event',
 ]);
 
-export const PRESET_WORLD_MAP = Object.freeze({
+const worldMapStaticLocaleEn = {};
+const worldMapStaticLocaleZhCn = {};
+const REGION_SUBTITLES_EN = {
+    hogwarts:
+        'Scottish Highlands · School of Magic',
+    london_wizarding:
+        'Diagon Alley, the Ministry, and King\'s Cross',
+    britain_wizarding:
+        'Villages, homes, and public institutions',
+};
+const WORLD_NODE_SUMMARIES_EN = {
+    hogwarts_castle:
+        'The Great Hall, House towers, classrooms, library, and many moving staircases.',
+    hogwarts_grounds:
+        'Greenhouses, Quidditch pitch, Hagrid\'s hut, and the Forbidden Forest boundary.',
+    hogsmeade:
+        'Britain\'s only entirely wizarding village.',
+    diagon_alley:
+        'The magical commercial centre linking the Leaky Cauldron, Gringotts, and major shops.',
+    knockturn_alley:
+        'A narrow district trading in dangerous or dubious magical goods.',
+    ministry_of_magic:
+        'The administrative and judicial centre of magical Britain.',
+    kings_cross:
+        'Platform Nine and Three-Quarters is the London terminus of the Hogwarts Express.',
+    st_mungos:
+        'Britain\'s principal magical hospital.',
+    godrics_hollow:
+        'A mixed village connected to several major episodes of magical history.',
+    azkaban:
+        'A magical prison in the North Sea guarded by Dementors.',
+};
+
+function worldTitle(
+    value,
+) {
+    return String(value || '')
+        .split('_')
+        .map(part =>
+            part.charAt(0)
+                .toUpperCase() +
+            part.slice(1))
+        .join(' ');
+}
+
+function splitWorldMap(
+    source,
+) {
+    return {
+        ...source,
+        regions:
+            source.regions.map(
+                region => {
+                    const nameEn =
+                        worldTitle(
+                            region.id,
+                        );
+                    const subtitleEn =
+                        REGION_SUBTITLES_EN[
+                            region.id
+                        ];
+                    worldMapStaticLocaleEn[
+                        `world.region.${region.id}.name`
+                    ] = nameEn;
+                    worldMapStaticLocaleZhCn[
+                        `world.region.${region.id}.name`
+                    ] = region.name;
+                    worldMapStaticLocaleEn[
+                        `world.region.${region.id}.subtitle`
+                    ] = subtitleEn;
+                    worldMapStaticLocaleZhCn[
+                        `world.region.${region.id}.subtitle`
+                    ] = region.subtitle;
+                    const next = {
+                        ...region,
+                        nameEn,
+                        subtitleEn,
+                    };
+                    delete next.name;
+                    delete next.subtitle;
+                    return next;
+                },
+            ),
+        nodes:
+            source.nodes.map(node => {
+                const nameEn =
+                    worldTitle(node.id);
+                const summaryEn =
+                    WORLD_NODE_SUMMARIES_EN[
+                        node.id
+                    ];
+                worldMapStaticLocaleEn[
+                    `world.node.${node.id}.name`
+                ] = nameEn;
+                worldMapStaticLocaleZhCn[
+                    `world.node.${node.id}.name`
+                ] = node.name;
+                worldMapStaticLocaleEn[
+                    `world.node.${node.id}.summary`
+                ] = summaryEn;
+                worldMapStaticLocaleZhCn[
+                    `world.node.${node.id}.summary`
+                ] = node.summary;
+                const next = {
+                    ...node,
+                    nameEn,
+                    summaryEn,
+                    aliases: [
+                        node.name,
+                    ],
+                };
+                delete next.name;
+                delete next.summary;
+                return next;
+            }),
+    };
+}
+
+export const PRESET_WORLD_MAP = Object.freeze(splitWorldMap({
     version: 2,
     regions: [
         {
@@ -147,4 +265,13 @@ export const PRESET_WORLD_MAP = Object.freeze({
         { from: 'hogwarts_castle', to: 'hogwarts_grounds', mode: 'walk', minutes: 8 },
         { from: 'hogwarts_castle', to: 'hogsmeade', mode: 'walk', minutes: 35 },
     ],
-});
+}));
+
+export const WORLD_MAP_STATIC_LOCALE_EN =
+    Object.freeze({
+        ...worldMapStaticLocaleEn,
+    });
+export const WORLD_MAP_STATIC_LOCALE_ZH_CN =
+    Object.freeze({
+        ...worldMapStaticLocaleZhCn,
+    });

@@ -124,7 +124,6 @@ function collectActivationSchemaIds(
 
 export function createTurnWorkflow(ports) {
     const {
-        TRANSLATION_FORMAT_VERSION,
         admitCurrentLocationResidents,
         admitMentionedKnownActors,
         applyObservedActorUpdates,
@@ -154,6 +153,8 @@ export function createTurnWorkflow(ports) {
         createSceneMomentumDirective,
         createTurnPerformanceBudget,
         createTurnRetryCheckpoint,
+        enqueueLocalizationCandidates =
+        async () => {},
         ensureCurrentInteriorMap,
         assertWorldFoundationReady,
         ensurePacingDirectorAssessment,
@@ -172,11 +173,9 @@ export function createTurnWorkflow(ports) {
         getFailedPlayerTurn,
         getLocalMapDefinition,
         getMudState,
-        getSettings,
         getInspectorMapScope,
         isObservedEventBoundary,
         jobRegistry,
-        localizeTurnTransaction,
         normalizeEventKnowledge,
         parseItemOperationDirectives,
         parseSpellCastDirectives,
@@ -212,140 +211,12 @@ export function createTurnWorkflow(ports) {
         resolveRoleSlots,
         retrieveLocalKnowledge,
         setLiveSceneStreamPhase,
-        stripSyntheticSceneOpeningActorSegments,
         syncLocalKnowledge,
         updateNativeMessageBlock,
         validateTurnTransaction,
         discardTurnDiagnostics =
         () => {},
     } = ports;
-
-    function findPlayerActionForMessage(chat, messageId) {
-        for (let index = messageId - 1; index >= 0; index--) {
-            if (chat[index]?.is_user) {
-                return chat[index].mes;
-            }
-            if (!chat[index]?.is_system) {
-                break;
-            }
-        }
-        return '';
-    }
-
-    async function repairLegacyGenericTurnSummaries() {
-        const context = getContext();
-        let chatChanged = false;
-
-        context.chat.forEach((message, messageId) => {
-            const transactions = [
-                message.extra?.hogwartsMud?.turnTransaction,
-                ...(message.swipe_info || []).map(
-                    swipe => swipe.extra?.hogwartsMud?.turnTransaction,
-                ),
-            ].filter(transaction =>
-                transaction &&
-            /player completes|player acts|characters respond/i.test(
-                String(transaction.publicEventEn || ''),
-            ),
-            );
-            if (!transactions.length) return;
-
-            const action = findPlayerActionForMessage(context.chat, messageId)
-                .replace(/\s+/g, ' ')
-                .trim()
-                .slice(0, 180);
-            if (!action) return;
-            transactions.forEach(transaction => {
-                transaction.publicEventEn = `Legacy player action: ${action}`;
-                transaction.publicEvent = action;
-            });
-            chatChanged = true;
-        });
-
-        if (chatChanged) await context.saveChat();
-    }
-
-    async function repairLegacySyntheticSceneOpeningSegments() {
-        const context =
-        getContext();
-        const state =
-        getMudState();
-        let changed = false;
-        for (
-            const message
-            of context.chat
-        ) {
-            const mud =
-            message?.extra
-                ?.hogwartsMud;
-            if (
-                mud?.role !==
-                'scene_opening' ||
-            !Array.isArray(
-                mud.segments,
-            )
-            ) {
-                continue;
-            }
-            const cleaned =
-            stripSyntheticSceneOpeningActorSegments(
-                mud.segments,
-            );
-            if (
-                cleaned.length ===
-                mud.segments.length ||
-            !cleaned.length
-            ) {
-                continue;
-            }
-            const sourceEn =
-            composeSceneSegments(
-                cleaned,
-                state
-                    .actorLibrary ||
-                    [],
-                'en',
-            );
-            const translatedZh =
-            composeSceneSegments(
-                cleaned,
-                state
-                    .actorLibrary ||
-                    [],
-                'zh',
-            );
-            const hasTranslation =
-            cleaned.some(segment =>
-                String(
-                    segment.textZh ||
-                    '',
-                ).trim()) &&
-            translatedZh !==
-                sourceEn;
-            mud.segments =
-            cleaned;
-            mud.sourceEn =
-            sourceEn;
-            mud.translatedZh =
-            hasTranslation
-                ? translatedZh
-                : undefined;
-            message.mes =
-            sourceEn;
-            if (hasTranslation) {
-                message.extra
-                    .display_text =
-                translatedZh;
-            } else {
-                delete message.extra
-                    .display_text;
-            }
-            changed = true;
-        }
-        if (changed) {
-            await context.saveChat();
-        }
-    }
 
     async function repairNarratedCurrentLocationResidents() {
         const context =
@@ -365,9 +236,6 @@ export function createTurnWorkflow(ports) {
                     state.scene?.id)
             .map(message =>
                 String(
-                    message.extra
-                        .hogwartsMud
-                        .sourceEn ||
                     message.mes ||
                     '',
                 ))
@@ -455,45 +323,33 @@ export function createTurnWorkflow(ports) {
             ...(state.actorLibrary || []),
             ...(state.actors || []),
         ];
-        const sourceEn = composeSceneSegments(transaction.segments, renderableActors, 'en');
-        const translatedZh = composeSceneSegments(transaction.segments, renderableActors, 'zh');
-        const hasTranslation = getSettings().translationEnabled &&
-        transaction.segments.some(segment =>
-            String(segment.textZh || '').trim()) &&
-        translatedZh !== sourceEn;
+        const messageText =
+            composeSceneSegments(
+                transaction.segments,
+                renderableActors,
+                'en',
+            );
         const message = existingMessage || {
             name: 'Scene',
             is_user: false,
             is_system: false,
             send_date: new Date().toISOString(),
-            mes: sourceEn,
+            mes: messageText,
             extra: {},
         };
         message.name = 'Scene';
-        message.mes = sourceEn;
+        message.mes = messageText;
         message.extra = message.extra && typeof message.extra === 'object' ? message.extra : {};
         message.extra.hogwartsMud = {
             ...message.extra.hogwartsMud,
-            sourceEn,
-            translatedZh: hasTranslation ? translatedZh : undefined,
-            provider: hasTranslation
-                ? getSettings()
-                    .translationProvider
-                : undefined,
-            translatedAt: hasTranslation ? Date.now() : undefined,
-            translationVersion: hasTranslation
-                ? TRANSLATION_FORMAT_VERSION
-                : undefined,
+            languageVersion: 1,
             role: 'scene_turn',
             sceneId: state.scene?.id,
             segments: transaction.segments,
             turnTransaction: transaction,
         };
-        if (hasTranslation) {
-            message.extra.display_text = translatedZh;
-        } else {
-            delete message.extra.display_text;
-        }
+        delete message.extra
+            .display_text;
         return message;
     }
 
@@ -518,8 +374,6 @@ export function createTurnWorkflow(ports) {
         const job = (async () => {
             jobRegistry.turnActive = true;
             let state = getMudState();
-            const previousClock =
-                state.clock;
             const modelTaskActionId = [
                 'turn',
                 state.timelineEpoch ||
@@ -833,6 +687,8 @@ export function createTurnWorkflow(ports) {
                             localAdjudication
                                 .result
                                 .check,
+                        sourceMessageId:
+                            playerMessageId,
                         spellCast:
                             spellCasts[0] ||
                             null,
@@ -1032,11 +888,6 @@ export function createTurnWorkflow(ports) {
                 const validation = validateTurnTransaction(transaction, state);
                 if (!validation.valid) {
                     throw new Error(`合并后的回合事务无效：${validation.errors.join('；')}`);
-                }
-                try {
-                    transaction = await localizeTurnTransaction(transaction);
-                } catch (translationError) {
-                    console.warn('[Hogwarts MUD] Turn transaction translation failed; using English labels', translationError);
                 }
                 const localObservation =
                 await requestLocalTurnObservation(
@@ -1366,10 +1217,20 @@ export function createTurnWorkflow(ports) {
                     [],
                 );
                 state = getMudState();
+                const timelineSourceMessageId =
+                    assistantMessageId ===
+                    null
+                        ? context.chat
+                            .length
+                        : assistantMessageId;
                 let nextState = applyTurnTransaction(
                     state,
                     transaction,
                     narrativePlayerAction,
+                    {
+                        sourceMessageId:
+                            timelineSourceMessageId,
+                    },
                 );
                 nextState =
                 applyPresenceWitnessTransaction(
@@ -1559,6 +1420,32 @@ export function createTurnWorkflow(ports) {
                 );
                 await context.saveMetadata();
                 await context.saveChat();
+                void enqueueLocalizationCandidates(
+                    (
+                        transaction
+                            .segments ||
+                        []
+                    ).map((
+                        segment,
+                        index,
+                    ) => ({
+                        recordKind:
+                            'message_segment',
+                        recordId:
+                            `message:${messageId}:segment:${index}`,
+                        fieldPath: 'textEn',
+                        sourceText:
+                            segment.textEn ||
+                            '',
+                        priority: 0,
+                        changedAt:
+                            Date.now(),
+                    })),
+                ).catch(error =>
+                    console.warn(
+                        '[Hogwarts MUD] Turn localization candidate enqueue failed',
+                        error,
+                    ));
                 if (
                     transaction
                         .eventKnowledge
@@ -1786,8 +1673,6 @@ export function createTurnWorkflow(ports) {
             assertWorldFoundationReady(
                 state,
             );
-            await repairLegacyGenericTurnSummaries();
-            await repairLegacySyntheticSceneOpeningSegments();
             await repairNarratedCurrentLocationResidents();
             await syncLocalKnowledge();
             await processUnsettledTurn();
@@ -1799,9 +1684,6 @@ export function createTurnWorkflow(ports) {
     }
 
     return {
-        findPlayerActionForMessage,
-        repairLegacyGenericTurnSummaries,
-        repairLegacySyntheticSceneOpeningSegments,
         repairNarratedCurrentLocationResidents,
         buildSceneMessage,
         runStructuredTurn,

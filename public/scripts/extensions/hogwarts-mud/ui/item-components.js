@@ -1,3 +1,8 @@
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from '../domain/localized-view-model.js';
+
 function appendText(
     parent,
     tag,
@@ -16,12 +21,56 @@ function appendText(
     return element;
 }
 
+function staticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+) {
+    return getStaticLocaleText(
+        staticKey,
+        normalizeDisplayLocale(
+            displayLocale,
+        ),
+    ) ||
+        sourceTextEn;
+}
+
+function formatStaticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+    values = {},
+) {
+    return Object.entries(
+        values,
+    ).reduce(
+        (
+            text,
+            [
+                key,
+                value,
+            ],
+        ) =>
+            text.replaceAll(
+                `{${key}}`,
+                String(value),
+            ),
+        staticText(
+            displayLocale,
+            staticKey,
+            sourceTextEn,
+        ),
+    );
+}
+
 export function createItemCard(
     item,
     {
         compact = false,
         onReferenceItem =
         null,
+        displayLocale =
+        'zh-CN',
     } = {},
 ) {
     const card =
@@ -75,7 +124,11 @@ export function createItemCard(
         );
     if (item.isEquipped) {
         state.textContent =
-            `${item.stateLabel} · 穿戴中`;
+            `${item.stateLabel} · ${staticText(
+                displayLocale,
+                'ui.item.component.equipped',
+                'Equipped',
+            )}`;
     }
     header.prepend(
         seal,
@@ -137,7 +190,15 @@ export function createItemCard(
                     role.label,
                 );
             badge.title =
-                `剧情角色：${role.label}`;
+                formatStaticText(
+                    displayLocale,
+                    'ui.item.component.story_role',
+                    'Story role: {role}',
+                    {
+                        role:
+                            role.label,
+                    },
+                );
         });
 
     card.append(
@@ -179,10 +240,25 @@ export function createItemCard(
             provenance,
             'span',
             '',
-            `来源 · ${
-                item.sourceEventId ||
-                '未记录'
-            }`,
+            formatStaticText(
+                displayLocale,
+                'ui.item.component.source',
+                'Source · {source}',
+                {
+                    source:
+                        item.sourceEventId
+                            ? staticText(
+                                displayLocale,
+                                'ui.item.component.recorded',
+                                'Recorded',
+                            )
+                            : staticText(
+                                displayLocale,
+                                'ui.item.component.unrecorded',
+                                'Unrecorded',
+                            ),
+                },
+            ),
         );
         if (
             /^https:\/\//u.test(
@@ -201,7 +277,11 @@ export function createItemCard(
             sourceLink.rel =
                 'noopener noreferrer';
             sourceLink.textContent =
-                '查看 Canon 资料';
+                staticText(
+                    displayLocale,
+                    'ui.item.component.canon_link',
+                    'View Canon source',
+                );
             provenance.append(
                 sourceLink,
             );
@@ -228,9 +308,17 @@ export function createItemCard(
         reference.className =
             'hpmud-item-reference';
         reference.textContent =
-            '引用到输入';
+            staticText(
+                displayLocale,
+                'ui.item.component.reference',
+                'Reference in input',
+            );
         reference.title =
-            `使用稳定 Item ID：${item.id}`;
+            staticText(
+                displayLocale,
+                'ui.item.component.reference_title',
+                'Reference this Item in the composer',
+            );
         reference.addEventListener(
             'click',
             () =>
@@ -253,6 +341,8 @@ export function createItemLedger(
     {
         onReferenceItem =
         null,
+        displayLocale =
+        'zh-CN',
     } = {},
 ) {
     const ledger =
@@ -274,13 +364,21 @@ export function createItemLedger(
             empty,
             'strong',
             '',
-            '还没有需要正式追踪的物品',
+            staticText(
+                displayLocale,
+                'ui.item.component.empty_title',
+                'No Items require formal tracking yet',
+            ),
         );
         appendText(
             empty,
             'p',
             '',
-            '普通校服、课本、羽毛笔和生活用品仍可自然使用，但不会占用物品档案。',
+            staticText(
+                displayLocale,
+                'ui.item.component.empty_detail',
+                'Ordinary uniforms, textbooks, quills, and daily supplies remain usable without occupying the Item archive.',
+            ),
         );
         ledger.append(empty);
         return ledger;
@@ -330,6 +428,7 @@ export function createItemLedger(
                         item,
                         {
                             onReferenceItem,
+                            displayLocale,
                         },
                     ),
                 ));
@@ -340,11 +439,19 @@ export function createItemLedger(
             ledger.append(group);
         };
     appendGroup(
-        '当前物品',
+        staticText(
+            displayLocale,
+            'ui.item.component.active',
+            'Current Items',
+        ),
         projection.active,
     );
     appendGroup(
-        '失去与消耗记录',
+        staticText(
+            displayLocale,
+            'ui.item.component.history',
+            'Loss and consumption history',
+        ),
         projection.history,
     );
     return ledger;
@@ -359,8 +466,48 @@ export function createItemCandidateCard(
         readOnly = false,
         onAccept,
         onIgnore,
+        displayLocale =
+        'zh-CN',
     } = {},
 ) {
+    const acceptLabel =
+        staticText(
+            displayLocale,
+            'ui.proposal.accept',
+            'Accept',
+        );
+    const ignoreLabel =
+        staticText(
+            displayLocale,
+            'ui.proposal.ignore',
+            'Ignore',
+        );
+    const processingLabel =
+        staticText(
+            displayLocale,
+            'ui.proposal.processing',
+            'Processing...',
+        );
+    const decisionLabel =
+        value =>
+            value === 'pending'
+                ? staticText(
+                    displayLocale,
+                    'ui.proposal.discovered_item',
+                    'Item discovered',
+                )
+                : value ===
+                    'accepted'
+                    ? staticText(
+                        displayLocale,
+                        'ui.proposal.accepted',
+                        'Accepted',
+                    )
+                    : staticText(
+                        displayLocale,
+                        'ui.proposal.ignored',
+                        'Ignored',
+                    );
     const docket =
         document.createElement(
             'aside',
@@ -399,13 +546,9 @@ export function createItemCandidateCard(
             copy,
             'small',
             '',
-            decision ===
-                'pending'
-                ? '发现物品'
-                : decision ===
-                    'accepted'
-                    ? '已收录'
-                    : '已忽略',
+            decisionLabel(
+                decision,
+            ),
         );
     appendText(
         copy,
@@ -490,7 +633,11 @@ export function createItemCandidateCard(
     info.className =
         'hpmud-item-candidate-info';
     info.textContent =
-        '详情';
+        staticText(
+            displayLocale,
+            'ui.proposal.details',
+            'Details',
+        );
     info.setAttribute(
         'aria-expanded',
         'false',
@@ -528,7 +675,7 @@ export function createItemCandidateCard(
         accept.className =
             'is-primary';
         accept.textContent =
-            '收录';
+            acceptLabel;
         accept.disabled =
             disabled;
         const ignore =
@@ -537,7 +684,7 @@ export function createItemCandidateCard(
             );
         ignore.type = 'button';
         ignore.textContent =
-            '忽略';
+            ignoreLabel;
         ignore.disabled =
             disabled;
         const resolve =
@@ -550,7 +697,7 @@ export function createItemCandidateCard(
                 ignore.disabled =
                     true;
                 button.textContent =
-                    '处理中…';
+                    processingLabel;
                 try {
                     await handler?.(
                         candidate.key,
@@ -563,10 +710,9 @@ export function createItemCandidateCard(
                         docket.className =
                             `hpmud-item-candidate decision-${resolvedDecision}`;
                         status.textContent =
-                            resolvedDecision ===
-                                'accepted'
-                                ? '已收录'
-                                : '已忽略';
+                            decisionLabel(
+                                resolvedDecision,
+                            );
                         actions.replaceChildren(
                             info,
                         );
@@ -576,11 +722,19 @@ export function createItemCandidateCard(
                             'accepted'
                     ) {
                         toastr.success(
-                            '已收录到物品档案',
+                            staticText(
+                                displayLocale,
+                                'ui.proposal.item_accepted',
+                                'Added to Item archive',
+                            ),
                         );
                     } else {
                         toastr.info(
-                            '已忽略这条物品候选',
+                            staticText(
+                                displayLocale,
+                                'ui.proposal.item_ignored',
+                                'Ignored this Item candidate',
+                            ),
                         );
                     }
                 } catch (error) {
@@ -590,8 +744,8 @@ export function createItemCandidateCard(
                         false;
                     button.textContent =
                         button === accept
-                            ? '收录'
-                            : '忽略';
+                            ? acceptLabel
+                            : ignoreLabel;
                     toastr.error(
                         String(
                             error
@@ -603,7 +757,7 @@ export function createItemCandidateCard(
                     if (
                         button.isConnected &&
                         button.textContent ===
-                            '处理中…'
+                            processingLabel
                     ) {
                         accept.disabled =
                             false;
@@ -611,8 +765,8 @@ export function createItemCandidateCard(
                             false;
                         button.textContent =
                             button === accept
-                                ? '收录'
-                                : '忽略';
+                                ? acceptLabel
+                                : ignoreLabel;
                     }
                 }
             };

@@ -634,12 +634,16 @@ test('[defect-probing] ordinary Performer receives one authority snapshot and ac
         systemContract,
         /\b(?:playerTurnSequence|addressing|actorKnowledge|actorContinuityCapsules|actorProfiles|presentActors|memoryActivationCapsules|historicalKnowledgeEvidence)\b/u,
     );
+    const expectedAuthoritySnapshot =
+        buildNarrativeAuthoritySnapshot(
+            state,
+        );
+    delete expectedAuthoritySnapshot
+        .currentActors;
     assert.deepEqual(
         payload.sceneFacts
             .authoritySnapshot,
-        buildNarrativeAuthoritySnapshot(
-            state,
-        ),
+        expectedAuthoritySnapshot,
     );
     assert.deepEqual(
         Object.keys(
@@ -763,12 +767,16 @@ test('[defect-probing] medium Transition and low Opening use the shared snapshot
                 .content,
         );
 
+    const expectedAuthoritySnapshot =
+        buildNarrativeAuthoritySnapshot(
+            state,
+        );
+    delete expectedAuthoritySnapshot
+        .currentActors;
     assert.deepEqual(
         transitionPayload
             .authoritySnapshot,
-        buildNarrativeAuthoritySnapshot(
-            state,
-        ),
+        expectedAuthoritySnapshot,
     );
     assert.deepEqual(
         Object.keys(
@@ -1064,7 +1072,7 @@ test('[defect-probing] extreme Performer repair trimming preserves action, confl
         stage:
             'scene_performance_validation',
         errors: [
-            'unsupported_historical_detail [segment:1]',
+            'invalid_segment_actor_id [segment:1]',
             'Item vanished_quill is physically absent.',
         ],
         details: {
@@ -1216,7 +1224,7 @@ test('[defect-probing] extreme Opening repair trimming preserves the committed o
         stage:
             'scene_opening_validation',
         errors: [
-            'unsupported_historical_detail [segment:1]',
+            'invalid_segment_actor_id [segment:1]',
             'Opening contradicts absent Item vanished_quill.',
         ],
     };

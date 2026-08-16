@@ -3,8 +3,27 @@ import {
     listMapsByMountHierarchy,
 } from '../domain/interior-mount.js';
 import {
+    projectCharacterForPrompt,
+} from '../domain/character.js';
+import {
     getMapRooms,
 } from '../domain/map-access.js';
+import {
+    adoptMapProposalLanguage,
+} from '../domain/maps.js';
+import {
+    createLocalMapField,
+    createLocalMapLevelField,
+    createLocalMapRoomField,
+    createWorldMapNodeField,
+    createWorldRegionField,
+} from '../domain/map-localization.js';
+import {
+    getActorDisplayName,
+} from '../domain/actor-display-name.js';
+import {
+    createCharacterInputLocalizationField,
+} from '../domain/localization-candidates.js';
 
 export function createMapRenderer(ports) {
     const {
@@ -20,11 +39,21 @@ export function createMapRenderer(ports) {
         buildMapAuthorityContext,
         buildMapModel,
         createInspectorCard,
+        ensureLocalizedFields =
+        async () => [],
         getLocalMapDefinition,
+        getLocalizedField =
+        field => ({
+            text:
+                field.sourceTextEn ||
+                '',
+        }),
         getMudState,
         getWorldState,
         initials,
         parseJsonObject,
+        requestFieldRetranslation =
+        async () => [],
         renderInspector,
         resolveLocalMapId,
         resolveRoleSlots,
@@ -38,6 +67,182 @@ export function createMapRenderer(ports) {
         inspectorElement,
     } = refs;
 
+    function displayField(
+        field,
+    ) {
+        return getLocalizedField(
+            field,
+        ).text ||
+            field.sourceTextEn;
+    }
+
+    function staticText(
+        staticKey,
+        sourceTextEn,
+    ) {
+        return getLocalizedField({
+            staticKey,
+            sourceTextEn,
+        }).text ||
+            sourceTextEn;
+    }
+
+    function openMapInspector() {
+        root.classList.add(
+            'hpmud-inspector-open',
+        );
+        root.querySelector(
+            '#hpmud_character',
+        )?.setAttribute(
+            'aria-expanded',
+            'true',
+        );
+        renderInspector('map');
+    }
+
+    function createMapLegend(
+        entries,
+    ) {
+        const legend =
+            document.createElement(
+                'div',
+            );
+        legend.className =
+            'hpmud-map-legend';
+        entries.forEach(([
+            className,
+            staticKey,
+            sourceTextEn,
+        ]) => {
+            const item =
+                document.createElement(
+                    'span',
+                );
+            item.className =
+                className;
+            item.textContent =
+                staticText(
+                    staticKey,
+                    sourceTextEn,
+                );
+            legend.append(item);
+        });
+        return legend;
+    }
+
+    function ensureMapFields(
+        fields,
+    ) {
+        void Promise.resolve(
+            ensureLocalizedFields(
+                fields,
+                {
+                    priority: 1,
+                },
+            ),
+        ).catch(error =>
+            console.warn(
+                '[Hogwarts MUD] Map localization query failed',
+                error,
+            ));
+    }
+
+    function appendLocalizationStatus(
+        container,
+        fields,
+    ) {
+        const statuses =
+            (fields || [])
+                .filter(field =>
+                    String(
+                        field
+                            ?.sourceTextEn ||
+                        '',
+                    ).trim())
+                .map(field =>
+                    getLocalizedField(
+                        field,
+                    ).status);
+        const status =
+            statuses.includes(
+                'error',
+            )
+                ? 'error'
+                : statuses.includes(
+                    'pending',
+                )
+                    ? 'pending'
+                    : '';
+        if (!status) {
+            return;
+        }
+        const indicator =
+            document.createElement(
+                'small',
+            );
+        indicator.className =
+            `hpmud-map-localization-status is-${status}`;
+        indicator.setAttribute(
+            'role',
+            'status',
+        );
+        indicator.textContent =
+            getLocalizedField({
+                staticKey:
+                    `translation.status.${status}`,
+                sourceTextEn:
+                    status === 'error'
+                        ? 'Translation unavailable'
+                        : 'Translating',
+            }).text;
+        container.append(
+            indicator,
+        );
+        if (
+            status === 'error'
+        ) {
+            const retry =
+                document.createElement(
+                    'button',
+                );
+            retry.type = 'button';
+            retry.className =
+                'hpmud-map-localization-retry';
+            retry.textContent =
+                getLocalizedField({
+                    staticKey:
+                        'translation.action.retranslate',
+                    sourceTextEn:
+                        'Retranslate',
+                }).text;
+            retry.addEventListener(
+                'click',
+                async () => {
+                    retry.disabled =
+                        true;
+                    try {
+                        await requestFieldRetranslation(
+                            fields.filter(field =>
+                                getLocalizedField(
+                                    field,
+                                ).status ===
+                                    'error'),
+                            {
+                                priority: 1,
+                            },
+                        );
+                    } finally {
+                        retry.disabled =
+                            false;
+                    }
+                },
+            );
+            container.append(
+                retry,
+            );
+        }
+    }
+
     function createSvgElement(name, attributes = {}) {
         const element = document.createElementNS('http://www.w3.org/2000/svg', name);
         Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, String(value)));
@@ -48,11 +253,56 @@ export function createMapRenderer(ports) {
         container.replaceChildren();
         const compact = Boolean(options.compact);
         const model = buildMapModel(mapState || {}, options.currentLocation, Boolean(options.revealAll));
+        const regionFields =
+            new Map(
+                model.regions.map(
+                    region => [
+                        region.id,
+                        createWorldRegionField(
+                            region,
+                        ),
+                    ],
+                ),
+            );
+        const nodeFields =
+            new Map(
+                model.nodes.map(node => [
+                    node.id,
+                    {
+                        name:
+                            createWorldMapNodeField(
+                                node,
+                                'nameEn',
+                            ),
+                        summary:
+                            createWorldMapNodeField(
+                                node,
+                                'summaryEn',
+                            ),
+                    },
+                ]),
+            );
+        const localizationFields = [
+            ...regionFields.values(),
+            ...[
+                ...nodeFields.values(),
+            ].flatMap(fields => [
+                fields.name,
+                fields.summary,
+            ]),
+        ];
+        ensureMapFields(
+            localizationFields,
+        );
         container.classList.toggle('compact', compact);
         const svg = createSvgElement('svg', {
             viewBox: '0 0 100 100',
             role: 'img',
-            'aria-label': '英国魔法世界地点与路线图',
+            'aria-label':
+                staticText(
+                    'ui.map.world_aria',
+                    'British Wizarding World locations and routes',
+                ),
             preserveAspectRatio: 'xMidYMid meet',
         });
         svg.innerHTML = `
@@ -86,7 +336,12 @@ export function createMapRenderer(ports) {
                     class: 'hpmud-map-region-label',
                     'text-anchor': 'middle',
                 });
-                label.textContent = region.name;
+                label.textContent =
+                    displayField(
+                        regionFields.get(
+                            region.id,
+                        ),
+                    );
                 group.append(label);
             }
             regionsLayer.append(group);
@@ -113,7 +368,12 @@ export function createMapRenderer(ports) {
                 'data-node-id': node.id,
             });
             const title = createSvgElement('title');
-            title.textContent = `${node.name} · ${node.summary}`;
+            const fields =
+                nodeFields.get(
+                    node.id,
+                );
+            title.textContent =
+                `${displayField(fields.name)} · ${displayField(fields.summary)}`;
             group.append(title);
             if (node.visibility === 'current') {
                 group.append(createSvgElement('circle', { class: 'pulse', r: compact ? 4.2 : 4.8 }));
@@ -125,7 +385,10 @@ export function createMapRenderer(ports) {
                     y: -3.8,
                     'text-anchor': 'middle',
                 });
-                label.textContent = node.name;
+                label.textContent =
+                    displayField(
+                        fields.name,
+                    );
                 group.append(label);
             }
             nodesLayer.append(group);
@@ -134,21 +397,72 @@ export function createMapRenderer(ports) {
         container.append(svg);
 
         if (!compact) {
-            const legend = document.createElement('div');
-            legend.className = 'hpmud-map-legend';
-            legend.innerHTML = '<span class="current">当前位置</span><span class="discovered">已发现</span><span class="known">地图已知</span><span class="generated">世界生成</span>';
-            container.append(legend);
+            container.append(
+                createMapLegend([
+                    [
+                        'current',
+                        'ui.map.legend.current',
+                        'Current location',
+                    ],
+                    [
+                        'discovered',
+                        'ui.map.legend.discovered',
+                        'Discovered',
+                    ],
+                    [
+                        'known',
+                        'ui.map.legend.known',
+                        'Mapped',
+                    ],
+                    [
+                        'generated',
+                        'ui.map.legend.generated',
+                        'World-generated',
+                    ],
+                ]),
+            );
         }
+        appendLocalizationStatus(
+            container,
+            localizationFields,
+        );
     }
 
     function getMapPositionMarkers(state, mapId) {
         const markers = [];
         if (state.map?.activeMapId === mapId &&
             state.map?.currentLocalNodeId) {
+            const playerName =
+                state.character
+                    ?.inputEvidence
+                    ?.identity
+                    ?.name ||
+                '';
+            const playerNameField =
+                createCharacterInputLocalizationField(
+                    'identity.name',
+                    playerName,
+                );
+            if (playerName) {
+                ensureMapFields([
+                    playerNameField,
+                ]);
+            }
             markers.push({
                 id: 'player',
                 type: 'player',
-                name: state.character?.identity?.name || '玩家',
+                name:
+                    (
+                        playerName
+                            ? displayField(
+                                playerNameField,
+                            )
+                            : ''
+                    ) ||
+                    staticText(
+                        'ui.map.legend.player',
+                        'Player',
+                    ),
                 roomId: state.map.currentLocalNodeId,
             });
         }
@@ -160,11 +474,36 @@ export function createMapRenderer(ports) {
             .forEach(actor => {
                 const profile = state.actorLibrary?.find(item =>
                     item.id === actor.id);
+                const actorField = {
+                    recordKind:
+                        'actor_core',
+                    recordId:
+                        actor.id,
+                    fieldPath:
+                        'nameEn',
+                    sourceTextEn:
+                        profile?.nameEn ||
+                        actor.nameEn ||
+                        actor.id,
+                };
+                ensureMapFields([
+                    actorField,
+                ]);
                 markers.push({
                     id: actor.id,
                     type: 'actor',
-                    name: profile?.name || actor.name ||
-                        profile?.nameEn || actor.nameEn || actor.id,
+                    name:
+                        getActorDisplayName({
+                            actorId:
+                                actor.id,
+                            nameEn:
+                                actorField
+                                    .sourceTextEn,
+                            displayLocale:
+                                session
+                                    .displayLocale,
+                            getLocalizedField,
+                        }),
                     roomId: actor.roomId,
                 });
             });
@@ -179,11 +518,62 @@ export function createMapRenderer(ports) {
             renderWorldMap(container, mapState, options);
             return null;
         }
+        const localMapField =
+            createLocalMapField(
+                model,
+            );
+        const levelFields =
+            new Map(
+                model.levels.map(
+                    level => [
+                        level.id,
+                        createLocalMapLevelField(
+                            mapId,
+                            level,
+                        ),
+                    ],
+                ),
+            );
+        const roomFields =
+            new Map(
+                model.nodes.map(room => [
+                    room.id,
+                    {
+                        name:
+                            createLocalMapRoomField(
+                                mapId,
+                                room,
+                            ),
+                        description:
+                            createLocalMapRoomField(
+                                mapId,
+                                room,
+                                'descriptionEn',
+                            ),
+                    },
+                ]),
+            );
+        const localizationFields = [
+            localMapField,
+            ...levelFields.values(),
+            ...[
+                ...roomFields.values(),
+            ].flatMap(fields => [
+                fields.name,
+                fields.description,
+            ]),
+        ];
+        ensureMapFields(
+            localizationFields,
+        );
         container.classList.toggle('compact', compact);
         const svg = createSvgElement('svg', {
             viewBox: '0 0 100 100',
             role: 'img',
-            'aria-label': `${model.name} · ${model.levels.find(level => level.id === model.levelId)?.name || ''} MUD 地图`,
+            'aria-label': `${displayField(localMapField)} · ${displayField(levelFields.get(model.levelId))} ${staticText(
+                'ui.map.local_aria_suffix',
+                'MUD map',
+            )}`,
             preserveAspectRatio: 'xMidYMid meet',
         });
         svg.innerHTML = `
@@ -226,7 +616,20 @@ export function createMapRenderer(ports) {
                 'data-node-id': room.id,
             });
             const title = createSvgElement('title');
-            title.textContent = `${room.name} · ${room.description || room.kind}`;
+            const fields =
+                roomFields.get(
+                    room.id,
+                );
+            title.textContent =
+                `${displayField(fields.name)} · ${
+                    displayField(
+                        fields.description,
+                    ) ||
+                    staticText(
+                        'ui.map.room_generic',
+                        'Room',
+                    )
+                }`;
             group.append(title);
             if (room.visibility === 'current') {
                 group.append(createSvgElement('circle', { class: 'pulse', r: compact ? 4 : 4.8 }));
@@ -238,7 +641,10 @@ export function createMapRenderer(ports) {
                     y: -3.8,
                     'text-anchor': 'middle',
                 });
-                label.textContent = room.name;
+                label.textContent =
+                    displayField(
+                        fields.name,
+                    );
                 group.append(label);
             }
             nodeLayer.append(group);
@@ -275,7 +681,12 @@ export function createMapRenderer(ports) {
                     'data-position-id': position.id,
                 });
                 const title = createSvgElement('title');
-                title.textContent = `${position.name} · ${room.name}`;
+                title.textContent =
+                    `${position.name} · ${displayField(
+                        roomFields.get(
+                            room.id,
+                        ).name,
+                    )}`;
                 marker.append(title);
                 if (position.type === 'player') {
                     marker.append(createSvgElement('path', {
@@ -304,20 +715,60 @@ export function createMapRenderer(ports) {
         container.append(svg);
 
         if (!compact) {
-            const legend = document.createElement('div');
-            legend.className = 'hpmud-map-legend';
-            legend.innerHTML = '<span class="player">玩家</span><span class="actor">人物</span><span class="discovered">固定房间</span><span class="known">未发现秘密</span>';
-            container.append(legend);
+            container.append(
+                createMapLegend([
+                    [
+                        'player',
+                        'ui.map.legend.player',
+                        'Player',
+                    ],
+                    [
+                        'actor',
+                        'ui.map.legend.actor',
+                        'Character',
+                    ],
+                    [
+                        'discovered',
+                        'ui.map.legend.fixed_room',
+                        'Fixed room',
+                    ],
+                    [
+                        'known',
+                        'ui.map.legend.hidden_secret',
+                        'Undiscovered secret',
+                    ],
+                ]),
+            );
         }
+        appendLocalizationStatus(
+            container,
+            localizationFields,
+        );
         return model;
     }
 
     function populateMapScopeSelect(select, selectedValue, includeAuto = false, mapState = {}) {
         select.replaceChildren();
         if (includeAuto) {
-            select.add(new Option('跟随当前位置', 'auto'));
+            select.add(
+                new Option(
+                    staticText(
+                        'ui.map.scope.follow_current',
+                        'Follow current location',
+                    ),
+                    'auto',
+                ),
+            );
         }
-        select.add(new Option('英国魔法世界总览', 'world'));
+        select.add(
+            new Option(
+                staticText(
+                    'ui.map.scope.world',
+                    'British Wizarding World Overview',
+                ),
+                'world',
+            ),
+        );
         const hierarchy =
             listMapsByMountHierarchy(
                 mapState,
@@ -346,17 +797,44 @@ export function createMapRenderer(ports) {
                         room.id ===
                             mount.parentRoomId)
                     : null;
+            const mapNameField =
+                createLocalMapField(
+                    map,
+                );
+            const parentRoomField =
+                parentRoom
+                    ? createLocalMapRoomField(
+                        mount.parentMapId,
+                        parentRoom,
+                    )
+                    : null;
+            ensureMapFields([
+                mapNameField,
+                parentRoomField,
+            ].filter(Boolean));
             const label = [
                 depth
                     ? `${'  '.repeat(depth)}↳`
                     : '',
                 parentRoom
-                    ? `${parentRoom.name || parentRoom.nameEn || mount.parentRoomId} /`
+                    ? `${displayField(
+                        parentRoomField,
+                    ) || staticText(
+                        'map.location.unknown',
+                        'Unknown location',
+                    )} /`
                     : '',
-                map.name ||
-                    map.nameEn ||
-                    map.id,
-                `· ${(map.nodes || []).length} 节点`,
+                displayField(
+                    mapNameField,
+                ) ||
+                    staticText(
+                        'map.location.unknown',
+                        'Unknown location',
+                    ),
+                `· ${(map.nodes || []).length} ${staticText(
+                    'ui.map.nodes',
+                    'nodes',
+                )}`,
             ].filter(Boolean)
                 .join(' ');
             select.add(
@@ -379,7 +857,25 @@ export function createMapRenderer(ports) {
             select.hidden = true;
             return '';
         }
-        map.levels.forEach(level => select.add(new Option(level.name, level.id)));
+        const fields =
+            map.levels.map(level =>
+                createLocalMapLevelField(
+                    mapId,
+                    level,
+                ));
+        ensureMapFields(fields);
+        map.levels.forEach((
+            level,
+            index,
+        ) =>
+            select.add(
+                new Option(
+                    displayField(
+                        fields[index],
+                    ),
+                    level.id,
+                ),
+            ));
         select.value = map.levels.some(level => level.id === selectedValue)
             ? selectedValue
             : map.defaultLevelId;
@@ -394,17 +890,66 @@ export function createMapRenderer(ports) {
             ...(state.map?.generatedLocalNodes || [])
                 .filter(item => item.mapId === mapId),
         ].find(item => item.id === roomId);
-        return room?.name || room?.nameEn || roomId || '位置未知';
+        if (!room) {
+            return staticText(
+                'map.location.unknown',
+                'Unknown location',
+            );
+        }
+        const field =
+            createLocalMapRoomField(
+                mapId,
+                room,
+            );
+        ensureMapFields([
+            field,
+        ]);
+        return displayField(field) ||
+            roomId ||
+            staticText(
+                'map.location.unknown',
+                'Unknown location',
+            );
     }
 
     function renderMiniMap(state) {
         const container = root.querySelector('#hpmud_map_mini');
-        const localMapId = resolveLocalMapId(state.map, state.location);
+        const localMapId =
+            resolveLocalMapId(
+                state.map,
+            );
         if (!localMapId && state.phase !== 'playing') {
             container.replaceChildren();
             const pending = document.createElement('div');
             pending.className = 'hpmud-map-pending';
-            pending.innerHTML = '<span>⌁</span><strong>家庭场景生成中</strong><small>房间与出口将在规则校验后固化</small>';
+            const symbol =
+                document.createElement(
+                    'span',
+                );
+            symbol.textContent = '⌁';
+            const title =
+                document.createElement(
+                    'strong',
+                );
+            title.textContent =
+                staticText(
+                    'ui.map.pending.home_title',
+                    'Generating the home Scene',
+                );
+            const detail =
+                document.createElement(
+                    'small',
+                );
+            detail.textContent =
+                staticText(
+                    'ui.map.pending.home_detail',
+                    'Rooms and exits become fixed after rules validation',
+                );
+            pending.append(
+                symbol,
+                title,
+                detail,
+            );
             container.append(pending);
             return;
         }
@@ -417,21 +962,82 @@ export function createMapRenderer(ports) {
         } else {
             renderWorldMap(container, state.map, {
                 compact: true,
-                currentLocation: state.location,
             });
         }
         const caption = document.createElement('span');
         caption.className = 'hpmud-map-caption';
         const localMap = getLocalMapDefinition(localMapId, state.map);
         const localLevel = localMap?.levels.find(level => level.id === state.map?.currentLevelId);
+        const localMapField =
+            localMap
+                ? createLocalMapField(
+                    localMap,
+                )
+                : null;
+        const localLevelField =
+            localMap &&
+                localLevel
+                ? createLocalMapLevelField(
+                    localMap.id,
+                    localLevel,
+                )
+                : null;
+        const worldNode = [
+            ...PRESET_WORLD_MAP.nodes,
+            ...(
+                state.map
+                    ?.generatedNodes ||
+                []
+            ),
+        ].find(node =>
+            node.id ===
+                state.map
+                    ?.currentNodeId);
+        const worldNodeField =
+            worldNode
+                ? createWorldMapNodeField(
+                    worldNode,
+                )
+                : null;
+        ensureMapFields([
+            localMapField,
+            localLevelField,
+            worldNodeField,
+        ].filter(Boolean));
         caption.textContent = localMap
-            ? `${localMap.name}${localLevel ? ` · ${localLevel.name}` : ''}`
-            : state.location;
+            ? [
+                displayField(
+                    localMapField,
+                ),
+                localLevelField
+                    ? displayField(
+                        localLevelField,
+                    )
+                    : '',
+            ].filter(Boolean)
+                .join(' · ')
+            : worldNodeField
+                ? displayField(
+                    worldNodeField,
+                )
+                : staticText(
+                    'map.location.unknown',
+                    'Unknown location',
+                );
         const button = document.createElement('button');
         button.type = 'button';
-        button.setAttribute('aria-label', '展开世界地图');
+        button.setAttribute(
+            'aria-label',
+            staticText(
+                'ui.map.expand_aria',
+                'Expand world map',
+            ),
+        );
         button.textContent = '↗';
-        button.addEventListener('click', () => renderInspector('map'));
+        button.addEventListener(
+            'click',
+            openMapInspector,
+        );
         container.append(caption, button);
     }
 
@@ -441,56 +1047,150 @@ export function createMapRenderer(ports) {
         const roleSlot = slots.high;
         const profileId = roleSlot.profileId;
         if (!MAP_DIRECTOR_TRIGGERS.includes(trigger)) {
-            throw new Error('无效的地图演算触发条件。');
+            throw new Error(
+                staticText(
+                    'ui.map.expansion.invalid_trigger',
+                    'Invalid Map calculation trigger.',
+                ),
+            );
         }
         if (!profileId) {
-            toastr.warning('未配置高档“世界导演”Connection Profile。');
+            toastr.warning(
+                staticText(
+                    'ui.map.expansion.missing_profile',
+                    'Configure a high-tier World Director Connection Profile first.',
+                ),
+            );
             return;
         }
 
         const button = inspectorElement.querySelector('#hpmud_expand_map');
         if (button) {
             button.disabled = true;
-            button.textContent = '世界演算中…';
+            button.textContent =
+                staticText(
+                    'ui.map.expansion.running',
+                    'Calculating world structure...',
+                );
         }
         try {
             const response = await sendMapExpansionRequest(roleSlot, [
                 {
                     role: 'system',
-                    content: `You are the World Director for a persistent Harry Potter RPG. First search the supplied preset world and local-map catalog. Propose a new top-level location only when no preset room or location can represent the physical place created by the event. Output one JSON object and no prose:
-{"id":"string","reason":"string","changes":[{"operation":"add|update","node":{"id":"snake_case","regionId":"existing region id","name":"Chinese display name","kind":"string","summary":"Chinese summary","access":"public|student|restricted|dangerous|forbidden","x":0,"y":0}}]}
+                    content: `You are the World Director for a persistent Harry Potter RPG. First search the supplied preset world and local-map catalog. Propose a new top-level location only when no preset room or location can represent the physical place created by the event. Use English for every semantic prose field. Output one JSON object and no prose:
+{"id":"string","reasonEn":"English reason","changes":[{"operation":"add|update","node":{"id":"snake_case","regionId":"existing region id","nameEn":"English canonical name","kind":"string","summaryEn":"English canonical summary","access":"public|student|restricted|dangerous|forbidden","x":0,"y":0}}]}
 Never delete or rename a preset location. Ordinary movement and scene description require no proposal.`,
                 },
                 {
                     role: 'user',
                     content: JSON.stringify({
                         trigger,
-                        currentLocation: state.location,
-                        character: state.character,
-                        mapAuthority: buildMapAuthorityContext(state),
+                        currentLocation: {
+                            mapId:
+                                state.map
+                                    ?.activeMapId ||
+                                '',
+                            roomId:
+                                state.map
+                                    ?.currentLocalNodeId ||
+                                '',
+                        },
+                        character:
+                            projectCharacterForPrompt(
+                                state
+                                    .character,
+                            ),
+                        mapAuthority:
+                            buildMapAuthorityContext(
+                                state,
+                                {
+                                    purpose:
+                                        'expansion',
+                                },
+                            ),
                     }),
                 },
             ], { json: true });
-            const proposal = parseJsonObject(response?.content);
+            const parsed =
+                parseJsonObject(
+                    response?.content,
+                );
+            const adoption =
+                adoptMapProposalLanguage(
+                    parsed,
+                );
+            if (
+                adoption.diagnostics
+                    .length &&
+                !adoption.proposal
+                    .changes.length
+            ) {
+                toastr.info(
+                    staticText(
+                        'ui.map.expansion.language_skipped',
+                        'The Map proposal was not written to world State.',
+                    ),
+                );
+                return {
+                    status:
+                        'language_skipped',
+                    diagnostics:
+                        adoption
+                            .diagnostics,
+                };
+            }
+            const proposal =
+                adoption.proposal;
             const validation = validateMapProposal(proposal, {
                 trigger,
                 baseMap: PRESET_WORLD_MAP,
                 generatedNodes: state.map?.generatedNodes,
             });
             if (!validation.valid) {
-                throw new Error(`地图提案被规则层拒绝：${validation.errors.join('；')}`);
+                throw new Error(
+                    `${staticText(
+                        'ui.map.expansion.rejected',
+                        'The rules layer rejected the Map proposal',
+                    )}: ${validation.errors.join(
+                        '; ',
+                    )}`,
+                );
+            }
+            if (!proposal.changes.length) {
+                return {
+                    status:
+                        'no_change',
+                    diagnostics:
+                        adoption
+                            .diagnostics,
+                };
             }
             state.map = applyMapProposal(state.map, proposal);
             saveMetadataDebounced();
             renderInspector('map');
             renderMiniMap(getWorldState());
-            toastr.success('世界导演的地图提案已通过校验并提交。');
+            toastr.success(
+                staticText(
+                    'ui.map.expansion.committed',
+                    'The World Director Map proposal passed validation and was committed.',
+                ),
+            );
+            return {
+                status: 'committed',
+                diagnostics:
+                    adoption
+                        .diagnostics,
+            };
         } catch (error) {
             console.error('[Hogwarts MUD] Map expansion failed', error);
             toastr.error(String(error?.cause?.message || error?.message || error));
             if (button) {
                 button.disabled = false;
-                button.textContent = '申请结构影响演算';
+                button.textContent =
+                    staticText(
+                        'ui.map.inspector.recalculate',
+                        'Request structural impact calculation',
+                    );
             }
         }
     }
@@ -499,12 +1199,27 @@ Never delete or rename a preset location. Ordinary movement and scene descriptio
         const controls = document.createElement('div');
         controls.className = 'hpmud-map-selectors';
         const scopeSelect = document.createElement('select');
-        scopeSelect.setAttribute('aria-label', '地图地点');
+        scopeSelect.setAttribute(
+            'aria-label',
+            staticText(
+                'ui.map.inspector.scope_aria',
+                'Map location',
+            ),
+        );
         populateMapScopeSelect(scopeSelect, session.inspectorMapScope, true, state.map);
         session.inspectorMapScope = scopeSelect.value;
         const levelSelect = document.createElement('select');
-        levelSelect.setAttribute('aria-label', '地图楼层');
-        const resolvedMapId = resolveLocalMapId(state.map, state.location);
+        levelSelect.setAttribute(
+            'aria-label',
+            staticText(
+                'ui.map.inspector.level_aria',
+                'Map level',
+            ),
+        );
+        const resolvedMapId =
+            resolveLocalMapId(
+                state.map,
+            );
         const effectiveScope = session.inspectorMapScope === 'auto'
             ? resolvedMapId || 'world'
             : session.inspectorMapScope;
@@ -519,16 +1234,66 @@ Never delete or rename a preset location. Ordinary movement and scene descriptio
 
         const map = document.createElement('div');
         map.className = 'hpmud-inspector-map';
-        let title = `${getMudState()?.campaign?.startYear || 1991} · 英国魔法世界`;
+        let title = `${
+            getMudState()
+                ?.campaign
+                ?.startYear ||
+            1991
+        } · ${staticText(
+            'ui.setup.review.world',
+            'British Wizarding World',
+        )}`;
         let fixedCount = PRESET_WORLD_MAP.nodes.length;
         if (effectiveScope === 'world') {
-            renderWorldMap(map, state.map, { currentLocation: state.location });
+            renderWorldMap(
+                map,
+                state.map,
+            );
         } else {
             const model = renderLocalMap(map, effectiveScope, state.map, {
                 levelId: session.inspectorMapLevel,
                 positions: getMapPositionMarkers(state, effectiveScope),
             });
-            title = `${model?.name || '地点'} · ${model?.levels.find(level => level.id === model.levelId)?.name || ''}`;
+            const level =
+                model?.levels.find(
+                    candidate =>
+                        candidate.id ===
+                        model.levelId,
+                );
+            const mapField =
+                model
+                    ? createLocalMapField(
+                        model,
+                    )
+                    : null;
+            const levelField =
+                model &&
+                    level
+                    ? createLocalMapLevelField(
+                        model.id,
+                        level,
+                    )
+                    : null;
+            ensureMapFields([
+                mapField,
+                levelField,
+            ].filter(Boolean));
+            title = [
+                mapField
+                    ? displayField(
+                        mapField,
+                    )
+                    : staticText(
+                        'ui.map.inspector.location',
+                        'Location',
+                    ),
+                levelField
+                    ? displayField(
+                        levelField,
+                    )
+                    : '',
+            ].filter(Boolean)
+                .join(' · ');
             fixedCount = getLocalMapDefinition(effectiveScope, state.map)?.nodes.length || 0;
         }
         inspectorElement.append(createInspectorCard(title, map));
@@ -546,14 +1311,36 @@ Never delete or rename a preset location. Ordinary movement and scene descriptio
         const director = document.createElement('div');
         director.className = 'hpmud-map-director';
         const count = document.createElement('small');
-        count.textContent = `固定拓扑 ${fixedCount} 节点 · 运行时只保存结构差异`;
+        count.textContent =
+            `${staticText(
+                'ui.map.inspector.fixed_topology',
+                'Fixed topology',
+            )} ${fixedCount} ${staticText(
+                'ui.map.nodes',
+                'nodes',
+            )} · ${staticText(
+                'ui.map.inspector.runtime_differences',
+                'Runtime stores only structural differences',
+            )}`;
         const recalculate = document.createElement('button');
         recalculate.id = 'hpmud_expand_map';
         recalculate.type = 'button';
-        recalculate.textContent = '申请结构影响演算';
+        recalculate.textContent =
+            staticText(
+                'ui.map.inspector.recalculate',
+                'Request structural impact calculation',
+            );
         recalculate.addEventListener('click', () => void requestMapExpansion('world_event'));
         director.append(count, recalculate);
-        inspectorElement.append(createInspectorCard('世界导演', director));
+        inspectorElement.append(
+            createInspectorCard(
+                staticText(
+                    'ui.map.inspector.world_director',
+                    'World Director',
+                ),
+                director,
+            ),
+        );
     }
 
     return {

@@ -4,19 +4,24 @@ import {
 import {
     buildNarrativePromptContext,
 } from '../domain/narrative-prompt-context.js';
+import {
+    MODEL_OUTPUT_EVIDENCE_AUTHORITY,
+    collectNonEnglishAuthorityFields,
+    createModelLanguageMismatch,
+    partitionModelSegments,
+} from '../domain/model-language-adoption.js';
 
 export function createOpeningWorkflow(ports) {
     const {
-        CANON_WIT_TONE_CONTRACT,
         PRESET_WORLD_MAP,
-        TRANSLATION_FORMAT_VERSION,
         applyNativeRoleSettings,
         applyOpeningWorldPackage,
         applySystemPrompt,
+        enqueueLocalizationCandidates =
+        async () => {},
         extractRoleResponseText,
         getContext,
         getMudState,
-        getSettings,
         jobRegistry,
         parseJsonObject,
         renderAll,
@@ -25,93 +30,8 @@ export function createOpeningWorkflow(ports) {
         sendBootstrapSceneOpeningRequest,
         sendOpeningWorldRequest,
         syncLocalKnowledge,
-        translateOpeningValues,
         validateOpeningWorldPackage,
     } = ports;
-
-    async function localizeOpeningPackage(opening) {
-        if (!getSettings().translationEnabled) {
-            return opening;
-        }
-        const fields = [
-            opening.chapterEn,
-            opening.scene.nameEn,
-            opening.scene.summaryEn,
-            opening.scene.map.nameEn,
-            ...opening.scene.map.levels.map(level => level.nameEn),
-            ...opening.scene.map.rooms.map(room => room.nameEn),
-            ...opening.actorProposals.flatMap(actor => [
-                actor.roleEn,
-                actor.initialRelationshipToPlayerEn,
-                actor.firstImpressionOfPlayerEn ||
-                actor.initialRelationshipToPlayerEn,
-                actor.runtime.currentActivityEn,
-                actor.runtime.currentIntentEn,
-            ]),
-            opening.conflict.titleEn,
-            opening.conflict.premiseEn,
-            opening.conflict.immediatePressureEn,
-            opening.conflict.stakesEn,
-            opening.conflict.incitingEventEn,
-            ...(opening.clues || []).flatMap(item => [item.labelEn, item.detailEn]),
-            ...(opening.items || []).flatMap(item => [item.labelEn, item.detailEn]),
-            ...(opening.nextSceneIntent ? [
-                opening.nextSceneIntent.titleEn,
-                opening.nextSceneIntent.summaryEn,
-                opening.nextSceneIntent.triggerEn,
-            ] : []),
-        ];
-        const translated = await translateOpeningValues(fields);
-        let cursor = 0;
-        const display = {
-            chapter: translated[cursor++],
-            sceneName: translated[cursor++],
-            sceneSummary: translated[cursor++],
-            mapName: translated[cursor++],
-            levelNames: opening.scene.map.levels.map(() => translated[cursor++]),
-            roomNames: opening.scene.map.rooms.map(() => translated[cursor++]),
-            actorRoles: [],
-            actorRelationships: [],
-            actorImpressions: [],
-            actorActivities: [],
-            actorIntents: [],
-        };
-        opening.actorProposals.forEach(() => {
-            display.actorRoles.push(translated[cursor++]);
-            display.actorRelationships.push(translated[cursor++]);
-            display.actorImpressions.push(translated[cursor++]);
-            display.actorActivities.push(translated[cursor++]);
-            display.actorIntents.push(translated[cursor++]);
-        });
-        display.conflictTitle = translated[cursor++];
-        display.conflictPremise = translated[cursor++];
-        display.conflictPressure = translated[cursor++];
-        display.conflictStakes = translated[cursor++];
-        display.incitingEvent = translated[cursor++];
-        display.clueLabels = [];
-        display.clueDetails = [];
-        (opening.clues || []).forEach(() => {
-            display.clueLabels.push(translated[cursor++]);
-            display.clueDetails.push(translated[cursor++]);
-        });
-        display.itemLabels = [];
-        display.itemDetails = [];
-        (opening.items || []).forEach(() => {
-            display.itemLabels.push(translated[cursor++]);
-            display.itemDetails.push(translated[cursor++]);
-        });
-        const nextSceneIntent = opening.nextSceneIntent ? {
-            ...opening.nextSceneIntent,
-            title: translated[cursor++],
-            summary: translated[cursor++],
-            trigger: translated[cursor++],
-        } : undefined;
-        return {
-            ...opening,
-            ...(nextSceneIntent ? { nextSceneIntent } : {}),
-            display,
-        };
-    }
 
     function createOpeningDirectorPrompt(state) {
         const isFirstYear = state.campaign.grade === 1;
@@ -122,7 +42,8 @@ export function createOpeningWorkflow(ports) {
 
 The opening must already be in motion before the player gets control. Establish an exact time, a concrete current room, 1-8 present NPCs with independent activity and intent, and one strong dramatic conflict with immediate pressure and long-term stakes.
 
-	Every actor is proposed exactly once in actorProposals. For a present actor, runtime.present is true, runtime.roomId names one opening-map room, and firstImpressionOfPlayerEn is a specific initial opinion grounded in visible conduct or confirmed shared history. Do not use "stranger", "unknown", or a bare relationship label for family, guardians, relatives, established friends, or other pre-existing contacts.
+	Every actor is proposed exactly once in actorProposals. For a present actor, runtime.present is true, runtime.roomId names one opening-map room, and firstImpressionOfPlayerEn is a specific 1-24 English-word initial opinion grounded in visible conduct or confirmed shared history. Do not use "stranger", "unknown", or a bare relationship label for family, guardians, relatives, established friends, or other pre-existing contacts.
+	Every actor, including an absent future clue-bearing role, requires a non-empty runtime.currentActivityEn. For an absent actor, describe the actor's current offstage activity without placing them in the opening room.
 
 	publicProfile.descriptionEn is stable physical appearance only. Exclude clothes, accessories, held objects, nearby possessions, furniture, pose, activity, and location. Put current behavior in runtime.currentActivityEn; subsequent clothing and object state is maintained separately.
 
@@ -228,9 +149,11 @@ Schema:
                     playerCharacter: state.character,
                     canonicalWorldCatalog: PRESET_WORLD_MAP.nodes.map(node => ({
                         id: node.id,
-                        name: node.name,
+                        nameEn:
+                            node.nameEn,
                         regionId: node.regionId,
-                        summary: node.summary,
+                        summaryEn:
+                            node.summaryEn,
                     })),
                 }),
             },
@@ -395,6 +318,9 @@ Schema:
                     ? new Set([
                         'type',
                         'textEn',
+                        'rawText',
+                        'language',
+                        'authority',
                     ])
                     : segment?.type ===
                         'dialogue'
@@ -402,12 +328,16 @@ Schema:
                             'type',
                             'actorId',
                             'textEn',
+                            'rawText',
+                            'language',
+                            'authority',
                         ])
                         : null;
             if (
                 !allowedKeys ||
                 !String(
                     segment?.textEn ||
+                    segment?.rawText ||
                     '',
                 ).trim()
             ) {
@@ -427,9 +357,22 @@ Schema:
                     `Bootstrap segment ${index} cannot contain fields: ${unknownKeys.join(', ')}.`,
                 );
             }
+            if (
+                segment.rawText &&
+                (
+                    segment.authority !==
+                        MODEL_OUTPUT_EVIDENCE_AUTHORITY ||
+                    !segment.language
+                )
+            ) {
+                errors.push(
+                    `Bootstrap segment ${index} rawText lacks language evidence metadata.`,
+                );
+            }
             wordCount +=
                 String(
-                    segment.textEn,
+                    segment.textEn ||
+                    '',
                 )
                     .trim()
                     .split(/\s+/u)
@@ -464,8 +407,11 @@ Schema:
             );
         }
         if (
-            wordCount < 180 ||
-            wordCount > 420
+            wordCount > 0 &&
+            (
+                wordCount < 180 ||
+                wordCount > 420
+            )
         ) {
             errors.push(
                 'Bootstrap Scene Opening must contain 180-420 English words.',
@@ -502,6 +448,17 @@ Schema:
         try {
             const parsed =
                 parseJsonObject(raw);
+            const partition =
+                partitionModelSegments(
+                    parsed?.segments,
+                    {
+                        taskId:
+                            'scene_opening',
+                    },
+                );
+            parsed.segments =
+                partition
+                    .displaySegments;
             const validation =
                 validateBootstrapSceneOpening(
                     parsed,
@@ -524,7 +481,10 @@ Schema:
     function composeSceneSegments(segments, actorLibrary, language = 'en') {
         const actors = new Map((actorLibrary || []).map(actor => [actor.id, actor]));
         return (segments || []).map(segment => {
-            const text = language === 'zh' && segment.textZh ? segment.textZh : segment.textEn;
+            const text =
+                segment.textEn ||
+                segment.rawText ||
+                '';
             if (segment.type !== 'dialogue') {
                 return text;
             }
@@ -536,49 +496,56 @@ Schema:
         }).join('\n\n');
     }
 
-    async function localizeSceneSegments(segments) {
-        if (!getSettings().translationEnabled) {
-            return segments;
-        }
-        const translated = await translateOpeningValues(segments.map(segment => segment.textEn));
-        return segments.map((segment, index) => ({
-            ...segment,
-            textZh: translated[index],
-        }));
-    }
-
     async function appendOpeningNarrative(segments, state) {
         const context = getContext();
-        const sourceEn = composeSceneSegments(segments, state.actorLibrary, 'en');
-        const translatedZh = composeSceneSegments(segments, state.actorLibrary, 'zh');
+        const messageText =
+            composeSceneSegments(
+                segments,
+                state.actorLibrary,
+                'en',
+            );
         const message = {
             name: 'Scene',
             is_user: false,
             is_system: false,
             send_date: new Date().toISOString(),
-            mes: sourceEn,
+            mes: messageText,
             extra: {
                 hogwartsMud: {
-                    sourceEn,
+                    languageVersion: 1,
                     role: 'opening_narrative',
                     sceneId: state.scene?.id,
                     segments,
-                    ...(translatedZh !== sourceEn ? {
-                        translatedZh,
-                        provider:
-                        getSettings()
-                            .translationProvider,
-                        translatedAt: Date.now(),
-                        translationVersion: TRANSLATION_FORMAT_VERSION,
-                    } : {}),
                 },
-                ...(translatedZh !== sourceEn ? { display_text: translatedZh } : {}),
             },
         };
         const messageId =
             context.chat.length;
         context.chat.push(message);
         await context.saveChat();
+        void enqueueLocalizationCandidates(
+            segments
+                .map((
+                    segment,
+                    index,
+                ) => ({
+                    recordKind:
+                        'message_segment',
+                    recordId:
+                        `message:${messageId}:segment:${index}`,
+                    fieldPath: 'textEn',
+                    sourceText:
+                        segment.textEn ||
+                        '',
+                    priority: 0,
+                    changedAt:
+                        Date.now(),
+                })),
+        ).catch(error =>
+            console.warn(
+                '[Hogwarts MUD] Opening localization candidate enqueue failed',
+                error,
+            ));
         const openingExperience =
             applyCommittedSceneOpeningExperience(
                 state,
@@ -600,55 +567,58 @@ Schema:
     }
 
     async function generateOpeningPackage(highSlot, state) {
-        let response = await sendOpeningWorldRequest(
-            highSlot,
-            createOpeningDirectorPrompt(state),
-            { json: true },
-        );
-        let raw = extractRoleResponseText(response);
-        let lastError = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                const opening = parseJsonObject(raw);
-                const validation = validateOpeningWorldPackage(opening, state.character, state.campaign);
-                if (!validation.valid) {
-                    throw new Error(validation.errors.join('；'));
-                }
-                return opening;
-            } catch (error) {
-                lastError = error;
-                if (attempt > 0) {
-                    break;
-                }
-                response = await sendOpeningWorldRequest(highSlot, [
-                    {
-                        role: 'system',
-                        content: 'Repair an invalid opening-world JSON package. Return exactly one complete JSON object with no Markdown and no commentary. Preserve usable facts, fill missing required fields, close all arrays and objects, keep the campaign year unchanged, and ensure every map exit references an existing room.',
-                    },
-                    {
-                        role: 'user',
-                        content: JSON.stringify({
-                            validationError: String(error?.message || error),
-                            invalidOutput: typeof raw === 'string' ? raw : JSON.stringify(raw),
-                            originalRequest:
-                                JSON.parse(
-                                    createOpeningDirectorPrompt(
-                                        state,
-                                    )[1].content,
-                                ),
-                        }),
-                    },
-                ], { json: true });
-                raw = extractRoleResponseText(response);
-            }
+        const response =
+            await sendOpeningWorldRequest(
+                highSlot,
+                createOpeningDirectorPrompt(
+                    state,
+                ),
+                {
+                    json: true,
+                },
+            );
+        const opening =
+            parseJsonObject(
+                extractRoleResponseText(
+                    response,
+                ),
+            );
+        const mismatchPaths =
+            collectNonEnglishAuthorityFields(
+                opening,
+            );
+        if (mismatchPaths.length) {
+            return {
+                languageSkipped: true,
+                diagnostics:
+                    mismatchPaths.map(
+                        fieldPath =>
+                            createModelLanguageMismatch({
+                                taskId:
+                                    'opening_world',
+                                fieldPath,
+                                recordId:
+                                    opening
+                                        ?.scene
+                                        ?.id ||
+                                    '',
+                            }),
+                    ),
+            };
         }
-        const preview = String(typeof raw === 'string' ? raw : JSON.stringify(raw) || '')
-            .replace(/\s+/g, ' ')
-            .slice(0, 280);
-        throw new Error(
-            `世界导演连续两次未返回合法开场包：${String(lastError?.message || lastError)}。` +
-        `响应摘要：${preview || '[空响应]'}`,
-        );
+        const validation =
+            validateOpeningWorldPackage(
+                opening,
+                state.character,
+                state.campaign,
+            );
+        if (!validation.valid) {
+            throw new Error(
+                validation.errors
+                    .join('；'),
+            );
+        }
+        return opening;
     }
 
     async function initializeOpeningWorld() {
@@ -672,9 +642,9 @@ Schema:
             state.opening.attempt = Number(state.opening.attempt || 0) + 1;
             state.opening.error = '';
             if (!state.opening.package) {
-                state.chapter = '正在编排首幕';
-                state.clock = `${state.campaign.startYear} · 时间待定`;
-                state.location = '世界建档中';
+                state.chapterEn =
+                    'Opening World';
+                state.clock = `${state.campaign.startYear} · Time pending`;
             }
             await context.saveMetadata();
             renderAll();
@@ -682,13 +652,30 @@ Schema:
             try {
                 if (!state.opening.package) {
                     const opening = await generateOpeningPackage(highSlot, state);
-                    let localized = opening;
-                    try {
-                        localized = await localizeOpeningPackage(opening);
-                    } catch (translationError) {
-                        console.warn('[Hogwarts MUD] Opening state translation failed; using English labels', translationError);
+                    if (
+                        opening
+                            ?.languageSkipped
+                    ) {
+                        state.opening.status =
+                            'language_skipped';
+                        state.opening.error = '';
+                        state.opening
+                            .languageMismatchCount =
+                            opening
+                                .diagnostics
+                                .length;
+                        state.phase =
+                            'initializing';
+                        await context
+                            .saveMetadata();
+                        renderAll();
+                        return state;
                     }
-                    context.chatMetadata.hogwartsMud = applyOpeningWorldPackage(state, localized);
+                    context.chatMetadata.hogwartsMud =
+                        applyOpeningWorldPackage(
+                            state,
+                            opening,
+                        );
                     state = getMudState();
                     await context.saveMetadata();
                     applySystemPrompt();
@@ -705,11 +692,13 @@ Schema:
                     }
                     const segments =
                         await generateBootstrapSceneOpening(
-                        sceneSlot,
+                            sceneSlot,
+                            state,
+                        );
+                    await appendOpeningNarrative(
+                        segments,
                         state,
                     );
-                    const localizedSegments = await localizeSceneSegments(segments);
-                    await appendOpeningNarrative(localizedSegments, state);
                 }
 
                 state = getMudState();
@@ -740,13 +729,11 @@ Schema:
     }
 
     return {
-        localizeOpeningPackage,
         createOpeningDirectorPrompt,
         createBootstrapSceneOpeningPrompt,
         validateBootstrapSceneOpening,
         generateBootstrapSceneOpening,
         composeSceneSegments,
-        localizeSceneSegments,
         appendOpeningNarrative,
         hasOpeningNarrative,
         generateOpeningPackage,

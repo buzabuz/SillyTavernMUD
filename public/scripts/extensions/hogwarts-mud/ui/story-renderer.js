@@ -2,6 +2,25 @@ import {
     resolveNewAssistantStoryMessageId,
     resolveStoryScrollMode,
 } from './story-scroll.js';
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from '../domain/localized-view-model.js';
+import {
+    createActorNameField,
+    createActorRoleField,
+    createActorRuntimeField,
+    getActorDisplayName,
+} from '../domain/actor-display-name.js';
+import {
+    getCanonLocalizationZhCn,
+} from '../canon-localization.zh-cn.js';
+import {
+    createCharacterInputLocalizationField,
+} from '../domain/localization-candidates.js';
+import {
+    getSceneTimelineDisplaySummary,
+} from '../domain/scene-timeline-display.js';
 
 export function createStoryRenderer(ports) {
     const {
@@ -17,18 +36,28 @@ export function createStoryRenderer(ports) {
         closeSpellPicker,
         createFallbackNextSceneIntent,
         createGenerationStatusCard,
+        ensureLocalizedFields =
+        async () => [],
         findSceneDestination,
         getAvailableTurnRollbackCheckpoint,
         getContext,
         getCurrentSceneMessageEntries,
         getFailedPlayerTurn,
         getMudState,
+        getLocalizedField =
+        field => ({
+            text:
+                    field.sourceTextEn ||
+                    '',
+        }),
         getRoomName,
         getWorldState,
         initializeOpeningWorld,
         jobRegistry,
         openCalendar,
         projectPeoplePanel,
+        requestFieldRetranslation =
+        async () => [],
         renderAuthorQuillCard,
         renderComposerAddressing,
         renderInspector,
@@ -37,7 +66,7 @@ export function createStoryRenderer(ports) {
         renderMiniMap,
         retryFailedPlayerTurn,
         SAVE_REVISION_REFRESH_MESSAGE =
-        '时间线已更新，请刷新后继续。',
+        'The timeline has changed. Refresh before continuing.',
         isSaveRevisionBlocked =
         () => false,
         validateNextSceneIntent,
@@ -50,6 +79,45 @@ export function createStoryRenderer(ports) {
         sceneTransitionDialog,
     } = refs;
 
+    function staticText(
+        staticKey,
+        sourceTextEn,
+    ) {
+        return getStaticLocaleText(
+            staticKey,
+            normalizeDisplayLocale(
+                session.displayLocale,
+            ),
+        ) ||
+            sourceTextEn;
+    }
+
+    function formatStaticText(
+        staticKey,
+        sourceTextEn,
+        values = {},
+    ) {
+        return Object.entries(
+            values,
+        ).reduce(
+            (
+                text,
+                [
+                    key,
+                    value,
+                ],
+            ) =>
+                text.replaceAll(
+                    `{${key}}`,
+                    String(value),
+                ),
+            staticText(
+                staticKey,
+                sourceTextEn,
+            ),
+        );
+    }
+
     function initials(name) {
         return String(name || '?')
             .split(/\s+/)
@@ -60,52 +128,415 @@ export function createStoryRenderer(ports) {
             .toUpperCase();
     }
 
+    function localizedField(
+        recordKind,
+        recordId,
+        fieldPath,
+        sourceTextEn,
+    ) {
+        return getLocalizedField({
+            recordKind,
+            recordId:
+                String(recordId || ''),
+            fieldPath,
+            sourceTextEn:
+                String(
+                    sourceTextEn ||
+                    '',
+                ),
+        });
+    }
+
+    function ensureFields(
+        fields,
+        priority,
+        label,
+    ) {
+        void Promise.resolve(
+            ensureLocalizedFields(
+                fields,
+                {
+                    priority,
+                },
+            ),
+        ).catch(error =>
+            console.warn(
+                `[Hogwarts MUD] ${label} localization query failed`,
+                error,
+            ));
+    }
+
+    function getCurrentLocationText(
+        state,
+    ) {
+        const mapId =
+            state.scene?.mapId ||
+            state.map?.activeMapId ||
+            '';
+        const roomId =
+            state.scene?.roomId ||
+            state.map
+                ?.currentLocalNodeId ||
+            '';
+        if (mapId && roomId) {
+            return getRoomName(
+                state,
+                mapId,
+                roomId,
+            );
+        }
+        return getLocalizedField({
+            staticKey:
+                state.phase ===
+                    'playing'
+                    ? 'map.location.unknown'
+                    : 'map.status.world_setup',
+            sourceTextEn:
+                state.phase ===
+                    'playing'
+                    ? 'Unknown location'
+                    : 'World setup in progress',
+        }).text;
+    }
+
+    function getClockText(
+        state,
+    ) {
+        const clock =
+            String(
+                state.clock ||
+                '',
+            );
+        if (
+            clock.endsWith(
+                ' · Time pending',
+            )
+        ) {
+            return `${
+                clock.split(
+                    ' · ',
+                )[0]
+            } · ${staticText(
+                'ui.game.time_pending',
+                'Time pending',
+            )}`;
+        }
+        return clock;
+    }
+
+    function getChapterField(
+        state,
+    ) {
+        return {
+            ...(
+                state.scene?.id
+                    ? {}
+                    : {
+                        staticKey:
+                            'story.chapter.opening_world',
+                    }
+            ),
+            recordKind:
+                'world_state',
+            recordId: 'root',
+            fieldPath:
+                'chapterEn',
+            sourceTextEn:
+                state.chapterEn ||
+                'Opening World',
+        };
+    }
+
+    function createLocalizationStatus(
+        fields,
+    ) {
+        const statuses =
+            (fields || [])
+                .map(field =>
+                    getLocalizedField(
+                        field,
+                    ).status);
+        const status =
+            statuses.includes(
+                'error',
+            )
+                ? 'error'
+                : statuses.includes(
+                    'pending',
+                )
+                    ? 'pending'
+                    : '';
+        const control =
+            document.createElement(
+                'span',
+            );
+        control.className =
+            'hpmud-story-localization-control';
+        const element =
+            document.createElement(
+                'small',
+            );
+        element.className =
+            'hpmud-story-localization-status';
+        element.classList.toggle(
+            'is-visible',
+            Boolean(status),
+        );
+        element.classList.toggle(
+            'is-error',
+            status === 'error',
+        );
+        element.textContent =
+            status
+                ? getLocalizedField({
+                    staticKey:
+                        `translation.status.${status}`,
+                    sourceTextEn:
+                        status === 'error'
+                            ? 'Translation unavailable'
+                            : 'Translating',
+                }).text
+                : '\u00a0';
+        control.append(
+            element,
+        );
+        if (
+            status === 'error'
+        ) {
+            const retry =
+                document.createElement(
+                    'button',
+                );
+            retry.type = 'button';
+            retry.className =
+                'hpmud-story-localization-retry';
+            retry.textContent =
+                getLocalizedField({
+                    staticKey:
+                        'translation.action.retranslate',
+                    sourceTextEn:
+                        'Retranslate',
+                }).text;
+            retry.addEventListener(
+                'click',
+                async () => {
+                    retry.disabled =
+                        true;
+                    try {
+                        await requestFieldRetranslation(
+                            fields.filter(field =>
+                                getLocalizedField(
+                                    field,
+                                ).status ===
+                                    'error'),
+                            {
+                                priority: 1,
+                            },
+                        );
+                    } finally {
+                        retry.disabled =
+                            false;
+                    }
+                },
+            );
+            control.append(
+                retry,
+            );
+        }
+        return control;
+    }
+
     function getPeopleDisplay(_state, person) {
         const displayName =
-            person.header?.name ||
-            person.id;
+            getActorDisplayName({
+                actorId:
+                    person.id,
+                nameEn:
+                    person.header
+                        ?.name,
+                displayLocale:
+                    session
+                        .displayLocale,
+                getLocalizedField,
+            });
+        const roleField =
+            createActorRoleField(
+                person.id,
+                person.header
+                    ?.role,
+            );
+        const activityField =
+            createActorRuntimeField(
+                person.id,
+                'currentActivityEn',
+                person.current
+                    ?.activity,
+            );
+        const lifeStatusDetailField =
+            createActorRuntimeField(
+                person.id,
+                'lifeStatusDetailEn',
+                person.current
+                    ?.lifeStatusDetail,
+            );
+        const intentField =
+            createActorRuntimeField(
+                person.id,
+                'currentIntentEn',
+                person.current
+                    ?.intent,
+            );
         return {
             displayName,
             detail: [
                 person.current
                     ?.location,
-                person.current
-                    ?.activity ||
-                    person.header?.role,
-                person.current
-                    ?.lifeStatusDetail,
+                getLocalizedField(
+                    activityField,
+                ).text ||
+                    getLocalizedField(
+                        roleField,
+                    ).text,
+                getLocalizedField(
+                    lifeStatusDetailField,
+                ).text,
             ].filter(Boolean).join(' · '),
             intent:
-                person.current
-                    ?.intent ||
-                '',
+                getLocalizedField(
+                    intentField,
+                ).text,
         };
     }
 
     function renderHeaderAndScene() {
         const context = getContext();
         const state = getWorldState();
-        const playerName = state.character?.identity?.name || context.name1 || 'Player';
+        const playerName =
+            state.character
+                ?.inputEvidence
+                ?.identity
+                ?.name ||
+            context.name1 ||
+            'Player';
+        const playerNameField =
+            createCharacterInputLocalizationField(
+                'identity.name',
+                playerName,
+            );
+        const chapterField =
+            getChapterField(
+                state,
+            );
+        ensureFields(
+            [
+                chapterField,
+                playerNameField,
+            ],
+            1,
+            'Header',
+        );
 
-        root.querySelector('#hpmud_location').textContent = state.location;
-        root.querySelector('#hpmud_chapter').textContent = state.chapter;
-        root.querySelector('#hpmud_clock').textContent = state.clock;
-        root.querySelector('#hpmud_character').textContent = initials(playerName);
+        root.querySelector('#hpmud_location').textContent =
+            getCurrentLocationText(
+                state,
+            );
+        root.querySelector('#hpmud_chapter').textContent =
+            getLocalizedField(
+                chapterField,
+            ).text ||
+            chapterField.sourceTextEn;
+        root.querySelector('#hpmud_clock').textContent =
+            getClockText(state);
+        root.querySelector('#hpmud_character').textContent =
+            initials(
+                getLocalizedField(
+                    playerNameField,
+                ).text ||
+                playerName,
+            );
 
         const people = root.querySelector('#hpmud_people');
         people.replaceChildren();
         const peopleProjection =
-            projectPeoplePanel(state);
+            projectPeoplePanel(
+                state,
+                {
+                    getRoomName,
+                    getLocalizedField,
+                    displayLocale:
+                        session
+                            .displayLocale,
+                },
+            );
+        const visiblePeople = [
+            ...peopleProjection
+                .activePeople,
+            ...peopleProjection
+                .localPeople,
+        ];
+        const peopleFields = [
+            ...visiblePeople
+                .filter(person =>
+                    !getCanonLocalizationZhCn(
+                        person.id,
+                    ))
+                .map(person =>
+                    createActorNameField(
+                        person.id,
+                        person.header
+                            ?.name,
+                    )),
+            ...visiblePeople
+                .flatMap(person => [
+                    createActorRoleField(
+                        person.id,
+                        person.header
+                            ?.role,
+                    ),
+                    createActorRuntimeField(
+                        person.id,
+                        'currentActivityEn',
+                        person.current
+                            ?.activity,
+                    ),
+                    createActorRuntimeField(
+                        person.id,
+                        'lifeStatusDetailEn',
+                        person.current
+                            ?.lifeStatusDetail,
+                    ),
+                    createActorRuntimeField(
+                        person.id,
+                        'currentIntentEn',
+                        person.current
+                            ?.intent,
+                    ),
+                ]),
+        ];
+        ensureFields(
+            peopleFields,
+            1,
+            'People',
+        );
         if (!peopleProjection.activePeople.length) {
             const status = document.createElement('div');
             status.className = 'hpmud-people-pending';
             status.textContent =
                 state.phase ===
                     'initialization_failed'
-                    ? '首幕编排失败'
+                    ? staticText(
+                        'ui.story.opening_failed',
+                        'Opening arrangement failed',
+                    )
                     : state.phase === 'playing'
-                        ? '当前没有互动人物'
-                        : '世界导演正在确认人物…';
+                        ? staticText(
+                            'ui.story.no_interactive_characters',
+                            'No interactive characters',
+                        )
+                        : staticText(
+                            'ui.story.confirming_characters',
+                            'The World Director is confirming characters...',
+                        );
             people.append(status);
         } else {
             peopleProjection
@@ -213,10 +644,36 @@ export function createStoryRenderer(ports) {
         );
         peopleProjection.cohorts.forEach(
             cohort => {
+                const field = {
+                    recordKind:
+                        'cohort',
+                    recordId:
+                        cohort.id,
+                    fieldPath:
+                        'labelEn',
+                    sourceTextEn:
+                        cohort.label,
+                };
+                ensureFields(
+                    [
+                        field,
+                    ],
+                    1,
+                    'Cohort',
+                );
                 const summary =
                     document.createElement('p');
                 summary.textContent =
-                    `另有 ${cohort.label} 成员若干`;
+                    formatStaticText(
+                        'ui.story.other_cohort',
+                        'Other {label} members',
+                        {
+                            label:
+                                getLocalizedField(
+                                    field,
+                                ).text,
+                        },
+                    );
                 localCohorts.append(summary);
             },
         );
@@ -232,8 +689,14 @@ export function createStoryRenderer(ports) {
             empty.textContent =
                 peopleProjection
                     .localPresenceValid
-                    ? '暂无其他已确认人物'
-                    : '地点人物尚未确认';
+                    ? staticText(
+                        'ui.story.no_other_characters',
+                        'No other confirmed characters',
+                    )
+                    : staticText(
+                        'ui.story.location_characters_pending',
+                        'Location characters are not confirmed yet',
+                    );
             localCohorts.append(empty);
         }
         root.querySelector(
@@ -247,23 +710,114 @@ export function createStoryRenderer(ports) {
         }
         const agenda = root.querySelector('#hpmud_agenda');
         agenda.replaceChildren();
-        const entries = state.scene?.timelineEntries?.length
-            ? state.scene.timelineEntries.slice(-4)
+        const timelineEntries =
+            state.scene
+                ?.timelineEntries ||
+            [];
+        const entries = timelineEntries.length
+            ? timelineEntries.slice(-4)
             : [{
                 clock: state.clock,
-                label: state.phase === 'playing' ? state.scene?.summary || '当前场景' : '世界导演编排首幕',
+                summaryEn:
+                    state.phase ===
+                        'playing'
+                        ? state.scene
+                            ?.summaryEn ||
+                            'Current scene'
+                        : 'Opening World',
             }];
+        const timelineOffset =
+            Math.max(
+                0,
+                timelineEntries.length -
+                    entries.length,
+            );
+        const entryFields =
+            entries.map((
+                entry,
+                index,
+            ) => ({
+                recordKind:
+                    timelineEntries.length
+                        ? 'scene_timeline'
+                        : 'scene',
+                recordId:
+                    timelineEntries.length
+                        ? `${
+                            state.scene.id
+                        }:${
+                            timelineOffset +
+                            index
+                        }`
+                        : state.scene?.id ||
+                            'opening_world',
+                fieldPath:
+                    'summaryEn',
+                sourceTextEn:
+                    getSceneTimelineDisplaySummary(
+                        entry.summaryEn,
+                    ),
+            }));
+        ensureFields(
+            entryFields,
+            1,
+            'Scene timeline',
+        );
         agenda.setAttribute(
             'aria-label',
-            `当前场景现场记录：${entries
-                .map(entry => `${entry.clock || ''} ${entry.label || ''}`)
-                .join('；')}`,
+            formatStaticText(
+                'ui.story.live_log_title',
+                'Current Scene live record: {entries}',
+                {
+                    entries:
+                        entries
+                            .map((
+                                entry,
+                                index,
+                            ) =>
+                                `${
+                                    entry.clock ||
+                                    ''
+                                } ${
+                                    getLocalizedField(
+                                        entryFields[
+                                            index
+                                        ],
+                                    ).text
+                                }`)
+                            .join('; '),
+                },
+            ),
         );
-        entries.forEach(entry => {
+        entries.forEach((
+            entry,
+            index,
+        ) => {
             const row = document.createElement('span');
             const time = document.createElement('time');
-            time.textContent = entry.timeLabel || String(entry.clock || '').split(' · ').at(-1) || '现在';
-            row.append(time, document.createTextNode(` ${entry.label || ''}`));
+            time.textContent =
+                entry.timeLabel ||
+                String(
+                    entry.clock ||
+                    '',
+                ).split(' · ')
+                    .at(-1) ||
+                staticText(
+                    'ui.story.now',
+                    'Now',
+                );
+            row.append(
+                time,
+                document.createTextNode(
+                    ` ${
+                        getLocalizedField(
+                            entryFields[
+                                index
+                            ],
+                        ).text
+                    }`,
+                ),
+            );
             agenda.append(row);
         });
         renderSceneArchiveList(state);
@@ -279,28 +833,86 @@ export function createStoryRenderer(ports) {
         const currentLabel = document.createElement('small');
         const currentTitle = document.createElement('strong');
         const currentMeta = document.createElement('span');
-        currentLabel.textContent = 'CURRENT SCENE';
-        currentTitle.textContent = state.scene?.name ||
-            state.scene?.nameEn ||
-            '当前场景';
+        const currentNameField = {
+            recordKind: 'scene',
+            recordId:
+                state.scene?.id ||
+                '',
+            fieldPath: 'nameEn',
+            sourceTextEn:
+                state.scene?.nameEn ||
+                '',
+        };
+        ensureFields(
+            [
+                currentNameField,
+            ],
+            1,
+            'Current Scene',
+        );
+        currentLabel.textContent =
+            staticText(
+                'ui.story.current_scene',
+                'Current Scene',
+            );
+        currentTitle.textContent =
+            getLocalizedField(
+                currentNameField,
+            ).text ||
+            staticText(
+                'ui.story.current_scene',
+                'Current Scene',
+            );
         currentMeta.textContent = [
             String(state.scene?.startedClock || state.clock || '')
                 .split(' · ')
                 .at(-1),
-            state.location,
+            getCurrentLocationText(
+                state,
+            ),
         ].filter(Boolean).join(' · ');
         current.append(currentLabel, currentTitle, currentMeta);
         list.replaceChildren();
         if (!archive.length) {
             const empty = document.createElement('div');
             empty.className = 'hpmud-scene-archive-empty';
-            empty.textContent = '首个场景结束后会在这里生成只读档案。';
+            empty.textContent =
+                staticText(
+                    'ui.story.archive_empty',
+                    'The read-only archive appears after the first Scene ends.',
+                );
             list.append(empty);
             return;
         }
         const visibleArchive = [...archive]
             .reverse()
             .slice(0, session.archiveListLimit);
+        ensureFields(
+            visibleArchive.flatMap(scene => [
+                {
+                    recordKind:
+                        'scene_archive',
+                    recordId: scene.id,
+                    fieldPath:
+                        'nameEn',
+                    sourceTextEn:
+                        scene.nameEn ||
+                        '',
+                },
+                {
+                    recordKind:
+                        'scene_archive',
+                    recordId: scene.id,
+                    fieldPath:
+                        'summaryEn',
+                    sourceTextEn:
+                        scene.summaryEn ||
+                        '',
+                },
+            ]),
+            3,
+            'Scene Archive list',
+        );
         visibleArchive.forEach(scene => {
             const button = document.createElement('button');
             button.type = 'button';
@@ -308,10 +920,24 @@ export function createStoryRenderer(ports) {
             const content = document.createElement('span');
             const title = document.createElement('strong');
             const meta = document.createElement('small');
-            title.textContent = scene.name || scene.nameEn || '未命名场景';
+            title.textContent =
+                localizedField(
+                    'scene_archive',
+                    scene.id,
+                    'nameEn',
+                    scene.nameEn,
+                ).text ||
+                staticText(
+                    'ui.story.unnamed_scene',
+                    'Unnamed Scene',
+                );
             meta.textContent = [
                 String(scene.endedClock || '').split(' · ').at(-1),
-                scene.location,
+                getRoomName(
+                    state,
+                    scene.mapId,
+                    scene.roomId,
+                ),
             ].filter(Boolean).join(' · ');
             content.append(title, meta);
             button.append(marker, content);
@@ -322,7 +948,16 @@ export function createStoryRenderer(ports) {
             const more = document.createElement('button');
             more.type = 'button';
             more.className = 'hpmud-archive-more';
-            more.textContent = `加载更早场景 · 还剩 ${archive.length - visibleArchive.length}`;
+            more.textContent =
+                formatStaticText(
+                    'ui.story.load_earlier_scenes',
+                    'Load earlier Scenes · {count} remaining',
+                    {
+                        count:
+                            archive.length -
+                            visibleArchive.length,
+                    },
+                );
             more.addEventListener('click', () => {
                 session.archiveListLimit += ARCHIVE_LIST_PAGE_SIZE;
                 renderSceneArchiveList(state);
@@ -350,12 +985,58 @@ export function createStoryRenderer(ports) {
         const context = getContext();
         const messageIds = scene.messageIds || [];
         const visibleIds = messageIds.slice(-session.archiveTranscriptLimit);
+        const archiveFields = [
+            {
+                recordKind:
+                    'scene_archive',
+                recordId: scene.id,
+                fieldPath:
+                    'authorQuillEn',
+                sourceTextEn:
+                    scene.authorQuillEn ||
+                    '',
+            },
+            {
+                recordKind:
+                    'scene_archive',
+                recordId: scene.id,
+                fieldPath:
+                    'closureSummaryEn',
+                sourceTextEn:
+                    scene
+                        .closureSummaryEn ||
+                    '',
+            },
+            {
+                recordKind:
+                    'scene_archive',
+                recordId: scene.id,
+                fieldPath:
+                    'summaryEn',
+                sourceTextEn:
+                    scene.summaryEn ||
+                    '',
+            },
+        ];
+        ensureFields(
+            archiveFields,
+            1,
+            'Scene Archive',
+        );
         if (visibleIds.length < messageIds.length) {
             const more = document.createElement('button');
             more.type = 'button';
             more.className = 'hpmud-load-earlier';
             more.textContent =
-                `↑ 向上加载更早记录 · 还剩 ${messageIds.length - visibleIds.length}`;
+                formatStaticText(
+                    'ui.story.load_earlier_records',
+                    'Load earlier records · {count} remaining',
+                    {
+                        count:
+                            messageIds.length -
+                            visibleIds.length,
+                    },
+                );
             more.addEventListener('click', () => {
                 session.archiveTranscriptLimit += ARCHIVE_TRANSCRIPT_PAGE_SIZE;
                 renderSceneArchiveTranscript(
@@ -383,15 +1064,19 @@ export function createStoryRenderer(ports) {
                 );
             }
         });
+        const localizedQuill =
+            getLocalizedField(
+                archiveFields[0],
+            ).text;
         const quillCard = renderAuthorQuillCard(
             {
-                authorQuill: scene.authorQuill,
+                authorQuill:
+                    localizedQuill,
                 authorQuillEn: scene.authorQuillEn,
             },
             {
                 mes:
-                    scene.authorQuillEn ||
-                    scene.authorQuill ||
+                    localizedQuill ||
                     '',
             },
         );
@@ -402,8 +1087,17 @@ export function createStoryRenderer(ports) {
         if (!transcript.childElementCount) {
             const empty = document.createElement('div');
             empty.className = 'hpmud-scene-archive-empty';
-            empty.textContent = scene.closureSummary || scene.summary ||
-                '该场景没有可显示的现场转录。';
+            empty.textContent =
+                getLocalizedField(
+                    archiveFields[1],
+                ).text ||
+                getLocalizedField(
+                    archiveFields[2],
+                ).text ||
+                staticText(
+                    'ui.story.archive_no_transcript',
+                    'This Scene has no visible live transcript.',
+                );
             transcript.append(empty);
         }
         if (preserveScrollAnchor && scroll) {
@@ -415,7 +1109,12 @@ export function createStoryRenderer(ports) {
         const state = getWorldState();
         const scene = state.sceneArchive.find(item => item.id === sceneId);
         if (!scene) {
-            toastr.warning('该场景档案不存在或尚未完成封存。');
+            toastr.warning(
+                staticText(
+                    'ui.story.archive_missing',
+                    'This Scene archive does not exist or is not sealed yet.',
+                ),
+            );
             return;
         }
         openCalendar({
@@ -434,22 +1133,85 @@ export function createStoryRenderer(ports) {
             ? {
                 mapId: intent.mapId,
                 roomId: intent.roomId,
-                roomName: getRoomName(
-                    state,
-                    intent.mapId,
-                    intent.roomId,
-                ),
             }
             : findSceneDestination(input.value, state);
+        const roomName =
+            destination
+                ? getRoomName(
+                    state,
+                    destination.mapId,
+                    destination.roomId,
+                )
+                : '';
         status.textContent = destination
-            ? `${usesDefault ? '导演预排' : '用户覆盖'} · ${destination.roomName || destination.roomId} (${destination.roomId})`
-            : '用户覆盖未匹配固定房间；结算时导演会在现有地图中选择最合适的位置。';
+            ? formatStaticText(
+                'ui.story.destination.matched',
+                '{source} · {room}',
+                {
+                    source:
+                        usesDefault
+                            ? staticText(
+                                'ui.story.destination.director',
+                                'Director plan',
+                            )
+                            : staticText(
+                                'ui.story.destination.user',
+                                'User override',
+                            ),
+                    room:
+                        roomName ||
+                        destination
+                            .roomId,
+                },
+            )
+            : staticText(
+                'ui.story.destination.unmatched',
+                'The user override did not match a fixed room. Settlement will choose the best existing Map location.',
+            );
     }
 
-    function formatNextSceneIntent(intent) {
+    function createSceneIntentFields(
+        state,
+        intent,
+    ) {
         return [
-            intent?.title || intent?.titleEn,
-            intent?.summary || intent?.summaryEn,
+            {
+                recordKind:
+                    'scene_intent',
+                recordId:
+                    state.scene
+                        ?.id ||
+                    '',
+                fieldPath:
+                    'titleEn',
+                sourceTextEn:
+                    intent?.titleEn ||
+                    '',
+            },
+            {
+                recordKind:
+                    'scene_intent',
+                recordId:
+                    state.scene
+                        ?.id ||
+                    '',
+                fieldPath:
+                    'summaryEn',
+                sourceTextEn:
+                    intent?.summaryEn ||
+                    '',
+            },
+        ];
+    }
+
+    function formatNextSceneIntent(
+        fields,
+    ) {
+        return [
+            ...fields.map(field =>
+                getLocalizedField(
+                    field,
+                ).text),
         ].filter(Boolean).join('：');
     }
 
@@ -458,17 +1220,30 @@ export function createStoryRenderer(ports) {
             isSaveRevisionBlocked()
         ) {
             toastr.error(
-                SAVE_REVISION_REFRESH_MESSAGE,
+                staticText(
+                    'ui.story.stale_timeline',
+                    SAVE_REVISION_REFRESH_MESSAGE,
+                ),
             );
             return;
         }
         const state = getWorldState();
         if (state.phase !== 'playing' || !state.scene) {
-            toastr.warning('当前没有可以封存的活动场景。');
+            toastr.warning(
+                staticText(
+                    'ui.story.no_active_scene',
+                    'There is no active Scene to archive.',
+                ),
+            );
             return;
         }
         if (jobRegistry.sceneTransitionActive || jobRegistry.turnActive) {
-            toastr.warning('世界状态仍在结算，请稍候。');
+            toastr.warning(
+                staticText(
+                    'ui.story.world_settling',
+                    'World State is still settling. Please wait.',
+                ),
+            );
             return;
         }
         const intent = validateNextSceneIntent(
@@ -477,12 +1252,43 @@ export function createStoryRenderer(ports) {
         ).valid
             ? state.scene.nextSceneIntent
             : createFallbackNextSceneIntent(state);
+        const sceneNameField = {
+            recordKind: 'scene',
+            recordId:
+                state.scene.id,
+            fieldPath: 'nameEn',
+            sourceTextEn:
+                state.scene.nameEn ||
+                '',
+        };
+        const intentFields =
+            createSceneIntentFields(
+                state,
+                intent,
+            );
+        ensureFields(
+            [
+                sceneNameField,
+                ...intentFields,
+            ],
+            1,
+            'Scene Transition',
+        );
         root.querySelector('#hpmud_transition_scene_name').textContent =
-            state.scene.name || state.scene.nameEn || '当前场景';
+            getLocalizedField(
+                sceneNameField,
+            ).text ||
+            staticText(
+                'ui.story.current_scene',
+                'Current Scene',
+            );
         root.querySelector('#hpmud_transition_scene_meta').textContent =
-            `${state.clock} · ${state.location}`;
+            `${state.clock} · ${getCurrentLocationText(state)}`;
         const input = root.querySelector('#hpmud_transition_destination');
-        input.dataset.defaultValue = formatNextSceneIntent(intent);
+        input.dataset.defaultValue =
+            formatNextSceneIntent(
+                intentFields,
+            );
         input.value = state.sceneTransition?.status === 'failed' &&
             state.sceneTransition.destinationHint
             ? state.sceneTransition.destinationHint
@@ -543,24 +1349,82 @@ export function createStoryRenderer(ports) {
         storyElement.replaceChildren();
 
         if (state.phase === 'playing' && state.scene) {
+            const sceneFields = [
+                {
+                    recordKind:
+                        'scene',
+                    recordId:
+                        state.scene.id,
+                    fieldPath:
+                        'nameEn',
+                    sourceTextEn:
+                        state.scene
+                            .nameEn ||
+                        '',
+                },
+                {
+                    recordKind:
+                        'scene',
+                    recordId:
+                        state.scene.id,
+                    fieldPath:
+                        'summaryEn',
+                    sourceTextEn:
+                        state.scene
+                            .summaryEn ||
+                        '',
+                },
+                getChapterField(
+                    state,
+                ),
+            ];
+            ensureFields(
+                sceneFields,
+                1,
+                'Current Scene heading',
+            );
             const heading = document.createElement('section');
             heading.className = 'hpmud-current-scene-heading';
             const eyebrow = document.createElement('small');
             const title = document.createElement('h2');
             const summary = document.createElement('p');
             const meta = document.createElement('span');
-            eyebrow.textContent = 'CURRENT SCENE · 当前场景';
-            title.textContent = state.scene.name ||
-                state.scene.nameEn ||
-                '未命名场景';
-            summary.textContent = state.scene.summary ||
-                state.scene.summaryEn ||
-                '场景已经建立，等待下一步行动。';
+            eyebrow.textContent =
+                staticText(
+                    'ui.story.current_scene_eyebrow',
+                    'CURRENT SCENE',
+                );
+            title.textContent =
+                getLocalizedField(
+                    sceneFields[0],
+                ).text ||
+                staticText(
+                    'ui.story.unnamed_scene',
+                    'Unnamed Scene',
+                );
+            summary.textContent =
+                getLocalizedField(
+                    sceneFields[1],
+                ).text ||
+                staticText(
+                    'ui.story.scene_ready',
+                    'The Scene is established and awaits the next action.',
+                );
             meta.textContent = [
                 state.scene.startedClock || state.clock,
-                state.location,
+                getCurrentLocationText(
+                    state,
+                ),
             ].filter(Boolean).join(' · ');
-            heading.append(eyebrow, title, summary, meta);
+            heading.append(
+                eyebrow,
+                title,
+                summary,
+                meta,
+                createLocalizationStatus(
+                    sceneFields,
+                ),
+            );
             storyElement.append(heading);
         }
 
@@ -569,7 +1433,15 @@ export function createStoryRenderer(ports) {
             more.type = 'button';
             more.className = 'hpmud-load-earlier';
             more.textContent =
-                `↑ 向上加载当前场景更早记录 · 还剩 ${entries.length - visibleEntries.length}`;
+                formatStaticText(
+                    'ui.story.load_current_earlier',
+                    'Load earlier current-Scene records · {count} remaining',
+                    {
+                        count:
+                            entries.length -
+                            visibleEntries.length,
+                    },
+                );
             more.addEventListener('click', () => {
                 session.currentSceneMessageLimit += CURRENT_SCENE_PAGE_SIZE;
                 renderStory(true);
@@ -581,7 +1453,11 @@ export function createStoryRenderer(ports) {
             const empty = document.createElement('div');
             if (state.phase === 'playing') {
                 empty.className = 'hpmud-empty hpmud-current-scene-empty';
-                empty.textContent = '当前场景尚无现场记录。';
+                empty.textContent =
+                    staticText(
+                        'ui.story.current_empty',
+                        'The current Scene has no live record yet.',
+                    );
             } else {
                 empty.className = `hpmud-empty hpmud-opening-state phase-${state.phase}`;
             }
@@ -590,14 +1466,30 @@ export function createStoryRenderer(ports) {
             } else if (state.phase === 'initialization_failed') {
                 empty.innerHTML = `
                 <small>OPENING TRANSACTION PAUSED</small>
-                <strong>首幕编排没有提交</strong>
+                <strong></strong>
                 <span></span>
-                <button id="hpmud_retry_opening" type="button">重新编排首幕</button>
+                <button id="hpmud_retry_opening" type="button"></button>
             `;
-                empty.querySelector('span').textContent = state.opening?.error || '世界导演调用失败。';
+                empty.querySelector(
+                    'strong',
+                ).textContent =
+                    staticText(
+                        'ui.story.opening_not_committed',
+                        'Opening arrangement was not committed',
+                    );
+                empty.querySelector('span').textContent =
+                    staticText(
+                        'ui.story.world_director_failed',
+                        'World Director call failed.',
+                    );
                 const retryOpening =
                     empty.querySelector(
                         '#hpmud_retry_opening',
+                    );
+                retryOpening.textContent =
+                    staticText(
+                        'ui.story.opening_retry',
+                        'Arrange opening again',
                     );
                 retryOpening.disabled =
                     saveRevisionBlocked;
@@ -611,16 +1503,58 @@ export function createStoryRenderer(ports) {
                 const hasCommittedWorld = Boolean(state.opening?.package);
                 empty.innerHTML = `
                 <small>WORLD OPENING TRANSACTION</small>
-                <strong>${hasCommittedWorld ? '场景已固化，正在书写第一幕' : '世界导演正在编排你的开场'}</strong>
-                <span>${hasCommittedWorld
-        ? '时间、地点、地图、人物与隐藏故事线已经提交。中档编排场景、低档生成对白可能需要数分钟，请保持页面开启。'
-        : '正在根据人物背景确定时间、家庭场景、在场人物与戏剧冲突。导演接口可能需要数分钟，请保持页面开启。'}</span>
+                <strong></strong>
+                <span></span>
                 <ol>
-                    <li class="${hasCommittedWorld ? 'done' : 'active'}">世界导演建立场景</li>
-                    <li class="${hasCommittedWorld ? 'active' : ''}">中档编排场景 · 低档生成对白</li>
-                    <li>等待你的第一个行动</li>
+                    <li class="${hasCommittedWorld ? 'done' : 'active'}"></li>
+                    <li class="${hasCommittedWorld ? 'active' : ''}"></li>
+                    <li></li>
                 </ol>
             `;
+                empty.querySelector(
+                    'strong',
+                ).textContent =
+                    hasCommittedWorld
+                        ? staticText(
+                            'ui.story.opening.committed_title',
+                            'The Scene is fixed. Writing the opening now.',
+                        )
+                        : staticText(
+                            'ui.story.opening.arranging_title',
+                            'The World Director is arranging your opening.',
+                        );
+                empty.querySelector(
+                    'span',
+                ).textContent =
+                    hasCommittedWorld
+                        ? staticText(
+                            'ui.story.opening.committed_detail',
+                            'Time, location, Map, characters, and hidden Storylines are committed. Scene planning and performance may take several minutes. Keep the page open.',
+                        )
+                        : staticText(
+                            'ui.story.opening.arranging_detail',
+                            'Determining time, home Scene, present characters, and dramatic conflict from the character background. Keep the page open.',
+                        );
+                const steps = [
+                    ...empty.querySelectorAll(
+                        'li',
+                    ),
+                ];
+                steps[0].textContent =
+                    staticText(
+                        'ui.story.opening.step.world',
+                        'World Director establishes the Scene',
+                    );
+                steps[1].textContent =
+                    staticText(
+                        'ui.story.opening.step.performance',
+                        'Medium tier plans · Low tier performs',
+                    );
+                steps[2].textContent =
+                    staticText(
+                        'ui.story.opening.step.player',
+                        'Await your first action',
+                    );
             }
             storyElement.append(empty);
         } else {
@@ -644,9 +1578,15 @@ export function createStoryRenderer(ports) {
                     'span',
                 );
             title.textContent =
-                '时间线已更新';
+                staticText(
+                    'ui.story.timeline_updated',
+                    'Timeline updated',
+                );
             detail.textContent =
-                SAVE_REVISION_REFRESH_MESSAGE;
+                staticText(
+                    'ui.story.stale_timeline',
+                    SAVE_REVISION_REFRESH_MESSAGE,
+                );
             conflict.append(
                 title,
                 detail,
@@ -684,17 +1624,25 @@ export function createStoryRenderer(ports) {
                     'button',
                 );
             title.textContent =
-                '回复生成失败，玩家消息已保存';
+                staticText(
+                    'ui.story.reply_failed',
+                    'Reply generation failed. The player message was saved.',
+                );
             detail.textContent =
-                failedPlayerTurn.error ||
-                '低档没有提交有效的场景回复。';
+                staticText(
+                    'ui.story.reply_invalid',
+                    'The low-tier model did not submit a valid Scene reply.',
+                );
             retry.type = 'button';
             retry.className =
                 'hpmud-retry-turn';
             retry.disabled =
                 saveRevisionBlocked;
             retry.textContent =
-                '重试本回合';
+                staticText(
+                    'ui.story.retry_turn',
+                    'Retry this turn',
+                );
             retry.addEventListener(
                 'click',
                 () => {
@@ -703,7 +1651,10 @@ export function createStoryRenderer(ports) {
                         'is-loading',
                     );
                     retry.textContent =
-                        '正在重试';
+                        staticText(
+                            'ui.story.retrying',
+                            'Retrying',
+                        );
                     void retryFailedPlayerTurn();
                 },
             );
@@ -724,14 +1675,36 @@ export function createStoryRenderer(ports) {
                     ? 'WORLD DIRECTOR · ATOMIC'
                     : 'SCENE DIRECTOR · ATOMIC',
                 title: highTier
-                    ? '高档正在结算重大转折'
-                    : '中档正在封存场景并建立下一幕',
-                detail: '结构化状态将在完整校验后一次提交；旧场景在此之前保持可玩。',
+                    ? staticText(
+                        'ui.story.transition.high_title',
+                        'High tier is settling a major turn',
+                    )
+                    : staticText(
+                        'ui.story.transition.medium_title',
+                        'Medium tier is archiving the Scene and establishing the next one',
+                    ),
+                detail:
+                    staticText(
+                        'ui.story.transition.detail',
+                        'Structured State commits once after full validation. The old Scene remains playable until then.',
+                    ),
                 steps: [
-                    '收束旧场景',
-                    '确认人物与地点',
-                    '预写下一幕',
-                    '原子提交',
+                    staticText(
+                        'ui.story.transition.step.close',
+                        'Close the old Scene',
+                    ),
+                    staticText(
+                        'ui.story.transition.step.people',
+                        'Confirm characters and location',
+                    ),
+                    staticText(
+                        'ui.story.transition.step.next',
+                        'Prewrite the next Scene',
+                    ),
+                    staticText(
+                        'ui.story.transition.step.commit',
+                        'Atomic commit',
+                    ),
                 ],
                 activeStep: 1,
             }));
@@ -743,13 +1716,33 @@ export function createStoryRenderer(ports) {
                 storyElement.append(createGenerationStatusCard({
                     tier: 'medium',
                     eyebrow: 'MEMORY DIRECTOR · PERIODIC',
-                    title: '中档正在整理共同记忆',
-                    detail: '合并重复小事、提炼近期大事，并判断哪些经历真正留下长期印记。',
+                    title:
+                        staticText(
+                            'ui.story.memory.title',
+                            'Medium tier is organizing shared memories',
+                        ),
+                    detail:
+                        staticText(
+                            'ui.story.memory.detail',
+                            'Merging duplicate moments, distilling recent events, and deciding which experiences leave lasting marks.',
+                        ),
                     steps: [
-                        '回看共同经历',
-                        '合并日常碎片',
-                        '提炼重要事件',
-                        '更新人物印象',
+                        staticText(
+                            'ui.story.memory.step.review',
+                            'Review shared experiences',
+                        ),
+                        staticText(
+                            'ui.story.memory.step.merge',
+                            'Merge everyday fragments',
+                        ),
+                        staticText(
+                            'ui.story.memory.step.events',
+                            'Distill important events',
+                        ),
+                        staticText(
+                            'ui.story.memory.step.impressions',
+                            'Update character impressions',
+                        ),
                     ],
                     activeStep: 1,
                 }));
@@ -759,13 +1752,33 @@ export function createStoryRenderer(ports) {
                 storyElement.append(createGenerationStatusCard({
                     tier: 'medium',
                     eyebrow: 'PACING DIRECTOR · LIVE CHECK',
-                    title: '中档正在检查场景节奏',
-                    detail: '判断是否需要新人物、公开危机或主线转机。',
+                    title:
+                        staticText(
+                            'ui.story.pacing.title',
+                            'Medium tier is checking Scene pacing',
+                        ),
+                    detail:
+                        staticText(
+                            'ui.story.pacing.detail',
+                            'Deciding whether the Scene needs new characters, a public crisis, or a main-story turn.',
+                        ),
                     steps: [
-                        '检查重复阵容',
-                        '衡量场景压力',
-                        '选择介入方式',
-                        '提交公开转机',
+                        staticText(
+                            'ui.story.pacing.step.cast',
+                            'Check repeated cast',
+                        ),
+                        staticText(
+                            'ui.story.pacing.step.pressure',
+                            'Measure Scene pressure',
+                        ),
+                        staticText(
+                            'ui.story.pacing.step.intervention',
+                            'Choose intervention',
+                        ),
+                        staticText(
+                            'ui.story.pacing.step.commit',
+                            'Commit public turn',
+                        ),
                     ],
                     activeStep: 1,
                 }));
@@ -775,13 +1788,33 @@ export function createStoryRenderer(ports) {
                 storyElement.append(createGenerationStatusCard({
                     tier: 'low',
                     eyebrow: 'ON-SCENE PERFORMER · CONNECTING',
-                    title: '低档正在接管现场',
-                    detail: '正在读取玩家行动、空间关系与导演指令。',
+                    title:
+                        staticText(
+                            'ui.story.performer.title',
+                            'Low tier is taking over the Scene',
+                        ),
+                    detail:
+                        staticText(
+                            'ui.story.performer.detail',
+                            'Reading the player action, spatial relationships, and Director instructions.',
+                        ),
                     steps: [
-                        '读取行动',
-                        '书写现场',
-                        '译入中文',
-                        '提交状态',
+                        staticText(
+                            'ui.story.performer.step.read',
+                            'Read action',
+                        ),
+                        staticText(
+                            'ui.story.performer.step.write',
+                            'Write the Scene',
+                        ),
+                        staticText(
+                            'ui.story.performer.step.translate',
+                            'Prepare display translation',
+                        ),
+                        staticText(
+                            'ui.story.performer.step.commit',
+                            'Commit State',
+                        ),
                     ],
                     activeStep: 0,
                 }));
@@ -794,11 +1827,22 @@ export function createStoryRenderer(ports) {
             const title = document.createElement('strong');
             const detail = document.createElement('span');
             const retry = document.createElement('button');
-            title.textContent = '场景封存失败';
-            detail.textContent = state.sceneTransition.error ||
-                '结算包未通过规则校验。';
+            title.textContent =
+                staticText(
+                    'ui.story.settlement_failed',
+                    'Scene settlement failed',
+                );
+            detail.textContent =
+                staticText(
+                    'ui.story.settlement_invalid',
+                    'The settlement package failed rules validation.',
+                );
             retry.type = 'button';
-            retry.textContent = '重新打开结算';
+            retry.textContent =
+                staticText(
+                    'ui.story.settlement_reopen',
+                    'Reopen settlement',
+                );
             retry.disabled =
                 saveRevisionBlocked;
             retry.addEventListener('click', openSceneTransitionDialog);
@@ -887,29 +1931,62 @@ export function createStoryRenderer(ports) {
         }
         rollbackButton.title =
             rollbackCheckpoint
-                ? '删除上一组玩家/场景消息，并恢复该回合提交前的世界状态'
-                : '回滚上一轮；旧存档会从已提交事务重建回合前状态';
+                ? staticText(
+                    'ui.story.rollback_title',
+                    'Delete the previous player/Scene message pair and restore world State from before that turn',
+                )
+                : staticText(
+                    'ui.story.rollback_legacy_title',
+                    'Rollback the previous turn. Old saves rebuild pre-turn State from committed transactions.',
+                );
         if (!ready) {
             closeMovementPicker();
             closeSpellPicker();
         }
         composerInput.placeholder = ready
-            ? '写下你的行动、台词或想法……'
+            ? staticText(
+                'ui.game.input_placeholder',
+                'Write your action, dialogue, or thought...',
+            )
             : saveRevisionBlocked
-                ? SAVE_REVISION_REFRESH_MESSAGE
+                ? staticText(
+                    'ui.story.stale_timeline',
+                    SAVE_REVISION_REFRESH_MESSAGE,
+                )
                 : failedPlayerTurn
-                    ? '上一条玩家消息已保存，请先在上方重试本回合'
+                    ? staticText(
+                        'ui.story.busy.retry_first',
+                        'The previous player message is saved. Retry the turn above first.',
+                    )
                     : memoryDirectorBuilding
-                                ? '中档正在整理人物印象与共同记忆，请稍候'
-                                : pacingDirectorBuilding
-                                    ? '中档正在检查场景节奏与人物变化，请稍候'
-                                    : sceneTransitionBuilding
-                                        ? '正在封存当前场景并建立下一幕，请稍候'
-                                        : jobRegistry.turnActive
-                                            ? '低档正在表演本轮动作、场景与对白，请稍候'
-                                            : state.phase === 'initialization_failed'
-                                                ? '首幕编排失败，请先在上方重试'
-                                                : '世界正在建立，首幕完成后即可行动';
+                        ? staticText(
+                            'ui.story.busy.memory',
+                            'The medium tier is organizing impressions and shared memories. Please wait.',
+                        )
+                        : pacingDirectorBuilding
+                            ? staticText(
+                                'ui.story.busy.pacing',
+                                'The medium tier is checking Scene pacing and character changes. Please wait.',
+                            )
+                            : sceneTransitionBuilding
+                                ? staticText(
+                                    'ui.story.busy.transition',
+                                    'Archiving the current Scene and establishing the next one. Please wait.',
+                                )
+                                : jobRegistry.turnActive
+                                    ? staticText(
+                                        'ui.story.busy.performer',
+                                        'The low tier is performing this turn. Please wait.',
+                                    )
+                                    : state.phase === 'initialization_failed'
+                                        ? staticText(
+                                            'ui.story.busy.opening_failed',
+                                            'Opening arrangement failed. Retry above first.',
+                                        )
+                                        : staticText(
+                                            'ui.story.busy.world_setup',
+                                            'The world is being established. You can act after the opening is ready.',
+                                        );
     }
 
     return {

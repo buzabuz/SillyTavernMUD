@@ -338,9 +338,7 @@ export function normalizeItemProposal(
                 fingerprint(
                     evidenceText ||
                     itemSource
-                        .labelEn ||
-                    itemSource
-                        .label,
+                        .labelEn,
                 ),
             ].join(':');
     return {
@@ -594,8 +592,6 @@ export function partitionItemProposals(
                         !String(
                             candidateSource
                                 ?.labelEn ||
-                            candidateSource
-                                ?.label ||
                             '',
                         ).trim() ||
                         !String(
@@ -603,10 +599,6 @@ export function partitionItemProposals(
                                 ?.appearanceEn ||
                             candidateSource
                                 ?.detailEn ||
-                            candidateSource
-                                ?.appearance ||
-                            candidateSource
-                                ?.detail ||
                             '',
                         ).trim()
                         ||

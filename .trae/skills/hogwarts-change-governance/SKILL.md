@@ -54,9 +54,133 @@ The cross-change technical-debt and feature-count authority is:
 It is a project ledger rather than a change artifact and therefore does not
 require its own five-file directory.
 
+The permanent frontend dynamic-text authority is:
+
+```text
+.trae/skills/hogwarts-change-governance/FRONTEND_DYNAMIC_FIELD_REGISTRY.md
+```
+
+It registers every dynamic value written into the Hogwarts frontend and the
+required localization route and acceptance expansion for that value.
+
+## Documentation Routing And Maintenance
+
+Use exactly these documentation routes:
+
+| Document class | Canonical location | Authority and maintenance owner |
+| --- | --- | --- |
+| Active PRD registry | `HOGWARTS_MUD_PRODUCT_SPEC.md` | Stable root record point for every active/research PRD and status transition; index only, never a second behavioral contract |
+| Product intent | `.trae/specs/<change-id>/prd.md` | Sole product authority for that change; update when scope, behavior, migration, budget, whitelist, acceptance, or approval changes |
+| Technical design | `.trae/specs/<change-id>/spec.md` | Current approved component, ownership, data-flow, migration, and verification design |
+| Execution and evidence index | `tasks.md`, `checklist.md`, `progress.md` in the same change | Status and evidence only; cannot override the PRD or living contract |
+| Current runtime behavior | `.trae/specs/hogwarts-runtime-contracts/` | Maintained in the same change as production behavior |
+| Runtime field registry | `.trae/specs/hogwarts-runtime-contracts/state-fields.md` | Sole documentation registry for field meaning, writer, readers, migration, compatibility, and diagnostics |
+| Cross-change debt | `.trae/specs/TECH_DEBT.md` | Current evidence-backed debt and change/feature counts |
+| Frontend dynamic-field registry | `.trae/skills/hogwarts-change-governance/FRONTEND_DYNAMIC_FIELD_REGISTRY.md` | Permanent field-family inventory and mandatory rendered acceptance matrix for every Hogwarts frontend change |
+| Supporting evidence | `.trae/specs/<change-id>/<evidence-kind>/` | Must be linked from the owning checklist or progress log and marked with its evidence status |
+| Extension operations | `public/scripts/extensions/hogwarts-mud/README.md` | User/developer operation and navigation entry; not a field or product contract |
+| Prototype snapshot | `prototypes/hogwarts-mud/` | Colocated, explicitly non-authoritative, updated only with that prototype |
+| Historical change archive | Its original `.trae/specs/<change-id>/` | Retained as historical evidence; never rewritten to impersonate current runtime |
+
+### Active PRD Registry Gate
+
+1. Every active or research `.trae/specs/<change-id>/prd.md` must have exactly
+   one current row in `HOGWARTS_MUD_PRODUCT_SPEC.md`.
+2. Register a new PRD when its stable change directory is created.
+3. Update the registry in the same change when a PRD enters research,
+   approval, implementation, blocked, completed, superseded, or archived
+   status, or when a scope revision invalidates approval.
+4. The registry records status and links only. Behavioral details remain in
+   the linked PRD; runtime truth remains in the living contract.
+5. A missing target, duplicate row, unregistered active PRD, or status conflict
+   blocks approval and closeout.
+
+### Location And Evidence Gate
+
+1. Except for `HOGWARTS_MUD_PRODUCT_SPEC.md`, do not create Hogwarts plans,
+   specs, reports, or debug notes at repository root.
+2. Do not create orphan evidence under `.trae/`, `/tmp`, a dated root
+   directory, or an unrelated change. Move durable evidence under its stable
+   owning change and link it.
+3. Temporary investigation files must be removed before closeout. An
+   unresolved observation must be preserved as linked evidence with an exact
+   status such as `unverified`; do not call it fixed or register it as current
+   debt without runtime evidence.
+4. Completed change artifacts remain historical. Do not edit old progress or
+   test reports to match today's code. Put current facts in the living contract
+   and link historical evidence when needed.
+5. A legacy change directory that predates the five-file rule is read-only
+   history. Reopening it for new scope requires adding the missing current
+   artifacts, registering the PRD, and obtaining explicit approval; never
+   invent a historical PRD during unrelated cleanup.
+
+### Zombie Document Gate
+
+A document is a zombie only when at least one of these is proven:
+
+- it is empty and has no required artifact role;
+- it has no governed owner, no incoming reference, and no durable evidence
+  purpose;
+- it presents superseded behavior as current authority and a maintained
+  replacement exists.
+
+Age, completion, an old date, or lack of recent edits is not deletion evidence.
+
+Before deleting or rewriting any candidate:
+
+1. Inventory the exact path, size/line count, last tracked update, incoming
+   references, claimed authority, and replacement.
+2. Read the complete document and classify every still-valid fact,
+   unresolved observation, historical snapshot, and unapproved idea.
+3. Move current facts to their maintained authority. Preserve unresolved
+   observations as linked evidence with explicit status. Keep unapproved ideas
+   clearly non-authoritative rather than silently promoting or dropping them.
+4. Produce a path-level before/after matrix and obtain explicit user approval.
+5. Delete only the approved paths, then prove no dangling reference or
+   forbidden root document remains.
+
+At closeout, verify:
+
+- every active/research PRD has exactly one Product Spec registry row;
+- every changed runtime fact has a living-contract owner;
+- every durable supporting artifact is under and linked from its owner;
+- no forbidden root plan/debug file or orphan evidence remains;
+- no historical archive was rewritten as current authority.
+
 ## Mandatory Workflow
 
 Follow these gates in order. Do not skip or reorder them.
+
+### Permanent PRD-Goal Acceptance Invariant
+
+This invariant governs every Hogwarts PRD. Language/localization rules below
+are one domain-specific application, not the scope of this invariant.
+
+1. Acceptance gates must be derived directly from the current approved PRD's
+   implementation requirements, product goal and promised user outcome. Start
+   from `Problem`, `After`, `In Scope` and `Acceptance Criteria`; do not start
+   from available tests, implementation components, internal health metrics or
+   whatever is easiest to inspect.
+2. Before implementation, map every PRD requirement and goal to:
+   - the normal user or runtime workflow that exercises it;
+   - the exact observable result that proves it;
+   - forbidden outcomes that fail it;
+   - the authoritative evidence needed to decide pass or fail.
+   A requirement without this trace is not ready for implementation.
+3. Every primary acceptance check must identify the exact PRD requirement it
+   proves. A test, metric or artifact with no such trace may be useful
+   diagnostic evidence, but it cannot define acceptance and cannot compensate
+   for a failed PRD outcome.
+4. Tailor the gate to the current PRD. Do not reuse a generic checklist as if
+   it represented the product goal. Schema validity, API success, row counts,
+   hashes, queue health, unit tests and lack of crashes are supporting evidence
+   unless the PRD itself makes them an externally required outcome.
+5. For a user-facing PRD, the normal user workflow and rendered steady state
+   are mandatory evidence. If they contradict internal metrics or green tests,
+   the user-visible result wins and acceptance fails.
+6. Before declaring completion, reread the approved PRD and perform a
+   criterion-by-criterion audit against the implemented product. Work that is
+   technically correct but misses the PRD's actual goal is incomplete.
 
 ### Gate 1: Identify And Reuse The Change
 
@@ -64,6 +188,8 @@ Follow these gates in order. Do not skip or reorder them.
 2. Reuse it when the product intent and acceptance boundary are the same.
 3. Create a new stable `<change-id>` only for a genuinely distinct change.
 4. Create any missing one of the five required files before continuing.
+5. Add or update exactly one matching row in
+   `HOGWARTS_MUD_PRODUCT_SPEC.md`.
 
 ### Gate 2: Map The Existing Production System Before Designing
 
@@ -158,6 +284,12 @@ hydration, capsule, or composition-root change:
 Apply these rules whenever adding, moving, deleting or repairing Hogwarts
 tests:
 
+The canonical cross-change retirement and migration manifest is:
+
+```text
+.trae/specs/hogwarts-test-suite-decomposition/test-migration-manifest.md
+```
+
 1. Put a new test in the smallest existing domain-owned test file. If no
    focused owner exists, create a domain-named `hogwarts-mud-*.test.mjs` file.
    Do not add tests to a generic monolith, historical `taskN` catch-all or
@@ -184,6 +316,94 @@ tests:
 8. Every migrated file must run independently and reach its intended business
    assertion. Setup errors, stale imports, `skip` and `todo` do not count as
    successful migration.
+9. A behavior change and its test-contract migration are one atomic change.
+   Update every still-active assertion to the new approved contract in the
+   same task. If the behavior is retired, delete its production path and tests
+   in the same task and append an exact row to the canonical manifest. Never
+   leave a known stale assertion for a later cleanup task.
+10. Every manifest row must name the deleted or moved production/test path or
+    test title, current replacement owner, retirement authority, no-caller
+    evidence where applicable, and final verification result. A prose note in
+    `progress.md` is not a manifest substitute.
+11. Retired test utilities, fixture loaders, compatibility exports and dead
+    fixture paths are retired code too. Remove them with their test instead of
+    keeping an unreachable harness branch.
+
+### Permanent Frontend Dynamic Field Registry Gate
+
+Apply this gate before designing, implementing, reviewing or accepting any
+Hogwarts frontend change:
+
+1. Read
+   `.trae/skills/hogwarts-change-governance/FRONTEND_DYNAMIC_FIELD_REGISTRY.md`
+   completely.
+2. Trace every affected DOM text sink to one existing registry row. Add a
+   stable row before implementation for every new dynamic text value. An
+   unregistered dynamic value blocks implementation.
+3. Record the canonical source, Renderer, exact TranslationTable identity or
+   static locale key, and repeated-instance expansion. Direct `*En` reads,
+   reader-specific translation identities and undocumented fallback are
+   forbidden.
+4. A route marked `NO` or `PATCH` is failed work, not accepted resilience.
+   `PATCH` becomes `YES` only after the normal rendered zh-CN steady state
+   passes.
+5. For ordinary frontend changes, browser-test every touched row and its
+   repeated instances. For localization architecture, shared Renderer,
+   localization controller, view-model or locale-resource changes, expand and
+   test every registry row.
+6. Calendar acceptance must open every date containing content, every schedule
+   detail, every archived Scene detail/transcript, every Storyline and every
+   beat. Actor, Item, Spell, Map, Message and Relationship families likewise
+   expand to every current representative-save instance.
+7. In zh-CN after idle drains, every expanded value must be Chinese
+   `translated`, Chinese `STATIC`, exact player `RAW`, or an exact narrow
+   `ALLOW` token. Any avoidable English prose, English Canon name, visible
+   internal ID, `pending`, `error` or source fallback fails.
+8. Unit tests, table rows, API success and source inspection are supporting
+   evidence only. Persist the row-by-row DOM result under the active PRD and
+   link it from `checklist.md` and `progress.md`.
+9. Update the registry in the same change whenever a Renderer, projection,
+   field identity, visible fallback or recovery action changes.
+
+### Permanent Independent Acceptance Agent Gate
+
+Apply this gate to every Hogwarts change while running acceptance, regardless
+of whether the change affects model Prompts:
+
+1. The implementation agent cannot be the sole acceptance authority. After
+   implementation and deterministic tests, launch a fresh independent Agent
+   with no forked implementation conversation or hidden summary of what was
+   changed.
+2. Give the Agent the project goal, target repository, current approved PRD,
+   Spec, checklist, living contracts and any mandatory registry paths. Do not
+   give it the implementation plan, expected passing result, known workaround,
+   selected happy path or instructions to confirm the main Agent's conclusion.
+3. The independent Agent owns the complete acceptance design and execution
+   from the project goal. It must read the authoritative artifacts itself,
+   derive the normal user/runtime workflows and forbidden outcomes, inspect
+   the implementation, run the required tests and exercise the real product.
+4. For user-facing changes, it must perform browser acceptance against the
+   rendered product. For frontend/localization changes, it must independently
+   expand `FRONTEND_DYNAMIC_FIELD_REGISTRY.md`, not rely on the main Agent's
+   screenshots or field classifications.
+5. The independent Agent is read-only with respect to production code, tests,
+   migrations and real saves during acceptance. It reports findings with exact
+   evidence and cannot silently repair the implementation it is judging.
+6. A pass requires an explicit criterion-by-criterion result tied to the
+   project goal. Test counts, infrastructure health and the main Agent's prior
+   evidence remain supporting evidence only.
+7. If it finds any failure, the main Agent resumes implementation. The same
+   verifier cannot approve the resulting fix; launch another fresh independent
+   Agent and rerun the complete acceptance scope from the goal.
+8. Persist the independent Agent's task input, fresh-context declaration,
+   acceptance scope, findings and final result under the active PRD. Do not
+   store secrets, private Prompt payloads or raw save contents.
+9. If independent Agents are unavailable, cannot access the real product, or
+   cannot execute the complete goal-derived acceptance scope, completion is
+   blocked. Main-Agent testing cannot substitute for this gate.
+10. This gate supplements Gate 8. Prompt/model behavior changes must pass both
+    the context-free blind model simulation and the independent project-goal
+    acceptance Agent.
 
 ### Permanent Technical Debt Closeout
 
@@ -213,6 +433,16 @@ For every Hogwarts change:
    stale unchecked checklist prose into the ledger as fact.
 7. Do not mark a change complete until its debt question, ledger row and any
    required core-change re-inventory decision are recorded.
+8. A known waiver or unresolved issue that cannot be fixed inside the current
+   approved scope must receive its own evidence-backed Debt row in
+   `.trae/specs/TECH_DEBT.md` in the same task. The row must state current
+   status, severity, exact measured evidence, owning future change and review
+   trigger. Mentioning it only in a Change Ledger sentence, checklist or chat
+   is insufficient.
+9. Technical debt never justifies stale, skipped or `todo` tests. Tests still
+   assert the current approved contract and may remain red only when they
+   expose the registered unresolved product blocker itself; they must not stay
+   green by using an obsolete fixture, threshold or behavior.
 
 ### Gate 3: Reconcile The Living Runtime Contract
 
@@ -270,7 +500,13 @@ Requirements for key sections:
 - Event and memory sharing defaults to stable IDs and authoritative lookup. Do not copy the same event summary into multiple witnesses, projections, capsules, and prompt sections.
 - Every newly injected projection must name the old prompt reader or payload it replaces. Additive injection without a same-change removal plan is forbidden.
 - `Frontend Field Whitelist` lists the exact state, projection, and UI session fields the frontend may read or write. Anything absent is forbidden. Explicitly write `None` when there is no frontend impact.
-- `Acceptance Criteria` must be observable, testable, and traceable to `tasks.md` and `checklist.md`.
+- Every frontend whitelist row must map to the Permanent Frontend Dynamic Field
+  Registry. A PRD cannot approve a dynamic frontend value without a registry
+  owner and acceptance expansion.
+- `Acceptance Criteria` must be observable, testable, traceable to
+  `tasks.md` and `checklist.md`, and include the requirement-to-outcome matrix
+  required by the Permanent PRD-Goal Acceptance Invariant. An
+  implementation-component checklist is not an acceptance design.
 
 ### Gate 5: Complete The Technical Spec And Execution Files
 
@@ -322,6 +558,105 @@ After approval:
 17. Add new tests under the Permanent Test Ownership Gate. Test placement and
     stale fixture cleanup are part of implementation, not optional closeout
     polish.
+18. Maintain and verify every affected row under the Permanent Frontend
+    Dynamic Field Registry Gate.
+
+### PRD User-Outcome Acceptance Gate
+
+Apply the Permanent PRD-Goal Acceptance Invariant first. This section defines
+the additional workflow evidence required when the current PRD has a
+user-visible outcome; it does not narrow the invariant to localization or UI
+work.
+
+1. Before implementing tests or declaring an acceptance plan complete, write a
+   user-outcome matrix:
+   - target user and normal starting state;
+   - each primary user workflow and screen/surface;
+   - the exact visible result promised by the PRD;
+   - forbidden visible states and unacceptable degradation;
+   - transient states and their maximum allowed lifetime;
+   - recovery actions for partial failure;
+   - authoritative runtime evidence for each result.
+2. Map every PRD acceptance criterion to at least one user-observable
+   assertion. Infrastructure health, table contents, API success, row counts,
+   hashes, unit tests and source inspection are supporting evidence only. They
+   cannot replace a required rendered or workflow-level result.
+3. Test representative breadth, not one convenient happy path. Enumerate all
+   affected screens, record kinds, readers and interaction states. Sample each
+   distinct renderer/reader and every state class that a user can encounter:
+   success, missing, pending, error, fallback, refresh/reload and explicit
+   recovery.
+4. During browser acceptance, inspect the actual rendered output and visible
+   status of every sampled dynamic field. Record whether it resolved from
+   static resources, canonical source, translated data, pending work, error or
+   fallback. Do not call a surface passed merely because it rendered without
+   crashing.
+5. Treat obvious visual contradictions as failed acceptance evidence even when
+   automated tests are green. If a screenshot or DOM snapshot shows a
+   forbidden state, investigate it before continuing; never summarize past it
+   as an acceptable fallback.
+6. Completion requires the normal user workflow to reach the PRD's promised
+   steady state. A transient indicator is acceptable only while work is
+   actually queued or active and must disappear after the approved idle or
+   completion condition. Permanent `pending`, stale status, or an error with no
+   usable recovery action fails the user outcome.
+7. When a feature promises a seamless experience, acceptance must measure the
+   absence of visible seams. Internal correctness does not compensate for
+   user-visible inconsistency.
+
+#### Language and Localization User Outcome
+
+For a PRD that promises one canonical internal language plus localized player
+display, the primary user outcome is seamless reading in the selected display
+language.
+
+1. In `zh-CN`, the normal steady-state UI must not contain avoidable English
+   semantic prose or Canon names on any affected surface. Stable IDs, internal
+   codes and source-language labels must not leak into player-facing text.
+   Exact Latin symbols are not English leakage when the symbol itself is the
+   source-backed fact and the accepted Chinese rendering preserves it, such as
+   a written initial (`H`), a compartment designator (`A-F`), a geometric
+   shape (`V`) or a Spell incantation. This exception is token-exact and
+   context-bound: it never permits an English word, name or phrase beside the
+   literal symbol, and the validator must prove the token occurs in the
+   canonical source with the same semantic role.
+2. Inspect at minimum:
+   - Home and Setup;
+   - current Game header and Scene;
+   - every visible current/historical message segment and dialogue header;
+   - left people panel and local-presence panel;
+   - Calendar grid, entry details, participant names, storylines and beats;
+   - Map labels and Inspector;
+   - Actor Dossier, memories, relationship evidence and Items;
+   - Archive/Story readers and provider/settings controls.
+   Use the permanent frontend dynamic-field registry as the exhaustive list;
+   this minimum list cannot replace or narrow it.
+3. Enumerate visible dynamic fields on each surface and classify them as
+   `static`, `translated`, `pending`, `error`, `source fallback` or
+   `raw evidence`. Persist this matrix as acceptance evidence.
+4. After the approved idle gates are open and the queue is drained:
+   - visible missing rows must have been enqueued;
+   - `pending` indicators must be zero;
+   - successful rows must render translated text;
+   - failed rows may show source fallback only with a precise non-global status
+     and a working explicit retranslation action;
+   - a global `Translation unavailable` banner for one failed field is not a
+     seamless pass.
+5. Canon names must resolve from the authoritative locale catalog consistently
+   across every renderer. Do not depend on model translation for a known Canon
+   display name.
+6. Switching `zh-CN -> en -> zh-CN`, reloading the page, clearing browser
+   storage and reopening Calendar/Dossier must preserve the selected-language
+   rendering contract without world/chat writes.
+7. English fallback proves resilience only. It does not prove Chinese-display
+   acceptance. Mixed Chinese/English output, permanent `Translating`, and
+   visible `Translation unavailable` are failures against a seamless Chinese
+   reading goal unless the current PRD explicitly approves them as the final
+   experience.
+8. Before closeout, compare screenshots and DOM field-state matrices from at
+   least one current message, one historical message, one Calendar entry with
+   participants, one Dossier with memories/Items and one Map/Archive view. A
+   single fully translated latest message is insufficient evidence.
 
 ### Gate 8: Run Blind Model Simulation
 
@@ -369,6 +704,47 @@ or the untouched response cannot run through the production chain, stop and
 report the acceptance gate as blocked. Do not substitute a response written by
 the main agent.
 
+### Out-of-Scope Remediation Gate
+
+Apply this gate whenever a proposed fix, optimization or acceptance adjustment
+would modify a module, business contract or semantic behavior outside the
+current user goal, approved PRD scope or active task ownership.
+
+1. Separate the observed problem from the proposed remediation. Discovering a
+   failure during current acceptance does not make every possible fix part of
+   the current task.
+2. Before editing, compare the remediation's touched modules, writers,
+   readers, Prompt fields and business semantics with the current goal, PRD In
+   Scope/Non-Goals and active task expected files. A metric associated with the
+   current test does not automatically authorize changes to the module that
+   produced it.
+3. If the remediation crosses that boundary, do not edit its production code,
+   tests to normalize the new behavior, migrations or real saves. Record the
+   observation as an out-of-scope TODO/debt with exact evidence and label the
+   solution semantics `undecided` and `unapproved`.
+4. Do not automatically mark the whole current task blocked. Continue all work
+   that remains inside its approved scope. Mark it blocked only when the
+   current goal itself is impossible to complete without the out-of-scope
+   decision, and record that exact dependency rather than using the unrelated
+   issue as a reason to stop.
+5. A numeric Prompt, size, latency, coverage or performance target approves
+   only the threshold. It does not authorize a trimming, omission, batching or
+   scheduling algorithm, nor does it expand the current module boundary.
+6. Never invent Prompt field omission, evidence selection, summarization,
+   ordering, batching, cursor advancement, catch-up scheduling, call cadence,
+   retry or fallback behavior merely to make a target pass.
+7. Report the out-of-scope observation to the user in plain language. State
+   which unrelated module or semantic contract a fix would change and which
+   decisions a separate PRD would need. A TODO is not implementation approval.
+8. For Prompt evidence growth, a separate approved PRD must define at minimum:
+   protected fields, evidence priority and order, pair/group integrity,
+   reference and ACL preservation, cursor semantics, overflow behavior,
+   additional call budget, failure policy and blind acceptance cases.
+9. If an out-of-scope remediation was already edited, stop immediately. When
+   the user orders rollback, remove only that unapproved change, preserve
+   unrelated work, and verify that no model call, State/chat save, translation
+   write, Knowledge write or migration used the rejected behavior.
+
 ### Gate 9: Close The Change
 
 A change is complete only when:
@@ -401,6 +777,18 @@ A change is complete only when:
     `.trae/specs/TECH_DEBT.md`.
 16. The change ledger and feature-count header are consistent. A core change
     has a recorded user decision on technical-debt re-inventory.
+17. `HOGWARTS_MUD_PRODUCT_SPEC.md` has exactly one current row for every
+    active/research PRD and reflects this change's final status.
+18. The PRD User-Outcome Acceptance Gate passes on the rendered product. No
+    infrastructure-only evidence or graceful fallback is used to substitute
+    for the promised user experience.
+19. Every affected frontend dynamic-field registry row is current and passes
+    its required repeated-instance browser expansion. Localization architecture
+    changes pass every row in the registry.
+20. A fresh independent acceptance Agent receives the project goal and
+    authoritative artifact paths, independently executes the complete
+    acceptance scope, and reports a pass. Any post-failure fix is rechecked by
+    another fresh Agent.
 
 ## Incident-Derived Non-Negotiable Lesson
 
@@ -441,12 +829,21 @@ Stop and ask for resolution when any of these is true:
 - The correct stable `<change-id>` cannot be determined without changing product scope.
 - A field would have multiple authoritative writers.
 - A reader depends on a field outside the frontend whitelist or documented runtime contract.
+- A frontend dynamic text value is absent from the permanent registry, has an
+  unknown route, remains marked `NO`/`PATCH`, or lacks its required rendered
+  repeated-instance evidence.
+- No fresh independent Agent can execute and pass the complete project-goal
+  acceptance scope, or the only acceptance claim comes from the implementation
+  Agent.
 - Atomic migration or old-field removal semantics are unknown.
 - Prompt growth has no explicit field-level budget or overflow behavior.
 - The real production call graph, existing prompt readers, or semantic removal targets have not been mapped.
 - A prompt-affecting change lacks a measured real-save baseline from the production builder.
 - A new projection would coexist with an overlapping legacy payload without explicit approved migration and removal.
 - The affected role exceeds the runtime-derived Prompt budget or an explicitly approved PRD target, duplicates semantic sources, or requires protected-field truncation.
+- A proposed remediation would change a module or business semantic outside
+  the current user goal, approved PRD scope or active task ownership, even when
+  the underlying issue was discovered during current acceptance.
 - Only synthetic fixtures or unit tests support the completion claim.
 - A Prompt-affecting change has not passed blind model simulation for every
   affected active task/mode/entry path.

@@ -43,6 +43,7 @@ export const UI_ACTION_NAMES = Object.freeze([
     'createSaveCard',
     'createSvgElement',
     'deleteProfileEditor',
+    'ensureLocalizedFields',
     'ensureNarratorCharacter',
     'ensureNativeProfileOption',
     'formatMessageText',
@@ -55,6 +56,7 @@ export const UI_ACTION_NAMES = Object.freeze([
     'getHogwartsSaves',
     'getInspectorMapScope',
     'getKnownSpellMap',
+    'getLocalizedField',
     'getMapPositionMarkers',
     'getMovementPickerOptions',
     'getOrCreateEditorSecretId',
@@ -128,6 +130,7 @@ export const UI_ACTION_NAMES = Object.freeze([
     'renderWorldMap',
     'repairNarratorCharacter',
     'requestMapExpansion',
+    'requestFieldRetranslation',
     'resetCalendarSelection',
     'resetInspectorMapScope',
     'rollbackLastTurn',
@@ -158,7 +161,7 @@ export const UI_ACTION_NAMES = Object.freeze([
     'syncProfileEndpointVisibility',
     'syncSettingsUi',
     'testProfileConnection',
-    'translateCurrentStateAndLatestArchive',
+    'setDisplayLocale',
     'translateExistingMessages',
     'translateMessage',
     'unregisterUiBindings',
@@ -182,16 +185,24 @@ export function createUiApplication({
         refs,
         session,
     };
+    const translationController =
+        createTranslationController(
+            dependencies,
+        );
+    Object.assign(
+        dependencies,
+        translationController,
+    );
     return Object.assign(
         {},
         createSaveLibrary(dependencies),
         createSetupController(dependencies),
+        translationController,
         createSettingsProfileController(dependencies),
         createMapRenderer(dependencies),
         createMessageRenderer(dependencies),
         createStoryRenderer(dependencies),
         createInspectorController(dependencies),
-        createTranslationController(dependencies),
         createComposerController(dependencies),
         createTurnController(dependencies),
         createAppController(dependencies),

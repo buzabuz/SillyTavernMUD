@@ -1,3 +1,20 @@
+import {
+    getLocalMapDefinition,
+    getMapRooms,
+} from '../domain/map-access.js';
+import {
+    createLocalMapRoomField,
+} from '../domain/map-localization.js';
+import {
+    migrateLanguageAuthorityV1,
+} from '../domain/language-authority-migration.js';
+import {
+    seedLanguageAuthorityTranslations,
+} from '../domain/language-authority-seeding.js';
+import {
+    createCharacterInputLocalizationField,
+} from '../domain/localization-candidates.js';
+
 export function repairLoadedModelSlots({
     loadedSlots,
     configuredSlots,
@@ -80,6 +97,14 @@ export function createSaveLibrary(ports) {
         canOpenCurrentSocialSaveReadOnly,
         createDefaultCharacterDraft,
         doNewChat,
+        enqueueLocalizationCandidates =
+        async () => ({
+            enqueued: 0,
+            skipped: 0,
+            errorCode: '',
+        }),
+        ensureLocalizedFields =
+        async () => [],
         ensureSceneLifecycleState =
         () => false,
         flushPendingMetadataSave =
@@ -87,11 +112,19 @@ export function createSaveLibrary(ports) {
         getCharacters,
         getConnectionProfiles,
         getContext,
+        getLocalizedField =
+        field => ({
+            text:
+                    field.sourceTextEn ||
+                    '',
+        }),
         getMudState,
         getRequestHeaders,
         getSettings,
+        guardedRewriteTimeline,
         guardedSaveMetadata =
         async () => null,
+        idleLocalizationScheduler,
         initials,
         isSaveRevisionBlocked =
         () => false,
@@ -99,6 +132,7 @@ export function createSaveLibrary(ports) {
         migrateLoadedSocialGraph,
         normalizeCampaign,
         normalizeModelSlots,
+        localizationTable,
         projectActorSocialRelationships,
         registerSaveRevisionHead =
         async () => null,
@@ -112,6 +146,109 @@ export function createSaveLibrary(ports) {
     const {
         root,
     } = refs;
+
+    function staticText(
+        staticKey,
+        sourceTextEn,
+    ) {
+        return getLocalizedField({
+            staticKey,
+            sourceTextEn,
+        }).text ||
+            sourceTextEn;
+    }
+
+    async function migrateLoadedLanguageAuthority(
+        context,
+    ) {
+        const currentState =
+            context
+                ?.chatMetadata
+                ?.hogwartsMud;
+        if (
+            !currentState ||
+            currentState
+                .languageAuthorityVersion ===
+                1
+        ) {
+            return {
+                changed: false,
+                report: null,
+                seed: null,
+            };
+        }
+        if (
+            typeof guardedRewriteTimeline !==
+                'function' ||
+            !localizationTable
+        ) {
+            throw new TypeError(
+                'Language Authority migration ports are unavailable.',
+            );
+        }
+        const currentChat =
+            structuredClone(
+                context.chat,
+            );
+        const plan =
+            migrateLanguageAuthorityV1({
+                worldState:
+                    currentState,
+                chat:
+                    currentChat,
+            });
+        const translationProvider =
+            String(
+                getSettings?.()
+                    ?.translationProvider ||
+                'local',
+            );
+        const seed =
+            await seedLanguageAuthorityTranslations({
+                timelineEpoch:
+                    currentState
+                        .timelineEpoch,
+                candidates:
+                    plan
+                        .translationCandidates,
+                localizationTable,
+                providerId:
+                    translationProvider ===
+                    'off'
+                        ? 'local'
+                        : translationProvider,
+            });
+        await guardedRewriteTimeline({
+            currentState:
+                structuredClone(
+                    currentState,
+                ),
+            nextState:
+                plan.nextState,
+            currentChat,
+            nextChat:
+                plan.nextChat,
+            source:
+                'language_authority_v1',
+            changedDomains: [
+                'calendar',
+                'character',
+                'item',
+                'language_authority',
+                'map',
+                'material',
+                'message',
+                'spell',
+                'timeline',
+            ],
+        });
+        return {
+            changed: true,
+            report:
+                plan.report,
+            seed,
+        };
+    }
 
     async function migrateLoadedWorld(
         context,
@@ -343,27 +480,231 @@ export function createSaveLibrary(ports) {
                 ? data.map(entry => ({ ...entry, storageCharacterId }))
                 : [];
         }));
-        return collections
+        const saves = collections
             .flat()
             .filter(entry => entry?.chat_metadata?.hogwartsMud?.character?.confirmed)
             .sort((left, right) => new Date(right.last_mes).getTime() - new Date(left.last_mes).getTime())
             .map(entry => {
                 const state = entry.chat_metadata.hogwartsMud;
                 const campaign = normalizeCampaign(state.campaign);
+                const timelineEpoch =
+                    String(
+                        state.timelineEpoch ||
+                        '',
+                    );
+                const mapId =
+                    state.scene?.mapId ||
+                    state.map
+                        ?.activeMapId ||
+                    '';
+                const roomId =
+                    state.scene?.roomId ||
+                    state.map
+                        ?.currentLocalNodeId ||
+                    '';
+                const map =
+                    getLocalMapDefinition(
+                        mapId,
+                        state.map,
+                    );
+                const room =
+                    getMapRooms(
+                        map,
+                        state.map,
+                    ).find(candidate =>
+                        candidate.id ===
+                        roomId);
+                const chapterField = {
+                    ...(
+                        state.scene?.id
+                            ? {}
+                            : {
+                                staticKey:
+                                    'story.chapter.opening_world',
+                            }
+                    ),
+                    timelineEpoch,
+                    recordKind:
+                        'world_state',
+                    recordId: 'root',
+                    fieldPath:
+                        'chapterEn',
+                    sourceTextEn:
+                        state.chapterEn ||
+                        'Opening World',
+                };
+                const locationField =
+                    room
+                        ? {
+                            ...createLocalMapRoomField(
+                                mapId,
+                                room,
+                            ),
+                            timelineEpoch,
+                        }
+                        : {
+                            staticKey:
+                                'map.location.unknown',
+                            timelineEpoch,
+                            recordKind:
+                                'local_map_room',
+                            recordId:
+                                `${mapId}:${roomId}`,
+                            fieldPath:
+                                'nameEn',
+                            sourceTextEn:
+                                roomId ||
+                                'Unknown location',
+                        };
+                const previewText =
+                    String(
+                        entry.mes ||
+                        '',
+                    ).trim();
+                const previewField = {
+                    timelineEpoch,
+                    recordKind:
+                        'save_preview',
+                    recordId:
+                        String(
+                            entry.file_name ||
+                            '',
+                        ),
+                    fieldPath: 'textEn',
+                    sourceTextEn:
+                        /[\u3400-\u9fff]/u
+                            .test(
+                                previewText,
+                            )
+                            ? ''
+                            : previewText,
+                    rawText:
+                        /[\u3400-\u9fff]/u
+                            .test(
+                                previewText,
+                            )
+                            ? previewText
+                            : '',
+                };
+                const characterName =
+                    state.character
+                        .inputEvidence
+                        ?.identity
+                        ?.name ||
+                    state.character
+                        .canonicalEn
+                        ?.identity
+                        ?.nameEn ||
+                    '';
+                const characterNameField = {
+                    ...createCharacterInputLocalizationField(
+                        'identity.name',
+                        characterName,
+                        {
+                            timelineEpoch,
+                        },
+                    ),
+                };
                 return {
                     fileName: entry.file_name,
                     storageCharacterId: entry.storageCharacterId,
-                    characterName: state.character.identity?.name || '未命名角色',
-                    campaignName: campaign.presetName,
-                    difficultyName: campaign.difficultyName,
-                    chapter: state.chapter || '未知章节',
-                    clock: state.clock || '时间未知',
-                    location: state.location || '地点未知',
+                    campaignName:
+                        getLocalizedField({
+                            staticKey:
+                                `campaign.${campaign.presetId}.name`,
+                            sourceTextEn:
+                                campaign
+                                    .presetId,
+                        }).text,
+                    difficultyName:
+                        getLocalizedField({
+                            staticKey:
+                                `difficulty.${campaign.difficulty}.name`,
+                            sourceTextEn:
+                                campaign
+                                    .difficulty,
+                        }).text,
+                    clock:
+                        state.clock ||
+                        staticText(
+                            'ui.archive.time_unknown',
+                            'Time unknown',
+                        ),
                     messageCount: Number(entry.chat_items || 0),
-                    preview: String(entry.mes || '').trim(),
                     updatedAt: entry.last_mes,
+                    localizationFields: [
+                        chapterField,
+                        locationField,
+                        previewField,
+                        characterNameField,
+                    ],
                 };
             });
+        await ensureLocalizedFields(
+            saves.flatMap(save =>
+                save.localizationFields),
+            {
+                priority: 4,
+            },
+        );
+        return saves.map(save => {
+            const [
+                chapterField,
+                locationField,
+                previewField,
+                characterNameField,
+            ] = save
+                .localizationFields;
+            const statuses = [
+                getLocalizedField(
+                    chapterField,
+                ),
+                getLocalizedField(
+                    locationField,
+                ),
+                getLocalizedField(
+                    previewField,
+                ),
+                getLocalizedField(
+                    characterNameField,
+                ),
+            ];
+            const result = {
+                ...save,
+            };
+            delete result
+                .localizationFields;
+            return {
+                ...result,
+                chapter:
+                    statuses[0].text ||
+                    chapterField
+                        .sourceTextEn,
+                location:
+                    statuses[1].text ||
+                    locationField
+                        .sourceTextEn,
+                preview:
+                    statuses[2].text ||
+                    '',
+                characterName:
+                    statuses[3].text ||
+                    staticText(
+                        'ui.archive.unnamed_character',
+                        'Unnamed character',
+                    ),
+                localizationStatus:
+                    statuses.some(field =>
+                        field.status ===
+                        'error')
+                        ? 'error'
+                        : statuses.some(field =>
+                            field.status ===
+                            'pending')
+                            ? 'pending'
+                            : '',
+            };
+        });
     }
 
     function createSaveCard(save, isCurrent) {
@@ -381,16 +722,53 @@ export function createSaveLibrary(ports) {
         <span class="hpmud-save-arrow">→</span>
     `;
         button.querySelector('.hpmud-save-monogram').textContent = initials(save.characterName);
-        button.querySelector('small').textContent = isCurrent ? '当前时间线' : new Date(save.updatedAt).toLocaleString('zh-CN', {
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
+        const timestamp = isCurrent
+            ? staticText(
+                'ui.archive.current_timeline',
+                'Current timeline',
+            )
+            : new Date(
+                save.updatedAt,
+            ).toLocaleString(
+                session
+                    .displayLocale ===
+                    'en'
+                    ? 'en-GB'
+                    : 'zh-CN',
+                {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                },
+            );
+        const localizationStatus =
+            save.localizationStatus
+                ? getLocalizedField({
+                    staticKey:
+                        `translation.status.${save.localizationStatus}`,
+                    sourceTextEn:
+                        save
+                            .localizationStatus ===
+                            'error'
+                            ? 'Translation unavailable'
+                            : 'Translating',
+                }).text
+                : '';
+        button.querySelector('small').textContent =
+            [
+                timestamp,
+                localizationStatus,
+            ].filter(Boolean)
+                .join(' · ');
         button.querySelector('strong').textContent = save.characterName;
         button.querySelector('.hpmud-save-copy > span').textContent =
             `${save.campaignName} · ${save.difficultyName} · ${save.chapter} · ${save.location}`;
-        button.querySelector('em').textContent = `${save.messageCount} 条记录${save.preview ? ` · ${save.preview}` : ''}`;
+        button.querySelector('em').textContent =
+            `${save.messageCount} ${staticText(
+                'ui.archive.records',
+                'records',
+            )}${save.preview ? ` · ${save.preview}` : ''}`;
         button.addEventListener('click', () => void loadHogwartsSave(save));
         return button;
     }
@@ -398,7 +776,11 @@ export function createSaveLibrary(ports) {
     async function renderSaveLibrary() {
         const requestId = ++session.saveListRequest;
         const list = root.querySelector('#hpmud_save_list');
-        list.innerHTML = '<div class="hpmud-save-empty">正在检索魔法档案…</div>';
+        list.innerHTML =
+            `<div class="hpmud-save-empty">${staticText(
+                'ui.archive.loading',
+                'Searching magical archives...',
+            )}</div>`;
         try {
             const saves = await getHogwartsSaves();
             if (requestId !== session.saveListRequest || session.activeScreen !== 'home') {
@@ -407,18 +789,40 @@ export function createSaveLibrary(ports) {
             list.replaceChildren();
             const currentChatId = String(getContext().chatId || '');
             if (!saves.length) {
-                list.innerHTML = '<div class="hpmud-save-empty"><strong>还没有旧档案</strong><span>建立第一个角色后，时间线会出现在这里。</span></div>';
+                list.innerHTML =
+                    `<div class="hpmud-save-empty"><strong>${staticText(
+                        'ui.archive.empty_title',
+                        'No archived timelines yet',
+                    )}</strong><span>${staticText(
+                        'ui.archive.empty_detail',
+                        'Create a character and its timeline will appear here.',
+                    )}</span></div>`;
             } else {
                 saves.forEach(save => {
                     const normalized = save.fileName.replace(/\.jsonl$/i, '');
                     list.append(createSaveCard(save, normalized === currentChatId || save.fileName === currentChatId));
                 });
             }
-            root.querySelector('#hpmud_save_count').textContent = `${saves.length} 个档案`;
+            root.querySelector('#hpmud_save_count').textContent =
+                `${saves.length} ${staticText(
+                    'ui.archive.archives',
+                    'archives',
+                )}`;
         } catch (error) {
             console.error('[Hogwarts MUD] Failed to list saves', error);
-            list.innerHTML = '<div class="hpmud-save-empty"><strong>无法读取档案</strong><span>请检查酒馆连接后刷新。</span></div>';
-            root.querySelector('#hpmud_save_count').textContent = '读取失败';
+            list.innerHTML =
+                `<div class="hpmud-save-empty"><strong>${staticText(
+                    'ui.archive.error_title',
+                    'Unable to read archives',
+                )}</strong><span>${staticText(
+                    'ui.archive.error_detail',
+                    'Check the tavern connection and refresh.',
+                )}</span></div>`;
+            root.querySelector('#hpmud_save_count').textContent =
+                staticText(
+                    'ui.archive.read_failed',
+                    'Read failed',
+                );
         }
     }
 
@@ -516,6 +920,10 @@ export function createSaveLibrary(ports) {
         const list = root.querySelector('#hpmud_save_list');
         const previousSuppression =
             automaticWork.suppressed;
+        let scheduleLoadedLocalization =
+            false;
+        automaticWork.suppressed =
+            true;
         list.classList.add('loading');
         try {
             const currentContext =
@@ -540,16 +948,26 @@ export function createSaveLibrary(ports) {
             ) {
                 await registerSaveRevisionHead(
                     currentContext,
+                    {
+                        persistMigration:
+                            false,
+                    },
                 );
                 if (
                     !isSaveRevisionBlocked()
                 ) {
+                    await migrateLoadedLanguageAuthority(
+                        currentContext,
+                    );
                     await migrateLoadedWorld(
                         currentContext,
                     );
                     await repairLoadedModelConfiguration(
                         currentContext,
                     );
+                    await enqueueLocalizationCandidates();
+                    scheduleLoadedLocalization =
+                        true;
                 }
                 applySystemPrompt();
                 setAppScreen(
@@ -573,7 +991,7 @@ export function createSaveLibrary(ports) {
                     save,
                     healthyIndex,
                 );
-            const loadedState =
+            let loadedState =
                 loadedContext
                     .chatMetadata
                     ?.hogwartsMud;
@@ -596,6 +1014,10 @@ export function createSaveLibrary(ports) {
             }
             await registerSaveRevisionHead(
                 loadedContext,
+                {
+                    persistMigration:
+                        false,
+                },
             );
             if (
                 isSaveRevisionBlocked()
@@ -610,6 +1032,13 @@ export function createSaveLibrary(ports) {
                 );
                 return;
             }
+            await migrateLoadedLanguageAuthority(
+                loadedContext,
+            );
+            loadedState =
+                loadedContext
+                    .chatMetadata
+                    ?.hogwartsMud;
             await migrateLoadedWorld(
                 loadedContext,
             );
@@ -672,6 +1101,9 @@ export function createSaveLibrary(ports) {
             ) {
                 await applyNativeRoleSettings(lowSlot);
             }
+            await enqueueLocalizationCandidates();
+            scheduleLoadedLocalization =
+                true;
             applySystemPrompt();
             setAppScreen(
                 'game',
@@ -684,9 +1116,33 @@ export function createSaveLibrary(ports) {
         } catch (error) {
             console.error('[Hogwarts MUD] Failed to load save', error);
             toastr.error(String(error?.message || error));
+            if (
+                getMudState()
+                    ?.languageAuthorityVersion !==
+                1
+            ) {
+                setAppScreen(
+                    'home',
+                    {
+                        allowAutomaticModelWork:
+                            false,
+                    },
+                );
+            }
         } finally {
             automaticWork.suppressed =
-                previousSuppression;
+                getMudState()
+                    ?.languageAuthorityVersion ===
+                    1
+                    ? previousSuppression
+                    : true;
+            if (
+                scheduleLoadedLocalization &&
+                !automaticWork.suppressed
+            ) {
+                idleLocalizationScheduler
+                    ?.schedule();
+            }
             list.classList.remove('loading');
         }
     }
@@ -700,6 +1156,7 @@ export function createSaveLibrary(ports) {
         renderSaveLibrary,
         beginNewGame,
         openExistingHogwartsSave,
+        migrateLoadedLanguageAuthority,
         loadHogwartsSave,
     };
 }

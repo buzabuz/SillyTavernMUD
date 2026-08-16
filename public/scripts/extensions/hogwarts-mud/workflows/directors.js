@@ -2,6 +2,34 @@ import {
     NARRATIVE_PROMPT_ACCESS,
     projectNarrativePromptInput,
 } from '../domain/narrative-prompt-context.js';
+import {
+    collectNonEnglishAuthorityFields,
+    createModelLanguageMismatch,
+} from '../domain/model-language-adoption.js';
+
+export function adoptPacingAssessmentLanguage(
+    payload,
+) {
+    const mismatches =
+        collectNonEnglishAuthorityFields(
+            payload,
+        );
+    if (!mismatches.length) {
+        return payload;
+    }
+    return {
+        languageSkipped: true,
+        diagnostics:
+            mismatches.map(fieldPath =>
+                createModelLanguageMismatch({
+                    taskId:
+                        'pacing_director',
+                    fieldPath,
+                    recordId:
+                        'pacing_assessment',
+                })),
+    };
+}
 
 export function createDirectorWorkflows(ports) {
     const {
@@ -37,7 +65,6 @@ export function createDirectorWorkflows(ports) {
             )),
         renderAll,
         resolveRoleSlots,
-        retrieveLocalKnowledge,
         sendPacingDirectorRequest,
         syncLocalKnowledge,
         validatePacingAssessment,
@@ -211,6 +238,8 @@ export function createDirectorWorkflows(ports) {
         );
     }
 
+    // Removed with the remaining legacy Prompt builders in P2-09.
+    // eslint-disable-next-line no-unused-vars
     function createPacingDirectorPrompt(
         state,
         pacingSignals,
@@ -355,8 +384,16 @@ When a public guest is necessary, guestActor must contain exactly:
                             clock: state.clock,
                             currentScene:
                                 state.scene,
-                            currentLocation:
-                                state.location,
+                            currentLocation: {
+                                mapId:
+                                    state.map
+                                        ?.activeMapId ||
+                                    '',
+                                roomId:
+                                    state.map
+                                        ?.currentLocalNodeId ||
+                                    '',
+                            },
                             presentActors:
                             projectNpcRuntimeActorsForPrompt(
                                 state,
@@ -702,9 +739,6 @@ For intervene:
                             state.map
                                 ?.currentLocalNodeId ||
                             '',
-                        name:
-                            state.location ||
-                            '',
                     },
                     actorDirectory,
                     currentItem,
@@ -724,56 +758,45 @@ For intervene:
             state,
             pacingSignals,
         );
-        let response = await sendPacingDirectorRequest(
-            roleSlot,
-            prompt,
-            { json: true },
-        );
-        let raw = extractRoleResponseText(response);
-        let lastError = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                const payload =
-                normalizePacingAssessmentPayload(
-                    parseJsonObject(raw),
-                );
-                if (payload.decision === 'hold' &&
-                payload.intervention === undefined) {
-                    payload.intervention = null;
-                }
-                const validation = validatePacingAssessment(
-                    payload,
-                    state,
-                    pacingSignals,
-                );
-                if (!validation.valid) {
-                    throw new Error(validation.errors.join('；'));
-                }
-                return payload;
-            } catch (error) {
-                lastError = error;
-                if (attempt > 0) break;
-                response = await sendPacingDirectorRequest(roleSlot, [
-                    {
-                        role: 'system',
-                        content: 'Repair the causal-only Pacing JSON. Return hold with null intervention when no grounded prior fact fits. Otherwise return exactly one reversible this_turn causal_collision using only supplied Actor, Item, map, room and Event IDs. Never create or admit an Actor, and never return filler or a generic incident. Output JSON only.',
-                    },
-                    {
-                        role: 'user',
-                        content: JSON.stringify({
-                            validationError:
-                            String(error?.message || error),
-                            invalidOutput: raw,
-                            originalRequest:
-                            JSON.parse(prompt[1].content),
-                        }),
-                    },
-                ], { json: true });
-                raw = extractRoleResponseText(response);
-            }
+        const response =
+            await sendPacingDirectorRequest(
+                roleSlot,
+                prompt,
+                {
+                    json: true,
+                },
+            );
+        const raw =
+            extractRoleResponseText(
+                response,
+            );
+        const payload =
+            normalizePacingAssessmentPayload(
+                parseJsonObject(raw),
+            );
+        if (
+            payload.decision ===
+                'hold' &&
+            payload.intervention ===
+                undefined
+        ) {
+            payload.intervention = null;
         }
-        throw new Error(
-            `中档节奏评估连续两次无效：${String(lastError?.message || lastError)}`,
+        const validation =
+            validatePacingAssessment(
+                payload,
+                state,
+                pacingSignals,
+            );
+        if (!validation.valid) {
+            throw new Error(
+                validation.errors.join(
+                    '；',
+                ),
+            );
+        }
+        return adoptPacingAssessmentLanguage(
+            payload,
         );
     }
 
@@ -811,6 +834,35 @@ For intervene:
                     pacingSignals,
                 );
                 state = getMudState();
+                if (
+                    assessment
+                        ?.languageSkipped
+                ) {
+                    state.pacingDirector = {
+                        ...(
+                            state
+                                .pacingDirector ||
+                            {}
+                        ),
+                        status: 'idle',
+                        error: '',
+                        lastAssessedTurn:
+                            Number(
+                                state.turn
+                                    ?.count ||
+                                0,
+                            ),
+                        lastAssessedSceneId:
+                            state.scene?.id ||
+                            '',
+                        assessment: null,
+                        pendingBeat: null,
+                    };
+                    await context
+                        .saveMetadata();
+                    renderAll();
+                    return assessment;
+                }
                 context.chatMetadata.hogwartsMud =
                 applyPacingAssessment(
                     state,

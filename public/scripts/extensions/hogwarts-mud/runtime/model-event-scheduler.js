@@ -320,34 +320,39 @@ export function createModelEventScheduler({
             promptBudget,
             promptMeasurement,
         };
-        const {
-            tier:
-                _tier,
-            modelTaskActionId:
-                _actionId,
-            ...requestOptions
-        } = options;
-        try {
-            recordModelTaskAttempt(
-                prepared.state,
-                prepared.definition,
-                prepared.event,
-                tier,
-            );
-        } catch (error) {
-            if (
-                error instanceof
-                ModelTaskDeferredError
-            ) {
-                await persistRuntime(
+        const requestOptions = {
+            ...options,
+        };
+        delete requestOptions.tier;
+        delete requestOptions
+            .modelTaskActionId;
+        const usesWorldLedger =
+            prepared.definition
+                .ledgerScope !==
+            'ephemeral_display';
+        if (usesWorldLedger) {
+            try {
+                recordModelTaskAttempt(
                     prepared.state,
+                    prepared.definition,
+                    prepared.event,
+                    tier,
                 );
+            } catch (error) {
+                if (
+                    error instanceof
+                    ModelTaskDeferredError
+                ) {
+                    await persistRuntime(
+                        prepared.state,
+                    );
+                }
+                throw error;
             }
-            throw error;
+            await persistRuntime(
+                prepared.state,
+            );
         }
-        await persistRuntime(
-            prepared.state,
-        );
         onAttempt(envelope);
         try {
             const result =
@@ -356,33 +361,37 @@ export function createModelEventScheduler({
                     messages,
                     requestOptions,
                 );
-            const outcomeState =
-                currentTaskState(
-                    prepared,
+            if (usesWorldLedger) {
+                const outcomeState =
+                    currentTaskState(
+                        prepared,
+                    );
+                recordModelTaskSuccess(
+                    outcomeState,
+                    prepared.definition,
+                    prepared.event,
                 );
-            recordModelTaskSuccess(
-                outcomeState,
-                prepared.definition,
-                prepared.event,
-            );
-            await persistRuntime(
-                outcomeState,
-            );
+                await persistRuntime(
+                    outcomeState,
+                );
+            }
             onSuccess(envelope);
             return result;
         } catch (error) {
-            const outcomeState =
-                currentTaskState(
-                    prepared,
+            if (usesWorldLedger) {
+                const outcomeState =
+                    currentTaskState(
+                        prepared,
+                    );
+                recordModelTaskFailure(
+                    outcomeState,
+                    prepared.definition,
+                    prepared.event,
                 );
-            recordModelTaskFailure(
-                outcomeState,
-                prepared.definition,
-                prepared.event,
-            );
-            await persistRuntime(
-                outcomeState,
-            );
+                await persistRuntime(
+                    outcomeState,
+                );
+            }
             onFailure({
                 ...envelope,
                 error,
@@ -420,58 +429,68 @@ export function createModelEventScheduler({
             event:
                 prepared.event,
         };
-        try {
-            recordModelTaskAttempt(
-                prepared.state,
-                prepared.definition,
-                prepared.event,
-                'local',
-            );
-        } catch (error) {
-            if (
-                error instanceof
-                ModelTaskDeferredError
-            ) {
-                await persistRuntime(
+        const usesWorldLedger =
+            prepared.definition
+                .ledgerScope !==
+            'ephemeral_display';
+        if (usesWorldLedger) {
+            try {
+                recordModelTaskAttempt(
                     prepared.state,
+                    prepared.definition,
+                    prepared.event,
+                    'local',
                 );
+            } catch (error) {
+                if (
+                    error instanceof
+                    ModelTaskDeferredError
+                ) {
+                    await persistRuntime(
+                        prepared.state,
+                    );
+                }
+                throw error;
             }
-            throw error;
+            await persistRuntime(
+                prepared.state,
+            );
         }
-        await persistRuntime(
-            prepared.state,
-        );
         onAttempt(envelope);
         try {
             const result =
                 await invoke();
-            const outcomeState =
-                currentTaskState(
-                    prepared,
+            if (usesWorldLedger) {
+                const outcomeState =
+                    currentTaskState(
+                        prepared,
+                    );
+                recordModelTaskSuccess(
+                    outcomeState,
+                    prepared.definition,
+                    prepared.event,
                 );
-            recordModelTaskSuccess(
-                outcomeState,
-                prepared.definition,
-                prepared.event,
-            );
-            await persistRuntime(
-                outcomeState,
-            );
+                await persistRuntime(
+                    outcomeState,
+                );
+            }
             onSuccess(envelope);
             return result;
         } catch (error) {
-            const outcomeState =
-                currentTaskState(
-                    prepared,
+            if (usesWorldLedger) {
+                const outcomeState =
+                    currentTaskState(
+                        prepared,
+                    );
+                recordModelTaskFailure(
+                    outcomeState,
+                    prepared.definition,
+                    prepared.event,
                 );
-            recordModelTaskFailure(
-                outcomeState,
-                prepared.definition,
-                prepared.event,
-            );
-            await persistRuntime(
-                outcomeState,
-            );
+                await persistRuntime(
+                    outcomeState,
+                );
+            }
             onFailure({
                 ...envelope,
                 error,

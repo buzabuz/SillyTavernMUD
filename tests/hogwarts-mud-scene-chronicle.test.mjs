@@ -32,13 +32,10 @@ function createState() {
     state.phase = 'playing';
     state.clock =
         '1991-07-24 · 11:15';
-    state.chapter = 'Test';
-    state.location = 'Kitchen';
+    state.chapterEn = 'Test';
     state.scene = {
         id: 'scene_one',
-        name: 'Kitchen',
         nameEn: 'Kitchen',
-        summary: 'Test',
         summaryEn:
             'A quiet discussion is ending.',
         startedClock:
@@ -46,8 +43,10 @@ function createState() {
         startedMessageId: 0,
         timelineEntries: [{
             clock: state.clock,
-            label:
+            summaryEn:
                 'The discussion begins.',
+            sourceRef:
+                'scene:scene_one:opening',
         }],
         mapId: 'test_map',
         roomId: 'kitchen',
@@ -61,26 +60,22 @@ function createState() {
         'ground';
     state.map.customLocalMaps = [{
         id: 'test_map',
-        name: 'Test',
         nameEn: 'Test',
         defaultLevelId: 'ground',
         levels: [{
             id: 'ground',
-            name: 'Ground',
             nameEn: 'Ground',
             z: 0,
         }],
         nodes: [
             {
                 id: 'kitchen',
-                name: 'Kitchen',
                 nameEn: 'Kitchen',
                 levelId:
                     'ground',
             },
             {
                 id: 'garden',
-                name: 'Garden',
                 nameEn: 'Garden',
                 levelId:
                     'ground',
@@ -122,6 +117,20 @@ function createPayload() {
             mapId: 'test_map',
             roomId: 'garden',
             actorStates: [],
+            openingSegments: [
+                {
+                    type:
+                        'narration',
+                    textEn:
+                        'Morning light reaches the garden path as the kitchen door closes behind the departing group.',
+                },
+                {
+                    type:
+                        'narration',
+                    textEn:
+                        'The waiting owl watches from the fence while the clear path ahead remains open.',
+                },
+            ],
             followingSceneIntent: {
                 titleEn: 'Continue',
                 summaryEn:
@@ -142,27 +151,18 @@ function createArchiveEntry(
 ) {
     return {
         id: state.scene.id,
-        name: state.scene.name,
         nameEn:
             state.scene.nameEn,
-        summary:
-            state.scene.summary,
         summaryEn:
             state.scene.summaryEn,
-        closureSummary:
-            payload.closureSummaryEn,
         closureSummaryEn:
             payload.closureSummaryEn,
-        authorQuill:
-            payload.authorQuillEn,
         authorQuillEn:
             payload.authorQuillEn,
-        unresolvedThreads: [],
         unresolvedThreadsEn: [],
         startedClock:
             state.scene.startedClock,
         endedClock: state.clock,
-        location: state.location,
         mapId: state.scene.mapId,
         roomId: state.scene.roomId,
         activeInteractionActorIds: [],
@@ -178,7 +178,6 @@ function createArchiveEntry(
             ),
         calendarEntryIds: [],
         tier: 'medium',
-        translationProvider: '',
         status: 'closed',
         closedAt:
             '2026-08-13T00:00:00.000Z',
@@ -292,8 +291,15 @@ test('successful Scene Transition atomically appends one chronicle entry without
         next.sceneArchive[0]
             .timelineEntries
             .at(-1)
-            .label,
+            .summaryEn,
         payload.closureSummaryEn,
+    );
+    assert.equal(
+        next.sceneArchive[0]
+            .timelineEntries
+            .at(-1)
+            .sourceRef,
+        'scene:scene_one:closure',
     );
     assert.equal(
         next.memorySynapse

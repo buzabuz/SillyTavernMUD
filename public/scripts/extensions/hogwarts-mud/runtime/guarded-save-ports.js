@@ -655,6 +655,236 @@ export function createGuardedSavePorts(
         return result;
     }
 
+    async function guardedRewriteTimeline(
+        {
+            currentState,
+            nextState,
+            currentChat,
+            nextChat,
+            source =
+            'language_authority_migration',
+            changedDomains = [
+                'language_authority',
+            ],
+        },
+    ) {
+        const observed =
+            observeContext(
+                getHostContext(),
+            );
+        if (!observed) {
+            throw new TypeError(
+                'Guarded timeline rewrite requires an active Hogwarts world.',
+            );
+        }
+        assertSaveRevisionWritable();
+        const context =
+            observed.context;
+        const hostSave =
+            context?.saveChat;
+        if (
+            typeof hostSave !==
+            'function'
+        ) {
+            throw new TypeError(
+                'Hogwarts context does not provide saveChat.',
+            );
+        }
+        if (
+            currentState
+                ?.timelineEpoch !==
+                observed.state
+                    .timelineEpoch ||
+            currentState
+                ?.stateRevision !==
+                observed.state
+                    .stateRevision ||
+            hasWorldStateChanges(
+                currentState,
+                observed.state,
+            )
+        ) {
+            throw new SaveRevisionConflictError({
+                code: 'stale_save',
+                timelineEpoch:
+                    currentState
+                        ?.timelineEpoch ||
+                    observed.state
+                        .timelineEpoch,
+                expectedRevision:
+                    currentState
+                        ?.stateRevision,
+                actualRevision:
+                    observed.state
+                        .stateRevision,
+                source,
+                recoverable: true,
+            });
+        }
+        if (
+            !Array.isArray(
+                currentChat,
+            ) ||
+            !Array.isArray(
+                nextChat,
+            ) ||
+            !Array.isArray(
+                context.chat,
+            )
+        ) {
+            throw new TypeError(
+                'Guarded timeline rewrite requires current and next chat arrays.',
+            );
+        }
+        if (
+            JSON.stringify(
+                currentChat,
+            ) !==
+            JSON.stringify(
+                context.chat,
+            )
+        ) {
+            throw new SaveRevisionConflictError({
+                code:
+                    'stale_chat',
+                timelineEpoch:
+                    observed.state
+                        .timelineEpoch,
+                expectedRevision:
+                    currentState
+                        .stateRevision,
+                actualRevision:
+                    observed.state
+                        .stateRevision,
+                source,
+                recoverable: true,
+            });
+        }
+        const previousState =
+            context
+                .chatMetadata
+                .hogwartsMud;
+        const previousChat =
+            structuredClone(
+                context.chat,
+            );
+        const hostChat =
+            context.chat;
+        const rewrittenChat =
+            structuredClone(
+                nextChat,
+            );
+        let result;
+        try {
+            result =
+                await guard.guardedSave({
+                    currentState,
+                    nextState,
+                    source,
+                    timelineKey:
+                        observed
+                            .timelineKey,
+                    changedDomains,
+                    consumeRevision:
+                        true,
+                    save:
+                    async committed => {
+                        context
+                            .chatMetadata
+                            .hogwartsMud =
+                            committed;
+                        hostChat.splice(
+                            0,
+                            hostChat.length,
+                            ...structuredClone(
+                                rewrittenChat,
+                            ),
+                        );
+                        return hostSave
+                            .call(
+                                context,
+                            );
+                    },
+                });
+        } catch (error) {
+            context
+                .chatMetadata
+                .hogwartsMud =
+                previousState;
+            hostChat.splice(
+                0,
+                hostChat.length,
+                ...structuredClone(
+                    previousChat,
+                ),
+            );
+            if (
+                error instanceof
+                HostSaveDurabilityError
+            ) {
+                if (
+                    !error
+                        .confirmedFailure
+                ) {
+                    setConflict(
+                        {
+                            code:
+                                'save_in_progress',
+                            timelineEpoch:
+                                active
+                                    .timelineEpoch,
+                            expectedRevision:
+                                active.baseline
+                                    ?.stateRevision,
+                            actualRevision:
+                                currentState
+                                    .stateRevision,
+                            source,
+                            recoverable:
+                                true,
+                        },
+                        {
+                            restoreBaseline:
+                                false,
+                        },
+                    );
+                }
+            }
+            throw error;
+        }
+        if (!result.ok) {
+            context
+                .chatMetadata
+                .hogwartsMud =
+                previousState;
+            hostChat.splice(
+                0,
+                hostChat.length,
+                ...structuredClone(
+                    previousChat,
+                ),
+            );
+            setConflict(
+                result.conflict,
+            );
+            throw new SaveRevisionConflictError(
+                result.conflict,
+            );
+        }
+        if (
+            active.timelineEpoch ===
+            result.state.timelineEpoch
+        ) {
+            active.baseline =
+                structuredClone(
+                    result.state,
+                );
+            active.migrationPending =
+                false;
+        }
+        return result;
+    }
+
     async function saveChatForContext(
         inputContext,
         options = {},
@@ -993,6 +1223,7 @@ export function createGuardedSavePorts(
         getSaveRevisionConflict:
             () =>
                 active.conflict,
+        guardedRewriteTimeline,
         guardedSaveChat,
         guardedSaveMetadata,
         guardedSaveTransaction,

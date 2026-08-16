@@ -2,6 +2,10 @@ import express from 'express';
 import path from 'node:path';
 
 import {
+    TRANSLATION_API_CONTRACT_VERSION,
+    TRANSLATION_TABLE_LIMITS,
+} from '../../public/scripts/extensions/hogwarts-mud/domain/localization-contract.js';
+import {
     KNOWLEDGE_API_CONTRACT_VERSION,
     KNOWLEDGE_CATEGORIES,
     KNOWLEDGE_NODE_TYPES,
@@ -10,6 +14,10 @@ import {
 import {
     createConfiguredKnowledgeService,
 } from '../hogwarts-mud/knowledge-backend-factory.js';
+import {
+    TranslationTableError,
+    createTranslationTableService,
+} from '../hogwarts-mud/localization-table.js';
 import {
     StaleKnowledgeRevisionError,
 } from '../hogwarts-mud/knowledge-vector-backend.js';
@@ -38,6 +46,8 @@ const KNOWLEDGE_NODE_TYPE_SET =
 const MAX_RECORDS_PER_SYNC = 2_000;
 const MAX_KNOWLEDGE_BODY_LENGTH =
     8_000_000;
+const translationTableServices =
+    new Map();
 
 function getKnowledgeService(request) {
     return createConfiguredKnowledgeService({
@@ -45,6 +55,78 @@ function getKnowledgeService(request) {
             request.user
                 .directories.files,
     });
+}
+
+function getTranslationTableService(
+    request,
+) {
+    const filesRoot =
+        path.resolve(
+            request.user
+                .directories.files,
+        );
+    if (
+        !translationTableServices
+            .has(filesRoot)
+    ) {
+        translationTableServices.set(
+            filesRoot,
+            createTranslationTableService({
+                filesRoot,
+            }),
+        );
+    }
+    return translationTableServices
+        .get(filesRoot);
+}
+
+function validateTranslationEnvelope(
+    body,
+) {
+    return Boolean(
+        body &&
+        typeof body === 'object' &&
+        !Array.isArray(body) &&
+        Number(
+            body
+                .translationApiContractVersion,
+        ) ===
+            TRANSLATION_API_CONTRACT_VERSION &&
+        typeof body.timelineEpoch ===
+            'string' &&
+        body.timelineEpoch.trim() &&
+        body.timelineEpoch.length <=
+            256 &&
+        JSON.stringify(body).length <=
+            TRANSLATION_TABLE_LIMITS
+                .maxRequestBytes,
+    );
+}
+
+function sendTranslationTableError(
+    response,
+    error,
+) {
+    if (
+        error instanceof
+        TranslationTableError
+    ) {
+        return response
+            .status(error.status)
+            .json({
+                error: error.code,
+            });
+    }
+    console.error(
+        '[Hogwarts MUD] Translation table failed',
+        error,
+    );
+    return response
+        .status(500)
+        .json({
+            error:
+                'TRANSLATION_TABLE_UNAVAILABLE',
+        });
 }
 
 function isRevision(value) {
@@ -1062,6 +1144,126 @@ router.post('/social/resolve', async (request, response) => {
     } catch (error) {
         console.error('[Hogwarts MUD] Social director graph failed', error);
         return response.sendStatus(500);
+    }
+});
+
+router.get('/localization/health', async (request, response) => {
+    const envelope = {
+        translationApiContractVersion:
+            request.query
+                ?.translationApiContractVersion,
+        timelineEpoch:
+            request.query
+                ?.timelineEpoch,
+    };
+    if (
+        !validateTranslationEnvelope(
+            envelope,
+        )
+    ) {
+        return response.sendStatus(400);
+    }
+    try {
+        return response.json(
+            await getTranslationTableService(
+                request,
+            ).health(envelope),
+        );
+    } catch (error) {
+        return sendTranslationTableError(
+            response,
+            error,
+        );
+    }
+});
+
+router.post('/localization/query', async (request, response) => {
+    if (
+        !validateTranslationEnvelope(
+            request.body,
+        ) ||
+        !Array.isArray(
+            request.body.keys,
+        ) ||
+        request.body.keys.length >
+            TRANSLATION_TABLE_LIMITS
+                .maxQueryKeys
+    ) {
+        return response.sendStatus(400);
+    }
+    try {
+        return response.json(
+            await getTranslationTableService(
+                request,
+            ).query(
+                request.body,
+            ),
+        );
+    } catch (error) {
+        return sendTranslationTableError(
+            response,
+            error,
+        );
+    }
+});
+
+router.post('/localization/upsert', async (request, response) => {
+    if (
+        !validateTranslationEnvelope(
+            request.body,
+        ) ||
+        !Array.isArray(
+            request.body.rows,
+        ) ||
+        request.body.rows.length >
+            TRANSLATION_TABLE_LIMITS
+                .maxUpsertRows
+    ) {
+        return response.sendStatus(400);
+    }
+    try {
+        return response.json(
+            await getTranslationTableService(
+                request,
+            ).upsert(
+                request.body,
+            ),
+        );
+    } catch (error) {
+        return sendTranslationTableError(
+            response,
+            error,
+        );
+    }
+});
+
+router.post('/localization/retranslate', async (request, response) => {
+    if (
+        !validateTranslationEnvelope(
+            request.body,
+        ) ||
+        !Array.isArray(
+            request.body.keys,
+        ) ||
+        request.body.keys.length >
+            TRANSLATION_TABLE_LIMITS
+                .maxUpsertRows
+    ) {
+        return response.sendStatus(400);
+    }
+    try {
+        return response.json(
+            await getTranslationTableService(
+                request,
+            ).retranslate(
+                request.body,
+            ),
+        );
+    } catch (error) {
+        return sendTranslationTableError(
+            response,
+            error,
+        );
     }
 });
 

@@ -31,6 +31,9 @@ import {
     validateScenePerformance,
 } from '../public/scripts/extensions/hogwarts-mud/domain/turn-validation.js';
 import {
+    createDirectorWorkflows,
+} from '../public/scripts/extensions/hogwarts-mud/workflows/directors.js';
+import {
     createCurrentPlayingState,
 } from './hogwarts-mud-test-fixtures.mjs';
 
@@ -477,4 +480,149 @@ test('coherent orphan actor references recover into one temporary entrance', () 
         ),
         /Actor creation proposal/u,
     );
+});
+
+test('Pacing Director skips non-English authority after one model request', async () => {
+    let calls = 0;
+    const state = keyState();
+    const signals =
+        analyzePacingSignals(
+            state,
+            'Inspect the Brass Key.',
+        );
+    const opportunity =
+        signals.metrics
+            .causalCollapseOpportunity;
+    const workflow =
+        createDirectorWorkflows({
+            extractRoleResponseText:
+                response =>
+                    response.content,
+            normalizePacingAssessmentPayload,
+            parseJsonObject:
+                JSON.parse,
+            sendPacingDirectorRequest:
+                async () => {
+                    calls++;
+                    return {
+                        content:
+                            JSON.stringify({
+                                decision:
+                                    'intervene',
+                                diagnosisEn:
+                                    '当前场景无需介入。',
+                                reassessAfterTurns:
+                                    6,
+                                intervention: {
+                                    kind:
+                                        'causal_collision',
+                                    timing:
+                                        'this_turn',
+                                    beatEn:
+                                        'Fresh wax clings to the key.',
+                                    pressureEn:
+                                        'The residue complicates immediate use.',
+                                    arcId: '',
+                                    causalCollapse: {
+                                        kind:
+                                            'material_history',
+                                        focusActorId:
+                                            '',
+                                        relatedActorIds:
+                                            [],
+                                        itemId:
+                                            'brass_key',
+                                        mapId:
+                                            opportunity
+                                                .mapId,
+                                        roomId:
+                                            opportunity
+                                                .roomId,
+                                        effectiveMinutesBeforeObservation:
+                                            20,
+                                        factEn:
+                                            'A clerk sealed the key shortly before Tina inspected it.',
+                                        edgeType: '',
+                                        visibleResiduesEn: [
+                                            'Fresh red wax covers the key teeth.',
+                                        ],
+                                        aftermathEn:
+                                            'Show the wax before anyone explains it.',
+                                        witnessAccounts:
+                                            [],
+                                        sourceEventIds:
+                                            [],
+                                        persistenceTargets:
+                                            [
+                                                'event',
+                                                'item',
+                                            ],
+                                        surfaceMode:
+                                            'aftermath',
+                                        consequenceMode:
+                                            'mixed',
+                                        irreversible:
+                                            false,
+                                        requiresHighTier:
+                                            false,
+                                    },
+                                },
+                            }),
+                    };
+                },
+            validatePacingAssessment,
+        });
+
+    const result =
+        await workflow
+            .generatePacingAssessment(
+                {},
+                state,
+                signals,
+            );
+
+    assert.equal(calls, 1);
+    assert.equal(
+        result.languageSkipped,
+        true,
+    );
+    assert.equal(
+        result.diagnostics.length,
+        1,
+    );
+});
+
+test('Pacing Director surfaces invalid JSON after one model request without repair', async () => {
+    let calls = 0;
+    const workflow =
+        createDirectorWorkflows({
+            extractRoleResponseText:
+                response =>
+                    response.content,
+            normalizePacingAssessmentPayload,
+            parseJsonObject:
+                JSON.parse,
+            sendPacingDirectorRequest:
+                async () => {
+                    calls++;
+                    return {
+                        content:
+                            'not-json',
+                    };
+                },
+            validatePacingAssessment,
+        });
+
+    await assert.rejects(
+        workflow.generatePacingAssessment(
+            {},
+            keyState(),
+            {
+                reasons: [],
+                metrics: {},
+            },
+        ),
+        /Unexpected token|JSON/iu,
+    );
+    assert.equal(calls, 1);
 });

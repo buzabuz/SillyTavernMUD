@@ -73,10 +73,10 @@ export {
 } from './domain/causal-state.js';
 
 export {
-    CANON_DENSITY_VALUES, CHARACTER_ATTRIBUTE_BUDGET, CHARACTER_ATTRIBUTE_KEYS, RELATIONSHIP_FOCUS_VALUES,
+    CANON_DENSITY_VALUES, CHARACTER_ATTRIBUTE_BUDGET, CHARACTER_ATTRIBUTE_KEYS, CHARACTER_LANGUAGE_VERSION, RELATIONSHIP_FOCUS_VALUES,
     RELATIVE_AGE_PREFERENCE_VALUES, SOCIAL_DENSITY_VALUES, STORY_TONE_VALUES, buildCharacterContext,
-    buildPlayerVisibleProfile, createDefaultCharacterDraft, getPlayerAgeAtClock, getRelativeAgeProfile,
-    normalizeStoryPreferences, validateCharacterDraft,
+    buildPlayerVisibleProfile, createDefaultCharacterDraft, getCharacterInputDraft, getPlayerAgeAtClock, getRelativeAgeProfile, projectCharacterForPrompt,
+    normalizeCharacterCode, normalizeCharacterV2, normalizeStoryPreferences, validateCharacterDraft,
 } from './domain/character.js';
 
 export {

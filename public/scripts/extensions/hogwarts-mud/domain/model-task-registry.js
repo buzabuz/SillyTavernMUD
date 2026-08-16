@@ -17,7 +17,7 @@ export const MODEL_TASK_EVENT_TYPES =
         'calendar.player_commitment',
         'map.container_entered',
         'map.expansion_requested',
-        'translation.requested',
+        'localization.idle_batch_requested',
     ]);
 
 const eventTypes =
@@ -37,6 +37,7 @@ function task(
         quotaGroup,
         budgetPolicyId,
         owner,
+        ledgerScope = 'world',
         status = 'active',
         replacementTaskIds = [],
     },
@@ -59,6 +60,7 @@ function task(
         quotaGroup,
         budgetPolicyId,
         owner,
+        ledgerScope,
         status,
         replacementTaskIds:
             Object.freeze([
@@ -462,16 +464,18 @@ export const MODEL_TASK_CATALOG =
                 kind: 'utility',
                 tiers: ['local'],
                 triggerEvents: [
-                    'translation.requested',
+                    'localization.idle_batch_requested',
                 ],
-                phase: 'post_generation',
-                blocking: true,
+                phase: 'idle_display',
+                blocking: false,
                 quotaGroup:
                     'local_translation',
                 budgetPolicyId:
                     'local_translation',
                 owner:
                     'adapters/translation.js',
+                ledgerScope:
+                    'ephemeral_display',
             },
         ),
     ]);

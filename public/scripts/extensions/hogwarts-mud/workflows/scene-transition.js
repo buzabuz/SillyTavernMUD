@@ -12,8 +12,11 @@ import {
     projectNarrativePromptInput,
 } from '../domain/narrative-prompt-context.js';
 import {
-    validateHistoricalClaimProvenance,
-} from '../domain/narrative-memory-provenance.js';
+    MODEL_OUTPUT_EVIDENCE_AUTHORITY,
+    collectNonEnglishAuthorityFields,
+    createModelLanguageMismatch,
+    partitionModelSegments,
+} from '../domain/model-language-adoption.js';
 import {
     getMapRooms,
 } from '../domain/map-access.js';
@@ -94,7 +97,6 @@ function projectTransitionLocationDirectory(
         id: map.id,
         nameEn:
             map.nameEn ||
-            map.name ||
             map.id,
         depth,
         mount:
@@ -107,17 +109,31 @@ function projectTransitionLocationDirectory(
                 id: room.id,
                 nameEn:
                     room.nameEn ||
-                    room.name ||
                     room.id,
-                levelId:
-                    room.levelId ||
-                    '',
                 kind:
                     room.kind ||
                     'room',
-                access:
-                    room.access ||
-                    '',
+                ...(
+                    room.levelId
+                        ? {
+                            levelId:
+                                room
+                                    .levelId,
+                        }
+                        : {}
+                ),
+                ...(
+                    room.access
+                        &&
+                    room.access !==
+                        'public'
+                        ? {
+                            access:
+                                room
+                                    .access,
+                        }
+                        : {}
+                ),
             })),
     }));
 }
@@ -330,6 +346,9 @@ export function validateLowSceneOpeningOutput(
                 ? new Set([
                     'type',
                     'textEn',
+                    'rawText',
+                    'language',
+                    'authority',
                 ])
                 : segment?.type ===
                     'dialogue'
@@ -337,6 +356,9 @@ export function validateLowSceneOpeningOutput(
                         'type',
                         'actorId',
                         'textEn',
+                        'rawText',
+                        'language',
+                        'authority',
                         'historicalClaims',
                     ])
                     : null;
@@ -419,14 +441,27 @@ export function validateLowSceneOpeningOutput(
                     });
             }
         }
-        const textEn =
+        const text =
             String(
                 segment.textEn ||
+                segment.rawText ||
                 '',
             ).trim();
-        if (!textEn) {
+        if (!text) {
             errors.push(
                 `低档场景开场第 ${index + 1} 段为空。`,
+            );
+        }
+        if (
+            segment.rawText &&
+            (
+                segment.authority !==
+                    MODEL_OUTPUT_EVIDENCE_AUTHORITY ||
+                !segment.language
+            )
+        ) {
+            errors.push(
+                `低档场景开场第 ${index + 1} 段 rawText 缺少语言证据标记。`,
             );
         }
         if (
@@ -543,7 +578,6 @@ export function createSceneTransitionWorkflow(ports) {
         DEFAULT_MODEL_SLOTS,
         NPC_IDENTITY_PROMPT_BOUNDARY =
         '',
-        TRANSLATION_FORMAT_VERSION,
         admitCurrentLocationResidents,
         applyCommittedSceneOpeningExperience =
         applyCommittedSceneOpeningExperienceDeterministically,
@@ -554,6 +588,8 @@ export function createSceneTransitionWorkflow(ports) {
         buildSceneCastRotationPolicy,
         composeSceneSegments,
         createContextBudgetPlan,
+        enqueueLocalizationCandidates =
+        async () => {},
         ensureCurrentInteriorMap,
         ensureSceneLifecycleState,
         extractRoleResponseText,
@@ -563,7 +599,6 @@ export function createSceneTransitionWorkflow(ports) {
         getContext,
         getMudState,
         getSceneDestinationAuthority,
-        getSettings,
         jobRegistry,
         normalizeSceneTransitionPackage,
         parseJsonObject,
@@ -578,7 +613,6 @@ export function createSceneTransitionWorkflow(ports) {
         sendSceneTransitionRequest,
         synchronizeHeldItemLocations,
         syncLocalKnowledge,
-        translateOpeningValues,
         validateSceneTransitionPackage,
     } = ports;
 
@@ -761,8 +795,16 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     projectNarrativePromptInput({
                         tier,
                         authoritySnapshot:
-                    narrativeContext
-                        .authoritySnapshot,
+                    Object.fromEntries(
+                        Object.entries(
+                            narrativeContext
+                                .authoritySnapshot,
+                        ).filter(([
+                            key,
+                        ]) =>
+                            key !==
+                            'currentActors'),
+                    ),
                         destinationHint,
                         explicitDestination: destinationAuthority,
                         committedNextSceneIntent:
@@ -772,9 +814,23 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         calendarClock,
                         calendarEntries,
                         calendarStorySources,
-                        currentChapter: state.chapter,
+                        currentChapterEn:
+                            state.chapterEn,
                         currentScene: state.scene,
-                        currentLocation: state.location,
+                        currentLocation: {
+                            mapId:
+                                state.scene
+                                    ?.mapId ||
+                                state.map
+                                    ?.activeMapId ||
+                                '',
+                            roomId:
+                                state.scene
+                                    ?.roomId ||
+                                state.map
+                                    ?.currentLocalNodeId ||
+                                '',
+                        },
                         calendarMoment:
                     transitionContext.kind ===
                         'calendar_moment'
@@ -898,130 +954,103 @@ ${CANON_WIT_TONE_CONTRACT}`,
             contextPlan,
             transitionContext,
         );
-        let response = await sendSceneTransitionRequest(
-            roleSlot,
-            prompt,
-            {
-                json: true,
-                tier,
-            },
-        );
-        let raw = extractRoleResponseText(response);
-        let lastError = null;
+        const response =
+            await sendSceneTransitionRequest(
+                roleSlot,
+                prompt,
+                {
+                    json: true,
+                    tier,
+                },
+            );
         const destinationAuthority = expectedDestination
             ? getSceneDestinationAuthority(state, expectedDestination)
             : null;
-        const maximumAttempts =
-            transitionContext
-                .noModelRetry
-                ? 1
-                : 3;
-        for (
-            let attempt = 0;
-            attempt <
-                maximumAttempts;
-            attempt++
+        const raw =
+            extractRoleResponseText(
+                response,
+            );
+        const parsed =
+            parseJsonObject(raw);
+        if (
+            parsed.nextScene &&
+            typeof parsed
+                .nextScene ===
+                'object'
         ) {
-            try {
-                const parsed =
-                parseJsonObject(raw);
-                if (
-                    parsed.nextScene &&
-                typeof parsed
-                    .nextScene ===
-                    'object'
-                ) {
-                    delete parsed
-                        .nextScene
-                        .openingSegments;
-                }
-                const payload = normalizeSceneTransitionPackage(
-                    parsed,
-                    state,
-                    {
-                        tier,
-                    },
-                );
-                if (
-                    isFixedMomentContext(
-                        transitionContext,
-                    )
-                ) {
-                    payload.nextClock =
-                        transitionContext
-                            .fixedClock;
-                    payload.transitionMinutes =
-                        transitionContext
-                            .fixedTransitionMinutes;
-                }
-                const validation = validateSceneTransitionPackage(payload, state, {
-                    expectedMapId: expectedDestination?.mapId,
-                    expectedRoomId: expectedDestination?.roomId,
-                    requireDestinationGrounding: Boolean(destinationAuthority),
-                });
-                if (!validation.valid) {
-                    const error =
-                        new Error(
-                            validation.errors
-                                .join('；'),
-                        );
-                    if (
-                        validation.errors
-                            .some(message =>
-                                message.includes(
-                                    'globalChronicleSummaryEn',
-                                ))
-                    ) {
-                        error.code =
-                            'INVALID_GLOBAL_CHRONICLE';
-                    }
-                    throw error;
-                }
-                return payload;
-            } catch (error) {
-                lastError = error;
-                if (
-                    error?.code ===
-                    'INVALID_GLOBAL_CHRONICLE'
-                ) {
-                    throw error;
-                }
-                if (
-                    attempt >=
-                    maximumAttempts - 1
-                ) {
-                    break;
-                }
-                response = await sendSceneTransitionRequest(roleSlot, [
-                    {
-                        role: 'system',
-                        content: `Rewrite the invalid scene-transition JSON as one complete replacement object. Preserve only the observed closure facts, committed intent or explicit user override, existing actor IDs, and world facts. Include globalChronicleSummaryEn as a 40-80 word, at most 640-character semantic chronicle of the closed Scene; it must use only supplied committed facts and must not copy closureSummaryEn. Include authorQuillEn as a 180-280 word OOC comic review with specific callbacks, affectionate roasting, mock awards or deadpan asides, and at least three jokes based only on observed player choices. It must not reveal hidden facts, private motives, locked clues, future events, or hidden roll details.
-
-The destination authority is binding. Rewrite nextScene.id, nameEn, summaryEn, actorStates.currentActivityEn, and followingSceneIntent so they form one coherent new scene at that destination. Do not retain state or physical details from the old room. If a supplied actor cannot plausibly be at the destination, mark that actor absent. nextScene.nameEn and nextScene.summaryEn must each literally contain destinationAuthority.roomNameEn.
-
-Preserve actorContinuityCapsules from originalRequest. behavioralEnvironment describes only the closing clock; derive the opening conditions from currentClock plus transitionMinutes. Choose any non-negative transitionMinutes naturally required by sleep, travel, waiting, holidays, or another time skip, with no maximum span. Familiar actors must behave as already acquainted, and the opening must embody materially relevant time, sleep pressure, curfew, and weather effects without reciting them.
-
-Do not output openingSegments or public opening prose. Return only valid structured transition JSON. Never invent a player action.`,
-                    },
-                    {
-                        role: 'user',
-                        content: JSON.stringify({
-                            validationError: String(error?.message || error),
-                            invalidOutput: raw,
-                            originalRequest: JSON.parse(prompt[1].content),
-                            destinationAuthority,
-                        }),
-                    },
-                ], {
-                    json: true,
-                    tier,
-                });
-                raw = extractRoleResponseText(response);
-            }
+            delete parsed
+                .nextScene
+                .openingSegments;
         }
-        throw new Error(
-            `场景结算连续${maximumAttempts}次无效：${String(lastError?.message || lastError)}`,
-        );
+        const mismatchPaths =
+            collectNonEnglishAuthorityFields(
+                parsed,
+            );
+        if (mismatchPaths.length) {
+            return {
+                languageSkipped: true,
+                diagnostics:
+                    mismatchPaths.map(
+                        fieldPath =>
+                            createModelLanguageMismatch({
+                                taskId:
+                                    'scene_transition',
+                                fieldPath,
+                                recordId:
+                                    parsed
+                                        ?.nextScene
+                                        ?.id ||
+                                    '',
+                            }),
+                    ),
+            };
+        }
+        const payload =
+            normalizeSceneTransitionPackage(
+                parsed,
+                state,
+                {
+                    tier,
+                },
+            );
+        if (
+            isFixedMomentContext(
+                transitionContext,
+            )
+        ) {
+            payload.nextClock =
+                transitionContext
+                    .fixedClock;
+            payload.transitionMinutes =
+                transitionContext
+                    .fixedTransitionMinutes;
+        }
+        const validation =
+            validateSceneTransitionPackage(
+                payload,
+                state,
+                {
+                    expectedMapId:
+                        expectedDestination
+                            ?.mapId,
+                    expectedRoomId:
+                        expectedDestination
+                            ?.roomId,
+                    requireDestinationGrounding:
+                        Boolean(
+                            destinationAuthority,
+                        ),
+                    deferOpeningSegments:
+                        true,
+                },
+            );
+        if (!validation.valid) {
+            throw new Error(
+                validation.errors
+                    .join('；'),
+            );
+        }
+        return payload;
     }
 
     async function generateSceneTransitionOpening(
@@ -1195,8 +1224,16 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         payload
                             .nextClock,
                     authoritySnapshot:
-                        narrativeContext
-                            .authoritySnapshot,
+                        Object.fromEntries(
+                            Object.entries(
+                                narrativeContext
+                                    .authoritySnapshot,
+                            ).filter(([
+                                key,
+                            ]) =>
+                                key !==
+                                'currentActors'),
+                        ),
                     calendarClock:
                         payload
                             .nextClock,
@@ -1343,6 +1380,17 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 );
             const parsed =
                 parseJsonObject(raw);
+            const partition =
+                partitionModelSegments(
+                    parsed?.segments,
+                    {
+                        taskId:
+                            'scene_opening',
+                    },
+                );
+            parsed.segments =
+                partition
+                    .displaySegments;
             const outputValidation =
                 validateLowSceneOpeningOutput(
                     parsed,
@@ -1383,20 +1431,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                             ),
                     },
                 );
-            const historicalClaimValidation =
-                validateHistoricalClaimProvenance(
-                    segments,
-                    originalRequest
-                        .memoryActivationCapsules,
-                );
-            validation.errors.push(
-                ...historicalClaimValidation
-                    .errors,
-            );
-            validation.valid =
-                validation
-                    .errors
-                    .length === 0;
             if (!validation.valid) {
                 throw new Error(
                     validation.errors
@@ -1409,58 +1443,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 `低档场景开场无效：${String(error?.message || error)}`,
             );
         }
-    }
-
-    async function localizeSceneTransitionPackage(payload) {
-        if (!getSettings().translationEnabled) {
-            return payload;
-        }
-        const nextScene = payload.nextScene;
-        const values = [
-            payload.closureSummaryEn,
-            payload.authorQuillEn,
-            ...(payload.unresolvedThreadsEn || []),
-            nextScene.nameEn,
-            nextScene.summaryEn,
-            nextScene.chapterEn,
-            ...(nextScene.actorStates || []).map(actor => actor.currentActivityEn),
-            ...(nextScene.openingSegments || []).map(segment => segment.textEn),
-            nextScene.followingSceneIntent.titleEn,
-            nextScene.followingSceneIntent.summaryEn,
-            nextScene.followingSceneIntent.triggerEn,
-        ];
-        const translated = await translateOpeningValues(values);
-        let cursor = 0;
-        return {
-            ...payload,
-            translationProvider:
-            getSettings()
-                .translationProvider,
-            closureSummary: translated[cursor++],
-            authorQuill: translated[cursor++],
-            unresolvedThreads: (payload.unresolvedThreadsEn || [])
-                .map(() => translated[cursor++]),
-            nextScene: {
-                ...nextScene,
-                name: translated[cursor++],
-                summary: translated[cursor++],
-                chapter: translated[cursor++],
-                actorStates: (nextScene.actorStates || []).map(actor => ({
-                    ...actor,
-                    currentActivity: translated[cursor++],
-                })),
-                openingSegments: (nextScene.openingSegments || []).map(segment => ({
-                    ...segment,
-                    textZh: translated[cursor++],
-                })),
-                followingSceneIntent: {
-                    ...nextScene.followingSceneIntent,
-                    title: translated[cursor++],
-                    summary: translated[cursor++],
-                    trigger: translated[cursor++],
-                },
-            },
-        };
     }
 
     function getCurrentSceneMessageIds(state) {
@@ -1511,21 +1493,13 @@ ${CANON_WIT_TONE_CONTRACT}`,
         );
         return {
             id: state.scene.id,
-            name: state.scene.name,
             nameEn: state.scene.nameEn,
-            summary: state.scene.summary,
             summaryEn: state.scene.summaryEn,
-            closureSummary: payload.closureSummary || payload.closureSummaryEn,
             closureSummaryEn: payload.closureSummaryEn,
-            authorQuill:
-            payload.authorQuill ||
-            payload.authorQuillEn,
             authorQuillEn: payload.authorQuillEn,
-            unresolvedThreads: payload.unresolvedThreads || payload.unresolvedThreadsEn || [],
             unresolvedThreadsEn: payload.unresolvedThreadsEn || [],
             startedClock: state.scene.startedClock || state.clock,
             endedClock: state.clock,
-            location: state.location,
             mapId: state.scene.mapId || state.map?.activeMapId,
             roomId: state.scene.roomId || state.map?.currentLocalNodeId,
             activeInteractionActorIds:
@@ -1553,10 +1527,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 ),
             ],
             tier,
-            translationProvider:
-            payload
-                .translationProvider ||
-            '',
             status: 'closed',
             closedAt: new Date().toISOString(),
         };
@@ -1564,31 +1534,21 @@ ${CANON_WIT_TONE_CONTRACT}`,
 
     function buildSceneTransitionMessage(payload, state) {
         const segments = payload.nextScene.openingSegments;
-        const sourceEn = composeSceneSegments(segments, state.actorLibrary, 'en');
-        const translatedZh = composeSceneSegments(segments, state.actorLibrary, 'zh');
-        const hasTranslation = getSettings().translationEnabled &&
-        segments.some(segment => String(segment.textZh || '').trim()) &&
-        translatedZh !== sourceEn;
+        const messageText =
+            composeSceneSegments(
+                segments,
+                state.actorLibrary,
+                'en',
+            );
         return {
             name: 'Scene',
             is_user: false,
             is_system: false,
             send_date: new Date().toISOString(),
-            mes: sourceEn,
+            mes: messageText,
             extra: {
                 hogwartsMud: {
-                    sourceEn,
-                    translatedZh: hasTranslation ? translatedZh : undefined,
-                    provider: hasTranslation
-                        ? payload
-                            .translationProvider ||
-                        getSettings()
-                            .translationProvider
-                        : undefined,
-                    translatedAt: hasTranslation ? Date.now() : undefined,
-                    translationVersion: hasTranslation
-                        ? TRANSLATION_FORMAT_VERSION
-                        : undefined,
+                    languageVersion: 1,
                     role: 'scene_opening',
                     sceneId: payload.nextScene.id,
                     segments,
@@ -1660,14 +1620,8 @@ ${CANON_WIT_TONE_CONTRACT}`,
                             ),
                         },
                     },
-                    authorQuill:
-                    payload.authorQuill ||
-                    payload.authorQuillEn,
                     authorQuillEn: payload.authorQuillEn,
                 },
-                ...(hasTranslation
-                    ? { display_text: translatedZh }
-                    : {}),
             },
         };
     }
@@ -1762,7 +1716,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         .map(actor => actor.id),
                 ].filter(Boolean);
                 const retrievedKnowledge = await retrieveLocalKnowledge(
-                    `Close scene ${state.scene.nameEn || state.scene.name}. ` +
+                    `Close scene ${state.scene.nameEn}. ` +
                 `Next destination: ${destinationHint || 'director choice'}.`,
                     entityIds,
                     {
@@ -1790,6 +1744,34 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     retrievedKnowledge,
                     contextPlan,
                 );
+                if (
+                    payload
+                        ?.languageSkipped
+                ) {
+                    state =
+                        getMudState();
+                    state.sceneTransition = {
+                        ...state
+                            .sceneTransition,
+                        status:
+                            'language_skipped',
+                        error: '',
+                        languageMismatchCount:
+                            payload
+                                .diagnostics
+                                .length,
+                        settledAt:
+                            new Date()
+                                .toISOString(),
+                    };
+                    await context
+                        .saveMetadata();
+                    renderAll();
+                    toastr.warning(
+                        '场景导演返回了非英语结构内容，本次转场未写入世界状态。',
+                    );
+                    return state;
+                }
                 const openingContextPlan =
                 createContextBudgetPlan(
                     slots.low
@@ -1814,11 +1796,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     {},
                     retrievedKnowledge,
                 );
-                try {
-                    payload = await localizeSceneTransitionPackage(payload);
-                } catch (translationError) {
-                    console.warn('[Hogwarts MUD] Scene transition translation failed; using English', translationError);
-                }
                 const archiveEntry = buildSceneArchiveEntry(state, payload, tier);
                 const startedMessageId = context.chat.length;
                 const nextState = applySceneTransition(
@@ -1837,6 +1814,32 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 context.chat.push(message);
                 await context.saveMetadata();
                 await context.saveChat();
+                void enqueueLocalizationCandidates(
+                    (
+                        payload.nextScene
+                            .openingSegments ||
+                        []
+                    ).map((
+                        segment,
+                        index,
+                    ) => ({
+                        recordKind:
+                            'message_segment',
+                        recordId:
+                            `message:${startedMessageId}:segment:${index}`,
+                        fieldPath: 'textEn',
+                        sourceText:
+                            segment.textEn ||
+                            '',
+                        priority: 0,
+                        changedAt:
+                            Date.now(),
+                    })),
+                ).catch(error =>
+                    console.warn(
+                        '[Hogwarts MUD] Scene localization candidate enqueue failed',
+                        error,
+                    ));
                 const openingExperience =
                     applyCommittedSceneOpeningExperience(
                         nextState,
@@ -1856,7 +1859,9 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 await syncLocalKnowledge();
                 applySystemPrompt();
                 renderAll();
-                toastr.success(`旧场景已封存，当前场景切换到${settledState.location}。`);
+                toastr.success(
+                    '旧场景已封存，当前场景已切换。',
+                );
                 return settledState;
             } catch (error) {
                 state = getMudState();
@@ -1882,7 +1887,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
         createSceneTransitionPrompt,
         generateSceneTransitionPackage,
         generateSceneTransitionOpening,
-        localizeSceneTransitionPackage,
         getCurrentSceneMessageIds,
         buildSceneArchiveEntry,
         buildSceneTransitionMessage,

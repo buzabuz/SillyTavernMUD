@@ -1,4 +1,4 @@
-export const MATERIAL_STATE_SCHEMA_VERSION = 2;
+export const MATERIAL_STATE_SCHEMA_VERSION = 3;
 
 export const MATERIAL_EXTRACTION_SCHEMA =
     Object.freeze({
@@ -35,8 +35,8 @@ export const MATERIAL_EVENT_DEFINITIONS =
             operation: 'add',
             aspect: 'placement',
             required: Object.freeze([
-                'objectText',
-                'targetText',
+                'objectTextEn',
+                'targetTextEn',
             ]),
         }),
         object_moved: Object.freeze({
@@ -44,9 +44,9 @@ export const MATERIAL_EVENT_DEFINITIONS =
             operation: 'move',
             aspect: 'placement',
             required: Object.freeze([
-                'objectText',
-                'sourceText',
-                'targetText',
+                'objectTextEn',
+                'sourceTextEn',
+                'targetTextEn',
             ]),
         }),
         object_removed: Object.freeze({
@@ -54,7 +54,7 @@ export const MATERIAL_EVENT_DEFINITIONS =
             operation: 'remove',
             aspect: 'placement',
             required: Object.freeze([
-                'objectText',
+                'objectTextEn',
             ]),
         }),
         scene_adjusted: Object.freeze({
@@ -62,9 +62,9 @@ export const MATERIAL_EVENT_DEFINITIONS =
             operation: 'set',
             aspect: 'furnishing',
             requiredAny: Object.freeze([
-                'objectText',
-                'targetText',
-                'resultText',
+                'objectTextEn',
+                'targetTextEn',
+                'resultTextEn',
             ]),
         }),
         scene_damaged: Object.freeze({
@@ -72,8 +72,8 @@ export const MATERIAL_EVENT_DEFINITIONS =
             operation: 'damage',
             aspect: 'integrity',
             requiredAny: Object.freeze([
-                'objectText',
-                'targetText',
+                'objectTextEn',
+                'targetTextEn',
             ]),
         }),
         scene_repaired: Object.freeze({
@@ -81,8 +81,8 @@ export const MATERIAL_EVENT_DEFINITIONS =
             operation: 'repair',
             aspect: 'integrity',
             requiredAny: Object.freeze([
-                'objectText',
-                'targetText',
+                'objectTextEn',
+                'targetTextEn',
             ]),
         }),
         scene_soiled: Object.freeze({
@@ -90,9 +90,9 @@ export const MATERIAL_EVENT_DEFINITIONS =
             operation: 'soil',
             aspect: 'cleanliness',
             requiredAny: Object.freeze([
-                'objectText',
-                'targetText',
-                'resultText',
+                'objectTextEn',
+                'targetTextEn',
+                'resultTextEn',
             ]),
         }),
         scene_cleaned: Object.freeze({
@@ -100,8 +100,8 @@ export const MATERIAL_EVENT_DEFINITIONS =
             operation: 'clean',
             aspect: 'cleanliness',
             requiredAny: Object.freeze([
-                'objectText',
-                'targetText',
+                'objectTextEn',
+                'targetTextEn',
             ]),
         }),
         outfit_changed: Object.freeze({
@@ -112,7 +112,7 @@ export const MATERIAL_EVENT_DEFINITIONS =
                 'actorId',
             ]),
             requiredUnlessRemove:
-                'valueText',
+                'valueTextEn',
         }),
         accessory_changed: Object.freeze({
             category: 'appearance_change',
@@ -122,7 +122,7 @@ export const MATERIAL_EVENT_DEFINITIONS =
                 'actorId',
             ]),
             requiredUnlessRemove:
-                'valueText',
+                'valueTextEn',
         }),
         hairstyle_changed: Object.freeze({
             category: 'appearance_change',
@@ -130,7 +130,7 @@ export const MATERIAL_EVENT_DEFINITIONS =
             aspect: 'hair',
             required: Object.freeze([
                 'actorId',
-                'valueText',
+                'valueTextEn',
             ]),
         }),
         appearance_changed: Object.freeze({
@@ -139,7 +139,7 @@ export const MATERIAL_EVENT_DEFINITIONS =
             aspect: 'condition',
             required: Object.freeze([
                 'actorId',
-                'valueText',
+                'valueTextEn',
             ]),
         }),
         appearance_cleared: Object.freeze({
@@ -156,7 +156,7 @@ export const MATERIAL_EVENT_DEFINITIONS =
             aspect: 'held_item',
             required: Object.freeze([
                 'actorId',
-                'objectText',
+                'objectTextEn',
             ]),
         }),
         object_released: Object.freeze({
