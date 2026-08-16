@@ -341,15 +341,10 @@ export function getAuthoritativeSceneSpells(
         {};
     const text = [
         scene.nameEn,
-        scene.name,
         scene.summaryEn,
-        scene.summary,
         intent.titleEn,
-        intent.title,
         intent.summaryEn,
-        intent.summary,
         intent.triggerEn,
-        intent.trigger,
     ]
         .filter(Boolean)
         .join('\n');
@@ -359,12 +354,8 @@ export function getAuthoritativeSceneSpells(
         spellId: spell.id,
         incantation:
             spell.incantation,
-        name:
-            spell.name,
         nameEn:
             spell.nameEn,
-        effect:
-            spell.effect,
         effectEn:
             spell.effectEn,
         sourceTier:

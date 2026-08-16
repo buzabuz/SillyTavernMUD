@@ -1,9 +1,5 @@
 /* eslint-disable playwright/expect-expect */
 import assert from 'node:assert/strict';
-import {
-    existsSync,
-    readFileSync,
-} from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -30,12 +26,6 @@ import {
     normalizeNpcIdentity,
 } from '../public/scripts/extensions/hogwarts-mud/domain/npc-identity-schema.js';
 import * as helpers from '../public/scripts/extensions/hogwarts-mud/helpers.js';
-
-const TINA_CHAT_URL =
-    new URL(
-        '../data/default-user/backups/chat_hogwarts_world_director_20260812-183453.jsonl',
-        import.meta.url,
-    );
 
 function actorCoreFixture(
     overrides = {},
@@ -549,7 +539,7 @@ test('Task 1 versions initialize new worlds and are exported by the facade', () 
     );
     assert.equal(
         memoryReferenceVersion,
-        2,
+        3,
     );
     assert.equal(
         actorDossierProjectionVersion,
@@ -611,7 +601,7 @@ test('Task 1 versions initialize new worlds and are exported by the facade', () 
         },
         {
             actorContextVersion: 1,
-            memoryReferenceVersion: 2,
+            memoryReferenceVersion: 3,
             actorDossierProjectionVersion: 1,
         },
     );
@@ -670,81 +660,3 @@ test('Task 1 synthetic fixture locks field and duplicate-fact metrics', () => {
             0,
     );
 });
-
-test(
-    'Task 1 Tina fixture locks the current pre-unification baseline',
-    {
-        skip:
-            !existsSync(TINA_CHAT_URL),
-    },
-    () => {
-        const firstLine =
-            readFileSync(
-                TINA_CHAT_URL,
-                'utf8',
-            ).split('\n', 1)[0];
-        const state =
-            JSON.parse(firstLine)
-                .chat_metadata
-                .hogwartsMud;
-        const baseline =
-            measureActorContextBaseline(
-                state,
-            );
-
-        assert.deepEqual(
-            baseline,
-            {
-                actorLibraryCharacters:
-                    218_243,
-                actorLibraryBytes:
-                    239_297,
-                actorRuntimeCharacters:
-                    75_863,
-                actorRuntimeBytes:
-                    79_844,
-                actorLibraryCount: 21,
-                actorRuntimeCount: 23,
-                actorLibraryFieldCount: 58,
-                actorRuntimeFieldCount: 52,
-                actorLibraryFieldInstances:
-                    994,
-                actorRuntimeFieldInstances:
-                    875,
-                sharedEventFactCopies: 31,
-                referencedCanonicalEventCount:
-                    5,
-                extraSharedCopies: 26,
-                sameTopLevelFieldCounts: {
-                    alex_zhang: 24,
-                    minerva_mcgonagall: 24,
-                    hogwarts_owl: 24,
-                    mirena_vance: 26,
-                    severus_snape: 26,
-                    tom_leaky_bartender: 26,
-                    eddie_cooper: 26,
-                    diagon_passerby_doris: 26,
-                    madam_malkin: 26,
-                    eddie_grandmother_cooper:
-                        26,
-                    diagon_food_cart_vendor:
-                        26,
-                    malkins_next_customer: 26,
-                    garrick_ollivander: 29,
-                    canon_hermione_jean_granger:
-                        35,
-                    canon_ronald_bilius_weasley:
-                        35,
-                    canon_dean_thomas: 35,
-                    canon_seamus_finnigan: 35,
-                    canon_neville_longbottom:
-                        35,
-                    canon_lavender_brown: 35,
-                    canon_harry_james_potter:
-                        35,
-                    canon_filius_flitwick: 30,
-                },
-            },
-        );
-    },
-);

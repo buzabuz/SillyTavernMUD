@@ -32,6 +32,9 @@ import {
 import {
     createOpeningWorkflow,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/opening.js';
+import {
+    createCurrentPlayingState,
+} from './hogwarts-mud-test-fixtures.mjs';
 
 const CLOCK =
     '1991-09-02 · 11:30';
@@ -91,11 +94,8 @@ function createEntry(
             'first_flying_lesson',
         parentId: '',
         entryType: 'event',
-        title: '第一次飞行课',
         titleEn:
             'First Flying Lesson',
-        summary:
-            '在草坪参加第一次飞行课。',
         summaryEn:
             'Attend the first flying lesson on the grounds.',
         tags: [
@@ -135,6 +135,12 @@ function createLegacyEntry(
         createEntry(
             patch,
         );
+    entry.title =
+        patch.title ||
+        '第一次飞行课';
+    entry.summary =
+        patch.summary ||
+        '在草坪参加第一次飞行课。';
     delete entry.sourceBeatId;
     delete entry.beatSlot;
     delete entry.scheduleKind;
@@ -147,11 +153,8 @@ function createStoryline(
     return {
         id:
             'house_cup_storyline',
-        title: '学院杯故事线',
         titleEn:
             'House Cup Storyline',
-        summary:
-            '学院积分竞争持续推进。',
         summaryEn:
             'The house-point contest continues.',
         tags: [
@@ -181,11 +184,8 @@ function createStoryBeat(
             'house_cup_1991_autumn',
         storylineId:
             'house_cup_storyline',
-        title: '秋季积分竞争',
         titleEn:
             'Autumn House Point Race',
-        summary:
-            '第一学期通过四个场景推进学院竞争。',
         summaryEn:
             'Four scenes advance the first-term house competition.',
         tags: [
@@ -238,15 +238,15 @@ function validationErrors(
     ).errors.join('\n');
 }
 
-test('Calendar V2 schedule normalization keeps only approved fields and ordinary tags', () => {
+test('Calendar V3 schedule normalization keeps only approved fields and ordinary tags', () => {
     const normalized =
         normalizeCalendarEntry(
             createEntry({
                 parentId: null,
                 entryType:
                     ' EVENT ',
-                title:
-                    '  第一次   飞行课 ',
+                titleEn:
+                    '  First   Flying Lesson ',
                 tags: [
                     ' Canon ',
                     'canon',
@@ -290,8 +290,8 @@ test('Calendar V2 schedule normalization keeps only approved fields and ordinary
         'event',
     );
     assert.equal(
-        normalized.title,
-        '第一次 飞行课',
+        normalized.titleEn,
+        'First Flying Lesson',
     );
     assert.deepEqual(
         normalized.tags,
@@ -450,12 +450,12 @@ test('Calendar Schema rejects unknown fields, missing fields and unstable IDs', 
     );
 });
 
-test('Calendar V2 normalizes independent strict storyline and storyBeat schemas', () => {
+test('Calendar V3 normalizes independent strict storyline and storyBeat schemas', () => {
     const storyline =
         normalizeCalendarStoryline(
             createStoryline({
-                title:
-                    '  学院杯   故事线 ',
+                titleEn:
+                    '  House Cup   Storyline ',
                 tags: [
                     ' School ',
                     'school',
@@ -487,8 +487,8 @@ test('Calendar V2 normalizes independent strict storyline and storyBeat schemas'
         CALENDAR_STORY_BEAT_FIELDS,
     );
     assert.equal(
-        storyline.title,
-        '学院杯 故事线',
+        storyline.titleEn,
+        'House Cup Storyline',
     );
     assert.deepEqual(
         storyline.tags,
@@ -516,7 +516,7 @@ test('Calendar V2 normalizes independent strict storyline and storyBeat schemas'
     );
 });
 
-test('Calendar V2 validates clocks, cross-collection references and unique beat slots', () => {
+test('Calendar V3 validates clocks, cross-collection references and unique beat slots', () => {
     const storyline =
         createStoryline();
     const storyBeat =
@@ -982,7 +982,7 @@ test('Calendar migration is zero-model, idempotent and changes no existing domai
     );
 });
 
-test('Calendar migration normalizes an existing V2 once and rejects unknown persisted fields', () => {
+test('Calendar migration converts an existing V2 once and rejects unknown persisted fields', () => {
     const state =
         createAuthorityState();
     state.calendar =
@@ -998,6 +998,16 @@ test('Calendar migration normalizes an existing V2 once and rejects unknown pers
                 ],
             }),
         ]);
+    state.calendar.version = 2;
+    state.calendar.entries =
+        state.calendar.entries
+            .map(entry => ({
+                ...entry,
+                title:
+                    '第一次飞行课',
+                summary:
+                    '在草坪参加第一次飞行课。',
+            }));
 
     const normalized =
         migrateCalendarState(
@@ -1253,33 +1263,10 @@ function unchanged(value) {
     };
 }
 
-test('lifecycle submits Calendar migration through the existing save port once', () => {
-    const state = {
-        ...createAuthorityState(),
-        modelSlots: {},
-        actors: [],
-        cohorts: [],
-        localPresence: null,
-        scene: null,
-        checks: [],
-        timeline: [],
-        turn: {
-            count: 0,
-        },
-        causalCollapse: {},
-        socialGraph: {},
-        sceneTransition: {
-            status: 'idle',
-        },
-        pacingDirector: {
-            status: 'idle',
-        },
-        memoryDirector: {
-            status: 'idle',
-            reviewAfterTurns: 10,
-            lastReviewedTurn: 0,
-        },
-    };
+test('lifecycle leaves pre-authority Calendar migration to the atomic cutover', () => {
+    const state =
+        createCurrentPlayingState();
+    delete state.calendar;
     const saveRequests = [];
     const context = {
         chat: [],
@@ -1305,7 +1292,17 @@ test('lifecycle submits Calendar migration through the existing save port once',
             migrateActorPresentationState:
                 unchanged,
             migrateItemSystemState:
-                unchanged,
+                () => {
+                    throw new Error(
+                        'Item V4 must not run before Language Authority V1.',
+                    );
+                },
+            migrateCalendarState:
+                () => {
+                    throw new Error(
+                        'Calendar V3 must not run before Language Authority V1.',
+                    );
+                },
             migrateLoadedSocialGraph:
                 value => ({
                     graph: value,
@@ -1320,7 +1317,11 @@ test('lifecycle submits Calendar migration through the existing save port once',
             migrateRelationshipMemoryState:
                 unchanged,
             migrateSpellbookState:
-                unchanged,
+                () => {
+                    throw new Error(
+                        'Spellbook V3 must not run before Language Authority V1.',
+                    );
+                },
             normalizeCausalCollapseState:
                 value => value,
             normalizeModelSlots:
@@ -1342,39 +1343,24 @@ test('lifecycle submits Calendar migration through the existing save port once',
                 }),
         });
 
+    lifecycle
+        .ensureSceneLifecycleState(
+            state,
+        );
     assert.equal(
-        lifecycle
-            .ensureSceneLifecycleState(
-                state,
-            ),
-        true,
-    );
-    assert.deepEqual(
-        state.calendar,
-        createInitialCalendarState(
-            CLOCK,
+        Object.hasOwn(
+            state,
+            'calendar',
         ),
-    );
-    assert.deepEqual(
-        saveRequests,
-        [{
-            source:
-                'calendar_migration',
-            changedDomains: [
-                'calendar',
-            ],
-        }],
-    );
-    assert.equal(
-        lifecycle
-            .ensureSceneLifecycleState(
-                state,
-            ),
         false,
     );
     assert.equal(
-        saveRequests.length,
-        1,
+        saveRequests.some(
+            request =>
+                request?.source ===
+                'calendar_migration',
+        ),
+        false,
     );
 });
 
@@ -1480,12 +1466,10 @@ test('[defect-probing] legacy agenda does not enter prompt, opening Schema or UI
     );
 });
 
-test('[defect-probing] Calendar V2 accepts strict storyline, storyBeat and schedule collections', () => {
+test('[defect-probing] Calendar V3 accepts strict storyline, storyBeat and schedule collections', () => {
     const storyline = {
         id: 'tina_secret_storyline',
-        title: '蒂娜的秘密',
         titleEn: 'Tina Secret',
-        summary: '一条横跨学年的秘密剧情线。',
         summaryEn:
             'A secret storyline spanning school years.',
         tags: ['mystery'],
@@ -1503,11 +1487,8 @@ test('[defect-probing] Calendar V2 accepts strict storyline, storyBeat and sched
         id: 'tina_secret_1991_autumn',
         storylineId:
             storyline.id,
-        title: '第一学期疑点',
         titleEn:
             'First-term Doubts',
-        summary:
-            '四个可观察场景逐步暴露疑点。',
         summaryEn:
             'Four observable scenes reveal the doubts.',
         tags: ['mystery'],
@@ -1538,7 +1519,8 @@ test('[defect-probing] Calendar V2 accepts strict storyline, storyBeat and sched
     const result =
         validateCalendarState(
             {
-                version: 2,
+                version:
+                    CALENDAR_VERSION,
                 storylines: [
                     storyline,
                 ],
@@ -1623,7 +1605,7 @@ test('[defect-probing] Calendar migration moves V1 storylines and preserves gran
 
     assert.equal(
         first.state.calendar.version,
-        2,
+        CALENDAR_VERSION,
     );
     assert.deepEqual(
         first.state.calendar
@@ -1653,9 +1635,7 @@ test('[defect-probing] Calendar migration moves V1 storylines and preserves gran
         'id',
         'parentId',
         'entryType',
-        'title',
         'titleEn',
-        'summary',
         'summaryEn',
         'tags',
         'startClock',

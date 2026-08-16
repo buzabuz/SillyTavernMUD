@@ -93,7 +93,8 @@ function containsSpatialPhrase(
 export function inferActorRoomId(actor, map, fallbackRoomId = '') {
     const rooms = getMapRooms(map);
     const activity = normalizeSpatialText(
-        actor?.currentActivityEn || actor?.currentActivity || '',
+        actor?.currentActivityEn ||
+        '',
     );
     const primaryActivity = activity
         .split(/[,;]|\b(?:while|watching|looking|calling)\b/i)[0];
@@ -102,7 +103,6 @@ export function inferActorRoomId(actor, map, fallbackRoomId = '') {
         let score = 0;
         for (const label of [
             room.id,
-            room.name,
             room.nameEn,
             ...(room.aliases || []),
         ]) {

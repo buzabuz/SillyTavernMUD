@@ -140,29 +140,6 @@ test('[defect-probing] local semantic adapter submits one Appraisal batch for ev
         eventKnowledge: [
             event,
         ],
-        gossipPacks: [{
-            id: 'rumor_batch',
-            status: 'active',
-            sourceEventIds: [
-                event.eventId,
-            ],
-            sourceMessageIds:
-                event.sourceMessageIds,
-            versions: [{
-                id:
-                    'rumor_batch_v1',
-                sourceEventIds: [
-                    event.eventId,
-                ],
-                sourceMessageIds:
-                    event
-                        .sourceMessageIds,
-                audienceActorIds: [
-                    'luna',
-                ],
-                sourceActorIds: [],
-            }],
-        }],
     };
 
     try {
@@ -219,7 +196,6 @@ test('[defect-probing] local semantic adapter submits one Appraisal batch for ev
                     observer.id),
             [
                 'hermione',
-                'luna',
                 'ron',
             ],
         );
@@ -1300,6 +1276,11 @@ test('Item candidate acceptance persists and renders without knowledge or model 
             },
             DEFAULT_WORLD_PROMPT: '',
             extension_settings: {},
+            getRequestHeaders:
+                () => ({
+                    'Content-Type':
+                        'application/json',
+                }),
             getContext: () =>
                 context,
             normalizeModelSlots:
@@ -1492,6 +1473,11 @@ test('custom spell candidate acceptance persists locally without knowledge or mo
             },
             DEFAULT_WORLD_PROMPT: '',
             extension_settings: {},
+            getRequestHeaders:
+                () => ({
+                    'Content-Type':
+                        'application/json',
+                }),
             getContext: () =>
                 context,
             normalizeModelSlots:
@@ -1774,6 +1760,8 @@ test('lifecycle repairs stale transition cast and local-presence projections wit
                 unchanged,
             migrateSpellbookState:
                 unchanged,
+            migrateTimelineAppraisalState:
+                unchanged,
             normalizeCausalCollapseState:
                 value => value,
             normalizeModelSlots:
@@ -1944,177 +1932,27 @@ test('opening workflow accepts a valid first response without repair', async () 
     assert.equal(harness.calls.length, 1);
 });
 
-test('opening workflow repairs one invalid response and preserves call order', async () => {
+test('opening workflow surfaces the first invalid response without repair', async () => {
     const harness = createOpeningHarness([
-        JSON.stringify({
-            valid: false,
-        }),
-        JSON.stringify({
-            valid: true,
-            id: 'repaired_opening',
-        }),
-    ]);
-
-    const result =
-        await harness.workflow.generateOpeningPackage(
-            {
-                profileId: 'offline-test',
-            },
-            harness.state,
-        );
-
-    assert.equal(result.id, 'repaired_opening');
-    assert.equal(harness.calls.length, 2);
-    assert.match(
-        harness.calls[1][1][0].content,
-        /^Repair an invalid opening-world JSON package\./u,
-    );
-});
-
-test('opening workflow preserves the consecutive-failure error contract', async () => {
-    const harness = createOpeningHarness([
-        JSON.stringify({
-            valid: false,
-        }),
         JSON.stringify({
             valid: false,
         }),
     ]);
 
     await assert.rejects(
-        harness.workflow.generateOpeningPackage(
-            {
-                profileId: 'offline-test',
-            },
-            harness.state,
-        ),
-        /世界导演连续两次未返回合法开场包：invalid opening。响应摘要：/u,
-    );
-    assert.equal(harness.calls.length, 2);
-});
-
-test('model adapter falls back from streaming once and removes its temporary profile', async () => {
-    const profiles = [{
-        id: 'base',
-        preset: 'base-preset',
-    }];
-    const requestModes = [];
-    const adapter = createModelAdapter({
-        ConnectionManagerRequestService: {
-            sendRequest: async (
-                _profileId,
-                _prompt,
-                _maxTokens,
-                options,
-            ) => {
-                requestModes.push(options.stream);
-                if (options.stream) {
-                    throw new Error('stream unavailable');
-                }
-                return {
-                    content: 'fallback response',
-                };
-            },
-        },
-        applyRegexPresetById: async () => {},
-        getConnectionProfiles: () => profiles,
-        limitMessagesToContext: prompt => prompt,
-        parseCompleteJsonObject: value => value,
-        uuidv4: () => 'offline-test',
-    });
-
-    const result = await adapter.sendRoleRequest(
-        {
-            profileId: 'base',
-            contextSize: 4096,
-            maxResponseLength: 512,
-        },
-        [{
-            role: 'user',
-            content: 'offline',
-        }],
-        {
-            stream: true,
-        },
-    );
-
-    assert.equal(result.content, 'fallback response');
-    assert.deepEqual(requestModes, [true, false]);
-    assert.deepEqual(profiles, [{
-        id: 'base',
-        preset: 'base-preset',
-    }]);
-});
-
-test('model adapter rethrows common streaming rate-limit errors without one-shot fallback', async () => {
-    const rateLimitErrors = [
-        Object.assign(new Error('upstream rejected request'), {
-            status: 429,
-        }),
-        Object.assign(new Error('upstream rejected request'), {
-            statusCode: '429',
-        }),
-        Object.assign(new Error('upstream rejected request'), {
-            response: {
-                status: 429,
-            },
-        }),
-        Object.assign(new Error('upstream rejected request'), {
-            cause: {
-                status: 429,
-            },
-        }),
-        new Error('HTTP 429 from upstream'),
-        new Error('Too Many Requests'),
-        new Error('rate limit exceeded'),
-    ];
-
-    for (const rateLimitError of rateLimitErrors) {
-        const profiles = [{
-            id: 'base',
-            preset: 'base-preset',
-        }];
-        let requestCount = 0;
-        const adapter = createModelAdapter({
-            ConnectionManagerRequestService: {
-                sendRequest: async () => {
-                    requestCount++;
-                    throw rateLimitError;
-                },
-            },
-            applyRegexPresetById: async () => {},
-            getConnectionProfiles: () => profiles,
-            limitMessagesToContext: prompt => prompt,
-            parseCompleteJsonObject: value => value,
-            uuidv4: () => `rate-limit-${requestCount}`,
-        });
-
-        await assert.rejects(
-            adapter.sendRoleRequest(
+        harness.workflow
+            .generateOpeningPackage(
                 {
-                    profileId: 'base',
-                    contextSize: 4096,
-                    maxResponseLength: 512,
+                    profileId: 'offline-test',
                 },
-                [{
-                    role: 'user',
-                    content: 'offline',
-                }],
-                {
-                    stream: true,
-                },
+                harness.state,
             ),
-            error => {
-                assert.strictEqual(error, rateLimitError);
-                return true;
-            },
-        );
-        assert.equal(requestCount, 1);
-        assert.deepEqual(profiles, [{
-            id: 'base',
-            preset: 'base-preset',
-        }]);
-    }
+        /invalid opening/u,
+    );
+    assert.equal(
+        harness.calls.length,
+        1,
+    );
 });
 
 test('model adapter records context limiting and the resulting model call', async () => {

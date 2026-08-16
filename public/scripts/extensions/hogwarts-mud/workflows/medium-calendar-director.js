@@ -3,7 +3,6 @@ import {
     validateCalendarProposal,
 } from '../domain/calendar-reducer.js';
 import {
-    projectCalendarByDate,
     projectUpcomingCalendar,
 } from '../domain/calendar-projection.js';
 import {
@@ -24,6 +23,9 @@ import {
     getInteriorMount,
     listMapsByMountHierarchy,
 } from '../domain/interior-mount.js';
+import {
+    adoptEnglishFields,
+} from '../domain/model-language-adoption.js';
 import {
     advanceWorldClock,
     worldClockToEpochMinutes,
@@ -54,6 +56,63 @@ const STORY_BEAT_SLOTS =
         3,
         4,
     ]);
+
+function adoptMediumCalendarLanguage(
+    proposal,
+) {
+    const diagnostics = [];
+    const entries =
+        (
+            Array.isArray(
+                proposal?.entries,
+            )
+                ? proposal.entries
+                : []
+        )
+            .map(entry => {
+                const candidate = {
+                    ...entry,
+                };
+                delete candidate.title;
+                delete candidate.summary;
+                const result =
+                    adoptEnglishFields(
+                        candidate,
+                        {
+                            taskId:
+                                'calendar_medium',
+                            recordId:
+                                candidate.id,
+                            requiredFields: [
+                                'titleEn',
+                                'summaryEn',
+                            ],
+                        },
+                    );
+                diagnostics.push(
+                    ...result
+                        .diagnostics,
+                );
+                return result.admissible
+                    ? result.accepted
+                    : null;
+            })
+            .filter(Boolean);
+    const accepted = {
+        ...proposal,
+        entries,
+    };
+    Object.defineProperty(
+        accepted,
+        'modelLanguageDiagnostics',
+        {
+            value:
+                diagnostics,
+            enumerable: false,
+        },
+    );
+    return accepted;
+}
 const DAILY_SCHEDULE_TAGS =
     Object.freeze([
         'breakfast',
@@ -426,76 +485,6 @@ export function projectSchedulableStoryBeats(
             ));
 }
 
-function projectDailyScheduleCoverage(
-    worldState,
-    targetHorizon,
-) {
-    const targetMinutes =
-        clockMinutes(
-            targetHorizon,
-            'Medium Calendar 目标 horizon',
-        );
-    const dates = [];
-    for (
-        let dayOffset = 0;
-        dayOffset <=
-            MEDIUM_CALENDAR_TARGET_DAYS;
-        dayOffset++
-    ) {
-        const clock =
-            advanceWorldClock(
-                worldState.clock,
-                dayOffset *
-                    24 *
-                    60,
-            );
-        if (
-            clockMinutes(
-                clock,
-                'Medium Calendar 规划日期',
-            ) >
-            targetMinutes
-        ) {
-            break;
-        }
-        const date =
-            clock.slice(0, 10);
-        if (
-            dates.at(-1) !== date
-        ) {
-            dates.push(date);
-        }
-    }
-    return dates.map(date => {
-        const schedules =
-            projectCalendarByDate(
-                worldState,
-                date,
-            );
-        return {
-            date,
-            existingScheduleIds:
-                schedules.map(entry =>
-                    entry.id),
-            existingScheduleKinds: [
-                ...new Set(
-                    schedules.map(entry =>
-                        entry
-                            .scheduleKind),
-                ),
-            ],
-            existingTags: [
-                ...new Set(
-                    schedules.flatMap(
-                        entry =>
-                            entry.tags,
-                    ),
-                ),
-            ],
-        };
-    });
-}
-
 function projectAdmittedActorStates(
     worldState,
 ) {
@@ -526,23 +515,16 @@ function projectAdmittedActorStates(
             ).valid,
         );
     }).map(profile => {
-        const runtime =
-            runtimeById.get(
-                profile.id,
-            ) ||
-            {};
         return {
             id: profile.id,
             nameEn:
                 String(
                     profile.nameEn ||
-                    profile.name ||
                     profile.id,
                 ),
             roleEn:
                 String(
                     profile.roleEn ||
-                    profile.role ||
                     '',
                 ),
         };
@@ -561,7 +543,6 @@ function projectCalendarLocationDirectory(
         id: map.id,
         nameEn:
             map.nameEn ||
-            map.name ||
             map.id,
         depth,
         mount:
@@ -574,11 +555,19 @@ function projectCalendarLocationDirectory(
                 id: room.id,
                 nameEn:
                     room.nameEn ||
-                    room.name ||
                     room.id,
-                access:
-                    room.access ||
-                    '',
+                ...(
+                    room.access
+                        &&
+                    room.access !==
+                        'public'
+                        ? {
+                            access:
+                                room
+                                    .access,
+                        }
+                        : {}
+                ),
             })),
     }));
 }
@@ -674,11 +663,6 @@ export function projectMediumCalendarDirectorContext(
                             ?.currentLocalNodeId ||
                         worldState.scene
                             ?.roomId ||
-                        '',
-                    ),
-                label:
-                    String(
-                        worldState.location ||
                         '',
                     ),
             },
@@ -997,9 +981,7 @@ Proposal schema:
     "id": "stable_snake_case",
     "parentId": "",
     "entryType": "event",
-    "title": "player-visible Chinese title",
     "titleEn": "player-visible English title",
-    "summary": "player-visible Chinese summary",
     "summaryEn": "player-visible English summary",
     "tags": ["ordinary_tag"],
     "startClock": "YYYY-MM-DD · HH:MM",
@@ -1035,6 +1017,8 @@ export function createMediumCalendarDirectorWorkflow(
         applySystemPrompt =
         () => {},
         extractRoleResponseText,
+        enqueueLocalizationCandidates =
+        async () => {},
         getContext =
         () => ({
             chat: [],
@@ -1072,81 +1056,40 @@ export function createMediumCalendarDirectorWorkflow(
                     recentPlayerActions,
                 },
             );
-        let raw = '';
-        let lastError = null;
-        for (
-            let attempt = 0;
-            attempt < 2;
-            attempt++
+        const response =
+            await sendModelTaskRequest(
+                roleSlot,
+                prompt,
+                {
+                    json: true,
+                },
+            );
+        const proposal =
+            adoptMediumCalendarLanguage(
+                parseJsonObject(
+                    extractRoleResponseText(
+                        response,
+                    ),
+                ),
+            );
+        const validation =
+            validateMediumCalendarDirectorProposal(
+                proposal,
+                state,
+                targetHorizon,
+            );
+        if (
+            !validation.valid &&
+            !proposal
+                .modelLanguageDiagnostics
+                .length
         ) {
-            const response =
-                await sendModelTaskRequest(
-                    roleSlot,
-                    attempt === 0
-                        ? prompt
-                        : [{
-                            role:
-                                'system',
-                            content:
-                                'Repair the invalid Medium Calendar proposal. Return only baseTimelineEpoch, baseStateRevision and entries. Fill every missing beat slot 1..4 with stable sourceBeatId + beatSlot schedules, reuse existing pair IDs, preserve ordinary daily schedules, and use only supplied actor/map/room IDs. Keep only medium V2 schedules with scheduleKind, remove past edits, hidden content, horizon and every non-Calendar field. JSON only.',
-                        }, {
-                            role: 'user',
-                            content:
-                                JSON.stringify({
-                                    validationError:
-                                        String(
-                                            lastError
-                                                ?.message ||
-                                            lastError ||
-                                            '',
-                                        ),
-                                    invalidOutput:
-                                        raw,
-                                    originalRequest:
-                                        JSON.parse(
-                                            prompt[1]
-                                                .content,
-                                        ),
-                                }),
-                        }],
-                    {
-                        json: true,
-                    },
-                );
-            raw =
-                extractRoleResponseText(
-                    response,
-                );
-            try {
-                const proposal =
-                    parseJsonObject(
-                        raw,
-                    );
-                const validation =
-                    validateMediumCalendarDirectorProposal(
-                        proposal,
-                        state,
-                        targetHorizon,
-                    );
-                if (!validation.valid) {
-                    throw new Error(
-                        validation.errors
-                            .join('；'),
-                    );
-                }
-                return proposal;
-            } catch (error) {
-                lastError = error;
-            }
+            throw new Error(
+                validation.errors
+                    .join('；'),
+            );
         }
-        throw new Error(
-            `中级 Calendar Director 连续两次未返回合法 proposal：${
-                String(
-                    lastError?.message ||
-                    lastError,
-                )
-            }`,
-        );
+        return proposal;
     }
 
     async function runMediumCalendarDirector(
@@ -1211,6 +1154,26 @@ export function createMediumCalendarDirectorWorkflow(
                     targetHorizon,
                 );
             if (!validation.valid) {
+                if (
+                    proposal
+                        .modelLanguageDiagnostics
+                        .length &&
+                    validation
+                        .errors
+                        .every(error =>
+                            error.includes(
+                                '缺少稳定 schedule 槽位',
+                            ))
+                ) {
+                    return {
+                        status:
+                            'language_skipped',
+                        diagnostics:
+                            proposal
+                                .modelLanguageDiagnostics,
+                        state: current,
+                    };
+                }
                 throw new Error(
                     validation.errors
                         .join('；'),
@@ -1290,6 +1253,13 @@ export function createMediumCalendarDirectorWorkflow(
                     'stale_save';
                 throw error;
             }
+            void enqueueLocalizationCandidates(
+                [],
+            ).catch(error =>
+                console.warn(
+                    '[Hogwarts MUD] Medium Calendar localization candidate enqueue failed',
+                    error,
+                ));
             applySystemPrompt();
             renderAll();
             return {

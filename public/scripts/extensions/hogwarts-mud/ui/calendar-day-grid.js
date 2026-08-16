@@ -1,3 +1,8 @@
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from '../domain/localized-view-model.js';
+
 const CLOCK_PATTERN =
     /^(\d{4})-(\d{2})-(\d{2}) · ([01]\d|2[0-3]):([0-5]\d)$/u;
 
@@ -17,6 +22,48 @@ function element(documentRef, tag, className = '', content = '') {
 
 function asArray(value) {
     return Array.isArray(value) ? value : [];
+}
+
+function staticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+) {
+    return getStaticLocaleText(
+        staticKey,
+        normalizeDisplayLocale(
+            displayLocale,
+        ),
+    ) ||
+        sourceTextEn;
+}
+
+function formatStaticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+    values = {},
+) {
+    return Object.entries(
+        values,
+    ).reduce(
+        (
+            text,
+            [
+                key,
+                value,
+            ],
+        ) =>
+            text.replaceAll(
+                `{${key}}`,
+                String(value),
+            ),
+        staticText(
+            displayLocale,
+            staticKey,
+            sourceTextEn,
+        ),
+    );
 }
 
 function parseClock(clock) {
@@ -44,13 +91,41 @@ function parseClock(clock) {
     };
 }
 
-function formatDuration(minutes) {
-    if (minutes < 60) return `${minutes} 分钟`;
+function formatDuration(
+    minutes,
+    displayLocale,
+) {
+    if (minutes < 60) {
+        return formatStaticText(
+            displayLocale,
+            'ui.calendar.duration.minutes',
+            '{minutes} min',
+            {
+                minutes,
+            },
+        );
+    }
     const hours = Math.floor(minutes / 60);
     const remainder = minutes % 60;
     return remainder
-        ? `${hours} 小时 ${remainder} 分钟`
-        : `${hours} 小时`;
+        ? formatStaticText(
+            displayLocale,
+            'ui.calendar.duration.hours_minutes',
+            '{hours} hr {minutes} min',
+            {
+                hours,
+                minutes:
+                    remainder,
+            },
+        )
+        : formatStaticText(
+            displayLocale,
+            'ui.calendar.duration.hours',
+            '{hours} hr',
+            {
+                hours,
+            },
+        );
 }
 
 function normalizeEntries(entries) {
@@ -163,6 +238,7 @@ export function calculateCalendarDayGrid(
         DEFAULT_GRID_OPTIONS.pixelsPerMinute,
         minimumCardHeight =
         DEFAULT_GRID_OPTIONS.minimumCardHeight,
+        displayLocale = 'zh-CN',
         ...rangeOptions
     } = {},
 ) {
@@ -183,11 +259,27 @@ export function calculateCalendarDayGrid(
             widthPercent: 100 / entry.laneCount,
             ariaLabel: [
                 entry.title,
-                `${entry.startTimeLabel} 至 ${entry.endTimeLabel}`,
-                formatDuration(entry.durationMinutes),
+                `${entry.startTimeLabel}${
+                    staticText(
+                        displayLocale,
+                        'ui.calendar.to',
+                        ' to ',
+                    )
+                }${entry.endTimeLabel}`,
+                formatDuration(
+                    entry.durationMinutes,
+                    displayLocale,
+                ),
                 entry.statusLabel,
                 entry.location,
-            ].filter(Boolean).join('，'),
+            ].filter(Boolean)
+                .join(
+                    staticText(
+                        displayLocale,
+                        'ui.calendar.list_separator',
+                        ', ',
+                    ),
+                ),
         };
     });
     const hours = Array.from(
@@ -363,6 +455,7 @@ export function renderCalendarDayGrid(
         selectedEntryId = '',
         onSelect,
         onKeyDown,
+        displayLocale = 'zh-CN',
     },
 ) {
     container.replaceChildren();
@@ -373,12 +466,25 @@ export function renderCalendarDayGrid(
             'hpmud-calendar-section-empty',
         );
         empty.append(
-            element(documentRef, 'strong', '', '这一天没有计划'),
+            element(
+                documentRef,
+                'strong',
+                '',
+                staticText(
+                    displayLocale,
+                    'ui.calendar.day.no_plans',
+                    'No plans on this day',
+                ),
+            ),
             element(
                 documentRef,
                 'p',
                 '',
-                '空白日期保持为空，不会自动补写安排。',
+                staticText(
+                    displayLocale,
+                    'ui.calendar.day.no_plans_detail',
+                    'Blank dates remain blank. The system never invents schedules to fill them.',
+                ),
             ),
         );
         container.append(empty);
@@ -406,7 +512,14 @@ export function renderCalendarDayGrid(
         'hpmud-calendar-day-track',
     );
     track.setAttribute('role', 'listbox');
-    track.setAttribute('aria-label', '所选日期的计划时间网格');
+    track.setAttribute(
+        'aria-label',
+        staticText(
+            displayLocale,
+            'ui.calendar.day.grid_aria',
+            'Plan time grid for the selected date',
+        ),
+    );
     for (const hour of grid.hours) {
         const label = element(
             documentRef,
@@ -453,6 +566,7 @@ function createWeekDayButton(
     documentRef,
     day,
     onDateSelect,
+    displayLocale,
 ) {
     const button = element(
         documentRef,
@@ -489,8 +603,20 @@ function createWeekDayButton(
             'span',
             '',
             day.entryCount
-                ? `${day.entryCount} 项`
-                : '空',
+                ? formatStaticText(
+                    displayLocale,
+                    'ui.calendar.item_count',
+                    '{count} items',
+                    {
+                        count:
+                            day.entryCount,
+                    },
+                )
+                : staticText(
+                    displayLocale,
+                    'ui.calendar.empty',
+                    'Empty',
+                ),
         ),
     );
     button.addEventListener(
@@ -509,6 +635,7 @@ export function renderCalendarWeekGrid(
         onSelect,
         onDateSelect,
         onKeyDown,
+        displayLocale = 'zh-CN',
     },
 ) {
     container.replaceChildren();
@@ -541,13 +668,18 @@ export function renderCalendarWeekGrid(
             documentRef,
             'span',
             'hpmud-calendar-week-corner',
-            '时间',
+            staticText(
+                displayLocale,
+                'ui.calendar.meta.time',
+                'Time',
+            ),
         ),
         ...week.days.map(day =>
             createWeekDayButton(
                 documentRef,
                 day,
                 onDateSelect,
+                displayLocale,
             )),
     );
 
@@ -599,7 +731,15 @@ export function renderCalendarWeekGrid(
         track.setAttribute('role', 'listbox');
         track.setAttribute(
             'aria-label',
-            `${day.weekdayLabel}的计划`,
+            formatStaticText(
+                displayLocale,
+                'ui.calendar.day.plans_aria',
+                '{weekday} plans',
+                {
+                    weekday:
+                        day.weekdayLabel,
+                },
+            ),
         );
         for (const hour of week.hours) {
             const line = element(
@@ -667,6 +807,7 @@ export function renderCalendarSceneCards(
         onSelect,
         onToggle,
         onLinkedEntrySelect,
+        displayLocale = 'zh-CN',
     },
 ) {
     container.replaceChildren();
@@ -677,12 +818,25 @@ export function renderCalendarSceneCards(
             'hpmud-calendar-section-empty',
         );
         empty.append(
-            element(documentRef, 'strong', '', '这一天没有场景'),
+            element(
+                documentRef,
+                'strong',
+                '',
+                staticText(
+                    displayLocale,
+                    'ui.calendar.day.no_scenes',
+                    'No Scenes on this day',
+                ),
+            ),
             element(
                 documentRef,
                 'p',
                 '',
-                '可以从这里自由开场，提交前不会改变世界状态。',
+                staticText(
+                    displayLocale,
+                    'ui.calendar.day.no_scenes_detail',
+                    'You may open a Free Scene here. Nothing changes world State before submission.',
+                ),
             ),
         );
         container.append(empty);
@@ -727,7 +881,11 @@ export function renderCalendarSceneCards(
                 documentRef,
                 'small',
                 '',
-                `${scene.location} · 已封存`,
+                `${scene.location} · ${staticText(
+                    displayLocale,
+                    'ui.calendar.scene.archived',
+                    'Archived',
+                )}`,
             ),
         );
         button.append(
@@ -737,7 +895,17 @@ export function renderCalendarSceneCards(
                 documentRef,
                 'i',
                 '',
-                isExpanded ? '收起' : '展开',
+                isExpanded
+                    ? staticText(
+                        displayLocale,
+                        'ui.calendar.collapse',
+                        'Collapse',
+                    )
+                    : staticText(
+                        displayLocale,
+                        'ui.calendar.expand',
+                        'Expand',
+                    ),
             ),
         );
         button.addEventListener('click', () => {
@@ -759,7 +927,11 @@ export function renderCalendarSceneCards(
                     documentRef,
                     'p',
                     'hpmud-calendar-muted',
-                    '未关联计划',
+                    staticText(
+                        displayLocale,
+                        'ui.calendar.scene.no_linked_plans',
+                        'No linked plans',
+                    ),
                 ),
             );
         } else {

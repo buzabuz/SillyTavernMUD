@@ -14,6 +14,16 @@ import {
     renderCalendarWeekGrid,
     renderCalendarSceneCards,
 } from './calendar-day-grid.js';
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from '../domain/localized-view-model.js';
+import {
+    createActorNameField,
+} from '../domain/actor-display-name.js';
+import {
+    getCanonLocalizationZhCn,
+} from '../canon-localization.zh-cn.js';
 
 function element(documentRef, tag, className = '', content = '') {
     const node = documentRef.createElement(tag);
@@ -22,7 +32,16 @@ function element(documentRef, tag, className = '', content = '') {
     return node;
 }
 
-function appendMetaRow(documentRef, list, label, value, { time = false } = {}) {
+function appendMetaRow(
+    documentRef,
+    list,
+    label,
+    value,
+    {
+        time = false,
+        emptyText = '',
+    } = {},
+) {
     const row = element(documentRef, 'div');
     const term = element(documentRef, 'dt', '', label);
     const detail = element(documentRef, 'dd');
@@ -31,15 +50,28 @@ function appendMetaRow(documentRef, list, label, value, { time = false } = {}) {
         timeNode.dateTime = String(value || '').replace(' · ', 'T');
         detail.append(timeNode);
     } else {
-        detail.textContent = value || '无';
+        detail.textContent =
+            value ||
+            emptyText;
     }
     row.append(term, detail);
     list.append(row);
 }
 
-function appendRecordRows(documentRef, list, rows) {
+function appendRecordRows(
+    documentRef,
+    list,
+    rows,
+    options,
+) {
     for (const [label, value] of rows) {
-        appendMetaRow(documentRef, list, label, value);
+        appendMetaRow(
+            documentRef,
+            list,
+            label,
+            value,
+            options,
+        );
     }
 }
 
@@ -49,6 +81,7 @@ function appendIntervalRow(
     label,
     startClock,
     endClock,
+    separator,
 ) {
     const row = element(documentRef, 'div');
     const term = element(documentRef, 'dt', '', label);
@@ -59,7 +92,12 @@ function appendIntervalRow(
     end.dateTime = String(endClock || '').replace(' · ', 'T');
     detail.append(
         start,
-        element(documentRef, 'span', '', ' 至 '),
+        element(
+            documentRef,
+            'span',
+            '',
+            separator,
+        ),
         end,
     );
     row.append(term, detail);
@@ -71,9 +109,19 @@ export function createCalendarController(ports) {
         refs,
         session,
         ARCHIVE_TRANSCRIPT_PAGE_SIZE = 8,
+        ensureLocalizedFields =
+        async () => [],
+        getLocalizedField =
+        field => ({
+            text:
+                    field.sourceTextEn ||
+                    '',
+        }),
         getRoomName,
         getWorldState,
         jobRegistry = {},
+        requestFieldRetranslation =
+        async () => [],
         renderSceneArchiveTranscript,
         runCalendarMoment,
         runTimelineMoment,
@@ -120,11 +168,265 @@ export function createCalendarController(ports) {
     const collectionKicker = root.querySelector(
         '#hpmud_calendar_collection_kicker',
     );
+    const localizationStatus =
+        element(
+            documentRef,
+            'small',
+            'hpmud-calendar-localization-status',
+            '\u00a0',
+        );
+    const localizationRetry =
+        element(
+            documentRef,
+            'button',
+            'hpmud-calendar-localization-retry',
+        );
+    localizationRetry.type =
+        'button';
+    localizationRetry.hidden =
+        true;
+    calendarDialog
+        .querySelector(
+            '.hpmud-calendar-title > div',
+        )
+        ?.append(
+            localizationStatus,
+            localizationRetry,
+        );
     const viewTabs = [
         ...root.querySelectorAll('[data-calendar-view]'),
     ];
     let lastViewModel = null;
+    let lastLocalizationFields = [];
     let backgroundScrollSnapshot = null;
+
+    function staticText(
+        staticKey,
+        sourceTextEn,
+    ) {
+        return getStaticLocaleText(
+            staticKey,
+            normalizeDisplayLocale(
+                session.displayLocale,
+            ),
+        ) ||
+            sourceTextEn;
+    }
+
+    function formatStaticText(
+        staticKey,
+        sourceTextEn,
+        values = {},
+    ) {
+        return Object.entries(
+            values,
+        ).reduce(
+            (
+                text,
+                [
+                    key,
+                    value,
+                ],
+            ) =>
+                text.replaceAll(
+                    `{${key}}`,
+                    String(value),
+                ),
+            staticText(
+                staticKey,
+                sourceTextEn,
+            ),
+        );
+    }
+
+    function setDirectText(
+        node,
+        value,
+    ) {
+        const textNode = [
+            ...(node?.childNodes ||
+                []),
+        ].find(child =>
+            child.nodeType === 3 &&
+            String(
+                child.nodeValue ||
+                '',
+            ).trim());
+        if (textNode) {
+            textNode.nodeValue =
+                value;
+        } else {
+            node?.append?.(
+                documentRef
+                    .createTextNode(
+                        value,
+                    ),
+            );
+        }
+    }
+
+    function syncStaticChrome() {
+        const setText = (
+            selector,
+            key,
+            sourceTextEn,
+        ) => {
+            const node =
+                calendarDialog
+                    .querySelector(
+                        selector,
+                    );
+            if (node) {
+                node.textContent =
+                    staticText(
+                        key,
+                        sourceTextEn,
+                    );
+            }
+        };
+        const setAria = (
+            selector,
+            key,
+            sourceTextEn,
+        ) =>
+            calendarDialog
+                .querySelector(
+                    selector,
+                )
+                ?.setAttribute?.(
+                    'aria-label',
+                    staticText(
+                        key,
+                        sourceTextEn,
+                    ),
+                );
+        setText(
+            '#hpmud_calendar_title',
+            'ui.calendar.title',
+            'School Calendar',
+        );
+        setText(
+            '#hpmud_calendar_description',
+            'ui.calendar.description',
+            'Read public schedules by time. Preview and author views never write world State.',
+        );
+        setAria(
+            '.hpmud-calendar-view-tabs',
+            'ui.calendar.view_tabs_aria',
+            'Calendar views',
+        );
+        setText(
+            '[data-calendar-view="agenda"]',
+            'ui.calendar.view.agenda',
+            'Agenda',
+        );
+        setText(
+            '[data-calendar-view="storylines"]',
+            'ui.calendar.view.storylines',
+            'Storylines',
+        );
+        setAria(
+            '#hpmud_calendar_close',
+            'ui.calendar.close_aria',
+            'Close Calendar',
+        );
+        setAria(
+            '#hpmud_calendar_collection',
+            'ui.calendar.collection_aria',
+            'Plans, Scenes, and Storylines',
+        );
+        const dateTrigger =
+            calendarDialog
+                .querySelector(
+                    '#hpmud_calendar_date_modal_open',
+                );
+        setDirectText(
+            dateTrigger,
+            staticText(
+                'ui.calendar.date_index',
+                'Date index',
+            ),
+        );
+        setAria(
+            '#hpmud_calendar_date_modal',
+            'ui.calendar.select_date',
+            'Select date',
+        );
+        setText(
+            '.hpmud-calendar-date-modal-header strong',
+            'ui.calendar.date_index',
+            'Date index',
+        );
+        setAria(
+            '#hpmud_calendar_date_modal_close',
+            'ui.calendar.close_date_index_aria',
+            'Close date index',
+        );
+        setAria(
+            '#hpmud_calendar_previous_month',
+            'ui.calendar.previous_month_aria',
+            'Previous month',
+        );
+        setAria(
+            '#hpmud_calendar_next_month',
+            'ui.calendar.next_month_aria',
+            'Next month',
+        );
+        setAria(
+            '#hpmud_calendar_month_grid',
+            'ui.calendar.select_date',
+            'Select date',
+        );
+        [
+            ...calendarDialog
+                .querySelectorAll(
+                    '.hpmud-calendar-weekdays > span',
+                ),
+        ].forEach((
+            node,
+            index,
+        ) => {
+            const weekdayKey = [
+                'mon',
+                'tue',
+                'wed',
+                'thu',
+                'fri',
+                'sat',
+                'sun',
+            ][index];
+            node.textContent =
+                staticText(
+                    `ui.calendar.weekday.${weekdayKey}`,
+                    weekdayKey,
+                );
+        });
+        setText(
+            '#hpmud_calendar_plans_title',
+            'ui.calendar.week_schedule',
+            'Weekly schedule',
+        );
+        setText(
+            '#hpmud_calendar_scenes_title',
+            'ui.calendar.scenes',
+            'Scenes',
+        );
+        setText(
+            '#hpmud_calendar_free_toggle',
+            'ui.calendar.free_scene',
+            'Free Scene',
+        );
+        setAria(
+            '#hpmud_calendar_storylines',
+            'ui.calendar.public_storylines_aria',
+            'Public Storylines',
+        );
+        setAria(
+            '#hpmud_calendar_preview',
+            'ui.calendar.preview_aria',
+            'Plan or Scene details',
+        );
+    }
 
     function schedule(callback) {
         const scheduleFrame =
@@ -222,6 +524,97 @@ export function createCalendarController(ports) {
         liveStatus.textContent = message;
         liveStatus.setAttribute('role', alert ? 'alert' : 'status');
     }
+
+    function updateLocalizationStatus(
+        fields,
+    ) {
+        lastLocalizationFields = [
+            ...(fields || []),
+        ];
+        const statuses =
+            (fields || [])
+                .map(field =>
+                    getLocalizedField(
+                        field,
+                    ).status);
+        const status =
+            statuses.includes(
+                'error',
+            )
+                ? 'error'
+                : statuses.includes(
+                    'pending',
+                )
+                    ? 'pending'
+                    : '';
+        localizationStatus.className = [
+            'hpmud-calendar-localization-status',
+            status
+                ? 'is-visible'
+                : '',
+            status === 'error'
+                ? 'is-error'
+                : '',
+        ].filter(Boolean)
+            .join(' ');
+        localizationStatus.textContent =
+            status
+                ? getLocalizedField({
+                    staticKey:
+                        status ===
+                            'error'
+                            ? 'translation.status.partial_error'
+                            : 'translation.status.pending',
+                    sourceTextEn:
+                        status === 'error'
+                            ? 'Some fields are showing English source'
+                            : 'Translating',
+                }).text
+                : '\u00a0';
+        localizationRetry.hidden =
+            status !== 'error';
+        localizationRetry.textContent =
+            getLocalizedField({
+                staticKey:
+                    'translation.action.retranslate',
+                sourceTextEn:
+                    'Retranslate',
+            }).text;
+    }
+
+    localizationRetry.addEventListener(
+        'click',
+        async () => {
+            localizationRetry.disabled =
+                true;
+            const errorFields =
+                lastLocalizationFields
+                    .filter(field =>
+                        getLocalizedField(
+                            field,
+                        ).status ===
+                            'error');
+            try {
+                await requestFieldRetranslation(
+                    errorFields,
+                    {
+                        priority: 1,
+                    },
+                );
+                announce(
+                    getLocalizedField({
+                        staticKey:
+                            'translation.status.pending',
+                        sourceTextEn:
+                            'Translating',
+                    }).text,
+                );
+            } finally {
+                localizationRetry.disabled =
+                    false;
+            }
+        },
+    );
 
     function findByData(selector, key, value) {
         return [...calendarDialog.querySelectorAll(selector)]
@@ -404,8 +797,14 @@ export function createCalendarController(ports) {
         }
         announce(
             mode === 'agenda'
-                ? '已切换到今日日程。'
-                : '已切换到剧情线作者视图。',
+                ? staticText(
+                    'ui.calendar.switched.agenda',
+                    'Switched to today\'s agenda.',
+                )
+                : staticText(
+                    'ui.calendar.switched.storylines',
+                    'Switched to the Storyline author view.',
+                ),
         );
     }
 
@@ -463,8 +862,18 @@ export function createCalendarController(ports) {
                 compact
                     ? day.weekdayLabel
                     : day.itemCount
-                        ? `${day.itemCount} 项`
-                        : '空',
+                        ? formatStaticText(
+                            'ui.calendar.item_count',
+                            '{count} items',
+                            {
+                                count:
+                                    day.itemCount,
+                            },
+                        )
+                        : staticText(
+                            'ui.calendar.empty',
+                            'Empty',
+                        ),
             ),
         );
         button.addEventListener(
@@ -556,7 +965,19 @@ export function createCalendarController(ports) {
                 documentRef,
                 'small',
                 '',
-                `${storyline.intervalLabel} · ${storyline.beats.length} 个学期 beat`,
+                formatStaticText(
+                    'ui.calendar.term_beat_count',
+                    '{interval} · {count} term beats',
+                    {
+                        interval:
+                            storyline
+                                .intervalLabel,
+                        count:
+                            storyline
+                                .beats
+                                .length,
+                    },
+                ),
             ),
             beats,
         );
@@ -588,12 +1009,23 @@ export function createCalendarController(ports) {
         const empty = element(documentRef, 'div', 'hpmud-calendar-empty');
         empty.append(
             element(documentRef, 'span', '', '◇'),
-            element(documentRef, 'strong', '', '尚无公开剧情线'),
+            element(
+                documentRef,
+                'strong',
+                '',
+                staticText(
+                    'ui.calendar.no_public_storylines',
+                    'No public Storylines',
+                ),
+            ),
             element(
                 documentRef,
                 'p',
                 '',
-                '剧情线由高级导演维护，不会从日程或预览中自动生成。',
+                staticText(
+                    'ui.calendar.no_public_storylines_detail',
+                    'High-tier Directors maintain Storylines. Schedules and previews never create them automatically.',
+                ),
             ),
         );
         storylineList.append(empty);
@@ -625,6 +1057,9 @@ export function createCalendarController(ports) {
                     focus: true,
                 }),
                 onKeyDown: handleListKeyDown,
+                displayLocale:
+                    session
+                        .displayLocale,
             },
         );
         renderCalendarSceneCards(
@@ -642,6 +1077,9 @@ export function createCalendarController(ports) {
                 onLinkedEntrySelect: entryId => selectEntry(entryId, {
                     focus: true,
                 }),
+                displayLocale:
+                    session
+                        .displayLocale,
             },
         );
     }
@@ -693,24 +1131,81 @@ export function createCalendarController(ports) {
                 documentRef,
                 'p',
                 '',
-                entry.summary || '没有公开摘要。',
+                entry.summary ||
+                    staticText(
+                        'ui.calendar.no_public_summary',
+                        'No public summary.',
+                    ),
             ),
         );
         return section;
     }
 
     function createTags(tags) {
-        if (!tags.length) return null;
+        const localizedTags =
+            tags
+                .map(tag =>
+                    getStaticLocaleText(
+                        `ui.calendar.tag.${tag}`,
+                        normalizeDisplayLocale(
+                            session
+                                .displayLocale,
+                        ),
+                    ))
+                .filter(Boolean);
+        if (!localizedTags.length) {
+            return null;
+        }
         const section = element(
             documentRef,
             'section',
             'hpmud-calendar-tags',
         );
-        section.setAttribute('aria-label', '安排标签');
+        section.setAttribute(
+            'aria-label',
+            staticText(
+                'ui.calendar.tags_aria',
+                'Schedule tags',
+            ),
+        );
         section.append(
-            ...tags.map(tag => element(documentRef, 'span', '', tag)),
+            ...localizedTags.map(tag =>
+                element(
+                    documentRef,
+                    'span',
+                    '',
+                    tag,
+                )),
         );
         return section;
+    }
+
+    function formatTermKey(
+        termKey,
+    ) {
+        const match =
+            /^(\d{4})_(autumn|spring)$/u
+                .exec(
+                    String(
+                        termKey ||
+                        '',
+                    ),
+                );
+        if (!match) {
+            return staticText(
+                'ui.calendar.term.unknown',
+                'Unscheduled term',
+            );
+        }
+        return formatStaticText(
+            `ui.calendar.term.${match[2]}`,
+            match[2] === 'spring'
+                ? '{year} spring term'
+                : '{year} autumn term',
+            {
+                year: match[1],
+            },
+        );
     }
 
     function createEntryDetails(entry) {
@@ -727,28 +1222,67 @@ export function createCalendarController(ports) {
         appendIntervalRow(
             documentRef,
             list,
-            '时间',
+            staticText(
+                'ui.calendar.meta.time',
+                'Time',
+            ),
             entry.startClock,
             entry.endClock,
+            staticText(
+                'ui.calendar.to',
+                ' to ',
+            ),
         );
-        appendRecordRows(documentRef, list, [
-            ['地点', entry.location],
+        appendRecordRows(
+            documentRef,
+            list,
             [
-                '人物',
-                entry.participants.length
-                    ? entry.participants
-                        .map(person => person.name)
-                        .join('、')
-                    : '无指定人物',
+                [
+                    staticText(
+                        'ui.calendar.meta.location',
+                        'Location',
+                    ),
+                    entry.location,
+                ],
+                [
+                    staticText(
+                        'ui.calendar.meta.characters',
+                        'Characters',
+                    ),
+                    entry.participants.length
+                        ? entry.participants
+                            .map(person => person.name)
+                            .join(', ')
+                        : staticText(
+                            'ui.calendar.meta.no_characters',
+                            'No specified characters',
+                        ),
+                ],
+                [
+                    staticText(
+                        'ui.calendar.meta.status',
+                        'Status',
+                    ),
+                    entry.statusLabel,
+                ],
+                [
+                    staticText(
+                        'ui.calendar.meta.public_source',
+                        'Public source',
+                    ),
+                    entry.source
+                        ? `${entry.source.storylineTitle} · ${entry.source.beatTitle}`
+                        : entry.planningTierLabel,
+                ],
             ],
-            ['状态', entry.statusLabel],
-            [
-                '公开来源',
-                entry.source
-                    ? `${entry.source.storylineTitle} · ${entry.source.beatTitle}`
-                    : entry.planningTierLabel,
-            ],
-        ]);
+            {
+                emptyText:
+                    staticText(
+                        'ui.calendar.none',
+                        'None',
+                    ),
+            },
+        );
         section.append(list);
         return section;
     }
@@ -761,14 +1295,32 @@ export function createCalendarController(ports) {
         );
         section.setAttribute(
             'aria-label',
-            `已封存时间线，共 ${scene.timelineEntries.length} 条`,
+            formatStaticText(
+                'ui.calendar.timeline.sealed',
+                'Sealed timeline · {count} entries',
+                {
+                    count:
+                        scene
+                            .timelineEntries
+                            .length,
+                },
+            ),
         );
         section.append(
             element(
                 documentRef,
                 'h4',
                 '',
-                `时间线 · ${scene.timelineEntries.length} 条`,
+                formatStaticText(
+                    'ui.calendar.timeline.count',
+                    'Timeline · {count} entries',
+                    {
+                        count:
+                            scene
+                                .timelineEntries
+                                .length,
+                    },
+                ),
             ),
         );
         if (!scene.timelineEntries.length) {
@@ -777,7 +1329,10 @@ export function createCalendarController(ports) {
                     documentRef,
                     'p',
                     'hpmud-calendar-muted',
-                    '该场景没有保存时间线条目。',
+                    staticText(
+                        'ui.calendar.timeline.empty',
+                        'This Scene has no saved timeline entries.',
+                    ),
                 ),
             );
             return section;
@@ -789,7 +1344,11 @@ export function createCalendarController(ports) {
                 documentRef,
                 'time',
                 '',
-                entry.timeLabel || '时间未知',
+                entry.timeLabel ||
+                    staticText(
+                        'ui.calendar.time.unknown',
+                        'Time unknown',
+                    ),
             );
             if (entry.clock) {
                 time.dateTime = entry.clock.replace(' · ', 'T');
@@ -800,7 +1359,11 @@ export function createCalendarController(ports) {
                     documentRef,
                     'p',
                     '',
-                    entry.label || '没有保存说明。',
+                    entry.label ||
+                        staticText(
+                            'ui.calendar.timeline.no_note',
+                            'No saved note.',
+                        ),
                 ),
             );
             list.append(item);
@@ -814,7 +1377,16 @@ export function createCalendarController(ports) {
         session.calendarMomentBusy = true;
         session.calendarMomentError = '';
         renderCalendar();
-        announce(`正在进入 ${entry.startClock}。`);
+        announce(
+            formatStaticText(
+                'ui.calendar.entering',
+                'Entering {clock}.',
+                {
+                    clock:
+                        entry.startClock,
+                },
+            ),
+        );
         try {
             await runCalendarMoment(entry.id);
             backgroundScrollSnapshot = null;
@@ -822,10 +1394,9 @@ export function createCalendarController(ports) {
         } catch (error) {
             console.error('[Hogwarts MUD] Calendar Moment failed', error);
             session.calendarMomentError =
-                String(
-                    error?.cause?.message ||
-                    error?.message ||
-                    error,
+                staticText(
+                    'ui.calendar.runtime_error',
+                    'The Scene could not be opened.',
                 );
             announce(
                 session.calendarMomentError,
@@ -891,7 +1462,12 @@ export function createCalendarController(ports) {
         const state = getWorldState();
         const validation = validateCalendarTimelineMoment(
             state,
-            draft,
+            {
+                ...draft,
+                displayLocale:
+                    session
+                        .displayLocale,
+            },
         );
         if (!validation.valid) {
             session.calendarMomentError = validation.error;
@@ -904,7 +1480,17 @@ export function createCalendarController(ports) {
         session.calendarMomentBusy = true;
         session.calendarMomentError = '';
         renderCalendar();
-        announce(`正在前往 ${validation.startClock} 的自由开场。`);
+        announce(
+            formatStaticText(
+                'ui.calendar.entering_free',
+                'Opening a Free Scene at {clock}.',
+                {
+                    clock:
+                        validation
+                            .startClock,
+                },
+            ),
+        );
         try {
             await runTimelineMoment({
                 startClock: validation.startClock,
@@ -916,7 +1502,10 @@ export function createCalendarController(ports) {
         } catch (error) {
             console.error('[Hogwarts MUD] Timeline Moment failed', error);
             session.calendarMomentError =
-                String(error?.cause?.message || error?.message || error);
+                staticText(
+                    'ui.calendar.runtime_error',
+                    'The Scene could not be opened.',
+                );
             announce(session.calendarMomentError, true);
         } finally {
             session.calendarMomentBusy = false;
@@ -949,13 +1538,32 @@ export function createCalendarController(ports) {
             'hpmud-calendar-free',
         );
         section.append(
-            element(documentRef, 'small', '', '自由场景'),
-            element(documentRef, 'h4', '', '从所选日期自由开场'),
+            element(
+                documentRef,
+                'small',
+                '',
+                staticText(
+                    'ui.calendar.free.kicker',
+                    'Free Scene',
+                ),
+            ),
+            element(
+                documentRef,
+                'h4',
+                '',
+                staticText(
+                    'ui.calendar.free.title',
+                    'Open a Free Scene on the selected date',
+                ),
+            ),
             element(
                 documentRef,
                 'p',
                 '',
-                '不认领任何计划。提交后才会封存当前场景，并通过时间线保存事务创建新场景。',
+                staticText(
+                    'ui.calendar.free.detail',
+                    'Claims no plan. Submission seals the current Scene and creates a new Scene through the timeline save transaction.',
+                ),
             ),
         );
         const form = element(
@@ -987,7 +1595,7 @@ export function createCalendarController(ports) {
         };
         mapSelect.append(
             ...viewModel.locationOptions.map(map =>
-                option(`${map.name} · ${map.id}`, map.id)),
+                option(map.name, map.id)),
         );
         mapSelect.value = draft.mapId;
         const populateRooms = mapId => {
@@ -1001,7 +1609,6 @@ export function createCalendarController(ports) {
                         [
                             room.levelName,
                             room.name,
-                            room.id,
                         ].filter(Boolean).join(' · '),
                         room.id,
                     )),
@@ -1016,22 +1623,54 @@ export function createCalendarController(ports) {
         populateRooms(mapSelect.value);
         const dateLabel = element(documentRef, 'label');
         dateLabel.append(
-            element(documentRef, 'span', '', '所选日期'),
+            element(
+                documentRef,
+                'span',
+                '',
+                staticText(
+                    'ui.calendar.free.selected_date',
+                    'Selected date',
+                ),
+            ),
             dateInput,
         );
         const timeLabel = element(documentRef, 'label');
         timeLabel.append(
-            element(documentRef, 'span', '', '开始时间'),
+            element(
+                documentRef,
+                'span',
+                '',
+                staticText(
+                    'ui.calendar.free.start_time',
+                    'Start time',
+                ),
+            ),
             timeInput,
         );
         const mapLabel = element(documentRef, 'label');
         mapLabel.append(
-            element(documentRef, 'span', '', '权威地图'),
+            element(
+                documentRef,
+                'span',
+                '',
+                staticText(
+                    'ui.calendar.free.authoritative_map',
+                    'Authoritative Map',
+                ),
+            ),
             mapSelect,
         );
         const roomLabel = element(documentRef, 'label');
         roomLabel.append(
-            element(documentRef, 'span', '', '权威房间'),
+            element(
+                documentRef,
+                'span',
+                '',
+                staticText(
+                    'ui.calendar.free.authoritative_room',
+                    'Authoritative room',
+                ),
+            ),
             roomSelect,
         );
         const feedback = element(
@@ -1046,15 +1685,24 @@ export function createCalendarController(ports) {
             'button',
             'hpmud-calendar-free-submit',
             session.calendarMomentBusy
-                ? '正在建立场景'
-                : '自由开场',
+                ? staticText(
+                    'ui.calendar.free.creating',
+                    'Creating Scene',
+                )
+                : staticText(
+                    'ui.calendar.free.open',
+                    'Open Free Scene',
+                ),
         );
         submit.type = 'submit';
         const cancel = element(
             documentRef,
             'button',
             'hpmud-calendar-free-cancel',
-            '取消',
+            staticText(
+                'ui.calendar.cancel',
+                'Cancel',
+            ),
         );
         cancel.type = 'button';
         cancel.addEventListener(
@@ -1072,13 +1720,26 @@ export function createCalendarController(ports) {
         const refreshValidation = () => {
             const validation = validateCalendarTimelineMoment(
                 state,
-                readDraft(),
+                {
+                    ...readDraft(),
+                    displayLocale:
+                        session
+                            .displayLocale,
+                },
             );
             const error =
                 session.calendarMomentError ||
                 validation.error;
             feedback.textContent = error ||
-                `有效目标 · ${validation.startClock} · 不认领日程`;
+                formatStaticText(
+                    'ui.calendar.free.valid',
+                    'Valid target · {clock} · claims no schedule',
+                    {
+                        clock:
+                            validation
+                                .startClock,
+                    },
+                );
             feedback.className =
                 `hpmud-calendar-free-feedback${error ? ' is-error' : ' is-valid'}`;
             feedback.setAttribute(
@@ -1150,8 +1811,18 @@ export function createCalendarController(ports) {
             'button',
             'hpmud-calendar-enter',
             session.calendarMomentBusy
-                ? `正在进入 ${entry.timeLabel}`
-                : '进入场景',
+                ? formatStaticText(
+                    'ui.calendar.entering_scene',
+                    'Entering {time}',
+                    {
+                        time:
+                            entry.timeLabel,
+                    },
+                )
+                : staticText(
+                    'ui.calendar.enter_scene',
+                    'Enter Scene',
+                ),
         );
         button.type = 'button';
         button.disabled = Boolean(session.calendarMomentBusy);
@@ -1181,16 +1852,32 @@ export function createCalendarController(ports) {
     ) {
         const phases = [{
             id: 'preparing',
-            label: '整理场景资料',
+            label:
+                staticText(
+                    'ui.calendar.transition.prepare',
+                    'Prepare Scene material',
+                ),
         }, {
             id: 'archiving',
-            label: '封存当前场景',
+            label:
+                staticText(
+                    'ui.calendar.transition.archive',
+                    'Archive current Scene',
+                ),
         }, {
             id: 'opening',
-            label: '生成新场景开场',
+            label:
+                staticText(
+                    'ui.calendar.transition.generate',
+                    'Generate new Scene opening',
+                ),
         }, {
             id: 'saving',
-            label: '保存世界状态',
+            label:
+                staticText(
+                    'ui.calendar.transition.save',
+                    'Save world State',
+                ),
         }];
         const requestedPhase =
             jobRegistry
@@ -1211,13 +1898,25 @@ export function createCalendarController(ports) {
             phases[phaseIndex];
         const details = {
             preparing:
-                '正在读取日程、人物、地点与当前场景记录。',
+                staticText(
+                    'ui.calendar.transition.detail.prepare',
+                    'Reading the schedule, characters, location, and current Scene record.',
+                ),
             archiving:
-                '导演正在收束旧场景，并编排前往目标时刻的转场。',
+                staticText(
+                    'ui.calendar.transition.detail.archive',
+                    'The Director is closing the old Scene and arranging the transition to the target time.',
+                ),
             opening:
-                '旧场景方案已完成，现场表演者正在书写下一幕。',
+                staticText(
+                    'ui.calendar.transition.detail.generate',
+                    'The old Scene plan is complete. The Scene Performer is writing the next opening.',
+                ),
             saving:
-                '生成已完成，正在原子保存场景档案、时钟与日程。',
+                staticText(
+                    'ui.calendar.transition.detail.save',
+                    'Generation is complete. Atomically saving the Scene archive, clock, and Calendar.',
+                ),
         };
         const panel = element(
             documentRef,
@@ -1316,13 +2015,19 @@ export function createCalendarController(ports) {
                 documentRef,
                 'span',
                 '',
-                '页面仍在工作',
+                staticText(
+                    'ui.calendar.page_working',
+                    'The page is still working',
+                ),
             ),
             element(
                 documentRef,
                 'small',
                 '',
-                '需要连续完成两次模型生成，通常约 1–2 分钟。请保持页面开启。',
+                staticText(
+                    'ui.calendar.page_working_detail',
+                    'Two consecutive model generations are required and usually take 1-2 minutes. Keep this page open.',
+                ),
             ),
         );
         panel.append(
@@ -1354,7 +2059,10 @@ export function createCalendarController(ports) {
         preview.append(
             createPreviewHeader(
                 entry,
-                '计划详情',
+                staticText(
+                    'ui.calendar.plan_details',
+                    'Plan details',
+                ),
             ),
             body,
         );
@@ -1374,14 +2082,37 @@ export function createCalendarController(ports) {
         appendIntervalRow(
             documentRef,
             meta,
-            '时间',
+            staticText(
+                'ui.calendar.meta.time',
+                'Time',
+            ),
             scene.startClock,
             scene.endClock,
+            staticText(
+                'ui.calendar.to',
+                ' to ',
+            ),
         );
-        appendRecordRows(documentRef, meta, [
-            ['地点', scene.location],
-            ['档案 ID', scene.id],
-        ]);
+        appendRecordRows(
+            documentRef,
+            meta,
+            [
+                [
+                    staticText(
+                        'ui.calendar.meta.location',
+                        'Location',
+                    ),
+                    scene.location,
+                ],
+            ],
+            {
+                emptyText:
+                    staticText(
+                        'ui.calendar.none',
+                        'None',
+                    ),
+            },
+        );
         body.append(meta);
         if (scene.summary) {
             body.append(
@@ -1406,7 +2137,10 @@ export function createCalendarController(ports) {
         preview.append(
             createPreviewHeader(
                 scene,
-                '封存场景 · 只读正文',
+                staticText(
+                    'ui.calendar.archive_body',
+                    'Archived Scene · Read-only text',
+                ),
             ),
             body,
         );
@@ -1438,30 +2172,68 @@ export function createCalendarController(ports) {
             'hpmud-calendar-context',
         );
         overview.append(
-            element(documentRef, 'h4', '', '长期线路档案'),
+            element(
+                documentRef,
+                'h4',
+                '',
+                staticText(
+                    'ui.calendar.storyline.archive',
+                    'Long-term Storyline archive',
+                ),
+            ),
         );
         const meta = element(documentRef, 'dl', 'hpmud-calendar-meta');
         appendMetaRow(
             documentRef,
             meta,
-            '时间跨度',
+            staticText(
+                'ui.calendar.meta.duration',
+                'Duration',
+            ),
             storyline.intervalLabel,
             {
                 time: true,
+                emptyText:
+                    staticText(
+                        'ui.calendar.none',
+                        'None',
+                    ),
             },
         );
-        appendRecordRows(documentRef, meta, [
-            ['状态', storyline.statusLabel],
+        appendRecordRows(
+            documentRef,
+            meta,
             [
-                '人物',
-                storyline.participants.length
-                    ? storyline.participants
-                        .map(person => person.name)
-                        .join('、')
-                    : '未指定',
+                [
+                    staticText(
+                        'ui.calendar.meta.status',
+                        'Status',
+                    ),
+                    storyline.statusLabel,
+                ],
+                [
+                    staticText(
+                        'ui.calendar.meta.characters',
+                        'Characters',
+                    ),
+                    storyline.participants.length
+                        ? storyline.participants
+                            .map(person => person.name)
+                            .join(', ')
+                        : staticText(
+                            'ui.calendar.meta.no_characters',
+                            'No specified characters',
+                        ),
+                ],
             ],
-            ['稳定 ID', storyline.id],
-        ]);
+            {
+                emptyText:
+                    staticText(
+                        'ui.calendar.none',
+                        'None',
+                    ),
+            },
+        );
         overview.append(meta);
         body.append(overview);
         const beats = element(
@@ -1474,7 +2246,16 @@ export function createCalendarController(ports) {
                 documentRef,
                 'h4',
                 '',
-                `学期节奏 · ${storyline.beats.length} 个 beat`,
+                formatStaticText(
+                    'ui.calendar.storyline.term_progress',
+                    'Term pacing · {count} beats',
+                    {
+                        count:
+                            storyline
+                                .beats
+                                .length,
+                    },
+                ),
             ),
         );
         for (const beat of storyline.beats) {
@@ -1485,7 +2266,16 @@ export function createCalendarController(ports) {
                     documentRef,
                     'small',
                     '',
-                    `${beat.sequence.toString().padStart(2, '0')} · ${beat.termKey}`,
+                    `${
+                        beat.sequence
+                            .toString()
+                            .padStart(
+                                2,
+                                '0',
+                            )
+                    } · ${formatTermKey(
+                        beat.termKey,
+                    )}`,
                 ),
                 element(documentRef, 'h5', '', beat.title),
                 element(
@@ -1503,7 +2293,14 @@ export function createCalendarController(ports) {
             progress.setAttribute('role', 'progressbar');
             progress.setAttribute(
                 'aria-label',
-                `${beat.title} 场景进度`,
+                formatStaticText(
+                    'ui.calendar.storyline.scene_progress',
+                    '{title} Scene progress',
+                    {
+                        title:
+                            beat.title,
+                    },
+                ),
             );
             progress.setAttribute('aria-valuemin', '0');
             progress.setAttribute(
@@ -1535,14 +2332,29 @@ export function createCalendarController(ports) {
                     documentRef,
                     'p',
                     '',
-                    beat.summary || '没有公开节奏摘要。',
+                    beat.summary ||
+                        staticText(
+                            'ui.calendar.storyline.no_summary',
+                            'No public pacing summary.',
+                        ),
                 ),
                 progress,
                 element(
                     documentRef,
                     'small',
                     '',
-                    `${beat.windowLabel} · ${beat.scheduleCount} 个日程机会`,
+                    formatStaticText(
+                        'ui.calendar.storyline.opportunities',
+                        '{window} · {count} schedule opportunities',
+                        {
+                            window:
+                                beat
+                                    .windowLabel,
+                            count:
+                                beat
+                                    .scheduleCount,
+                        },
+                    ),
                 ),
             );
             beats.append(article);
@@ -1551,7 +2363,10 @@ export function createCalendarController(ports) {
         preview.append(
             createPreviewHeader(
                 storyline,
-                'Storyline · 作者视图',
+                staticText(
+                    'ui.calendar.storyline.author_view',
+                    'Storyline · Author view',
+                ),
             ),
             body,
         );
@@ -1583,12 +2398,23 @@ export function createCalendarController(ports) {
             );
             empty.append(
                 element(documentRef, 'span', '', '◇'),
-                element(documentRef, 'h3', '', '剧情线作者视图'),
+                element(
+                    documentRef,
+                    'h3',
+                    '',
+                    staticText(
+                        'ui.calendar.storyline.author_title',
+                        'Storyline author view',
+                    ),
+                ),
                 element(
                     documentRef,
                     'p',
                     '',
-                    '左侧展示长期线路及每个学期 beat 的 0..4 场景进度。选择剧情线查看完整节奏档案。',
+                    staticText(
+                        'ui.calendar.storyline.author_detail',
+                        'The left side shows long-term Storylines and each term beat\'s 0..4 Scene progress. Select a Storyline to inspect its pacing archive.',
+                    ),
                 ),
             );
             preview.append(empty);
@@ -1606,13 +2432,19 @@ export function createCalendarController(ports) {
                     documentRef,
                     'h3',
                     '',
-                    '尚未选择',
+                    staticText(
+                        'ui.calendar.not_selected',
+                        'Nothing selected',
+                    ),
                 ),
                 element(
                     documentRef,
                     'p',
                     '',
-                    '选择一项计划或场景查看精简详情。',
+                    staticText(
+                        'ui.calendar.preview_empty',
+                        'Select a plan or Scene to view a concise record.',
+                    ),
                 ),
             );
             preview.append(empty);
@@ -1627,6 +2459,7 @@ export function createCalendarController(ports) {
 
     function renderCalendar() {
         if (!calendarDialog?.open) return null;
+        syncStaticChrome();
         beginBackgroundScrollProtection();
         const state = getWorldState();
         syncCalendarTimeline(state);
@@ -1637,8 +2470,180 @@ export function createCalendarController(ports) {
             selectedSceneId: session.calendarSelectedSceneId,
             selectedStorylineId:
                 session.calendarSelectedStorylineId,
+            displayLocale:
+                session.displayLocale,
             getRoomName,
+            getLocalizedField,
         });
+        const storylineMode =
+            session.calendarViewMode ===
+            'storylines';
+        const visibleLocalizationFields =
+            new Map();
+        const addField = (
+            recordKind,
+            recordId,
+            fieldPath,
+            sourceTextEn,
+        ) => {
+            if (!sourceTextEn) return;
+            const field = {
+                recordKind,
+                recordId:
+                    String(recordId),
+                fieldPath,
+                sourceTextEn,
+            };
+            visibleLocalizationFields
+                .set(
+                    JSON.stringify([
+                        recordKind,
+                        recordId,
+                        fieldPath,
+                    ]),
+                    field,
+                );
+        };
+        const addEntry = entry => {
+            addField(
+                'calendar_entry',
+                entry.id,
+                'titleEn',
+                entry.titleEn,
+            );
+            addField(
+                'calendar_entry',
+                entry.id,
+                'summaryEn',
+                entry.summaryEn,
+            );
+            (
+                entry.participants ||
+                []
+            )
+                .filter(person =>
+                    !getCanonLocalizationZhCn(
+                        person.id,
+                    ))
+                .forEach(person =>
+                    visibleLocalizationFields
+                        .set(
+                            JSON.stringify([
+                                'actor_core',
+                                person.id,
+                                'nameEn',
+                            ]),
+                            createActorNameField(
+                                person.id,
+                                person.nameEn,
+                            ),
+                        ));
+        };
+        if (storylineMode) {
+            viewModel.storylines
+                .forEach(storyline => {
+                    addField(
+                        'calendar_storyline',
+                        storyline.id,
+                        'titleEn',
+                        storyline.titleEn,
+                    );
+                    addField(
+                        'calendar_storyline',
+                        storyline.id,
+                        'summaryEn',
+                        storyline.summaryEn,
+                    );
+                    storyline.beats
+                        .forEach(beat => {
+                            addField(
+                                'calendar_story_beat',
+                                beat.id,
+                                'titleEn',
+                                beat.titleEn,
+                            );
+                            addField(
+                                'calendar_story_beat',
+                                beat.id,
+                                'summaryEn',
+                                beat.summaryEn,
+                            );
+                        });
+                });
+        } else {
+            viewModel.weekDays
+                .flatMap(day =>
+                    day.entries)
+                .forEach(addEntry);
+            viewModel.entries
+                .forEach(addEntry);
+            viewModel.scenes
+                .forEach(scene => {
+                    addField(
+                        'scene_archive',
+                        scene.id,
+                        'nameEn',
+                        scene.titleEn,
+                    );
+                    addField(
+                        'scene_archive',
+                        scene.id,
+                        'summaryEn',
+                        scene.summaryEn,
+                    );
+                    scene.timelineEntries
+                        .forEach((
+                            entry,
+                            index,
+                        ) =>
+                            addField(
+                                'scene_timeline',
+                                `${scene.id}:${index}`,
+                                'summaryEn',
+                                entry.summaryEn,
+                            ));
+                });
+        }
+        if (
+            !storylineMode &&
+            session
+                .calendarFreePanelOpen
+        ) {
+            viewModel.locationOptions
+                .flatMap(option =>
+                    option
+                        .localizationFields ||
+                    [])
+                .forEach(field =>
+                    visibleLocalizationFields
+                        .set(
+                            JSON.stringify([
+                                field.recordKind,
+                                field.recordId,
+                                field.fieldPath,
+                            ]),
+                            field,
+                        ));
+        }
+        updateLocalizationStatus([
+            ...visibleLocalizationFields
+                .values(),
+        ]);
+        void Promise.resolve(
+            ensureLocalizedFields(
+                [
+                    ...visibleLocalizationFields
+                        .values(),
+                ],
+                {
+                    priority: 1,
+                },
+            ),
+        ).catch(error =>
+            console.warn(
+                '[Hogwarts MUD] Calendar localization query failed',
+                error,
+            ));
         session.calendarSelectedDate = viewModel.selectedDate;
         session.calendarDisplayMonth = viewModel.displayMonth;
         session.calendarSelectedEntryId = viewModel.selectedEntryId;
@@ -1648,22 +2653,59 @@ export function createCalendarController(ports) {
         syncViewTabs();
         root.querySelector('#hpmud_calendar_month_label').textContent =
             viewModel.monthLabel;
-        const storylineMode =
-            session.calendarViewMode === 'storylines';
         collectionKicker.textContent =
             storylineMode
-                ? '作者视图'
-                : 'Weekly ledger';
+                ? staticText(
+                    'ui.calendar.mode.author',
+                    'Author view',
+                )
+                : staticText(
+                    'ui.calendar.mode.weekly',
+                    'Weekly ledger',
+                );
         root.querySelector('#hpmud_calendar_date_label').textContent =
             storylineMode
-                ? '长期剧情线'
+                ? staticText(
+                    'ui.calendar.mode.storylines',
+                    'Long-term Storylines',
+                )
                 : viewModel.weekLabel;
         root.querySelector('#hpmud_calendar_date_summary').textContent =
             storylineMode
-                ? `${viewModel.storylines.length} 条线路`
-                : `已选 ${viewModel.selectedDateLabel} · ${viewModel.scenes.length} 个场景`;
+                ? formatStaticText(
+                    'ui.calendar.storyline_count',
+                    '{count} Storylines',
+                    {
+                        count:
+                            viewModel
+                                .storylines
+                                .length,
+                    },
+                )
+                : formatStaticText(
+                    'ui.calendar.selected_summary',
+                    'Selected {date} · {count} Scenes',
+                    {
+                        date:
+                            viewModel
+                                .selectedDateLabel,
+                        count:
+                            viewModel
+                                .scenes
+                                .length,
+                    },
+                );
         planSummary.textContent =
-            `${viewModel.weekGrid.itemCount} 项 · 容器内滚动`;
+            formatStaticText(
+                'ui.calendar.scroll_summary',
+                '{count} items · scrolls inside this panel',
+                {
+                    count:
+                        viewModel
+                            .weekGrid
+                            .itemCount,
+                },
+            );
         renderDates(viewModel);
         renderItems(viewModel);
         renderFreePanel(viewModel, state);
@@ -1718,7 +2760,18 @@ export function createCalendarController(ports) {
             focusCalendarElement(focusTarget);
             restoreBackgroundScroll();
         });
-        announce(`${viewModel?.selectedDateLabel || 'Calendar'} 已打开。`);
+        announce(
+            formatStaticText(
+                'ui.calendar.opened',
+                '{date} opened.',
+                {
+                    date:
+                        viewModel
+                            ?.selectedDateLabel ||
+                        'Calendar',
+                },
+            ),
+        );
     }
 
     function closeCalendar() {

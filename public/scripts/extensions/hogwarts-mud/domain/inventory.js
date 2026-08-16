@@ -6,6 +6,9 @@ import {
 import {
     ACTOR_LIFE_STATUS_VALUES,
 } from './actor-context-schema.js';
+import {
+    isEnglishAuthorityText,
+} from './model-language-adoption.js';
 
 export {
     ACTOR_LIFE_STATUS_VALUES,
@@ -45,9 +48,7 @@ function inferItemImportance(
     const text = [
         item.id,
         item.labelEn,
-        item.label,
         item.detailEn,
-        item.detail,
     ].filter(Boolean).join(' ');
     if (IMPORTANT_ITEM_PATTERN.test(text)) {
         return 'key';
@@ -79,9 +80,6 @@ export function normalizeInventoryItem(
             appearanceEn:
                 item.appearanceEn ||
                 item.detailEn,
-            appearance:
-                item.appearance ||
-                item.detail,
             importance,
         },
         index,
@@ -315,6 +313,33 @@ export function projectObservedInventoryUpdates(
         ) {
             continue;
         }
+        const observedLabelEn =
+            String(
+                observed.labelEn ||
+                '',
+            ).trim();
+        const observedAppearanceEn =
+            String(
+                observed.appearanceEn ||
+                observed.detailEn ||
+                '',
+            ).trim();
+        if (
+            (
+                observedLabelEn &&
+                !isEnglishAuthorityText(
+                    observedLabelEn,
+                )
+            ) ||
+            (
+                observedAppearanceEn &&
+                !isEnglishAuthorityText(
+                    observedAppearanceEn,
+                )
+            )
+        ) {
+            continue;
+        }
         const existing =
             existingIds.has(
                 observed.id,
@@ -359,11 +384,8 @@ export function projectObservedInventoryUpdates(
         if (!existing) {
             const candidateText = [
                 observed.labelEn,
-                observed.labelZh,
                 observed.appearanceEn,
-                observed.appearanceZh,
                 observed.detailEn,
-                observed.detailZh,
             ]
                 .filter(Boolean)
                 .join(' ');
@@ -383,7 +405,6 @@ export function projectObservedInventoryUpdates(
             const labelMentioned =
                 [
                     observed.labelEn,
-                    observed.labelZh,
                 ]
                     .map(value =>
                         String(
@@ -483,24 +504,10 @@ export function projectObservedInventoryUpdates(
                     observed.labelEn ||
                     '',
                 ).trim(),
-            label:
-                String(
-                    observed.labelZh ||
-                    observed.labelEn ||
-                    '',
-                ).trim(),
             appearanceEn:
                 String(
                     observed
                         .appearanceEn ||
-                    observed.detailEn ||
-                    '',
-                ).trim(),
-            appearance:
-                String(
-                    observed
-                        .appearanceZh ||
-                    observed.detailZh ||
                     observed.detailEn ||
                     '',
                 ).trim(),
@@ -618,7 +625,7 @@ export function migrateObservedInventoryState(
         ).some(item =>
             /(?:autograph|signed_parchment|签名)/iu
                 .test(
-                    `${item.id || ''} ${item.labelEn || ''} ${item.label || ''}`,
+                    `${item.id || ''} ${item.labelEn || ''}`,
                 ));
     if (
         claimsAutograph &&
@@ -643,12 +650,8 @@ export function migrateObservedInventoryState(
                         'harry_signed_parchment',
                     labelEn:
                         'Harry Potter Autograph',
-                    label:
-                        '哈利·波特的签名',
                     detailEn:
                         'Lavender Brown\'s Sorting notes parchment bearing Harry Potter\'s crooked H autograph.',
-                    detail:
-                        '拉文德·布朗的分院笔记羊皮纸，上面留着哈利·波特歪歪扭扭的 H 签名。',
                     kind: 'other',
                     importance:
                         'important',
@@ -845,7 +848,7 @@ export function migrateEntityState(
     const hasOwnedWand =
         next.items.some(item =>
             /(?:wand|魔杖)/i.test(
-                `${item.id} ${item.labelEn} ${item.label}`,
+                `${item.id} ${item.labelEn}`,
             ) &&
             !['consumed', 'lost'].includes(
                 item.custody,
@@ -862,11 +865,8 @@ export function migrateEntityState(
                 id: 'holly_phoenix_wand',
                 labelEn:
                     'Holly Wand',
-                label: '冬青木魔杖',
                 detailEn:
                     'Twelve and a quarter inches, phoenix feather core; chosen Tina at Ollivanders.',
-                detail:
-                    '十二又四分之一英寸，凤凰羽毛杖芯；在奥利凡德魔杖店选择了蒂娜。',
                 importance: 'key',
                 custody: 'carried',
                 ownerId: 'player',

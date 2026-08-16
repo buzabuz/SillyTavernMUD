@@ -73,10 +73,7 @@ function createEntry(
         id,
         parentId: '',
         entryType: 'event',
-        title: id,
         titleEn: id,
-        summary:
-            `${id} 的公开摘要。`,
         summaryEn:
             `Public summary for ${id}.`,
         tags: [],
@@ -114,10 +111,7 @@ function createStoryline(
 ) {
     return {
         id,
-        title: id,
         titleEn: id,
-        summary:
-            `${id} 的公开长期方向。`,
         summaryEn:
             `Public long-term direction for ${id}.`,
         tags: [],
@@ -146,10 +140,7 @@ function createStoryBeat(
         id,
         storylineId:
             'house_cup_storyline',
-        title: id,
         titleEn: id,
-        summary:
-            `${id} 的公开学期节奏。`,
         summaryEn:
             `Public term beat for ${id}.`,
         tags: [],
@@ -183,7 +174,7 @@ function createState(
         revisionHistory: [],
         clock: CURRENT_CLOCK,
         calendar: {
-            version: 2,
+            version: 3,
             storylines: [],
             storyBeats: [],
             entries,
@@ -290,8 +281,8 @@ test('[defect-probing] High accepts only typed storyline and storyBeat proposals
         createStoryline(
             'house_cup_storyline',
             {
-                title:
-                    '学院杯竞争',
+                titleEn:
+                    'House Cup competition',
             },
         );
     const highBeat =
@@ -822,7 +813,8 @@ test('local clock settlement activates and completes every overlap without produ
         createEntry(
             'charms_exam',
             {
-                title: '魔咒考试',
+                titleEn:
+                    'Charms exam',
                 tags: [
                     'exam',
                 ],
@@ -836,7 +828,8 @@ test('local clock settlement activates and completes every overlap without produ
         createEntry(
             'charms_date',
             {
-                title: '考试中的约会',
+                titleEn:
+                    'Date during exams',
                 tags: [
                     'date',
                 ],
@@ -981,8 +974,6 @@ test('[defect-probing] local clock settlement defers only expired incomplete bea
                 windowEndClock:
                     '1991-09-03 · 10:00',
                 status: 'planned',
-                summary:
-                    '正文宣称四个场景已经全部完成。',
                 summaryEn:
                     'The prose claims that all four Scenes are complete.',
             },
@@ -1146,8 +1137,8 @@ test('proposal rejects rescheduling an active entry outside the current clock in
     };
     const otherwiseValidUpdate = {
         ...unchanged,
-        summary:
-            '这项合法更新也不得部分提交。',
+        summaryEn:
+            'This otherwise valid update must not commit partially.',
     };
     const validation =
         validateCalendarProposal(
@@ -1369,18 +1360,18 @@ test('past, terminal and Scene-linked entry fields remain read-only and byte-sta
     for (const entry of [
         {
             ...completed,
-            title:
-                '不得改写过去',
+            titleEn:
+                'Must not rewrite the past',
         },
         {
             ...cancelled,
-            title:
-                '不得重开取消条目',
+            titleEn:
+                'Must not reopen a cancelled entry',
         },
         {
             ...stalePlanned,
-            title:
-                '不得给过去改期',
+            titleEn:
+                'Must not reschedule a past entry',
         },
     ]) {
         assert.throws(
@@ -1875,7 +1866,7 @@ test('projection and reducer functions are pure and never create a second domain
             state,
             START_CLOCK,
         );
-    projection[0].title =
+    projection[0].titleEn =
         'mutated projection';
     projection[0].tags
         .push('mutated');
@@ -1886,8 +1877,8 @@ test('projection and reducer functions are pure and never create a second domain
 
     const updated = {
         ...entry,
-        summary:
-            '公开考试安排更新。',
+        summaryEn:
+            'Public exam schedule update.',
     };
     const applied =
         applyCalendarProposal(

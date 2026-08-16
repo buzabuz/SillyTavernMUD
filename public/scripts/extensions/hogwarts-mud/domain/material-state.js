@@ -10,6 +10,9 @@ import {
 import {
     normalizeMemoryId,
 } from './stable-identity.js';
+import {
+    isEnglishAuthorityText,
+} from './model-language-adoption.js';
 
 function compactMaterialText(
     value,
@@ -42,15 +45,15 @@ function materialEffectIdentity(event) {
         event.hand,
         event.quantity || '',
         materialFingerprint(
-            event.valueText ||
-            event.objectText ||
-            event.targetText,
+            event.valueTextEn ||
+            event.objectTextEn ||
+            event.targetTextEn,
         ),
         materialFingerprint(
-            event.sourceText,
+            event.sourceTextEn,
         ),
         materialFingerprint(
-            event.targetText,
+            event.targetTextEn,
         ),
     ].join(':');
 }
@@ -126,30 +129,46 @@ function normalizeMaterialEvent(
     ) {
         return null;
     }
-    const objectText =
+    const objectTextEn =
         compactMaterialText(
-            source.objectText,
+            source.objectTextEn,
         );
-    const sourceText =
+    const sourceTextEn =
         compactMaterialText(
-            source.sourceText,
+            source.sourceTextEn,
         );
-    const targetText =
+    const targetTextEn =
         compactMaterialText(
-            source.targetText,
+            source.targetTextEn,
         );
-    const valueText =
+    const valueTextEn =
         compactMaterialText(
-            source.valueText,
+            source.valueTextEn,
         );
-    const previousValueText =
+    const previousValueTextEn =
         compactMaterialText(
-            source.previousValueText,
+            source.previousValueTextEn,
         );
-    const resultText =
+    const resultTextEn =
         compactMaterialText(
-            source.resultText,
+            source.resultTextEn,
         );
+    const semanticTexts = [
+        objectTextEn,
+        sourceTextEn,
+        targetTextEn,
+        valueTextEn,
+        previousValueTextEn,
+        resultTextEn,
+    ].filter(Boolean);
+    if (
+        semanticTexts.some(text =>
+            !isEnglishAuthorityText(
+                text,
+            ))
+    ) {
+        return null;
+    }
     const operation =
         [
             'outfit_changed',
@@ -168,12 +187,12 @@ function normalizeMaterialEvent(
     }
     const fields = {
         actorId,
-        objectText,
-        sourceText,
-        targetText,
-        valueText,
-        previousValueText,
-        resultText,
+        objectTextEn,
+        sourceTextEn,
+        targetTextEn,
+        valueTextEn,
+        previousValueTextEn,
+        resultTextEn,
     };
     if (
         (definition.required || [])
@@ -301,12 +320,12 @@ function normalizeMaterialEvent(
         aspect:
             definition.aspect,
         actorId,
-        objectText,
-        sourceText,
-        targetText,
-        valueText,
-        previousValueText,
-        resultText,
+        objectTextEn,
+        sourceTextEn,
+        targetTextEn,
+        valueTextEn,
+        previousValueTextEn,
+        resultTextEn,
         quantity,
         operation,
         slot,
@@ -400,13 +419,13 @@ function materialTargetsOverlap(
 ) {
     const leftTarget =
         materialFingerprint(
-            left.targetText ||
-            left.objectText,
+            left.targetTextEn ||
+            left.objectTextEn,
         );
     const rightTarget =
         materialFingerprint(
-            right.targetText ||
-            right.objectText,
+            right.targetTextEn ||
+            right.objectTextEn,
         );
     return Boolean(
         leftTarget &&
@@ -428,11 +447,11 @@ function materialObjectsOverlap(
 ) {
     const leftObject =
         materialFingerprint(
-            left.objectText,
+            left.objectTextEn,
         );
     const rightObject =
         materialFingerprint(
-            right.objectText,
+            right.objectTextEn,
         );
     return Boolean(
         leftObject &&
@@ -514,18 +533,18 @@ export function applyMaterialEvents(
                 event.type ===
                     'outfit_changed'
             ) {
-                presentation.outfit =
+                presentation.outfitEn =
                     event.operation ===
                         'remove'
                         ? ''
                         : event
-                            .valueText;
+                            .valueTextEn;
             } else if (
                 event.type ===
                     'hairstyle_changed'
             ) {
-                presentation.hair =
-                    event.valueText;
+                presentation.hairEn =
+                    event.valueTextEn;
             } else if (
                 event.type ===
                     'appearance_changed'
@@ -542,12 +561,12 @@ export function applyMaterialEvents(
                         ...conditions,
                         {
                             id: event.id,
-                            value:
+                            valueEn:
                                 event
-                                    .valueText,
-                            resultText:
+                                    .valueTextEn,
+                            resultTextEn:
                                 event
-                                    .resultText,
+                                    .resultTextEn,
                             persistence:
                                 event
                                     .persistence,
@@ -569,13 +588,13 @@ export function applyMaterialEvents(
                             .visibleConditions ||
                         []
                     ).filter(condition =>
-                        event.valueText &&
+                        event.valueTextEn &&
                         !materialFingerprint(
-                            condition.value,
+                            condition.valueEn,
                         ).includes(
                             materialFingerprint(
                                 event
-                                    .valueText,
+                                    .valueTextEn,
                             ),
                         ));
             }
@@ -694,7 +713,7 @@ export function applyMaterialEvents(
                                 effect.id,
                             ),
                 );
-            if (!event.resultText) {
+            if (!event.resultTextEn) {
                 next.map.roomStates[
                     roomKey
                 ] = {
@@ -724,7 +743,7 @@ export function applyMaterialEvents(
                             )
                         ),
                 );
-            if (!event.resultText) {
+            if (!event.resultTextEn) {
                 next.map.roomStates[
                     roomKey
                 ] = {
@@ -738,10 +757,14 @@ export function applyMaterialEvents(
             ...event,
             committedClock: clock,
             committedTurn: turn,
-            description:
-                event.evidence
-                    .map(item =>
-                        item.text)
+            descriptionEn:
+                [
+                    event.objectTextEn,
+                    event.sourceTextEn,
+                    event.targetTextEn,
+                    event.valueTextEn,
+                    event.resultTextEn,
+                ]
                     .filter(Boolean)
                     .join(' ')
                     .slice(0, 800),
@@ -848,22 +871,22 @@ export function buildCurrentMaterialState(
                         effect.aspect,
                     actorId:
                         effect.actorId,
-                    objectText:
-                        effect.objectText,
-                    sourceText:
-                        effect.sourceText,
-                    targetText:
-                        effect.targetText,
-                    valueText:
-                        effect.valueText,
-                    resultText:
-                        effect.resultText,
+                    objectTextEn:
+                        effect.objectTextEn,
+                    sourceTextEn:
+                        effect.sourceTextEn,
+                    targetTextEn:
+                        effect.targetTextEn,
+                    valueTextEn:
+                        effect.valueTextEn,
+                    resultTextEn:
+                        effect.resultTextEn,
                     quantity:
                         effect.quantity,
                     persistence:
                         effect.persistence,
-                    description:
-                        effect.description,
+                    descriptionEn:
+                        effect.descriptionEn,
                     committedClock:
                         effect
                             .committedClock,
@@ -886,17 +909,17 @@ export function buildCurrentMaterialState(
                         ]) => [
                             actorId,
                             {
-                                outfit:
+                                outfitEn:
                                     presentation
-                                        .outfit ||
+                                        .outfitEn ||
                                     '',
                                 accessories:
                                     presentation
                                         .accessories ||
                                     {},
-                                hair:
+                                hairEn:
                                     presentation
-                                        .hair ||
+                                        .hairEn ||
                                     '',
                                 visibleConditions:
                                     (
@@ -910,9 +933,9 @@ export function buildCurrentMaterialState(
                                         .map(
                                             condition =>
                                                 condition
-                                                    .value ||
+                                                    .valueEn ||
                                                 condition
-                                                    .resultText,
+                                                    .resultTextEn,
                                         )
                                         .filter(
                                             Boolean,
@@ -921,9 +944,9 @@ export function buildCurrentMaterialState(
                                     presentation
                                         .heldItems ||
                                     {},
-                                heldObject:
+                                heldObjectEn:
                                     presentation
-                                        .heldObject ||
+                                        .heldObjectEn ||
                                     '',
                                 wornItemIds:
                                     presentation

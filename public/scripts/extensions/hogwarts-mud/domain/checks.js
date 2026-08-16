@@ -447,6 +447,8 @@ export function resolveActionCheck(
         randomInt = secureRandomInt,
         semanticCheck =
         undefined,
+        sourceMessageId =
+        null,
         spellCast = null,
     } = {},
 ) {
@@ -719,13 +721,21 @@ export function resolveActionCheck(
         id: globalThis.crypto?.randomUUID?.() ||
             `check-${Date.now()}-${playerRoll.rolls.join('-')}`,
         kind: detected.id,
-        label: detected.label,
         labelEn: detected.labelEn,
-        reasonEn: `Resolve the uncertain player action: ${String(playerAction).slice(0, 240)}`,
+        reasonCode:
+            detected.id,
+        ...(
+            Number.isInteger(
+                sourceMessageId,
+            ) &&
+            sourceMessageId >= 0
+                ? {
+                    sourceMessageId,
+                }
+                : {}
+        ),
         forced: detected.forced,
         attribute: detected.attribute,
-        attributeLabel:
-            CHECK_ATTRIBUTE_LABELS[detected.attribute].label,
         attributeLabelEn:
             CHECK_ATTRIBUTE_LABELS[detected.attribute].labelEn,
         skill: detected.skill,
@@ -745,11 +755,9 @@ export function resolveActionCheck(
         target: {
             mode: hidden.mode,
             actorId: detected.target?.actorId || null,
-            name: detected.target?.name || null,
             visibleDifficulty: null,
         },
         outcome,
-        outcomeLabel: CHECK_OUTCOME_LABELS[outcome].label,
         outcomeLabelEn: CHECK_OUTCOME_LABELS[outcome].labelEn,
         hidden,
         itemId: itemUsed?.id || null,
@@ -764,10 +772,6 @@ export function resolveActionCheck(
                         detected
                             .spell
                             .incantation,
-                    name:
-                        detected
-                            .spell
-                            .name,
                     nameEn:
                         detected
                             .spell
@@ -813,6 +817,23 @@ export function validateCheckResolution(check, worldState) {
     }
     if (!CHECK_OUTCOMES.includes(check.outcome)) {
         errors.push('判定结果等级无效。');
+    }
+    if (
+        check.sourceMessageId !==
+            undefined &&
+        (
+            !Number.isInteger(
+                check
+                    .sourceMessageId,
+            ) ||
+            check
+                .sourceMessageId <
+                0
+        )
+    ) {
+        errors.push(
+            '判定来源消息 ID 无效。',
+        );
     }
     if (!Array.isArray(check.rolls) ||
         !check.rolls.length ||

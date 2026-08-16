@@ -325,9 +325,12 @@ export function applyPlayerMovement(
             ? {
                 ...rawDestination,
                 roomName:
-                    rawDestination.roomName ||
-                    destinationRoom?.name ||
-                    destinationRoom?.nameEn,
+                    destinationRoom
+                        ?.nameEn ||
+                    formatSceneLocationId(
+                        destinationRoom
+                            ?.id,
+                    ),
                 roomNameEn:
                     destinationRoom?.nameEn ||
                     (
@@ -339,8 +342,7 @@ export function applyPlayerMovement(
                     ) ||
                     formatSceneLocationId(
                         destinationRoom?.id,
-                    ) ||
-                    rawDestination.roomName,
+                    ),
                 levelId:
                     rawDestination.levelId ||
                     destinationRoom?.levelId,
@@ -402,7 +404,6 @@ export function applyPlayerMovement(
     ).find(room => room.id === fromRoomId);
     const destinationNameEn =
         destination.roomNameEn ||
-        destination.roomName ||
         destination.roomId;
     if (destination.mapId !== mapId) {
         const sourceMount =
@@ -514,10 +515,6 @@ export function applyPlayerMovement(
                     ),
                     `${destination.mapId}:${destination.roomId}`,
                 ])];
-            next.location =
-                destination.roomName ||
-                destination.roomNameEn ||
-                next.location;
             if (next.scene) {
                 next.scene.mapId =
                     destination.mapId;
@@ -595,11 +592,9 @@ export function applyPlayerMovement(
                 toRoomId:
                     destination.roomId,
                 fromRoomName:
-                    sourceRoom?.name ||
                     sourceRoom?.nameEn ||
                     fromRoomId,
                 toRoomName:
-                    destination.roomName ||
                     destination.roomNameEn ||
                     destination.roomId,
                 toRoomNameEn:
@@ -652,11 +647,9 @@ export function applyPlayerMovement(
                 toMapId: destination.mapId,
                 toRoomId: destination.roomId,
                 fromRoomName:
-                    sourceRoom?.name ||
                     sourceRoom?.nameEn ||
                     fromRoomId,
                 toRoomName:
-                    destination.roomName ||
                     destination.roomNameEn ||
                     destination.roomId,
                 toRoomNameEn: destinationNameEn,
@@ -735,11 +728,9 @@ export function applyPlayerMovement(
                 toMapId: destination.mapId,
                 toRoomId: destination.roomId,
                 fromRoomName:
-                    sourceRoom?.name ||
                     sourceRoom?.nameEn ||
                     fromRoomId,
                 toRoomName:
-                    destination.roomName ||
                     destination.roomNameEn ||
                     destination.roomId,
                 toRoomNameEn: destinationNameEn,
@@ -784,11 +775,9 @@ export function applyPlayerMovement(
                 toMapId: mapId,
                 toRoomId: destination.roomId,
                 fromRoomName:
-                    sourceRoom?.name ||
                     sourceRoom?.nameEn ||
                     fromRoomId,
                 toRoomName:
-                    destination.roomName ||
                     destination.roomNameEn ||
                     destination.roomId,
                 toRoomNameEn: destinationNameEn,
@@ -809,8 +798,6 @@ export function applyPlayerMovement(
         ...(next.map.discoveredLocalNodeIds || []),
         `${mapId}:${destination.roomId}`,
     ])];
-    next.location = destination.roomName || destination.roomNameEn ||
-        next.location;
     if (next.scene) {
         next.scene.roomId = destination.roomId;
     }
@@ -861,11 +848,9 @@ export function applyPlayerMovement(
         toMapId: mapId,
         toRoomId: destination.roomId,
         fromRoomName:
-            sourceRoom?.name ||
             sourceRoom?.nameEn ||
             fromRoomId,
         toRoomName:
-            destination.roomName ||
             destination.roomNameEn ||
             destination.roomId,
         toRoomNameEn: destinationNameEn,

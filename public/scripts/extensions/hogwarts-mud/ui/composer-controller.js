@@ -1,3 +1,20 @@
+import {
+    createLocalMapLevelField,
+    createLocalMapRoomField,
+} from '../domain/map-localization.js';
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from '../domain/localized-view-model.js';
+import {
+    createSpellLocalizationField,
+    createSpellLocalizationFields,
+} from '../domain/spell-localization.js';
+import {
+    createActorNameField,
+    getActorDisplayName,
+} from '../domain/actor-display-name.js';
+
 export function createComposerController(ports) {
     const {
         refs,
@@ -5,10 +22,17 @@ export function createComposerController(ports) {
     } = ports;
 
     const {
-        SPELL_LEARNING_SOURCE_LABELS,
         createSpellDirective,
+        ensureLocalizedFields =
+        async () => [],
         findLocalRoomPath,
         getLocalMapDefinition,
+        getLocalizedField =
+        field => ({
+            text:
+                field.sourceTextEn ||
+                '',
+        }),
         getRoomName,
         getSpellDefinition,
         getSpellDefinitions,
@@ -26,6 +50,61 @@ export function createComposerController(ports) {
         root,
         composerInput,
     } = refs;
+
+    function spellLocale(
+        spell,
+        field,
+    ) {
+        const localizationField =
+            createSpellLocalizationField(
+                spell,
+                field,
+            );
+        return getLocalizedField(
+            localizationField,
+        ).text ||
+            localizationField
+                .sourceTextEn;
+    }
+
+    function staticLocale(
+        staticKey,
+        sourceTextEn,
+    ) {
+        return getStaticLocaleText(
+            staticKey,
+            normalizeDisplayLocale(
+                session.displayLocale,
+            ),
+        ) ||
+            sourceTextEn;
+    }
+
+    function formatStaticLocale(
+        staticKey,
+        sourceTextEn,
+        values = {},
+    ) {
+        return Object.entries(
+            values,
+        ).reduce(
+            (
+                text,
+                [
+                    key,
+                    value,
+                ],
+            ) =>
+                text.replaceAll(
+                    `{${key}}`,
+                    String(value),
+                ),
+            staticLocale(
+                staticKey,
+                sourceTextEn,
+            ),
+        );
+    }
 
     function insertAtCursor(text, caretOffset = text.length) {
         const start = composerInput.selectionStart ?? composerInput.value.length;
@@ -75,25 +154,41 @@ export function createComposerController(ports) {
         );
         const currentRoom =
             roomById.get(currentRoomId);
+        const localizationFields =
+            [];
         const levels = new Map(
             (map.levels || [])
-                .map((level, index) => [
-                    level.id,
-                    {
-                        name:
-                            level.name ||
-                            level.nameEn ||
-                            level.id,
-                        order:
-                            Number.isFinite(
-                                Number(level.z),
-                            )
-                                ? Number(
-                                    level.z,
+                .map((level, index) => {
+                    const field =
+                        createLocalMapLevelField(
+                            mapId,
+                            level,
+                        );
+                    localizationFields
+                        .push(field);
+                    return [
+                        level.id,
+                        {
+                            name:
+                                getLocalizedField(
+                                    field,
+                                )?.text ||
+                                level.nameEn ||
+                                staticLocale(
+                                    'ui.game.movement.unlevelled',
+                                    'No level',
+                                ),
+                            order:
+                                Number.isFinite(
+                                    Number(level.z),
                                 )
-                                : index,
-                    },
-                ]),
+                                    ? Number(
+                                        level.z,
+                                    )
+                                    : index,
+                        },
+                    ];
+                }),
         );
         const discovered = new Set(
             state.map
@@ -101,13 +196,33 @@ export function createComposerController(ports) {
             [],
         );
         const accessLabels = {
-            public: '公开区域',
-            student: '学生区域',
-            class: '教学区域',
-            private: '私人区域',
-            discovered: '已发现',
+            public:
+                staticLocale(
+                    'ui.game.movement.access.public',
+                    'Public area',
+                ),
+            student:
+                staticLocale(
+                    'ui.game.movement.access.student',
+                    'Student area',
+                ),
+            class:
+                staticLocale(
+                    'ui.game.movement.access.class',
+                    'Teaching area',
+                ),
+            private:
+                staticLocale(
+                    'ui.game.movement.access.private',
+                    'Private area',
+                ),
+            discovered:
+                staticLocale(
+                    'ui.game.movement.access.discovered',
+                    'Discovered',
+                ),
         };
-        return rooms
+        const options = rooms
             .filter(room =>
                 room.id !== currentRoomId)
             .filter(room => {
@@ -140,13 +255,28 @@ export function createComposerController(ports) {
                     ) || {
                         name:
                             room.levelId ||
-                            '未分层',
+                            staticLocale(
+                                'ui.game.movement.unlevelled',
+                                'No level',
+                            ),
                         order: 999,
                     };
+                const roomField =
+                    createLocalMapRoomField(
+                        mapId,
+                        room,
+                    );
+                localizationFields
+                    .push(roomField);
                 const label =
-                    room.name ||
+                    getLocalizedField(
+                        roomField,
+                    )?.text ||
                     room.nameEn ||
-                    room.id;
+                    staticLocale(
+                        'map.location.unknown',
+                        'Unknown location',
+                    );
                 return {
                     id: room.id,
                     label,
@@ -163,7 +293,10 @@ export function createComposerController(ports) {
                         accessLabels[
                             room.access
                         ] ||
-                        '可通行',
+                        staticLocale(
+                            'ui.game.movement.access.traversable',
+                            'Traversable',
+                        ),
                     levelId:
                         room.levelId ||
                         '',
@@ -197,6 +330,19 @@ export function createComposerController(ports) {
                     right.label,
                     'zh-CN',
                 ));
+        void Promise.resolve(
+            ensureLocalizedFields(
+                localizationFields,
+                {
+                    priority: 1,
+                },
+            ),
+        ).catch(error =>
+            console.warn(
+                '[Hogwarts MUD] Movement picker localization query failed',
+                error,
+            ));
+        return options;
     }
 
     function closeMovementPicker() {
@@ -298,7 +444,15 @@ export function createComposerController(ports) {
                 state.map
                     ?.currentLocalNodeId,
             ),
-            `${visibleOptions.length} 个地点`,
+            formatStaticLocale(
+                'ui.game.movement.location_count',
+                '{count} locations',
+                {
+                    count:
+                        visibleOptions
+                            .length,
+                },
+            ),
         ].join(' · ');
         const container =
             root.querySelector(
@@ -314,8 +468,14 @@ export function createComposerController(ports) {
                 'hpmud-movement-empty';
             empty.textContent =
                 normalizedQuery
-                    ? '没有匹配的可达地点'
-                    : '当前没有可达地点';
+                    ? staticLocale(
+                        'ui.game.movement.no_match',
+                        'No matching reachable location',
+                    )
+                    : staticLocale(
+                        'ui.game.movement.none_reachable',
+                        'No reachable locations',
+                    );
             container.append(empty);
             return;
         }
@@ -361,7 +521,14 @@ export function createComposerController(ports) {
                 );
             name.textContent =
                 group.current
-                    ? `${group.name} · 当前层`
+                    ? formatStaticLocale(
+                        'ui.game.movement.current_level',
+                        '{level} · Current level',
+                        {
+                            level:
+                                group.name,
+                        },
+                    )
                     : group.name;
             count.textContent =
                 `${group.options.length}`;
@@ -396,8 +563,14 @@ export function createComposerController(ports) {
                     option.label;
                 meta.textContent = [
                     option.accessLabel,
-                    `${option.hops} 段路径`,
-                    option.id,
+                    formatStaticLocale(
+                        'ui.game.movement.path_segments',
+                        '{count} route segments',
+                        {
+                            count:
+                                option.hops,
+                        },
+                    ),
                 ].join(' · ');
                 copy.append(title, meta);
                 button.append(
@@ -760,10 +933,18 @@ export function createComposerController(ports) {
                     !normalizedQuery ||
                     [
                         spell.incantation,
-                        spell.name,
                         spell.nameEn,
-                        spell.effect,
                         spell.effectEn,
+                        spellLocale(
+                            spell,
+                            'name',
+                        ),
+                        spellLocale(
+                            spell,
+                            'effect',
+                        ),
+                        ...(spell.aliases ||
+                            []),
                         spell.id,
                     ]
                         .join(' ')
@@ -791,6 +972,20 @@ export function createComposerController(ports) {
                         .localeCompare(
                             right.incantation,
                         ));
+        void Promise.resolve(
+            ensureLocalizedFields(
+                visible.flatMap(
+                    createSpellLocalizationFields,
+                ),
+                {
+                    priority: 1,
+                },
+            ),
+        ).catch(error =>
+            console.warn(
+                '[Hogwarts MUD] Spell picker localization query failed',
+                error,
+            ));
         const title =
             root.querySelector(
                 '#hpmud_spell_panel_title',
@@ -805,14 +1000,33 @@ export function createComposerController(ports) {
             );
         title.textContent =
             session.spellPickerShowAll
-                ? '全部常见咒语'
-                : '已学咒语';
+                ? staticLocale(
+                    'ui.game.spell.all_common',
+                    'All common spells',
+                )
+                : staticLocale(
+                    'ui.game.spell.learned',
+                    'Learned spells',
+                );
         count.textContent =
-            `${visible.length} 个 · 年级不限制学习`;
+            formatStaticLocale(
+                'ui.game.spell.count',
+                '{count} · curriculum year never blocks learning',
+                {
+                    count:
+                        visible.length,
+                },
+            );
         toggle.textContent =
             session.spellPickerShowAll
-                ? '只看已学咒语'
-                : '尝试未学咒语';
+                ? staticLocale(
+                    'ui.game.spell.show_learned',
+                    'Show learned spells only',
+                )
+                : staticLocale(
+                    'ui.game.spell.try_unlearned',
+                    'Try unlearned spells',
+                );
         const container =
             root.querySelector(
                 '#hpmud_spell_options',
@@ -827,8 +1041,14 @@ export function createComposerController(ports) {
                 'hpmud-spell-empty';
             empty.textContent =
                 session.spellPickerShowAll
-                    ? '没有匹配的咒语'
-                    : '尚未学会咒语；可以切换到全部目录进行自学或实验。';
+                    ? staticLocale(
+                        'ui.game.spell.no_match',
+                        'No matching spells',
+                    )
+                    : staticLocale(
+                        'ui.game.spell.none_learned',
+                        'No learned spells yet. Switch to the full catalog for self-study or experimentation.',
+                    );
             container.append(empty);
             return;
         }
@@ -881,25 +1101,51 @@ export function createComposerController(ports) {
                 `${
                     spell.incantation ||
                     spell.nameEn
-                } · ${spell.name}`;
+                } · ${spellLocale(
+                    spell,
+                    'name',
+                )}`;
             meta.textContent = [
-                spell.effect,
+                spellLocale(
+                    spell,
+                    'effect',
+                ),
                 learned
-                    ? SPELL_LEARNING_SOURCE_LABELS[
+                    ? staticLocale(
+                        `spell.source.${learned.learnedSource}`,
                         learned
-                            .learnedSource
-                    ] ||
-                    learned.learnedSource
-                    : '未学 · 可直接实验',
+                            .learnedSource,
+                    )
+                    : staticLocale(
+                        'ui.game.spell.unlearned_experiment',
+                        'Unlearned · Can experiment directly',
+                    ),
                 spell.curriculumYear >
                     0
-                    ? `常规课程 ${spell.curriculumYear} 年级`
-                    : '非标准课程',
+                    ? formatStaticLocale(
+                        'ui.game.spell.curriculum_year',
+                        'Standard curriculum Year {year}',
+                        {
+                            year:
+                                spell
+                                    .curriculumYear,
+                        },
+                    )
+                    : staticLocale(
+                        'ui.game.spell.nonstandard',
+                        'Nonstandard curriculum',
+                    ),
             ].join(' · ');
             badge.textContent =
                 learned
-                    ? `${rank.label} · ${learned.proficiencyXp} XP`
-                    : '未学 · 难度 +2';
+                    ? `${staticLocale(
+                        `spell.rank.${rank.id}`,
+                        rank.id,
+                    )} · ${learned.proficiencyXp} XP`
+                    : staticLocale(
+                        'ui.game.spell.unlearned_difficulty',
+                        'Unlearned · Difficulty +2',
+                    );
             fill.style.width =
                 `${
                     getSpellProgressPercent(
@@ -1017,6 +1263,20 @@ export function createComposerController(ports) {
                 cast.spellId,
                 getWorldState(),
             );
+        void Promise.resolve(
+            ensureLocalizedFields(
+                createSpellLocalizationFields(
+                    spell,
+                ),
+                {
+                    priority: 1,
+                },
+            ),
+        ).catch(error =>
+            console.warn(
+                '[Hogwarts MUD] Spell preview localization query failed',
+                error,
+            ));
         const learned =
             getKnownSpellMap()
                 .get(
@@ -1032,21 +1292,38 @@ export function createComposerController(ports) {
         preview.querySelector(
             'strong',
         ).textContent =
-            `${spell.incantation} · ${spell.name}`;
+            `${spell.incantation} · ${spellLocale(
+                spell,
+                'name',
+            )}`;
         preview.querySelector(
             'small',
         ).textContent =
             learned
-                ? `${
-                    SPELL_LEARNING_SOURCE_LABELS[
-                        learned
-                            .learnedSource
-                    ] ||
-                    learned.learnedSource
-                } · ${rank.label} ${
-                    learned.proficiencyXp
-                } XP · 本回合必定进行施法检定`
-                : '尚未学会 · 本次按自行实验结算 · 本回合必定进行施法检定';
+                ? formatStaticLocale(
+                    'ui.game.spell.preview_learned',
+                    '{source} · {rank} {xp} XP · This turn always rolls a casting check',
+                    {
+                        source:
+                            staticLocale(
+                                `spell.source.${learned.learnedSource}`,
+                                learned
+                                    .learnedSource,
+                            ),
+                        rank:
+                            staticLocale(
+                                `spell.rank.${rank.id}`,
+                                rank.id,
+                            ),
+                        xp:
+                            learned
+                                .proficiencyXp,
+                    },
+                )
+                : staticLocale(
+                    'ui.game.spell.preview_unlearned',
+                    'Unlearned · Settles as an experiment · This turn always rolls a casting check',
+                );
         preview.hidden = false;
     }
 
@@ -1181,7 +1458,10 @@ export function createComposerController(ports) {
                         block =>
                             block.mode ===
                                 'broadcast'
-                                ? '全场'
+                                ? staticLocale(
+                                    'ui.game.address.everyone',
+                                    'Everyone',
+                                )
                                 : block
                                     .targetLabel,
                     ),
@@ -1192,19 +1472,64 @@ export function createComposerController(ports) {
                     ? addressing.mode ===
                         'broadcast'
                         ? blockCount > 1
-                            ? `${blockCount} 段对全场发言`
-                            : '对全场发言'
+                            ? formatStaticLocale(
+                                'ui.game.address.broadcast_many',
+                                '{count} broadcast lines',
+                                {
+                                    count:
+                                        blockCount,
+                                },
+                            )
+                            : staticLocale(
+                                'ui.game.address.broadcast_one',
+                                'Broadcast to everyone',
+                            )
                         : addressing.mode ===
                             'direct'
                             ? blockCount > 1
-                                ? `${blockCount} 段对 ${targetLabels[0]} 说`
-                                : `对 ${targetLabels[0]} 说`
-                            : `${blockCount} 段定向台词 · ${targetLabels.join(' / ')}`
-                    : '受话对象无效';
+                                ? formatStaticLocale(
+                                    'ui.game.address.direct_many',
+                                    '{count} lines to {target}',
+                                    {
+                                        count:
+                                            blockCount,
+                                        target:
+                                            targetLabels[0],
+                                    },
+                                )
+                                : formatStaticLocale(
+                                    'ui.game.address.direct_one',
+                                    'Speak to {target}',
+                                    {
+                                        target:
+                                            targetLabels[0],
+                                    },
+                                )
+                            : formatStaticLocale(
+                                'ui.game.address.multi',
+                                '{count} directed lines · {targets}',
+                                {
+                                    count:
+                                        blockCount,
+                                    targets:
+                                        targetLabels
+                                            .join(' / '),
+                                },
+                            )
+                    : staticLocale(
+                        'ui.game.address.invalid',
+                        'Invalid addressee',
+                    );
             detail.textContent =
                 addressing.valid
-                    ? '以“@人物：”开头的行是台词；其他行按动作与叙述处理'
-                    : addressing.error;
+                    ? staticLocale(
+                        'ui.game.address.help',
+                        'Lines beginning with "@Character:" are dialogue. Other lines are actions and narration.',
+                    )
+                    : staticLocale(
+                        'ui.game.address.invalid_detail',
+                        'Put each directed line on its own line using the "@Character: dialogue" format.',
+                    );
         }
 
         const options = root.querySelector(
@@ -1212,13 +1537,16 @@ export function createComposerController(ports) {
         );
         options.replaceChildren();
         const createOption = (
-            label,
+            displayLabel,
             actorId = '',
+            inputLabel =
+            displayLabel,
         ) => {
             const button =
                 document.createElement('button');
             button.type = 'button';
-            button.textContent = label;
+            button.textContent =
+                displayLabel;
             button.classList.toggle(
                 'active',
                 actorId
@@ -1234,7 +1562,7 @@ export function createComposerController(ports) {
                 'click',
                 () => {
                     setComposerAddressTarget(
-                        label,
+                        inputLabel,
                     );
                     root.querySelector(
                         '#hpmud_address_menu',
@@ -1243,14 +1571,56 @@ export function createComposerController(ports) {
             );
             options.append(button);
         };
-        createOption('全场');
-        projectPeoplePanel(state)
-            .activePeople
+        createOption(
+            staticLocale(
+                'ui.game.address.everyone',
+                'Everyone',
+            ),
+            '',
+            '全场',
+        );
+        const activePeople =
+            projectPeoplePanel(
+                state,
+                {
+                    getRoomName,
+                    getLocalizedField,
+                    displayLocale:
+                        session
+                            .displayLocale,
+                },
+            ).activePeople;
+        void Promise.resolve(
+            ensureLocalizedFields(
+                activePeople.map(person =>
+                    createActorNameField(
+                        person.id,
+                        person.header
+                            ?.name,
+                    )),
+                {
+                    priority: 1,
+                },
+            ),
+        ).catch(() => {});
+        activePeople
             .forEach(person => {
+                const displayName =
+                    getActorDisplayName({
+                        actorId:
+                            person.id,
+                        nameEn:
+                            person.header
+                                ?.name,
+                        displayLocale:
+                            session
+                                .displayLocale,
+                        getLocalizedField,
+                    });
                 createOption(
-                    person.header?.name ||
+                    displayName,
                     person.id,
-                    person.id,
+                    displayName,
                 );
             });
     }

@@ -12,7 +12,7 @@
 | --- | --- | --- | --- |
 | Context budget / model diagnostics | Verified | 真实截断存档、持久化 turn diagnostics、266+ 全量测试 | 后续补 connection error taxonomy |
 | Presence / scene transition / people projection | Verified | Tina 转场与 turn 93 修复存档、4 active / 8 local、observer departure grounding、286/286 测试 | 补 dorm/family cohort 转场案例 |
-| Ordinary turn settlement | Tested | player-speech replay diagnostics、首次 Prompt 契约、narrative-first、repair、retry、presence/witness tests | 用下一次自然回合验证首次响应不再因 `actorId=player` 进入 repair |
+| Ordinary turn settlement | Current contract | narrative-first、authority/provenance validation、single-attempt failure、presence/witness tests | Low 非法输出直接失败；2026-08-09 repair trace 仅为历史证据，不再是当前行为 |
 | Spatial / movement / maps | Tested | movement、reachability、sightline、migration tests | 建结构化房间权威页 |
 | Item V2 / material / appearance / spell | Verified | Item 证据门禁、spell observation 三路径、296/296 全量、真实 JSONL/浏览器验证 | 后续只接 medium/high authorized hidden proposal 入口 |
 | Actor / Identity / Cast / Memory | Verified | Tina 21 个稳定 profile / 23 个 runtime actor 的只读 Identity V1 dry-run、Canon registry、clock projection、memory preservation tests | 后续补 authority body update Reducer |
@@ -269,7 +269,8 @@
   - NPC Identity V1 可立即开始；
   - Calendar V1 有条件开始，必须新建事件权威并先完成 Save Revision Guard；
   - 推荐纵向切片为一个完整霍格沃茨上课日，再进入蒙太奇/周结算/运势。
-- 详细报告：`item-npc-calendar-readiness.md`。
+- 原 readiness 报告的当前事实、历史快照与未批准候选已逐节迁入
+  `../hogwarts-documentation-governance/evidence/item-npc-calendar-readiness-migration.md`。
 
 ## 2026-08-09 Save Revision / NPC Identity V1 dry-run
 
@@ -319,3 +320,14 @@
 - 真实 Tina 与生产 reader 审计确认，半成品 Actor Context V1 会丢失 Cast 来源/首次认识和完整生命状态。
 - living contract 已登记待批准目标：Core `cast` 单写、Runtime 四字段 life 单写、Dossier 8 字段、LowTier 6 字段。
 - 标记为 Pending 的字段尚未实施；旧 Actor lifecycle revision 批准失效，业务代码暂停等待新 PRD 明确批准。
+
+## 2026-08-14 Documentation Governance Reconciliation
+
+- 2026-08-13 的 pending Actor lifecycle 记录已被后续实现取代；当前
+  Core `cast`、Runtime 四字段 life、Dossier 8 字段和 LowTier 6 字段以
+  `state-fields.md` 为权威。
+- Low 普通回合与 Low Scene Opening 均为一次请求；非法输出直接失败，
+  不发送 repair/retry，也不生成模型 fallback。
+- 已删除的 readiness topic 不再作为 living contract；其 226 行内容已在
+ 稳定迁移账本中逐节分类为 current authority、implemented/superseded、
+  historical snapshot 或 unapproved candidate。

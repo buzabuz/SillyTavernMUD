@@ -635,8 +635,8 @@ export function hydrateKnowledgeRecords(
         timelineEpoch = '',
         stateRevision,
         revisionPolicy =
-            KNOWLEDGE_REVISION_POLICIES
-                .EXACT,
+        KNOWLEDGE_REVISION_POLICIES
+            .EXACT,
         audience = {},
         clock = '',
         nodeTypes = [],

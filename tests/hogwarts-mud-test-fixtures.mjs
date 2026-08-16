@@ -267,26 +267,6 @@ export function createCurrentOpeningPackage() {
             '1991-07-24 · 11:15',
         scene:
             createCurrentScene(),
-        display: {
-            chapter:
-                '早餐时的信',
-            mapName: '张家',
-            levelNames: [
-                '一楼',
-            ],
-            roomNames: [
-                '厨房',
-                '后花园',
-            ],
-            sceneName:
-                '张家厨房',
-            sceneSummary:
-                '录取手续接近尾声。',
-            sceneExplorationHook:
-                '后花园围栏下有一小片草叶完全没有露水。',
-            incitingEvent:
-                '麦格教授把入学文件放在厨房桌上。',
-        },
         actorProposals: [
             createCurrentActorProposal(
                 'tina_mother',
@@ -429,10 +409,8 @@ export function createCurrentPlayingState() {
             opening,
         );
     state.phase = 'playing';
-    state.chapter =
+    state.chapterEn =
         opening.chapterEn;
-    state.location =
-        'Zhang Home';
     state.actorLibrary =
         state.actorLibrary.map(
             actor => ({
@@ -636,11 +614,6 @@ export function createCurrentKingsCrossState(
         roomId;
     state.scene.nameEn =
         'The Barrier Between Platforms Nine and Ten';
-    state.location =
-        roomId ===
-            'hogwarts_express'
-            ? 'Hogwarts Express'
-            : 'Barrier Between Platforms Nine and Ten';
     state.spatial = {
         version: 7,
         player: {

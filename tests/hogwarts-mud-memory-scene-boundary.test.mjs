@@ -5,7 +5,7 @@ import test from 'node:test';
 
 import {
     runSocialDirectorGraph,
-} from '../src/hogwarts-mud/social-director-graph.js';
+} from '../src/hogwarts-mud/social-director-v3-graph.js';
 import {
     migrateActorContextV1,
 } from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js';
@@ -33,18 +33,14 @@ import {
     normalizeAppraisal,
 } from '../public/scripts/extensions/hogwarts-mud/domain/memory-synapse-schema.js';
 import {
-    buildNarrativeAuthoritySnapshot,
-} from '../public/scripts/extensions/hogwarts-mud/domain/narrative-authority.js';
-import {
     normalizeSocialGraph,
 } from '../public/scripts/extensions/hogwarts-mud/domain/social-migration.js';
 import {
-    applySocialDirectorResult,
-} from '../public/scripts/extensions/hogwarts-mud/domain/social-reducer.js';
+    normalizeEventKnowledge,
+} from '../public/scripts/extensions/hogwarts-mud/presence-witness-contract.js';
 import {
-    createSceneTransitionWorkflow,
-    getSceneTransitionRetrievalOptions,
-} from '../public/scripts/extensions/hogwarts-mud/workflows/scene-transition.js';
+    applySocialDirectorResult,
+} from '../public/scripts/extensions/hogwarts-mud/domain/social-v3-reducer.js';
 import {
     createSocialMemoryWorkflow,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/social-memory.js';
@@ -82,9 +78,12 @@ function createAcceptedAppraisal(
 function strictActorContextWorld(
     source,
 ) {
-    return migrateActorContextV1({
-        ...source,
-        actorLibrary:
+    const migrated =
+        migrateActorContextV1({
+            ...source,
+            memorySynapse:
+            undefined,
+            actorLibrary:
             (
                 source.actorLibrary ||
                 []
@@ -101,7 +100,7 @@ function strictActorContextWorld(
                     'Clear and direct.',
                 ...actor,
             })),
-        actors:
+            actors:
             (
                 source.actors ||
                 []
@@ -122,7 +121,24 @@ function strictActorContextWorld(
                 temporary: false,
                 ...actor,
             })),
-    }).state;
+        }).state;
+    if (source.memorySynapse) {
+        migrated.memorySynapse =
+            structuredClone(
+                source.memorySynapse,
+            );
+    }
+    if (source.eventKnowledge) {
+        migrated.eventKnowledge =
+            structuredClone(
+                source.eventKnowledge,
+            );
+    }
+    migrated.socialGraph =
+        normalizeSocialGraph(
+            source.socialGraph,
+        );
+    return migrated;
 }
 
 function createBoundaryWorld() {
@@ -162,10 +178,10 @@ function createBoundaryWorld() {
                 core: [],
                 recent: [],
                 everyday: [{
-                    id: 'memory_a',
-                    summaryEn:
-                        'The player refused help in public.',
-                    updatedTurn: 30,
+                    eventId:
+                            'event_appraisal_c',
+                    lastClock:
+                            '1991-09-03 · 17:00',
                 }],
             },
         }],
@@ -173,19 +189,101 @@ function createBoundaryWorld() {
             id: 'hermione',
         }],
         memorySynapse: {
-            version: 1,
+            version: 2,
             maxActiveSchemasPerPair: 3,
             appraisals,
             personSchemas: [],
         },
         eventKnowledge:
-            appraisals.map(appraisal => ({
-                eventId:
-                    appraisal
-                        .sourceEventIds[0],
-                summaryEn:
-                    `Committed source for ${appraisal.id}.`,
-            })),
+            appraisals.map(
+                appraisal => {
+                    const summaryEn =
+                        `Committed source for ${appraisal.id}.`;
+                    const sourceMessageId = {
+                        appraisal_a:
+                            10,
+                        appraisal_b:
+                            20,
+                        appraisal_c:
+                            21,
+                    }[
+                        appraisal.id
+                    ];
+                    const sceneId =
+                        appraisal.id ===
+                            'appraisal_a'
+                            ? 'scene_a'
+                            : 'scene_b';
+                    return normalizeEventKnowledge({
+                        version: 2,
+                        eventId:
+                            appraisal
+                                .sourceEventIds[0],
+                        eventKind:
+                            'observed',
+                        sceneId:
+                            sceneId,
+                        clock:
+                            appraisal
+                                .committedClock,
+                        sourceMessageIds: [
+                            sourceMessageId,
+                        ],
+                        summaryEn,
+                        activationSchemaIds:
+                            [],
+                        participantActorIds: [
+                            'player',
+                        ],
+                        witnessActorIds: [
+                            'hermione',
+                        ],
+                        witnessCohortIds:
+                            [],
+                        witnessBasis: {
+                            hermione:
+                                'room_visual',
+                        },
+                        perception: {
+                            version: 1,
+                            visualScope:
+                                'room',
+                            audibleScope:
+                                'none',
+                            salience:
+                                'normal',
+                            attribution:
+                                'clear',
+                            concealment:
+                                'none',
+                            directParticipantActorIds: [
+                                'player',
+                            ],
+                            evidenceText:
+                                summaryEn,
+                            confidence:
+                                0.9,
+                            source:
+                                'post_turn_observer',
+                        },
+                        knownToPlayer:
+                            true,
+                        source:
+                            'deterministic_fallback',
+                    }, {
+                        actors: [{
+                            id:
+                                'hermione',
+                        }, {
+                            id:
+                                'player',
+                        }],
+                        sourceTexts: [
+                            summaryEn,
+                        ],
+                    });
+                },
+            ),
         memoryDirector: {
             lastReviewedTurn: 10,
             pendingEventBoundary: {
@@ -223,6 +321,25 @@ function createSchemaOperation() {
     };
 }
 
+function createSocialExtraction(
+    schemaOperations,
+    processedThroughMessageId,
+) {
+    return {
+        scanComplete: true,
+        processedThroughMessageId,
+        reviewAfterTurns: 10,
+        reviews: [],
+        reportedEvents: [],
+        recipientAppraisals: [],
+        identityClaims: [],
+        relationshipClaims: [],
+        personReferences: [],
+        relationshipEvidence: [],
+        schemaOperations,
+    };
+}
+
 test('event-boundary medium schema accepts schemaOperations in the existing single call', async () => {
     let calls = 0;
     const schemaOperation =
@@ -250,12 +367,6 @@ test('event-boundary medium schema accepts schemaOperations in the existing sing
                     translationEnabled:
                         false,
                 }),
-            normalizeActorMemoryProfile:
-                actor => ({
-                    ...actor,
-                    sharedMemories:
-                        actor.sharedMemories,
-                }),
             normalizeMemoryConsolidationPayload,
             normalizeSocialGraph:
                 graph => ({
@@ -266,21 +377,13 @@ test('event-boundary medium schema accepts schemaOperations in the existing sing
                         -1,
                     ...(graph || {}),
                 }),
-            selectSharedMemoriesForContext:
-                memories => memories,
-            sendRoleRequest:
+            sendModelTaskRequest:
                 async () => {
                     calls += 1;
-                    return {
-                        scanComplete: true,
-                        reviewAfterTurns: 10,
-                        reviews: [],
-                        statements: [],
-                        relationshipEvidence: [],
-                        schemaOperations: [
-                            schemaOperation,
-                        ],
-                    };
+                    return createSocialExtraction(
+                        [schemaOperation],
+                        21,
+                    );
                 },
             validateMemoryConsolidation:
                 () => ({
@@ -333,28 +436,76 @@ test('event-boundary medium schema accepts schemaOperations in the existing sing
     );
     assert.deepEqual(
         promptPayload
-            .authoritySnapshot,
-        buildNarrativeAuthoritySnapshot(
-            promptState,
+            .socialAuthorityStamp,
+        {
+            timelineEpoch:
+                promptState
+                    .timelineEpoch,
+            stateRevision:
+                promptState
+                    .stateRevision,
+            clock:
+                promptState.clock,
+            currentSceneId:
+                promptState
+                    .scene.id,
+            actorIds: [
+                'player',
+            ],
+        },
+    );
+    assert.equal(
+        Object.hasOwn(
+            promptPayload,
+            'authoritySnapshot',
         ),
+        false,
     );
     assert.match(
         prompt[0].content,
-        /Current structured State[\s\S]*current-scene[\s\S]*earlier Events[\s\S]*Appraisals or Schemas[\s\S]*raw historical evidence/iu,
+        /committed Events[\s\S]*schemaOperations may promote or update a Person Schema/iu,
     );
+    const promptWorld =
+        createBoundaryWorld();
+    const evidence = {
+        backfill: false,
+        hasMore: false,
+        messages: [],
+        allowedMessageIds: [
+            10,
+            20,
+            21,
+        ],
+        messageSceneIds: {
+            10: 'scene_a',
+            20: 'scene_b',
+            21: 'scene_b',
+        },
+        witnessActorIdsByMessageId: {
+            10: ['hermione'],
+            20: ['hermione'],
+            21: ['hermione'],
+        },
+        eventKnowledge:
+            promptWorld
+                .eventKnowledge,
+        presentActorIds: [
+            'hermione',
+        ],
+        sceneIds: [
+            'scene_a',
+            'scene_b',
+        ],
+    };
     const result =
         await workflow
             .generateMemoryConsolidation(
                 {},
-                createBoundaryWorld(),
+                promptWorld,
                 {
                     actors: [],
                 },
-                {
-                    backfill: false,
-                    messages: [],
-                    allowedMessageIds: [],
-                },
+                evidence,
                 {},
             );
     assert.equal(calls, 1);
@@ -368,28 +519,64 @@ test('[defect-probing] production Memory Consolidation records Schema validation
     const state =
         createBoundaryWorld();
     state.scene.startedMessageId =
-        0;
+        1;
     state.socialGraph =
         normalizeSocialGraph();
+    const diagnosticSummary =
+        'Hermione sees the player refuse help in public.';
     state.eventKnowledge = [
         ...state.eventKnowledge,
-        {
+        normalizeEventKnowledge({
+            version: 2,
+            eventKind:
+                'observed',
             eventId:
             'event_schema_diagnostics',
             sceneId: 'scene_b',
-            sourceMessageIds: [0],
+            clock: state.clock,
+            sourceMessageIds: [1],
             summaryEn:
-            'Hermione sees the player refuse help in public.',
+                diagnosticSummary,
+            activationSchemaIds:
+                [],
             participantActorIds: [
                 'hermione',
             ],
             witnessActorIds: [
                 'hermione',
             ],
-        },
+            witnessCohortIds: [],
+            witnessBasis: {
+                hermione: 'direct',
+            },
+            perception: {
+                version: 1,
+                visualScope: 'room',
+                audibleScope: 'room',
+                salience: 'normal',
+                attribution: 'clear',
+                concealment: 'none',
+                directParticipantActorIds: [
+                    'hermione',
+                ],
+                evidenceText:
+                    diagnosticSummary,
+                confidence: 0.9,
+                source:
+                    'post_turn_observer',
+            },
+            knownToPlayer: true,
+            source:
+                'post_turn_observer',
+        }, {
+            actors: state.actors,
+            sourceTexts: [
+                diagnosticSummary,
+            ],
+        }),
     ];
     const context = {
-        chat: [{
+        chat: [{}, {
             is_user: false,
             extra: {
                 hogwartsMud: {
@@ -397,7 +584,7 @@ test('[defect-probing] production Memory Consolidation records Schema validation
                         type:
                             'narration',
                         textEn:
-                            'Hermione sees the player refuse help in public.',
+                            diagnosticSummary,
                     }],
                 },
             },
@@ -426,22 +613,35 @@ test('[defect-probing] production Memory Consolidation records Schema validation
         createSchemaOperation();
     try {
         globalThis.fetch =
-            async () => ({
-                ok: true,
-                json:
-                    async () => ({
-                        socialGraph:
-                            normalizeSocialGraph(),
-                        memoryReviews: [],
-                        schemaOperations: [
-                            schemaOperation,
-                        ],
-                        acceptedStatementIds:
-                            [],
-                        acceptedEvidenceIds:
-                            [],
-                    }),
-            });
+            async (
+                _url,
+                request,
+            ) => {
+                const input =
+                    JSON.parse(
+                        request.body,
+                    );
+                assert.deepEqual(
+                    input
+                        .allowedMessageIds,
+                    [1],
+                );
+                assert.equal(
+                    input.extraction
+                        .processedThroughMessageId,
+                    1,
+                );
+                const result =
+                    await runSocialDirectorGraph(
+                        input,
+                    );
+                return {
+                    ok: true,
+                    json:
+                        async () =>
+                            result,
+                };
+            };
         const workflow =
             createSocialMemoryWorkflow({
                 CONTEXT_SIZE_PRESETS: {
@@ -492,8 +692,6 @@ test('[defect-probing] production Memory Consolidation records Schema validation
                 jobRegistry: {
                     memory: null,
                 },
-                normalizeActorMemoryProfile:
-                    actor => actor,
                 normalizeMemoryConsolidationPayload,
                 normalizeSocialGraph,
                 recordTurnDiagnostic:
@@ -514,22 +712,14 @@ test('[defect-probing] production Memory Consolidation records Schema validation
                                 8_000,
                         },
                     }),
-                selectSharedMemoriesForContext:
-                    memories =>
-                        memories,
-                sendRoleRequest:
-                    async () => ({
-                        scanComplete: true,
-                        reviewAfterTurns:
-                            10,
-                        reviews: [],
-                        statements: [],
-                        relationshipEvidence:
-                            [],
-                        schemaOperations: [
-                            schemaOperation,
-                        ],
-                    }),
+                sendModelTaskRequest:
+                    async () =>
+                        createSocialExtraction(
+                            [
+                                schemaOperation,
+                            ],
+                            1,
+                        ),
                 syncLocalKnowledge:
                     async () => {},
                 validateMemoryConsolidation:
@@ -565,67 +755,38 @@ test('[defect-probing] production Memory Consolidation records Schema validation
     }
 });
 
-test('memory localization preserves schemaOperations without changing the Person Schema authority shape', async () => {
-    const schemaOperation =
-        createSchemaOperation();
-    const workflow =
-        createSocialMemoryWorkflow({
-            getSettings: () => ({
-                translationEnabled:
-                    true,
-            }),
-            translateOpeningValues:
-                async values =>
-                    values.map(
-                        value =>
-                            `ZH:${value}`,
-                    ),
-        });
-    const localized =
-        await workflow
-            .localizeMemoryConsolidation({
-                reviews: [],
-                statements: [],
-                relationshipEvidence: [],
-                schemaOperations: [
-                    schemaOperation,
-                ],
-            });
-    assert.deepEqual(
-        localized.schemaOperations,
-        [schemaOperation],
-    );
-});
-
 test('[defect-probing] social resolver returns schemaOperations from the same medium extraction', async () => {
     const schemaOperation =
         createSchemaOperation();
+    const world =
+        createBoundaryWorld();
     const result =
         await runSocialDirectorGraph({
             sceneId: 'scene_b',
             clock:
                 '1991-09-03 · 17:00',
             turn: 30,
-            actorIds: ['hermione'],
+            actorIds: [
+                'hermione',
+                'player',
+            ],
             presentActorIds: [
                 'hermione',
             ],
-            allowedMessageIds: [],
-            messageSceneIds: {},
-            witnessActorIdsByMessageId:
-                {},
-            eventKnowledge: [],
+            allowedMessageIds: [
+                10,
+                20,
+                21,
+            ],
+            eventKnowledge:
+                world.eventKnowledge,
             existingGraph:
                 normalizeSocialGraph(),
-            extraction: {
-                reviews: [],
-                statements: [],
-                relationshipEvidence:
-                    [],
-                schemaOperations: [
-                    schemaOperation,
-                ],
-            },
+            extraction:
+                createSocialExtraction(
+                    [schemaOperation],
+                    21,
+                ),
         });
     assert.deepEqual(
         result.schemaOperations,
@@ -849,19 +1010,29 @@ test('[defect-probing] social director commits schema operations under the captu
         );
     const result = {
         socialGraph:
-            normalizeSocialGraph(),
+            normalizeSocialGraph({
+                lastProcessedMessageId:
+                    10,
+            }),
+        reportedEvents: [],
+        recipientAppraisals: [],
         memoryReviews: [],
         schemaOperations: [
             createSchemaOperation(),
         ],
-        acceptedStatementIds: [],
+        processedThroughMessageId:
+            10,
+        scanComplete: true,
         acceptedEvidenceIds: [],
+        structurallyRetainedAppraisalIds:
+            [],
+        rejected: [],
     };
     const committed =
         applySocialDirectorResult(
             world,
             result,
-            [],
+            [10],
             {
                 boundaryGuard:
                     guard,
@@ -890,7 +1061,7 @@ test('[defect-probing] social director commits schema operations under the captu
             applySocialDirectorResult(
                 stale,
                 result,
-                [],
+                [10],
                 {
                     boundaryGuard:
                         guard,
@@ -1277,141 +1448,6 @@ test('[defect-probing] committed scene opening experience is projected only from
     );
 });
 
-test('[defect-probing] scene transition prompt requires an explicit next-scene intent for every active actor', () => {
-    const workflow =
-        createSceneTransitionWorkflow({
-            CANON_CAST_IDENTITY_CONTRACT:
-                '',
-            CANON_WIT_TONE_CONTRACT: '',
-            buildActorContinuityCapsules:
-                () => [],
-            buildBehavioralEnvironment:
-                () => ({}),
-            buildMapAuthorityContext:
-                () => ({}),
-            buildSceneCastRotationPolicy:
-                () => ({}),
-            formatRetrievedKnowledge:
-                () => '',
-            getContext:
-                () => ({
-                    chat: [],
-                }),
-            projectActorLibraryForContext:
-                () => [],
-        });
-    const prompt =
-        workflow
-            .createSceneTransitionPrompt(
-                {
-                    clock:
-                        '1991-09-03 · 17:00',
-                    scene: {
-                        id: 'scene_old',
-                    },
-                    map: {},
-                    actors: [{
-                        id: 'hermione',
-                        present: true,
-                        currentIntentEn:
-                            'Finish the old argument.',
-                    }],
-                    actorLibrary: [{
-                        id: 'hermione',
-                    }],
-                    items: [],
-                    clues: [],
-                    storyArcs: [],
-                },
-                'medium',
-                '',
-                null,
-                {
-                    changed: false,
-                },
-                [],
-                {
-                    chapterMessageLimit:
-                        20,
-                },
-            );
-    assert.match(
-        prompt[0].content,
-        /active actor.*currentIntentEn.*explicit/u,
-    );
-    assert.match(
-        prompt[0].content,
-        /"currentIntentEn":/u,
-    );
-});
-
-test('[defect-probing] scene transition prompt requires active actors to submit or clear currentIntentEn', () => {
-    const workflow =
-        createSceneTransitionWorkflow({
-            CANON_CAST_IDENTITY_CONTRACT:
-                '',
-            CANON_WIT_TONE_CONTRACT: '',
-            buildActorContinuityCapsules:
-                () => [],
-            buildBehavioralEnvironment:
-                () => ({}),
-            buildMapAuthorityContext:
-                () => ({}),
-            buildSceneCastRotationPolicy:
-                () => ({}),
-            formatRetrievedKnowledge:
-                () => '',
-            getContext:
-                () => ({
-                    chat: [],
-                }),
-            projectActorLibraryForContext:
-                () => [],
-        });
-    const prompt =
-        workflow
-            .createSceneTransitionPrompt(
-                {
-                    clock:
-                        '1991-09-03 · 17:00',
-                    scene: {
-                        id: 'scene_old',
-                    },
-                    map: {},
-                    actors: [{
-                        id: 'hermione',
-                        present: true,
-                        currentIntentEn:
-                            'Finish the old argument.',
-                    }],
-                    actorLibrary: [{
-                        id: 'hermione',
-                    }],
-                    items: [],
-                    clues: [],
-                    storyArcs: [],
-                },
-                'medium',
-                '',
-                null,
-                {
-                    changed: false,
-                },
-                [],
-                {
-                    ragLimit: 4,
-                },
-            );
-    assert.match(
-        prompt[0].content,
-        /"currentIntentEn":/u,
-    );
-    assert.match(
-        prompt[0].content,
-        /explicitly (?:submit|clear).*currentIntentEn/iu,
-    );
-});
-
 test('[defect-probing] scene close carry remains reviewable and consumable on a later turn', () => {
     const state =
         strictActorContextWorld({
@@ -1436,6 +1472,10 @@ test('[defect-probing] scene close carry remains reviewable and consumable on a 
             },
             sceneArchive: [],
             timeline: [],
+            globalChronicle: {
+                version: 1,
+                entries: [],
+            },
             map: {
                 activeMapId: 'castle',
                 currentLocalNodeId:
@@ -1470,13 +1510,13 @@ test('[defect-probing] scene close carry remains reviewable and consumable on a 
                 'A capable classmate.',
                 sharedMemories: {
                     core: [],
-                    recent: [],
-                    everyday: [{
+                    recent: [{
                         id: 'memory_scene_close',
                         summaryEn:
                         'Hermione remembers the old discussion ending.',
                         updatedTurn: 30,
                     }],
+                    everyday: [],
                 },
             }, {
                 id: 'ron',
@@ -1534,14 +1574,11 @@ test('[defect-probing] scene close carry remains reviewable and consumable on a 
             '1991-09-03 · 17:05',
         closureSummaryEn:
             'The old discussion ends.',
+        globalChronicleSummaryEn:
+            'The classroom discussion ended after Hermione and Ron exhausted the immediate disagreement. Hermione moved to the library for assigned reading while Ron left the active cast, and the unresolved memory boundary remained available for the next eligible consolidation turn without changing any established relationship or Item fact.',
         authorQuillEn:
             'This chapter closes with sufficient paperwork, several determined glances, and one heroic refusal to leave a sentence unfinished. The editorial desk notes that everyone survived the conversation, which is already above average for a school evening. Hermione wins the Orderly Exit award; the furniture receives honourable mention for staying neutral throughout.',
         unresolvedThreadsEn: [],
-        worldChanges: {
-            prophetBriefs: [],
-            gossipUpdates: [],
-        },
-        relationshipUpdates: [],
         nextScene: {
             id: 'scene_library',
             nameEn: 'Library',
@@ -1821,30 +1858,5 @@ test('[defect-probing] scene close carry remains reviewable and consumable on a 
                     'hermione')
             .currentIntentEn,
         'Finish the assigned reading before supper.',
-    );
-});
-
-test('medium Scene retrieval excludes locked records while high transition may request them', () => {
-    assert.deepEqual(
-        getSceneTransitionRetrievalOptions(
-            'medium',
-            6,
-        ),
-        {
-            includeLockedClues:
-                false,
-            limit: 6,
-        },
-    );
-    assert.deepEqual(
-        getSceneTransitionRetrievalOptions(
-            'high',
-            6,
-        ),
-        {
-            includeLockedClues:
-                true,
-            limit: 6,
-        },
     );
 });

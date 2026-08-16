@@ -60,6 +60,8 @@ export function createLifecycleRuntime(ports) {
         }),
         migrateRelationshipMemoryState,
         migrateSpellbookState,
+        migrateTimelineAppraisalState =
+        migrateTimelineAppraisalLifecycleV4,
         normalizeCausalCollapseState,
         normalizeModelSlots,
         projectActorSocialRelationships,
@@ -79,7 +81,7 @@ export function createLifecycleRuntime(ports) {
         const originalState =
             state;
         const lifecycleCutover =
-            migrateTimelineAppraisalLifecycleV4(
+            migrateTimelineAppraisalState(
                 structuredClone(
                     originalState,
                 ),
@@ -106,6 +108,10 @@ export function createLifecycleRuntime(ports) {
             actorContextMigration.changed ||
             interiorMountMigration.changed;
         let saveOptions;
+        const languageAuthorityReady =
+            state
+                .languageAuthorityVersion ===
+            1;
         const actorContextV1 =
             state.actorContextVersion ===
                 actorContextVersion &&
@@ -284,60 +290,66 @@ export function createLifecycleRuntime(ports) {
             );
             changed = true;
         }
-        const itemSystemMigration =
-            migrateItemSystemState(
-                state,
-            );
         if (
-            itemSystemMigration.changed
+            languageAuthorityReady
         ) {
-            Object.assign(
-                state,
-                itemSystemMigration
-                    .state,
-            );
-            changed = true;
-        }
-        const spellbookMigration =
-        migrateSpellbookState(
-            state,
-            getContext().chat,
-        );
-        if (
-            spellbookMigration.changed
-        ) {
-            Object.assign(
-                state,
-                spellbookMigration.state,
-            );
-            changed = true;
-        }
-        if (
-            state.calendar ||
-            isCalendarWorldClock(
-                state.clock,
-            )
-        ) {
-            const calendarMigration =
-                migrateCalendarState(
+            const itemSystemMigration =
+                migrateItemSystemState(
                     state,
                 );
             if (
-                calendarMigration.changed
+                itemSystemMigration.changed
             ) {
                 Object.assign(
                     state,
-                    calendarMigration
+                    itemSystemMigration
                         .state,
                 );
-                saveOptions = {
-                    source:
-                        'calendar_migration',
-                    changedDomains: [
-                        'calendar',
-                    ],
-                };
                 changed = true;
+            }
+            const spellbookMigration =
+            migrateSpellbookState(
+                state,
+                getContext().chat,
+            );
+            if (
+                spellbookMigration.changed
+            ) {
+                Object.assign(
+                    state,
+                    spellbookMigration
+                        .state,
+                );
+                changed = true;
+            }
+            if (
+                state.calendar ||
+                isCalendarWorldClock(
+                    state.clock,
+                )
+            ) {
+                const calendarMigration =
+                    migrateCalendarState(
+                        state,
+                    );
+                if (
+                    calendarMigration
+                        .changed
+                ) {
+                    Object.assign(
+                        state,
+                        calendarMigration
+                            .state,
+                    );
+                    saveOptions = {
+                        source:
+                            'calendar_migration',
+                        changedDomains: [
+                            'calendar',
+                        ],
+                    };
+                    changed = true;
+                }
             }
         }
         if (!actorContextV1) {

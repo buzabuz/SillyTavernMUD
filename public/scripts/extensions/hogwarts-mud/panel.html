@@ -25,6 +25,13 @@
                     <button id="hpmud_reopen_models" type="button">AI 配置</button>
                     <button id="hpmud_reopen_setup" type="button">人物卡</button>
                     <section class="hpmud-more-translation">
+                        <span>显示语言</span>
+                        <div role="radiogroup" aria-label="显示语言">
+                            <button type="button" role="radio" data-hpmud-display-locale="zh-CN">中文</button>
+                            <button type="button" role="radio" data-hpmud-display-locale="en">English</button>
+                        </div>
+                    </section>
+                    <section class="hpmud-more-translation">
                         <span>默认翻译 <small id="hpmud_translation_provider_status">本地 4B</small></span>
                         <div role="radiogroup" aria-label="默认翻译源">
                             <button type="button" role="radio" data-hpmud-translation-provider="local">本地 4B</button>
@@ -45,7 +52,7 @@
                 <img src="/scripts/extensions/hogwarts-mud/assets/icon-wand.png" alt="">
                 <span></span>
             </div>
-            <small>World Blueprint · Persistent Timeline</small>
+            <small>世界蓝图 · 持久时间线</small>
             <h1>选择故事剧本</h1>
             <p>决定你从魔法史的哪个位置进入。开局之后，原著只提供初始条件。</p>
 
@@ -82,7 +89,7 @@
         </div>
         <section class="hpmud-save-library">
             <header>
-                <div><small>Archive Index</small><h2>读取旧档案</h2></div>
+                <div><small>档案索引</small><h2>读取旧档案</h2></div>
                 <button id="hpmud_refresh_saves" type="button" aria-label="刷新存档">↻</button>
             </header>
             <div id="hpmud_save_list" class="hpmud-save-list" aria-live="polite"></div>
@@ -129,8 +136,8 @@
 
                 <section class="hpmud-setup-page" data-hpmud-page="background" hidden>
                     <div class="hpmud-form-grid two">
-                        <label><span>血统背景</span><select name="blood_status"><option value="">待定</option><option>麻瓜出身</option><option>混血</option><option>纯血</option><option>未知或复杂</option></select></label>
-                        <label><span>家庭经济</span><select name="economy"><option value="">待定</option><option>拮据</option><option>普通</option><option>宽裕</option><option>显赫但受约束</option></select></label>
+                        <label><span>血统背景</span><select name="blood_status"><option value="">待定</option><option value="muggle_born">麻瓜出身</option><option value="half_blood">混血</option><option value="pure_blood">纯血</option><option value="unknown_complex">未知或复杂</option></select></label>
+                        <label><span>家庭经济</span><select name="economy"><option value="">待定</option><option value="拮据">拮据</option><option value="普通">普通</option><option value="宽裕">宽裕</option><option value="显赫但受约束">显赫但受约束</option></select></label>
                         <label><span>监护人或家庭关系 *</span><input name="guardian" maxlength="240" required></label>
                         <label><span>成长地点</span><input name="home" maxlength="160" placeholder="城市、村庄或具体住处"></label>
                         <label><span>最想得到什么 *</span><textarea name="desire" rows="3" maxlength="500" required></textarea></label>
@@ -149,9 +156,9 @@
                             <label><span>社交方式</span><input name="social" maxlength="160"></label>
                             <label class="wide"><span>压力下的反应</span><input name="pressure" maxlength="240"></label>
                             <label><span>总体魔法潜质</span><select name="magical_potential"><option value="balanced">均衡</option><option value="volatile">强烈但不稳定</option><option value="patient">起步缓慢、上限较高</option><option value="focused">领域集中</option></select></label>
-                            <label><span>优势领域</span><select name="strong_domain"><option value="">待发现</option><option>魔咒</option><option>变形</option><option>魔药</option><option>草药</option><option>飞行</option><option>心灵</option><option>防御</option></select></label>
-                            <label><span>弱势领域</span><select name="weak_domain"><option value="">待发现</option><option>魔咒</option><option>变形</option><option>魔药</option><option>草药</option><option>飞行</option><option>心灵</option><option>防御</option></select></label>
-                            <label><span>罕见天赋</span><select name="rare_talent"><option value="none">无已知罕见天赋</option><option>蛇佬腔</option><option>易容马格斯倾向</option><option>预言倾向</option><option>自定义，写入背景</option></select></label>
+                            <label><span>优势领域</span><select name="strong_domain"><option value="">待发现</option><option value="charms">魔咒</option><option value="transfiguration">变形</option><option value="potions">魔药</option><option value="herbology">草药</option><option value="flying">飞行</option><option value="mind">心灵</option><option value="defence">防御</option></select></label>
+                            <label><span>弱势领域</span><select name="weak_domain"><option value="">待发现</option><option value="charms">魔咒</option><option value="transfiguration">变形</option><option value="potions">魔药</option><option value="herbology">草药</option><option value="flying">飞行</option><option value="mind">心灵</option><option value="defence">防御</option></select></label>
+                            <label><span>罕见天赋</span><select name="rare_talent"><option value="none">无已知罕见天赋</option><option value="parseltongue">蛇佬腔</option><option value="metamorphmagus_tendency">易容马格斯倾向</option><option value="divination_tendency">预言倾向</option><option value="custom_in_background">自定义，写入背景</option></select></label>
                         </div>
                         <section class="hpmud-attributes">
                             <header><div><strong>六项基础属性</strong><small>单项 7–14</small></div><b><span id="hpmud_attribute_total">63</span> / 63</b></header>
@@ -473,7 +480,7 @@
                 <div class="hpmud-calendar-title">
                     <span class="hpmud-calendar-seal" aria-hidden="true"><i></i></span>
                     <div>
-                        <small>Collegiate chronology archive</small>
+                        <small>学院年代档案</small>
                         <h2 id="hpmud_calendar_title">学院日程</h2>
                     </div>
                 </div>
@@ -558,7 +565,7 @@
                             <section class="hpmud-calendar-section hpmud-calendar-plans" aria-labelledby="hpmud_calendar_plans_title">
                                 <header>
                                     <div>
-                                        <small>WEEK GRID</small>
+                                        <small>周视图</small>
                                         <h4 id="hpmud_calendar_plans_title">一周日程</h4>
                                     </div>
                                     <span id="hpmud_calendar_plan_summary">0 项</span>
@@ -568,7 +575,7 @@
                             <section class="hpmud-calendar-section hpmud-calendar-scenes" aria-labelledby="hpmud_calendar_scenes_title">
                                 <header>
                                     <div>
-                                        <small>ARCHIVE</small>
+                                        <small>档案</small>
                                         <h4 id="hpmud_calendar_scenes_title">场景</h4>
                                     </div>
                                     <button
@@ -620,7 +627,7 @@
                 <div class="hpmud-relationship-title">
                     <span class="hpmud-relationship-astrolabe" aria-hidden="true"><i></i></span>
                     <div>
-                        <small>Player-known social constellation</small>
+                        <small>玩家已知的社会关系星图</small>
                         <h2 id="hpmud_relationship_title">关系星图</h2>
                     </div>
                 </div>
@@ -771,6 +778,7 @@
             <div class="hpmud-dialog-scroll">
                 <label class="hpmud-switch-row"><span><strong>启用系统层</strong><small>注入世界规则、人物卡和英语输出契约</small></span><input id="hpmud_prompt_enabled" name="prompt_enabled" type="checkbox"></label>
                 <label><span>世界系统 Prompt</span><textarea id="hpmud_world_prompt" name="world_prompt" rows="8" autocomplete="off"></textarea></label>
+                <fieldset class="hpmud-provider-row"><legend><strong>显示语言</strong></legend><div role="radiogroup" aria-label="显示语言"><button type="button" role="radio" data-hpmud-display-locale="zh-CN">中文</button><button type="button" role="radio" data-hpmud-display-locale="en">English</button></div></fieldset>
                 <label class="hpmud-provider-row"><span><strong>默认翻译源</strong><small>英文原文保存在上下文，中文仅用于显示</small></span><select id="hpmud_translation_provider" name="translation_provider"><option value="local">本地 4B</option><option value="google">Google</option><option value="bing">Bing</option><option value="off">不开</option></select></label>
                 <section class="hpmud-import-card">
                     <div><strong>酒馆 Preset</strong><small id="hpmud_preset_status">未导入</small></div>

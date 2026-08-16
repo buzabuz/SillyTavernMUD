@@ -2,72 +2,149 @@ import {
     isItemVisibleToPlayer,
     normalizeItem,
 } from './item-schema.js';
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from './localized-view-model.js';
+import {
+    getActorDisplayName,
+} from './actor-display-name.js';
 
 export const ITEM_TYPE_LABELS =
     Object.freeze({
-        wand: '魔杖',
-        eyewear: '眼镜',
-        clothing: '衣着',
-        accessory: '饰品',
-        document: '文书',
-        container: '容器',
-        money: '钱币',
-        key: '钥匙',
-        book: '书籍',
-        tool: '工具',
-        consumable: '消耗品',
-        keepsake: '纪念物',
-        clue: '线索物',
-        other: '物品',
+        wand: 'Wand',
+        eyewear: 'Eyewear',
+        clothing: 'Clothing',
+        accessory: 'Accessory',
+        document: 'Document',
+        container: 'Container',
+        money: 'Currency',
+        key: 'Key',
+        book: 'Book',
+        tool: 'Tool',
+        consumable: 'Consumable',
+        keepsake: 'Keepsake',
+        clue: 'Clue Item',
+        other: 'Item',
     });
 
 export const ITEM_STATE_LABELS =
     Object.freeze({
-        intact: '完好',
-        damaged: '损坏',
-        dirty: '待清洗',
-        consumed: '已消耗',
-        lost: '已丢失',
-        destroyed: '已销毁',
+        intact: 'Intact',
+        damaged: 'Damaged',
+        dirty: 'Needs cleaning',
+        consumed: 'Consumed',
+        lost: 'Lost',
+        destroyed: 'Destroyed',
     });
 
 export const ITEM_TRANSFER_LABELS =
     Object.freeze({
         none: '',
-        gift: '赠与',
-        loan: '借出',
-        theft: '失窃转移',
-        return: '归还',
+        gift: 'Gift',
+        loan: 'Loaned',
+        theft: 'Transferred by theft',
+        return: 'Returned',
     });
 
 export const ITEM_STORY_ROLE_LABELS =
     Object.freeze({
-        signature: '标志物',
-        social: '社会意义',
-        clue: '线索',
-        promise: '承诺',
-        keepsake: '纪念',
+        signature: 'Signature Item',
+        social: 'Social significance',
+        clue: 'Clue',
+        promise: 'Promise',
+        keepsake: 'Keepsake',
     });
 
 const ITEM_TIME_PRECISION_LABELS =
     Object.freeze({
-        exact: '准确时间',
-        day: '当日',
-        before_date: '不晚于',
-        unknown: '时间未详',
+        exact: 'Exact time',
+        day: 'That day',
+        before_date: 'No later than',
+        unknown: 'Time unknown',
     });
+
+function staticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+) {
+    return getStaticLocaleText(
+        staticKey,
+        normalizeDisplayLocale(
+            displayLocale,
+        ),
+    ) ||
+        sourceTextEn;
+}
+
+function formatStaticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+    values = {},
+) {
+    return Object.entries(
+        values,
+    ).reduce(
+        (
+            text,
+            [
+                key,
+                value,
+            ],
+        ) =>
+            text.replaceAll(
+                `{${key}}`,
+                String(value),
+            ),
+        staticText(
+            displayLocale,
+            staticKey,
+            sourceTextEn,
+        ),
+    );
+}
+
+function mappedLabel(
+    displayLocale,
+    prefix,
+    value,
+    labels,
+) {
+    const sourceTextEn =
+        labels[value] ||
+        value;
+    return labels[value]
+        ? staticText(
+            displayLocale,
+            `${prefix}.${value}`,
+            sourceTextEn,
+        )
+        : sourceTextEn;
+}
 
 function getActorName(
     state,
     actorId,
+    displayLocale,
+    getLocalizedField,
 ) {
     if (!actorId) {
-        return '无人持有';
+        return staticText(
+            displayLocale,
+            'ui.item.no_holder',
+            'No holder',
+        );
     }
     if (actorId === 'player') {
         return state.character
             ?.identity?.name ||
-            '玩家';
+            staticText(
+                displayLocale,
+                'ui.item.player',
+                'Player',
+            );
     }
     const profile =
         (
@@ -75,8 +152,20 @@ function getActorName(
             []
         ).find(entry =>
             entry.id === actorId);
-    return profile?.nameEn ||
-        actorId;
+    return getActorDisplayName({
+        actorId,
+        nameEn:
+            profile?.nameEn ||
+            actorId,
+        displayLocale,
+        getLocalizedField:
+            getLocalizedField ||
+            (field => ({
+                text:
+                    field
+                        .sourceTextEn,
+            })),
+    });
 }
 
 function getKnownActorIds(
@@ -95,22 +184,58 @@ function getKnownActorIds(
 function getLocationLabel(
     item,
     state,
+    displayLocale,
+    {
+        getLocalizedField,
+        getRoomName,
+    } = {},
 ) {
     if (
         item.holderId
     ) {
-        return `随 ${getActorName(
-            state,
-            item.holderId,
-        )}`;
+        return formatStaticText(
+            displayLocale,
+            'ui.item.with_holder',
+            'With {holder}',
+            {
+                holder:
+                    getActorName(
+                        state,
+                        item.holderId,
+                        displayLocale,
+                        getLocalizedField,
+                    ),
+            },
+        );
     }
     if (
         item.state === 'lost'
     ) {
         return item.location
             .roomId
-            ? `最后见于 ${item.location.roomId}`
-            : '下落不明';
+            ? formatStaticText(
+                displayLocale,
+                'ui.item.last_seen',
+                'Last seen at {room}',
+                {
+                    room:
+                        getRoomName
+                            ? getRoomName(
+                                state,
+                                item.location
+                                    .mapId,
+                                item.location
+                                    .roomId,
+                            )
+                            : item.location
+                                .roomId,
+                },
+            )
+            : staticText(
+                displayLocale,
+                'ui.item.whereabouts_unknown',
+                'Whereabouts unknown',
+            );
     }
     if (
         [
@@ -118,26 +243,59 @@ function getLocationLabel(
             'destroyed',
         ].includes(item.state)
     ) {
-        return ITEM_STATE_LABELS[
-            item.state
-        ];
+        return mappedLabel(
+            displayLocale,
+            'ui.item.state',
+            item.state,
+            ITEM_STATE_LABELS,
+        );
     }
     return item.location
         .placement &&
         item.location
             .placement !==
             'in_room'
-        ? item.location
-            .placement
-        : item.location
-            .roomId ||
-            '位置未记录';
+        ? staticText(
+            displayLocale,
+            `ui.item.placement.${item.location.placement}`,
+            item.location
+                .placement,
+        )
+        : (
+            getRoomName &&
+            item.location
+                .roomId
+                ? getRoomName(
+                    state,
+                    item.location
+                        .mapId,
+                    item.location
+                        .roomId,
+                )
+                : item.location
+                    .roomId
+        ) ||
+            staticText(
+                displayLocale,
+                'ui.item.location_unrecorded',
+                'Location unrecorded',
+            );
 }
 
 export function projectItemCard(
     source,
     state,
+    displayLocale =
+    'zh-CN',
+    {
+        getLocalizedField,
+        getRoomName,
+    } = {},
 ) {
+    const locale =
+        normalizeDisplayLocale(
+            displayLocale,
+        );
     const item =
         normalizeItem(
             source,
@@ -146,12 +304,16 @@ export function projectItemCard(
         getActorName(
             state,
             item.ownerId,
+            locale,
+            getLocalizedField,
         );
     const holderName =
         item.holderId
             ? getActorName(
                 state,
                 item.holderId,
+                locale,
+                getLocalizedField,
             )
             : '';
     return {
@@ -160,58 +322,93 @@ export function projectItemCard(
         type:
             item.type,
         typeLabel:
-            ITEM_TYPE_LABELS[
-                item.type
-            ] ||
-            '物品',
+            mappedLabel(
+                locale,
+                'ui.item.type',
+                item.type,
+                ITEM_TYPE_LABELS,
+            ),
         label:
-            item.label ||
             item.labelEn,
         appearance:
-            item.appearance ||
             item.appearanceEn ||
-            '外观尚未记录。',
+            staticText(
+                locale,
+                'ui.item.appearance_unrecorded',
+                'Appearance unrecorded.',
+            ),
         state:
             item.state,
         stateLabel:
-            ITEM_STATE_LABELS[
-                item.state
-            ] ||
-            item.state,
+            mappedLabel(
+                locale,
+                'ui.item.state',
+                item.state,
+                ITEM_STATE_LABELS,
+            ),
         ownerName,
         holderName,
         ownershipLabel:
             holderName &&
             item.holderId !==
                 item.ownerId
-                ? `主人 ${ownerName} · 持有人 ${holderName}`
-                : `主人 ${ownerName}`,
+                ? formatStaticText(
+                    locale,
+                    'ui.item.owner_holder',
+                    'Owner {owner} · Holder {holder}',
+                    {
+                        owner:
+                            ownerName,
+                        holder:
+                            holderName,
+                    },
+                )
+                : formatStaticText(
+                    locale,
+                    'ui.item.owner',
+                    'Owner {owner}',
+                    {
+                        owner:
+                            ownerName,
+                    },
+                ),
         locationLabel:
             getLocationLabel(
                 item,
                 state,
+                locale,
+                {
+                    getLocalizedField,
+                    getRoomName,
+                },
             ),
         isEquipped:
             item.isEquipped,
         transferLabel:
-            ITEM_TRANSFER_LABELS[
-                item.transferMode
-            ] ||
-            '',
+            item.transferMode ===
+                'none'
+                ? ''
+                : mappedLabel(
+                    locale,
+                    'ui.item.transfer',
+                    item.transferMode,
+                    ITEM_TRANSFER_LABELS,
+                ),
         storyRoles:
             item.storyRoles.map(
                 role => ({
                     id:
                         role,
                     label:
-                        ITEM_STORY_ROLE_LABELS[
-                            role
-                        ] ||
-                        role,
+                        mappedLabel(
+                            locale,
+                            'ui.item.story_role',
+                            role,
+                            ITEM_STORY_ROLE_LABELS,
+                        ),
                 }),
             ),
         notes:
-            item.notes ||
             item.notesEn ||
             '',
         acquiredAt:
@@ -220,14 +417,20 @@ export function projectItemCard(
             item.acquiredAt
                 .value
                 ? `${
-                    ITEM_TIME_PRECISION_LABELS[
+                    mappedLabel(
+                        locale,
+                        'ui.item.time',
                         item.acquiredAt
-                            .precision
-                    ] ||
-                    '时间'
+                            .precision,
+                        ITEM_TIME_PRECISION_LABELS,
+                    )
                 } ${item.acquiredAt.value}`
-                : ITEM_TIME_PRECISION_LABELS
-                    .unknown,
+                : mappedLabel(
+                    locale,
+                    'ui.item.time',
+                    'unknown',
+                    ITEM_TIME_PRECISION_LABELS,
+                ),
         sourceEventId:
             item.sourceEventId,
         sourceUrl:
@@ -237,7 +440,14 @@ export function projectItemCard(
 
 export function projectItemLedger(
     state,
+    displayLocale =
+    'zh-CN',
+    options = {},
 ) {
+    const locale =
+        normalizeDisplayLocale(
+            displayLocale,
+        );
     const knownActorIds =
         getKnownActorIds(
             state,
@@ -258,6 +468,8 @@ export function projectItemLedger(
                 projectItemCard(
                     item,
                     state,
+                    locale,
+                    options,
                 ));
     const rank = {
         intact: 0,
@@ -275,7 +487,11 @@ export function projectItemLedger(
                         state.character
                             ?.identity
                             ?.name ||
-                        '玩家'
+                        staticText(
+                            locale,
+                            'ui.item.player',
+                            'Player',
+                        )
                     ),
             ) -
                 Number(
@@ -284,7 +500,11 @@ export function projectItemLedger(
                             state.character
                                 ?.identity
                                 ?.name ||
-                            '玩家'
+                            staticText(
+                                locale,
+                                'ui.item.player',
+                                'Player',
+                            )
                         ),
                 ) ||
             rank[left.state] -
@@ -320,6 +540,9 @@ export function projectItemLedger(
 export function projectActorItems(
     state,
     actorId,
+    displayLocale =
+    'zh-CN',
+    options = {},
 ) {
     const knownActorIds =
         getKnownActorIds(
@@ -346,6 +569,8 @@ export function projectActorItems(
             projectItemCard(
                 item,
                 state,
+                displayLocale,
+                options,
             ));
 }
 

@@ -551,13 +551,10 @@ export function listMapsByMountHierarchy(
             children
                 .sort((left, right) =>
                     text(
-                        left.map.name ||
                         left.map.nameEn ||
                         left.map.id,
                     ).localeCompare(
                         text(
-                            right.map
-                                .name ||
                             right.map
                                 .nameEn ||
                             right.map.id,

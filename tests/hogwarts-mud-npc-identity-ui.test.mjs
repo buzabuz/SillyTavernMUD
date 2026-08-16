@@ -246,7 +246,52 @@ function createWorldState() {
             id: IVY_ID,
             present: true,
         }],
+        eventKnowledge: [
+            {
+                eventId:
+                    'reported_ivy_self',
+                eventKind:
+                    'reported',
+                clock:
+                    '1991-09-02 · 11:45',
+                report: {
+                    speakerId: IVY_ID,
+                    recipientIds: [
+                        'player',
+                    ],
+                },
+            },
+            {
+                eventId:
+                    'reported_ron_other',
+                eventKind:
+                    'reported',
+                clock:
+                    '1991-09-02 · 11:50',
+                report: {
+                    speakerId: RON_ID,
+                    recipientIds: [
+                        'player',
+                    ],
+                },
+            },
+            {
+                eventId:
+                    'reported_ivy_brother',
+                eventKind:
+                    'reported',
+                clock:
+                    '1991-09-02 · 11:55',
+                report: {
+                    speakerId: IVY_ID,
+                    recipientIds: [
+                        'player',
+                    ],
+                },
+            },
+        ],
         socialGraph: {
+            version: 3,
             identityClaims: [{
                 id:
                     'ivy_self_lineage',
@@ -257,13 +302,8 @@ function createWorldState() {
                     'pure_blood',
                 sourceKind:
                     'self',
-                speakerId: IVY_ID,
-                sourceMessageIds: [7],
-                witnessedBy: [
-                    'player',
-                ],
-                clock:
-                    '1991-09-02 · 11:45',
+                reportedEventId:
+                    'reported_ivy_self',
             }, {
                 id:
                     'ron_other_lineage',
@@ -274,13 +314,8 @@ function createWorldState() {
                     'muggle_born',
                 sourceKind:
                     'other',
-                speakerId: RON_ID,
-                sourceMessageIds: [8],
-                witnessedBy: [
-                    'player',
-                ],
-                clock:
-                    '1991-09-02 · 11:50',
+                reportedEventId:
+                    'reported_ron_other',
             }],
             personReferences: [{
                 id:
@@ -301,13 +336,8 @@ function createWorldState() {
                     'ivy_brother_ref',
                 sourceKind:
                     'self',
-                speakerId: IVY_ID,
-                sourceMessageIds: [9],
-                witnessedBy: [
-                    'player',
-                ],
-                clock:
-                    '1991-09-02 · 11:55',
+                reportedEventId:
+                    'reported_ivy_brother',
             }],
         },
     };
@@ -1045,7 +1075,7 @@ test('Inspector and dossier styles preserve presentation, narrow-screen and moti
     );
     assert.match(
         presentationSource,
-        /\.outfit/u,
+        /display\('outfit'\)/u,
     );
     assert.match(
         presentationSource,

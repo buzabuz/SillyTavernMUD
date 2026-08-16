@@ -1,6 +1,12 @@
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from '../domain/localized-view-model.js';
+
 export function createTurnController(ports) {
     const {
         refs,
+        session,
     } = ports;
 
     const {
@@ -25,6 +31,19 @@ export function createTurnController(ports) {
         composerInput,
     } = refs;
 
+    function staticText(
+        staticKey,
+        sourceTextEn,
+    ) {
+        return getStaticLocaleText(
+            staticKey,
+            normalizeDisplayLocale(
+                session.displayLocale,
+            ),
+        ) ||
+            sourceTextEn;
+    }
+
     async function rollbackLastTurn() {
         const context = getContext();
         const checkpoint =
@@ -38,7 +57,10 @@ export function createTurnController(ports) {
             );
         if (!checkpoint) {
             toastr.info(
-                '当前没有可回滚的已完成回合。',
+                staticText(
+                    'ui.turn.rollback.none',
+                    'There is no completed turn to roll back.',
+                ),
             );
             renderAll();
             return;
@@ -48,13 +70,19 @@ export function createTurnController(ports) {
             jobRegistry.sceneTransitionActive
         ) {
             toastr.warning(
-                '世界状态仍在结算，请稍候。',
+                staticText(
+                    'ui.story.world_settling',
+                    'World State is still settling. Please wait.',
+                ),
             );
             return;
         }
         if (
             !window.confirm(
-                '回滚上一轮会删除对应的玩家消息与场景回复，并恢复提交前的世界状态。继续吗？',
+                staticText(
+                    'ui.turn.rollback.confirm',
+                    'Rolling back deletes the matching player message and Scene reply, then restores world State from before the turn. Continue?',
+                ),
             )
         ) {
             return;
@@ -84,7 +112,10 @@ export function createTurnController(ports) {
                 new Event('input'),
             );
             toastr.success(
-                '已回滚上一轮；原输入已放回编辑框。',
+                staticText(
+                    'ui.turn.rollback.done',
+                    'Previous turn rolled back. The original input was restored to the editor.',
+                ),
             );
         } catch (error) {
             toastr.error(
@@ -102,7 +133,12 @@ export function createTurnController(ports) {
 
     async function submitTurn(requireCheck = false) {
         if (getMudState()?.phase !== 'playing') {
-            toastr.warning('首幕尚未完成，当前不能提交行动。');
+            toastr.warning(
+                staticText(
+                    'ui.turn.opening_incomplete',
+                    'The opening is not complete. Actions cannot be submitted yet.',
+                ),
+            );
             return;
         }
         if (
@@ -112,7 +148,10 @@ export function createTurnController(ports) {
             )
         ) {
             toastr.warning(
-                '上一条玩家消息已经保存但尚未生成回复，请先重试本回合。',
+                staticText(
+                    'ui.turn.reply_missing',
+                    'The previous player message was saved without a reply. Retry that turn first.',
+                ),
             );
             return;
         }
@@ -135,7 +174,10 @@ export function createTurnController(ports) {
             );
         if (!addressing.valid) {
             toastr.warning(
-                addressing.error,
+                staticText(
+                    'ui.game.address.invalid_detail',
+                    'Put each directed line on its own line using the "@Character: dialogue" format.',
+                ),
             );
             composerInput.focus();
             return;
@@ -148,7 +190,12 @@ export function createTurnController(ports) {
                 ?.status ===
                 'generating' ||
             getMudState()?.sceneTransition?.status === 'resolving') {
-            toastr.warning('世界状态仍在结算，请稍候。');
+            toastr.warning(
+                staticText(
+                    'ui.story.world_settling',
+                    'World State is still settling. Please wait.',
+                ),
+            );
             return;
         }
         composerInput.value = '';

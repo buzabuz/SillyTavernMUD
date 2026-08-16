@@ -68,6 +68,7 @@ import {
 } from './calendar-schema.js';
 
 import {
+    normalizeCharacterV2,
     normalizeStoryPreferences,
 } from './character.js';
 
@@ -363,36 +364,43 @@ function openingRelationshipEdge(
 
 export function createInitialWorldState(character, modelSlots, campaign = createDefaultCampaign()) {
     const normalizedCampaign = normalizeCampaign(campaign);
-    const normalizedCharacter =
+    const characterSource =
         structuredClone(character);
-    normalizedCharacter.identity ??= {};
-    normalizedCharacter.identity
+    characterSource.identity ??= {};
+    characterSource.identity
         .birthDate ||=
-        `${normalizedCampaign.startYear - Number(normalizedCharacter.identity.age || 11)}-07-01`;
-    normalizedCharacter.identity
+        `${normalizedCampaign.startYear - Number(characterSource.identity.age || 11)}-07-01`;
+    characterSource.identity
         .heritage ??=
-        normalizedCharacter.identity
+        characterSource.identity
             .ethnicity ||
-        normalizedCharacter.background
+        characterSource.background
             ?.ethnicity ||
-        normalizedCharacter.background
+        characterSource.background
             ?.culturalBackground ||
         '';
-    normalizedCharacter.storyPreferences =
+    characterSource.storyPreferences =
         normalizeStoryPreferences(
-            normalizedCharacter
+            characterSource
                 .storyPreferences,
         );
+    const normalizedCharacter =
+        normalizeCharacterV2({
+            ...characterSource,
+            confirmed: true,
+        });
     return {
         phase: 'initializing',
         campaign: normalizedCampaign,
-        chapter: '正在编排首幕',
-        clock: `${normalizedCampaign.startYear} · 时间待定`,
-        location: '世界建档中',
+        chapterEn: 'Opening World',
+        clock: `${normalizedCampaign.startYear} · Time pending`,
         character: {
             ...normalizedCharacter,
             confirmed: true,
         },
+        characterLanguageVersion:
+            normalizedCharacter
+                .version,
         modelSlots: structuredClone(modelSlots),
         map: {
             baseVersion: PRESET_WORLD_MAP.version,
@@ -857,7 +865,23 @@ export function validateOpeningWorldPackage(opening, character, campaign) {
             '开场必须包含 1–8 名在场 NPC。',
         );
     }
-    const playerName = String(character?.identity?.name || '').trim().toLocaleLowerCase();
+    const playerCharacter =
+        normalizeCharacterV2(
+            character,
+        );
+    const playerName =
+        String(
+            playerCharacter
+                .canonicalEn
+                .identity
+                .nameEn ||
+            playerCharacter
+                .inputEvidence
+                .identity
+                .name ||
+            '',
+        ).trim()
+            .toLocaleLowerCase();
     if (actorProposals.some(actor => String(actor.nameEn || '').trim().toLocaleLowerCase() === playerName)) {
         errors.push('玩家角色不能被重复列为 NPC。');
     }
@@ -876,37 +900,35 @@ export function validateOpeningWorldPackage(opening, character, campaign) {
 export function applyOpeningWorldPackage(worldState, opening) {
     const next = structuredClone(worldState);
     const map = opening.scene.map;
-    const display = opening.display || {};
-    const sceneName = display.sceneName || opening.scene.nameEn;
     const customMap = {
         id: map.id,
         worldAnchorId:
             opening.scene
                 .worldAnchorId ||
             '',
-        name: display.mapName || map.nameEn,
         nameEn: map.nameEn,
+        aliases:
+            map.aliases || [],
         coordinateSystem: 'abstract-grid-100',
         defaultLevelId: map.currentLevelId || map.levels[0].id,
-        layoutRule: 'This opening-scene map is committed world state. Changes require a validated World Director mutation.',
-        levels: map.levels.map((level, index) => ({
+        layoutRuleEn: 'This opening-scene map is committed world state. Changes require a validated World Director mutation.',
+        levels: map.levels.map(level => ({
             id: level.id,
-            name: display.levelNames?.[index] || level.nameEn,
             nameEn: level.nameEn,
             z: Number(level.z || 0),
         })),
-        nodes: map.rooms.map((room, index) => ({
+        nodes: map.rooms.map(room => ({
             id: room.id,
-            name: display.roomNames?.[index] || room.nameEn,
             nameEn: room.nameEn,
             levelId: room.levelId,
             kind: room.kind || 'room',
             x: room.x,
             y: room.y,
             access: room.access || 'private',
-            description: room.descriptionEn || '',
             descriptionEn: room.descriptionEn || '',
             tags: ['opening_generated'],
+            aliases:
+                room.aliases || [],
         })),
         exits: map.exits.map(route => ({
             from: route.from,
@@ -918,30 +940,28 @@ export function applyOpeningWorldPackage(worldState, opening) {
         })),
     };
     next.phase = 'opening_narration';
-    next.chapter = display.chapter || opening.chapterEn;
+    next.chapterEn =
+        opening.chapterEn;
     next.clock = opening.clock;
     next.calendar ??=
         createInitialCalendarState(
             next.clock,
         );
-    next.location = sceneName;
     next.scene = {
         id: opening.scene.id || map.id,
-        name: sceneName,
         nameEn: opening.scene.nameEn,
-        summary: display.sceneSummary || opening.scene.summaryEn,
         summaryEn: opening.scene.summaryEn,
-        explorationHook:
-            display.sceneExplorationHook ||
-            opening.scene.explorationHookEn,
         explorationHookEn:
             opening.scene.explorationHookEn,
         startedClock: opening.clock,
         startedMessageId: 0,
         timelineEntries: [{
             clock: opening.clock,
-            label: display.incitingEvent ||
-                opening.conflict.incitingEventEn,
+            summaryEn:
+                opening.scene
+                    .summaryEn,
+            sourceRef:
+                `scene:${opening.scene.id || map.id}:opening`,
         }],
         mapId: map.id,
         roomId: map.currentRoomId,
@@ -1062,8 +1082,8 @@ export function applyOpeningWorldPackage(worldState, opening) {
                         proposal.runtime
                             .present)
                     .map(
-                    openingRelationshipEdge,
-                ),
+                        openingRelationshipEdge,
+                    ),
             ],
         });
     next.storyArcs = opening.storyArc ? [{
@@ -1071,14 +1091,10 @@ export function applyOpeningWorldPackage(worldState, opening) {
         status: opening.storyArc.status || 'active',
         revealedClueIds: [],
     }] : [];
-    next.conflict = {
-        ...opening.conflict,
-        title: display.conflictTitle || opening.conflict.titleEn,
-        premise: display.conflictPremise || opening.conflict.premiseEn,
-        immediatePressure: display.conflictPressure || opening.conflict.immediatePressureEn,
-        stakes: display.conflictStakes || opening.conflict.stakesEn,
-        incitingEvent: display.incitingEvent || opening.conflict.incitingEventEn,
-    };
+    next.conflict =
+        structuredClone(
+            opening.conflict,
+        );
     next.clues = [];
     next.items = [];
     next.map.customLocalMaps = [
@@ -1112,6 +1128,7 @@ export function applyOpeningWorldPackage(worldState, opening) {
     const openingPackage =
         structuredClone(opening);
     delete openingPackage.agenda;
+    delete openingPackage.display;
     next.opening = {
         status: 'narrating',
         attempt: Number(next.opening?.attempt || 0),

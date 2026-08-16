@@ -8,6 +8,50 @@
 - UI 只能读取本表列出的世界字段，页面交互状态写入 `ui/session-state.js`。
 - 任何人物名单都必须注明它表达 active、local、participant 还是 witness。
 
+## Revision 4 语言切换合同
+
+状态：`hogwarts-language-structured-input-identity-codes` Revision 4 已在
+Language Authority V1 存档上生效。下表是当前运行时合同，不再是未来目标。
+旧存档只能通过一次性原子迁移进入该合同；禁止长期双读、双写或 Prompt
+fallback。
+
+| 字段路径 | 目标语义 | 唯一写入者 | 主要读取者 | 迁移/诊断 |
+| --- | --- | --- | --- | --- |
+| `languageAuthorityVersion` | 英语语义权威切换版本；目标值 `1` | Language Authority V1 原子迁移、initial world | lifecycle、Schema/Prompt/Knowledge gates | 缺失表示旧合同；迁移成功后旧客户端显式失败 |
+| `characterLanguageVersion` | Character V2 原始输入证据与英语 Prompt 投影版本；目标值 `2` | Character V2 migration/setup reducer | Prompt projector、setup/dossier UI | 原始中文只留在 `inputEvidence`，不得成为英语事实 |
+| `calendar.version` | 英语-only Calendar V3 | Calendar V3 migration/reducers | Calendar directors、Scene/Prompt/UI projectors | 删除 `title/summary` 显示副本，只留 `titleEn/summaryEn` |
+| `itemSystemVersion` | 英语-only Item V4 | Item V4 migration/reducer | Authority、Prompt、UI | 删除 no-suffix prose；不得改变 `state/physicalForm/ownerId/holderId/location` |
+| `materialStateVersion` | 英语-only Material V3 | Material V3 migration/reducer | Authority、Knowledge、Prompt、UI | 语义 prose 改为 `*En`；raw evidence 单独标语言且不入 Prompt |
+| `spellbook.version` | 英语-only Spellbook V3 | Spell V3 migration/reducer | resolver、check、Prompt、UI | custom 只存 `nameEn/effectEn`；静态中文进入 locale resource |
+| `map.localMapVersion` | 英语-only Local Map V2 | Map V2 migration/reducer | movement、Calendar、Prompt、UI | custom map/level/room 只存 `nameEn/descriptionEn` |
+| `map.generatedNodes[].nameEn/summaryEn`、`map.proposals[].reasonEn` | World Map Expansion 生成地点的英语语义权威 | Map Expansion model adoption + map proposal reducer | World Map projection、Prompt、UI | 删除 `name/summary/reason`；中文模型记录非致命跳过；Tina 当前为 0 行 |
+| `timeline[].summaryEn/sourceRef` | 全局滚动历史的英语摘要和确定性来源 | turn/transition reducers、V1 migration | lifecycle、Knowledge、UI | 取代混合语言 `label`；不修改 clock/order |
+| `scene.timelineEntries[].summaryEn/sourceRef` | 当前 Scene append-only 英语历史 | turn/transition reducers、V1 migration | Performer、archive、UI | 取代 `label`；Tina 126 条有确定性英语来源，message `6` 使用 Revision 4 已批准精确替换，共 127/127 |
+| `sceneArchive[].timelineEntries[].summaryEn/sourceRef` | 封存 Scene append-only 英语历史索引 | archive projector、V1 migration | Archive/Calendar UI、Knowledge | 原 timeline 不删除/重排，只换 prose 字段和补 source ref |
+| `extra.hogwartsMud.languageVersion` | Hogwarts assistant 消息语言合同；目标值 `1` | opening/turn/transition message builders、V1 migration | render、archive、Knowledge | 不再保存 `translatedZh/textZh/display_text/sourceEn` |
+| `extra.hogwartsMud.segments[].textEn` | 已接纳的英语 narration/dialogue | Performer/Opening workflow | observer、archive、Knowledge、locale queue | 与 `rawText` 互斥 |
+| `extra.hogwartsMud.segments[].rawText/language/authority` | 未接纳为英语权威、但可展示的模型原文证据 | model-language adoption boundary、V1 migration | message renderer、bounded diagnostics | `authority=model_output_evidence`；禁止入 State/Prompt/Knowledge |
+| `TranslationTableV1` | 每 user + timelineEpoch 的服务端持久化显示翻译逻辑表 | authenticated localization endpoint | localization adapter、LocalizedViewModelV1 | 位于 user files；snapshot + checksummed journal；不属于 JSONL/State/Knowledge |
+| `TranslationTableRecordV1` | 由 source hash、locale、provider/version 和稳定 record key 标识的一条译文/错误 | localization endpoint atomic upsert | localized view projector、idle queue | 不自动淘汰；浏览器清理不删除；旧 source hash 不能覆盖新源 |
+| `StaticLocaleResourcesV1` | `en/zh-CN` 静态 UI/Canon 显示字典 | source locale modules | UI view projectors | 不入 State/Prompt/Knowledge |
+| `LocalizedViewModelV1` | 英语权威 + 静态资源 + server translation row 的只读显示投影 | localized view projector | UI renderers | 不持久化，不回写权威 |
+| `session.displayLocale` | 当前页面显示语言 `zh-CN/en` | locale controller | UI renderers、idle scheduler | 默认 `zh-CN`；可记一个无剧情内容的浏览器偏好 |
+| `session.localizationQueueCounts/localizationVisiblePending/localizationActiveBatch/localizationPriorityKeys/localizationLastErrorCode` | 当前页面闲时翻译队列和有界状态 | idle localization scheduler | locale/status UI | 不写 JSONL；不保存译文 |
+| `MODEL_TASK_REGISTRY.local_translation.ledgerScope` | `ephemeral_display`，只记录当前页面尝试 | model task registry/scheduler | idle scheduler diagnostics | 不写 `modelTaskRuntime`，不增加 `stateRevision` |
+
+语言采纳规则：
+
+```text
+结构解析/非语言验证
+-> 逐字段语言分类
+-> 英语字段进入既有 authority/provenance/Reducer
+-> 非英语字段保留 raw model evidence，跳过对应 canonical field/record
+-> 独立合法记录继续结算
+```
+
+语言不匹配本身不得报错、repair、retry 或切换模型。JSON、Schema、稳定
+ID、ACL、authority、provenance 等非语言错误仍按原合同直接失败。
+
 ## UI session 字段
 
 这些字段只存在于当前页面实例，不写入 JSONL 世界权威。Calendar V2.1 的三栏布局、场景折叠和自由开场位置只改变这些页面状态，不改变 V2 世界数据模型。
@@ -211,8 +255,6 @@ actorLibrary membership != physical presence
 | `extra.hogwartsMud.turnTransaction.itemCandidates[]` | 本回合发现的新 Item 候选快照 | turn workflow | message renderer、retry | 只允许 `acquire`，不等于正式入库 |
 | `extra.hogwartsMud.turnDiagnostics` | bounded 回合诊断，含 request、response、validation 与 commit/error 边界 | turn diagnostics recorder | 后续 debug；Low validation failure 记录 `willRetry=false`，不保存第二次请求 |
 | `extra.hogwartsMud.sceneTransition.diagnostics` | actor states、active/local 提交对比及精简 `authoritativeItems` | transition message builder | 后续转场 debug；Item 按已提交 holder/目的地投影 |
-| `extra.hogwartsMud.sourceEn` | 英文事实原文 | message builder | translation/render |
-| `extra.hogwartsMud.translatedZh` | 显示译文缓存 | translation workflow | renderer；不得参与状态提取 |
 
 ## 排障入口
 

@@ -10,6 +10,10 @@ import { z } from 'zod';
 import {
     getModelTaskDefinition,
 } from '../../public/scripts/extensions/hogwarts-mud/domain/model-task-registry.js';
+import {
+    createModelLanguageMismatch,
+    isEnglishAuthorityText,
+} from '../../public/scripts/extensions/hogwarts-mud/domain/model-language-adoption.js';
 import { getConfigValue } from '../util.js';
 import { IDENTITY_OBSERVATION_JSON_SCHEMA, IDENTITY_OBSERVATION_RESULT_SCHEMA, IDENTITY_OBSERVATION_SYSTEM_RULES } from './identity-observation-contract.js';
 
@@ -210,17 +214,17 @@ const materialEventSchema =
             z.enum(MATERIAL_EVENT_TYPES),
         actorId:
             z.string().max(96),
-        objectText:
+        objectTextEn:
             z.string().max(300),
-        sourceText:
+        sourceTextEn:
             z.string().max(300),
-        targetText:
+        targetTextEn:
             z.string().max(300),
-        valueText:
+        valueTextEn:
             z.string().max(300),
-        previousValueText:
+        previousValueTextEn:
             z.string().max(300),
-        resultText:
+        resultTextEn:
             z.string().max(500),
         quantity:
             z.number()
@@ -268,11 +272,7 @@ const inventoryUpdateSchema =
             ),
         labelEn:
             z.string().max(200),
-        labelZh:
-            z.string().max(200),
         appearanceEn:
-            z.string().max(600),
-        appearanceZh:
             z.string().max(600),
         ownerId:
             z.string().max(96),
@@ -389,10 +389,34 @@ const inventoryTurnResultSchema =
             ).max(8),
     }).strict();
 
-const translationResultSchema =
+export const translationResultSchema =
     z.object({
         translation:
             z.string().max(20_000),
+    }).strict();
+
+export const translationBatchResultSchema =
+    z.object({
+        translations:
+            z.array(
+                z.object({
+                    index:
+                        z.number()
+                            .int()
+                            .min(0)
+                            .max(255),
+                    partIndex:
+                        z.number()
+                            .int()
+                            .min(0)
+                            .max(255),
+                    text:
+                        z.string()
+                            .min(1)
+                            .max(20_000),
+                }).strict(),
+            ).min(1)
+                .max(256),
     }).strict();
 
 const preTurnJsonSchema = {
@@ -486,12 +510,12 @@ const materialEventJsonSchema = {
     required: [
         'type',
         'actorId',
-        'objectText',
-        'sourceText',
-        'targetText',
-        'valueText',
-        'previousValueText',
-        'resultText',
+        'objectTextEn',
+        'sourceTextEn',
+        'targetTextEn',
+        'valueTextEn',
+        'previousValueTextEn',
+        'resultTextEn',
         'quantity',
         'operation',
         'slot',
@@ -509,22 +533,22 @@ const materialEventJsonSchema = {
         actorId: {
             type: 'string',
         },
-        objectText: {
+        objectTextEn: {
             type: 'string',
         },
-        sourceText: {
+        sourceTextEn: {
             type: 'string',
         },
-        targetText: {
+        targetTextEn: {
             type: 'string',
         },
-        valueText: {
+        valueTextEn: {
             type: 'string',
         },
-        previousValueText: {
+        previousValueTextEn: {
             type: 'string',
         },
-        resultText: {
+        resultTextEn: {
             type: 'string',
         },
         quantity: {
@@ -587,9 +611,7 @@ const inventoryUpdateJsonSchema = {
         'operation',
         'type',
         'labelEn',
-        'labelZh',
         'appearanceEn',
-        'appearanceZh',
         'ownerId',
         'holderId',
         'targetHolderId',
@@ -620,15 +642,7 @@ const inventoryUpdateJsonSchema = {
             type: 'string',
             maxLength: 200,
         },
-        labelZh: {
-            type: 'string',
-            maxLength: 200,
-        },
         appearanceEn: {
-            type: 'string',
-            maxLength: 600,
-        },
-        appearanceZh: {
             type: 'string',
             maxLength: 600,
         },
@@ -872,7 +886,7 @@ const inventoryTurnJsonSchema = {
     },
 };
 
-const translationJsonSchema = {
+export const translationJsonSchema = {
     type: 'object',
     additionalProperties: false,
     required: [
@@ -884,6 +898,271 @@ const translationJsonSchema = {
         },
     },
 };
+
+export const translationBatchJsonSchema = {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+        'translations',
+    ],
+    properties: {
+        translations: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 256,
+            items: {
+                type: 'object',
+                additionalProperties:
+                    false,
+                required: [
+                    'index',
+                    'partIndex',
+                    'text',
+                ],
+                properties: {
+                    index: {
+                        type: 'integer',
+                        minimum: 0,
+                        maximum: 255,
+                    },
+                    partIndex: {
+                        type: 'integer',
+                        minimum: 0,
+                        maximum: 255,
+                    },
+                    text: {
+                        type: 'string',
+                    },
+                },
+            },
+        },
+    },
+};
+
+function rejectNonEnglishRecord({
+    source,
+    fields,
+    taskId,
+    recordId,
+    fieldPrefix,
+    diagnostics,
+}) {
+    const rejectedFields =
+        fields.filter(field => {
+            const value =
+                String(
+                    source?.[field] ||
+                    '',
+                ).trim();
+            return value &&
+                !isEnglishAuthorityText(
+                    value,
+                );
+        });
+    diagnostics.push(
+        ...rejectedFields.map(field =>
+            createModelLanguageMismatch({
+                taskId,
+                fieldPath:
+                    `${fieldPrefix}.${field}`,
+                recordId,
+            })),
+    );
+    return rejectedFields.length > 0;
+}
+
+export function adoptLocalPreTurnLanguage(
+    result,
+) {
+    const diagnostics = [];
+    const temporal = {
+        ...(result?.temporal || {}),
+    };
+    const check = {
+        ...(result?.check || {}),
+    };
+    for (const [
+        owner,
+        fieldPrefix,
+    ] of [
+            [
+                temporal,
+                'temporal',
+            ],
+            [
+                check,
+                'check',
+            ],
+        ]) {
+        if (
+            String(
+                owner.reasonEn ||
+                '',
+            ).trim() &&
+            !isEnglishAuthorityText(
+                owner.reasonEn,
+            )
+        ) {
+            diagnostics.push(
+                createModelLanguageMismatch({
+                    taskId:
+                        'local_pre_turn_adjudicator',
+                    fieldPath:
+                        `${fieldPrefix}.reasonEn`,
+                }),
+            );
+            owner.reasonEn = '';
+        }
+    }
+    return {
+        result: {
+            ...result,
+            temporal,
+            check,
+        },
+        diagnostics,
+    };
+}
+
+export function adoptLocalPostTurnLanguage(
+    result,
+) {
+    const diagnostics = [];
+    const materialEvents = (
+        result?.materialEvents ||
+        []
+    ).filter((event, index) =>
+        !rejectNonEnglishRecord({
+            source: event,
+            fields: [
+                'objectTextEn',
+                'sourceTextEn',
+                'targetTextEn',
+                'valueTextEn',
+                'previousValueTextEn',
+                'resultTextEn',
+            ],
+            taskId:
+                'local_post_turn_observer',
+            recordId:
+                String(
+                    event?.id ||
+                    index,
+                ),
+            fieldPrefix:
+                `materialEvents[${index}]`,
+            diagnostics,
+        }));
+    const actorUpdates = (
+        result?.actorUpdates ||
+        []
+    ).filter((update, index) =>
+        !rejectNonEnglishRecord({
+            source: update,
+            fields: [
+                'currentActivityEn',
+            ],
+            taskId:
+                'local_post_turn_observer',
+            recordId:
+                String(
+                    update?.actorId ||
+                    index,
+                ),
+            fieldPrefix:
+                `actorUpdates[${index}]`,
+            diagnostics,
+        }));
+    const identityObservations = (
+        result?.identityObservations ||
+        []
+    ).filter((observation, index) =>
+        !rejectNonEnglishRecord({
+            source: observation,
+            fields: [
+                'injuryType',
+                'description',
+            ],
+            taskId:
+                'local_post_turn_observer',
+            recordId:
+                String(
+                    observation
+                        ?.actorId ||
+                    index,
+                ),
+            fieldPrefix:
+                `identityObservations[${index}]`,
+            diagnostics,
+        }));
+    const eventBoundary = {
+        ...(result?.eventBoundary ||
+            {}),
+    };
+    if (
+        String(
+            eventBoundary.reasonEn ||
+            '',
+        ).trim() &&
+        !isEnglishAuthorityText(
+            eventBoundary.reasonEn,
+        )
+    ) {
+        diagnostics.push(
+            createModelLanguageMismatch({
+                taskId:
+                    'local_post_turn_observer',
+                fieldPath:
+                    'eventBoundary.reasonEn',
+            }),
+        );
+        eventBoundary.reasonEn = '';
+    }
+    return {
+        result: {
+            ...result,
+            materialEvents,
+            eventBoundary,
+            actorUpdates,
+            identityObservations,
+        },
+        diagnostics,
+    };
+}
+
+export function adoptLocalInventoryLanguage(
+    result,
+) {
+    const diagnostics = [];
+    const inventoryUpdates = (
+        result?.inventoryUpdates ||
+        []
+    ).filter((update, index) =>
+        !rejectNonEnglishRecord({
+            source: update,
+            fields: [
+                'labelEn',
+                'appearanceEn',
+            ],
+            taskId:
+                'local_inventory_observer',
+            recordId:
+                String(
+                    update?.id ||
+                    index,
+                ),
+            fieldPrefix:
+                `inventoryUpdates[${index}]`,
+            diagnostics,
+        }));
+    return {
+        result: {
+            ...result,
+            inventoryUpdates,
+        },
+        diagnostics,
+    };
+}
 
 let requestQueue =
     Promise.resolve();
@@ -1477,7 +1756,7 @@ Rules:
 - A completed gift, loan, return, or theft crosses the implicit-item boundary even for an ordinary quill, book, classroom supply, or everyday object. Emit a proposal so owner and holder can remain distinct. For a new borrowed object, use operation acquire, preserve the lender as ownerId, set the borrower as holderId, and use transferMode loan.
 - New candidates use operation acquire and a stable descriptive snake_case ID. They are only proposals; the player decides whether to record them.
 - Existing possessions must reuse a supplied inventory ID.
-- New candidates require accurate English and Simplified Chinese labels and objective appearances.
+- Every proposal requires an accurate English labelEn and objective appearanceEn. Do not output translated display fields.
 - ownerId is the social/legal owner. holderId is the current holder. A gift changes both; a loan or theft changes holderId but preserves ownerId.
 - targetHolderId is required only for give/lend. Use empty string otherwise.
 - storyRoles may include signature, social, clue, promise, keepsake. Use an empty array when none apply.
@@ -1537,7 +1816,7 @@ function shouldObserveInventory(
             .test(source);
 }
 
-const TRANSLATION_SYSTEM = `你是哈利·波特文字 RPG 的专业英译简中翻译器。英文是权威原文，中文只用于显示。
+export const TRANSLATION_SYSTEM = `你是哈利·波特文字 RPG 的专业英译简中翻译器。英文是权威原文，中文只用于显示。
 
 要求：
 - 完整翻译输入中的全部英文，不得总结、删节、续写、解释或改变事实。
@@ -1547,11 +1826,28 @@ const TRANSLATION_SYSTEM = `你是哈利·波特文字 RPG 的专业英译简中
 - “Name, age N,” 这类同位语表示人物年龄，必须译为“N 岁”，不得误作章节或序号。
 - 如实保留动作、物质和空间关系，不把沾染、摆放、移动等物理事实改写成比喻。
 - 咒语名称和咒文必须逐字保留原文（例如 Wingardium Leviosa、Expelliarmus、Expecto Patronum），不得翻译、音译或添加中文括注；只翻译咒语周围的叙述。
+- 除逐字保留的咒语、URL 和占位符外，输出不得残留任何英文单词；Year、Scene、Storyline、Current、flick、swish 等普通英文必须译成中文。
 - 输入可能是中英混排；其中中文是已经锁定的术语，必须保留，并把其余所有英文完整译成中文。
 - glossary 中的 source 必须使用对应 target，不得自行改译。
 - 所有形如 [[HPMUD_...]] 的占位符必须逐字原样保留，顺序和数量不得改变。
 - 不要翻译或改写占位符内部内容。
+- 输出 JSON 前逐字检查最终 translation；除 HPMUD 占位符和 URL 外，只要仍有 A-Z 或 a-z 字母，就必须先译成中文，不能原样返回。
 - 只返回符合 JSON Schema 的 translation 字段。`;
+
+export const TRANSLATION_BATCH_SYSTEM = `你是哈利·波特文字 RPG 的专业英译简中翻译器。英文是权威原文，中文只用于显示。
+
+要求：
+- segments 中每一项独立完整翻译，不得总结、删节、合并、拆分、续写、解释或改变事实。
+- 每个输出项必须逐字复制对应输入的 index 和 partIndex；不得缺项、重复或新增 ID。
+- 使用自然、流畅、有叙事感的现代简体中文；短标题和短标签只给出一个简洁译名。
+- 保留每项中的段落、打断、引号、强调、数字和专有格式。
+- 咒语名称和咒文必须逐字保留原文，不得翻译、音译或添加中文括注。
+- 除逐字保留的咒语、URL 和术语占位符外，每个 text 都不得残留任何英文单词；Year、Scene、Storyline、Current、flick、swish 等普通英文必须译成中文。
+- 输入可能中英混排；已有中文和 glossary 锁定术语必须原样保留。
+- 所有形如 ⟦术语0⟧ 的术语占位符必须逐字原样保留。
+- text 中不得输出 [[HPMUD_<index>_<partIndex>]] 字段边界标记。
+- 输出 JSON 前逐项逐字检查每个 text；除 ⟦术语0⟧ 这类占位符和 URL 外，只要仍有 A-Z 或 a-z 字母，就必须先译成中文，不能原样返回。
+- 只返回符合 JSON Schema 的 translations 数组。`;
 
 function getTranslationMarkers(
     text,
@@ -1583,6 +1879,133 @@ function normalizeGeneratedTranslation(
             '',
         )
         .trim();
+}
+
+export function parseProtectedTranslationSegments(
+    source,
+) {
+    const input =
+        String(source || '');
+    const pattern =
+        /\[\[\s*HPMUD_(\d+)_(\d+)\s*\]\]\s*([\s\S]*?)(?=\[\[\s*HPMUD_\d+_\d+\s*\]\]|$)/gu;
+    const segments = [
+        ...input.matchAll(
+            pattern,
+        ),
+    ].map(match => ({
+        index:
+            Number(match[1]),
+        partIndex:
+            Number(match[2]),
+        marker:
+            `[[HPMUD_${
+                Number(match[1])
+            }_${
+                Number(match[2])
+            }]]`,
+        text:
+            String(
+                match[3] ||
+                '',
+            ).trim(),
+    }));
+    const sourceMarkers =
+        getTranslationMarkers(
+            input,
+            /\[\[\s*HPMUD_\d+_\d+\s*\]\]/gu,
+        );
+    const identities =
+        new Set(
+            segments.map(segment =>
+                `${
+                    segment.index
+                }:${
+                    segment.partIndex
+                }`),
+        );
+    if (
+        sourceMarkers.length !==
+            segments.length ||
+        identities.size !==
+            segments.length ||
+        segments.some(segment =>
+            !segment.text)
+    ) {
+        throw new Error(
+            'Local translation input has invalid protected segment boundaries.',
+        );
+    }
+    return segments;
+}
+
+export function restoreStructuredTranslationSegments(
+    sourceSegments,
+    translations,
+) {
+    const expected =
+        new Map(
+            sourceSegments.map(
+                segment => [
+                    `${
+                        segment.index
+                    }:${
+                        segment.partIndex
+                    }`,
+                    segment,
+                ],
+            ),
+        );
+    const translated =
+        new Map();
+    for (const entry of (
+        translations || []
+    )) {
+        const identity =
+            `${
+                Number(entry?.index)
+            }:${
+                Number(
+                    entry?.partIndex,
+                )
+            }`;
+        const text =
+            normalizeGeneratedTranslation(
+                entry?.text,
+            );
+        if (
+            !expected.has(identity) ||
+            translated.has(identity) ||
+            !text
+        ) {
+            throw new Error(
+                'Local translation changed structured segment identities.',
+            );
+        }
+        translated.set(
+            identity,
+            text,
+        );
+    }
+    if (
+        translated.size !==
+        expected.size
+    ) {
+        throw new Error(
+            'Local translation changed structured segment identities.',
+        );
+    }
+    return sourceSegments
+        .map(segment =>
+            `${segment.marker} ${
+                translated.get(
+                    `${
+                        segment.index
+                    }:${
+                        segment.partIndex
+                    }`,
+                )
+            }`)
+        .join('\n');
 }
 
 export function translateText(
@@ -1649,25 +2072,54 @@ export function translateText(
                 ...new Set(
                     getTranslationMarkers(
                         source,
-                        /\[\[\s*HPMUD_TERM_\d+\s*\]\]/gu,
+                        /⟦\s*术语\s*\d+\s*⟧/gu,
                     ),
                 ),
             ].sort();
+        const sourceSegments =
+            parseProtectedTranslationSegments(
+                source,
+            );
+        const usesStructuredBatch =
+            sourceSegments.length > 0;
         const translated =
             await callStructuredModel({
                 taskId:
                     'local_translation',
                 system:
-                    TRANSLATION_SYSTEM,
-                input: {
-                    text: source,
-                    glossary:
-                        normalizedGlossary,
-                },
+                    usesStructuredBatch
+                        ? TRANSLATION_BATCH_SYSTEM
+                        : TRANSLATION_SYSTEM,
+                input:
+                    usesStructuredBatch
+                        ? {
+                            segments:
+                                sourceSegments
+                                    .map(segment => ({
+                                        index:
+                                            segment.index,
+                                        partIndex:
+                                            segment
+                                                .partIndex,
+                                        text:
+                                            segment.text,
+                                    })),
+                            glossary:
+                                normalizedGlossary,
+                        }
+                        : {
+                            text: source,
+                            glossary:
+                                normalizedGlossary,
+                        },
                 jsonSchema:
-                    translationJsonSchema,
+                    usesStructuredBatch
+                        ? translationBatchJsonSchema
+                        : translationJsonSchema,
                 resultSchema:
-                    translationResultSchema,
+                    usesStructuredBatch
+                        ? translationBatchResultSchema
+                        : translationResultSchema,
                 unload,
                 modelOverride:
                     model ||
@@ -1677,11 +2129,18 @@ export function translateText(
                     8_192,
             });
         let translation =
-            normalizeGeneratedTranslation(
-                translated
-                    .result
-                    .translation,
-            );
+            usesStructuredBatch
+                ? restoreStructuredTranslationSegments(
+                    sourceSegments,
+                    translated
+                        .result
+                        .translations,
+                )
+                : normalizeGeneratedTranslation(
+                    translated
+                        .result
+                        .translation,
+                );
         let translatedMarkers =
             getTranslationMarkers(
                 translation,
@@ -1704,7 +2163,7 @@ export function translateText(
                 ...new Set(
                     getTranslationMarkers(
                         translation,
-                        /\[\[\s*HPMUD_TERM_\d+\s*\]\]/gu,
+                        /⟦\s*术语\s*\d+\s*⟧/gu,
                     ),
                 ),
             ].sort();
@@ -1722,10 +2181,16 @@ export function translateText(
                 JSON.stringify(
                     sourceMarkers,
                 ) ||
+            JSON.stringify(
+                translatedTermMarkers,
+            ) !==
+                JSON.stringify(
+                    sourceTermMarkers,
+                ) ||
             unknownTermMarkers.length
         ) {
             throw new Error(
-                `Local translation changed protected placeholders: fields=${JSON.stringify(sourceMarkers)} translatedFields=${JSON.stringify(translatedMarkers)} unknownTerms=${JSON.stringify(unknownTermMarkers)}`,
+                `Local translation changed protected placeholders: fields=${JSON.stringify(sourceMarkers)} translatedFields=${JSON.stringify(translatedMarkers)} sourceTerms=${JSON.stringify(sourceTermMarkers)} translatedTerms=${JSON.stringify(translatedTermMarkers)} unknownTerms=${JSON.stringify(unknownTermMarkers)}`,
             );
         }
         return {
@@ -1743,19 +2208,37 @@ export function adjudicateTurn(
         model = '',
     } = {},
 ) {
-    return enqueueLocalSemanticOperation(() =>
-        callStructuredModel({
-            taskId:
+    return enqueueLocalSemanticOperation(async () => {
+        const modeled =
+            await callStructuredModel({
+                taskId:
                 'local_pre_turn_adjudicator',
-            system:
+                system:
                 PRE_TURN_SYSTEM,
-            input,
-            jsonSchema:
+                input,
+                jsonSchema:
                 preTurnJsonSchema,
-            resultSchema:
+                resultSchema:
                 preTurnResultSchema,
-            modelOverride: model,
-        }));
+                modelOverride: model,
+            });
+        const adopted =
+            adoptLocalPreTurnLanguage(
+                modeled.result,
+            );
+        return {
+            ...modeled,
+            result: adopted.result,
+            diagnostics: {
+                ...modeled.diagnostics,
+                languageMismatches:
+                    adopted.diagnostics,
+                languageMismatchCount:
+                    adopted.diagnostics
+                        .length,
+            },
+        };
+    });
 }
 
 export function validateObservedPerception(
@@ -1866,13 +2349,15 @@ export function observeTurn(
             ...(input || {}),
             narrativeText,
         };
-        const {
-            inventory = [],
-            narrativeText:
-                _narrativeText,
-            ...coreInput
-        } = normalizedInput;
-        const core =
+        const inventory =
+            normalizedInput.inventory ||
+            [];
+        const coreInput = {
+            ...normalizedInput,
+        };
+        delete coreInput.inventory;
+        delete coreInput.narrativeText;
+        const coreModel =
             await callStructuredModel({
                 taskId:
                     'local_post_turn_observer',
@@ -1887,6 +2372,25 @@ export function observeTurn(
                 unload: true,
                 modelOverride: model,
             });
+        const coreAdoption =
+            adoptLocalPostTurnLanguage(
+                coreModel.result,
+            );
+        const core = {
+            ...coreModel,
+            result:
+                coreAdoption.result,
+            diagnostics: {
+                ...coreModel.diagnostics,
+                languageMismatches:
+                    coreAdoption
+                        .diagnostics,
+                languageMismatchCount:
+                    coreAdoption
+                        .diagnostics
+                        .length,
+            },
+        };
         const perceptionValidation =
             validateObservedPerception(
                 core.result
@@ -1936,13 +2440,27 @@ export function observeTurn(
                             settings
                                 .inventoryModel,
                     });
+                const inventoryAdoption =
+                    adoptLocalInventoryLanguage(
+                        inventoryResult
+                            .result,
+                    );
                 inventoryUpdates =
-                    inventoryResult
+                    inventoryAdoption
                         .result
                         .inventoryUpdates;
                 inventoryDiagnostics =
-                    inventoryResult
-                        .diagnostics;
+                    {
+                        ...inventoryResult
+                            .diagnostics,
+                        languageMismatches:
+                            inventoryAdoption
+                                .diagnostics,
+                        languageMismatchCount:
+                            inventoryAdoption
+                                .diagnostics
+                                .length,
+                    };
             } catch (error) {
                 console.warn(
                     '[Hogwarts MUD] Local inventory observation unavailable; omitting optional item updates',
@@ -1975,6 +2493,29 @@ export function observeTurn(
                     inventoryDiagnostics
                         ?.taskId ||
                     '',
+                languageMismatches: [
+                    ...(
+                        core.diagnostics
+                            .languageMismatches ||
+                        []
+                    ),
+                    ...(
+                        inventoryDiagnostics
+                            ?.languageMismatches ||
+                        []
+                    ),
+                ],
+                languageMismatchCount:
+                    Number(
+                        core.diagnostics
+                            .languageMismatchCount ||
+                        0,
+                    ) +
+                    Number(
+                        inventoryDiagnostics
+                            ?.languageMismatchCount ||
+                        0,
+                    ),
             },
         };
     });

@@ -126,9 +126,9 @@ test('structured local observation normalizes material changes', () => {
                     type:
                         'object_placed',
                     actorId: 'player',
-                    objectText:
+                    objectTextEn:
                         'twenty-eight toy bears',
-                    targetText:
+                    targetTextEn:
                         'headboard',
                     quantity: 28,
                     mapId,
@@ -146,7 +146,7 @@ test('structured local observation normalizes material changes', () => {
                     type:
                         'outfit_changed',
                     actorId: 'player',
-                    valueText:
+                    valueTextEn:
                         'striped pyjamas',
                     operation: 'set',
                     mapId,
@@ -176,11 +176,11 @@ test('structured local observation normalizes material changes', () => {
         28,
     );
     assert.match(
-        placement.objectText,
+        placement.objectTextEn,
         /toy bears/u,
     );
     assert.match(
-        placement.targetText,
+        placement.targetTextEn,
         /headboard/u,
     );
     assert.deepEqual(
@@ -192,7 +192,7 @@ test('structured local observation normalizes material changes', () => {
     );
     assert.ok(outfit);
     assert.equal(
-        outfit.valueText,
+        outfit.valueTextEn,
         'striped pyjamas',
     );
     assert.deepEqual(
@@ -226,12 +226,8 @@ test('local inventory observation admits only evidenced durable player possessio
                         'acquire',
                     labelEn:
                         'Harry Potter Autograph',
-                    labelZh:
-                        '哈利·波特的签名',
                     detailEn:
                         'Lavender\'s Sorting parchment bearing Harry Potter\'s crooked H autograph.',
-                    detailZh:
-                        '拉文德的分院笔记羊皮纸，上面留着哈利·波特歪歪扭扭的 H 签名。',
                     importance:
                         'important',
                     custody:
@@ -252,12 +248,8 @@ test('local inventory observation admits only evidenced durable player possessio
                         'acquire',
                     labelEn:
                         'Toast',
-                    labelZh:
-                        '烤面包',
                     detailEn:
                         'An ordinary breakfast item.',
-                    detailZh:
-                        '普通早餐。',
                     importance:
                         'ordinary',
                     custody:
@@ -290,12 +282,8 @@ test('local inventory observation admits only evidenced durable player possessio
             type: 'document',
             labelEn:
                 'Harry Potter Autograph',
-            label:
-                '哈利·波特的签名',
             appearanceEn:
                 'Lavender\'s Sorting parchment bearing Harry Potter\'s crooked H autograph.',
-            appearance:
-                '拉文德的分院笔记羊皮纸，上面留着哈利·波特歪歪扭扭的 H 签名。',
             ownerId:
                 'player',
             holderId:
@@ -470,8 +458,8 @@ test('complete material event taxonomy reduces to current room and presentation 
             'placed',
             'object_placed',
             {
-                objectText: 'bear',
-                targetText:
+                objectTextEn: 'bear',
+                targetTextEn:
                     'headboard',
                 persistence:
                     'permanent',
@@ -481,25 +469,25 @@ test('complete material event taxonomy reduces to current room and presentation 
             'moved',
             'object_moved',
             {
-                objectText: 'bear',
-                sourceText:
+                objectTextEn: 'bear',
+                sourceTextEn:
                     'headboard',
-                targetText: 'trunk',
+                targetTextEn: 'trunk',
             },
         ),
         event(
             'removed',
             'object_removed',
             {
-                objectText: 'bear',
+                objectTextEn: 'bear',
             },
         ),
         event(
             'adjusted',
             'scene_adjusted',
             {
-                targetText: 'bed curtains',
-                resultText:
+                targetTextEn: 'bed curtains',
+                resultTextEn:
                     'The bed curtains are open.',
             },
         ),
@@ -507,23 +495,23 @@ test('complete material event taxonomy reduces to current room and presentation 
             'damaged',
             'scene_damaged',
             {
-                targetText: 'window',
+                targetTextEn: 'window',
             },
         ),
         event(
             'repaired',
             'scene_repaired',
             {
-                targetText: 'window',
+                targetTextEn: 'window',
             },
         ),
         event(
             'soiled',
             'scene_soiled',
             {
-                objectText: 'ink',
-                targetText: 'carpet',
-                resultText:
+                objectTextEn: 'ink',
+                targetTextEn: 'carpet',
+                resultTextEn:
                     'Ink stains the carpet.',
             },
         ),
@@ -531,14 +519,14 @@ test('complete material event taxonomy reduces to current room and presentation 
             'cleaned',
             'scene_cleaned',
             {
-                targetText: 'carpet',
+                targetTextEn: 'carpet',
             },
         ),
         event(
             'outfit',
             'outfit_changed',
             {
-                valueText:
+                valueTextEn:
                     'striped pyjamas',
             },
         ),
@@ -546,7 +534,7 @@ test('complete material event taxonomy reduces to current room and presentation 
             'accessory_add',
             'accessory_changed',
             {
-                valueText:
+                valueTextEn:
                     'silver necklace',
                 slot: 'neck',
             },
@@ -555,7 +543,7 @@ test('complete material event taxonomy reduces to current room and presentation 
             'accessory_remove',
             'accessory_changed',
             {
-                valueText:
+                valueTextEn:
                     'silver necklace',
                 operation: 'remove',
                 slot: 'neck',
@@ -565,7 +553,7 @@ test('complete material event taxonomy reduces to current room and presentation 
             'hair',
             'hairstyle_changed',
             {
-                valueText: 'ponytail',
+                valueTextEn: 'ponytail',
                 slot: 'hair',
             },
         ),
@@ -573,7 +561,7 @@ test('complete material event taxonomy reduces to current room and presentation 
             'condition',
             'appearance_changed',
             {
-                valueText:
+                valueTextEn:
                     'soaking wet',
             },
         ),
@@ -581,7 +569,7 @@ test('complete material event taxonomy reduces to current room and presentation 
             'condition_clear',
             'appearance_cleared',
             {
-                resultText:
+                resultTextEn:
                     'dried off',
             },
         ),
@@ -589,7 +577,7 @@ test('complete material event taxonomy reduces to current room and presentation 
             'held',
             'object_held',
             {
-                objectText: 'wand',
+                objectTextEn: 'wand',
                 hand: 'right',
             },
         ),
@@ -597,7 +585,7 @@ test('complete material event taxonomy reduces to current room and presentation 
             'released',
             'object_released',
             {
-                objectText: 'wand',
+                objectTextEn: 'wand',
                 hand: 'right',
             },
         ),
@@ -644,7 +632,7 @@ test('complete material event taxonomy reduces to current room and presentation 
     );
     assert.equal(
         current.actorPresentations
-            .player.outfit,
+            .player.outfitEn,
         'striped pyjamas',
     );
     assert.deepEqual(
@@ -654,7 +642,7 @@ test('complete material event taxonomy reduces to current room and presentation 
     );
     assert.equal(
         current.actorPresentations
-            .player.hair,
+            .player.hairEn,
         'ponytail',
     );
     assert.deepEqual(
@@ -669,7 +657,7 @@ test('complete material event taxonomy reduces to current room and presentation 
     );
     assert.equal(
         current.actorPresentations
-            .player.heldObject,
+            .player.heldObjectEn,
         '',
     );
 });
@@ -684,9 +672,9 @@ test('legacy actor descriptions split stable appearance from current presentatio
         {
             physicalDescriptionEn:
                 'A girl with bushy brown hair and large front teeth.',
-            outfit:
+            outfitEn:
                 'new Hogwarts robes already fastened',
-            heldObject: '',
+            heldObjectEn: '',
         },
     );
 
@@ -781,9 +769,9 @@ test('material events persist presentation and only project effects for the curr
             type:
                 'object_placed',
             actorId: 'player',
-            objectText:
+            objectTextEn:
                 'twenty-eight bears',
-            targetText:
+            targetTextEn:
                 'headboard',
             quantity: 28,
             mapId,
@@ -800,7 +788,7 @@ test('material events persist presentation and only project effects for the curr
             type:
                 'outfit_changed',
             actorId: 'player',
-            valueText:
+            valueTextEn:
                 'striped pyjamas',
             mapId,
             roomId,
@@ -814,7 +802,7 @@ test('material events persist presentation and only project effects for the curr
             id: 'wrong_room',
             type:
                 'scene_adjusted',
-            targetText:
+            targetTextEn:
                 'another bed',
             mapId,
             roomId: 'back_garden',
@@ -848,7 +836,7 @@ test('material events persist presentation and only project effects for the curr
         );
     assert.equal(
         next.actorPresentations
-            .player.outfit,
+            .player.outfitEn,
         'striped pyjamas',
     );
     assert.equal(
@@ -881,7 +869,7 @@ test('material events persist presentation and only project effects for the curr
     assert.equal(
         elsewhere
             .actorPresentations
-            .player.outfit,
+            .player.outfitEn,
         'striped pyjamas',
     );
 
@@ -923,7 +911,7 @@ test('material events persist presentation and only project effects for the curr
         );
     assert.equal(
         committed.actorPresentations
-            .player.outfit,
+            .player.outfitEn,
         'striped pyjamas',
     );
     assert.equal(

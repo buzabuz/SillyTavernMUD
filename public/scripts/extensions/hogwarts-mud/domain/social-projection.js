@@ -14,24 +14,65 @@ import {
     buildSocialClaimsAudienceProjection,
     isSocialFamilyEdgeVisible,
 } from './social-claims-projection.js';
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from './localized-view-model.js';
 
-function getSocialClosenessLabel(
+function staticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+) {
+    return getStaticLocaleText(
+        staticKey,
+        normalizeDisplayLocale(
+            displayLocale,
+        ),
+    ) ||
+        sourceTextEn;
+}
+
+function getSocialClosenessStage(
     closeness,
 ) {
     if (closeness >= 90) {
-        return '终身或家庭级纽带';
+        return 'lifelong';
     }
-    if (closeness >= 70) return '知己';
-    if (closeness >= 50) return '密友';
-    if (closeness >= 35) return '朋友';
-    if (closeness >= 20) return '熟人';
-    if (closeness >= 10) return '初识';
-    return '无关系';
+    if (closeness >= 70) return 'confidant';
+    if (closeness >= 50) return 'close_friend';
+    if (closeness >= 35) return 'friend';
+    if (closeness >= 20) return 'acquaintance';
+    if (closeness >= 10) {
+        return 'new_acquaintance';
+    }
+    return 'none';
+}
+
+function getSocialClosenessLabel(
+    closeness,
+    displayLocale,
+) {
+    const stage =
+        getSocialClosenessStage(
+            closeness,
+        );
+    return staticText(
+        displayLocale,
+        `ui.relationship.stage.${stage}`,
+        stage,
+    );
 }
 
 export function deriveRelationshipLabels(
     value = {},
+    displayLocale =
+    'zh-CN',
 ) {
+    const locale =
+        normalizeDisplayLocale(
+            displayLocale,
+        );
     const edge =
         normalizeSocialRelationshipEdge(
             value,
@@ -39,9 +80,14 @@ export function deriveRelationshipLabels(
     const tags = new Set(
         edge.structuralTags,
     );
+    const stageCode =
+        getSocialClosenessStage(
+            edge.closeness,
+        );
     const stage =
         getSocialClosenessLabel(
             edge.closeness,
+            locale,
         );
     const labels = [];
     const add = label => {
@@ -52,6 +98,21 @@ export function deriveRelationshipLabels(
             labels.push(label);
         }
     };
+    const label =
+        (
+            code,
+            sourceTextEn,
+        ) =>
+            staticText(
+                locale,
+                `ui.relationship.label.${code}`,
+                sourceTextEn,
+            );
+    const familyLabel =
+        label(
+            'family',
+            'Family',
+        );
     const estranged =
         edge.resentment >= 35 ||
         edge.warmth <= -20 ||
@@ -74,24 +135,46 @@ export function deriveRelationshipLabels(
     if (tags.has('family')) {
         add(
             estranged
-                ? '疏远的亲人'
-                : '亲人',
+                ? label(
+                    'estranged_family',
+                    'Estranged family',
+                )
+                : familyLabel,
         );
     } else if (nemesis) {
-        add('宿敌');
+        add(
+            label(
+                'nemesis',
+                'Nemesis',
+            ),
+        );
     } else if (
         edge.closeness >= 35 &&
         estranged
     ) {
         add(
             edge.closeness >= 70
-                ? '疏远的知己'
+                ? label(
+                    'estranged_confidant',
+                    'Estranged confidant',
+                )
                 : edge.closeness >= 50
-                    ? '疏远的密友'
-                    : '疏远的朋友',
+                    ? label(
+                        'estranged_close_friend',
+                        'Estranged close friend',
+                    )
+                    : label(
+                        'estranged_friend',
+                        'Estranged friend',
+                    ),
         );
     } else if (hostile) {
-        add('敌对');
+        add(
+            label(
+                'hostile',
+                'Hostile',
+            ),
+        );
     } else if (
         (
             edge.warmth <= -20 ||
@@ -100,26 +183,56 @@ export function deriveRelationshipLabels(
         edge.closeness < 35 &&
         edge.familiarity >= 20
     ) {
-        add('反感的熟人');
+        add(
+            label(
+                'disliked_acquaintance',
+                'Disliked acquaintance',
+            ),
+        );
     } else if (
         awe &&
         tags.has('mentor')
     ) {
-        add('敬畏的导师');
+        add(
+            label(
+                'awed_mentor',
+                'Awed mentor',
+            ),
+        );
     } else if (
         awe &&
         tags.has('authority')
     ) {
-        add('敬畏的权威');
+        add(
+            label(
+                'awed_authority',
+                'Awed authority',
+            ),
+        );
     } else if (awe) {
-        add('敬畏');
+        add(
+            label(
+                'awe',
+                'Awe',
+            ),
+        );
     } else if (
         edge.respect >= 20 &&
         edge.trust <= -20
     ) {
-        add('尊敬但不信任');
+        add(
+            label(
+                'respect_without_trust',
+                'Respect without trust',
+            ),
+        );
     } else if (edge.fear >= 35) {
-        add('畏惧');
+        add(
+            label(
+                'afraid',
+                'Afraid',
+            ),
+        );
     } else {
         add(stage);
     }
@@ -128,48 +241,96 @@ export function deriveRelationshipLabels(
         edge.closeness >= 35 &&
         edge.resentment >= 35
     ) {
-        add('亲近但积怨的朋友');
+        add(
+            label(
+                'close_with_resentment',
+                'Close friend with resentment',
+            ),
+        );
     }
     if (
         tags.has('family') &&
-        labels[0] !== '亲人'
+        labels[0] !==
+            familyLabel
     ) {
-        add('亲人');
+        add(
+            familyLabel,
+        );
     }
-    if (awe) add('敬畏');
+    if (awe) {
+        add(
+            label(
+                'awe',
+                'Awe',
+            ),
+        );
+    }
     if (
         edge.respect >= 20 &&
         edge.trust <= -20
     ) {
-        add('尊敬但不信任');
+        add(
+            label(
+                'respect_without_trust',
+                'Respect without trust',
+            ),
+        );
     }
     if (
         edge.fear >= 35 &&
         !awe
     ) {
-        add('畏惧');
+        add(
+            label(
+                'afraid',
+                'Afraid',
+            ),
+        );
     }
     if (
         !tags.has('family') &&
-        stage !== '无关系' &&
+        stageCode !== 'none' &&
         ![
-            '反感的熟人',
+            label(
+                'disliked_acquaintance',
+                'Disliked acquaintance',
+            ),
             stage,
         ].includes(labels[0])
     ) {
         add(stage);
     }
     if (edge.protectiveness >= 50) {
-        add('保护者');
+        add(
+            label(
+                'protector',
+                'Protector',
+            ),
+        );
     }
     if (tags.has('mentor')) {
-        add('导师');
+        add(
+            label(
+                'mentor',
+                'Mentor',
+            ),
+        );
     }
     if (tags.has('authority')) {
-        add('权威');
+        add(
+            label(
+                'authority',
+                'Authority',
+            ),
+        );
     }
     if (tags.has('rivalry')) {
-        add('竞争者');
+        add(
+            label(
+                'rival',
+                'Rival',
+            ),
+        );
     }
     return labels;
 }
@@ -417,7 +578,15 @@ function projectSocialActiveEmotions(
 export function buildSocialAudienceProjection(
     worldState = {},
     audienceActorId = 'player',
+    {
+        displayLocale =
+        'zh-CN',
+    } = {},
 ) {
+    const locale =
+        normalizeDisplayLocale(
+            displayLocale,
+        );
     const audienceId =
         normalizeSocialAudienceId(
             audienceActorId,
@@ -627,10 +796,12 @@ export function buildSocialAudienceProjection(
                 projected.labels =
                     deriveRelationshipLabels(
                         projected,
+                        locale,
                     );
                 projected.stageLabel =
                     getSocialClosenessLabel(
                         projected.closeness,
+                        locale,
                     );
                 return projected;
             })

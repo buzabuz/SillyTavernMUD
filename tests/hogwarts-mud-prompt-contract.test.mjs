@@ -558,7 +558,10 @@ test('fixed birth dates produce age bands relative to the player at the current 
         },
     );
 
-    state.character.identity.birthDate =
+    state.character
+        .canonicalEn
+        .identity
+        .birthDate =
         '1960-07-01';
     assert.equal(
         getRelativeAgeProfile(

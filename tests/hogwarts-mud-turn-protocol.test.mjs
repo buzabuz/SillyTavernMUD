@@ -349,11 +349,29 @@ test('turn settlement advances at least fifteen minutes and reveals only prewrit
             detailEn: 'A moving edge remains around the mother figure.',
         }],
     };
-    const next = applyTurnTransaction(state, transaction, 'I open the door.');
+    const next = applyTurnTransaction(
+        state,
+        transaction,
+        'I open the door.',
+        {
+            sourceMessageId: 42,
+        },
+    );
     assert.equal(next.clock, '1991-07-24 · 09:30');
     assert.equal(next.turn.lastElapsedMinutes, 15);
     assert.equal(next.clues[0].id, 'mother_portrait');
     assert.deepEqual(next.storyArcs[0].revealedClueIds, ['mother_portrait']);
+    assert.deepEqual(
+        next.scene.timelineEntries.at(-1),
+        {
+            clock:
+                '1991-07-24 · 09:30',
+            summaryEn:
+                transaction.publicEventEn,
+            sourceRef:
+                'message:42:public_event',
+        },
+    );
     assert.equal(
         next.actors.find(actor =>
             actor.id ===

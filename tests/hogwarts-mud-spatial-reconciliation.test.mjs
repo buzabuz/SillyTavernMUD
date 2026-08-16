@@ -595,7 +595,7 @@ test('train actor tracking prefers an explicit corridor over a generic compartme
     );
 });
 
-test('spatial migration restores legacy player and actor room positions', () => {
+test('spatial migration restores actor rooms without inferring player movement from prose', () => {
     const state = createCurrentPlayingState();
     delete state.spatial;
     delete state.actors[0].mapId;
@@ -610,7 +610,11 @@ test('spatial migration restores legacy player and actor room positions', () => 
         '然后我跑到后花园绕着围墙跑了一圈。',
     );
     assert.equal(migrated.changed, true);
-    assert.equal(migrated.state.map.currentLocalNodeId, 'back_garden');
+    assert.equal(
+        migrated.state.map
+            .currentLocalNodeId,
+        'kitchen',
+    );
     assert.equal(migrated.state.actors[0].roomId, 'kitchen');
     assert.equal(migrated.state.actors[1].mapId, 'zhang_home');
 });
@@ -671,7 +675,7 @@ test('spatial v4 repairs a scene whose opening is at the barrier but room ID say
 test('spatial context allows reactions across a committed sightline', () => {
     const state = applyPlayerMovement(
         createCurrentPlayingState(),
-        '→【后花园】\n我跑到后花园。',
+        '→【back_garden】\n我跑到后花园。',
     ).state;
     const spatial = buildSpatialContext(state);
     assert.equal(spatial.player.roomId, 'back_garden');

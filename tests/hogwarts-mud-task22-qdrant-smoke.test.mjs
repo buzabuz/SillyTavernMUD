@@ -111,6 +111,25 @@ function matchesCondition(payload, condition) {
         payload,
         condition.key,
     );
+    if (condition.range) {
+        return (
+            (
+                condition.range.lte ===
+                    undefined ||
+                value <=
+                    condition.range.lte
+            ) &&
+            (
+                condition.range.gte ===
+                    undefined ||
+                value >=
+                    condition.range.gte
+            )
+        );
+    }
+    if (!condition.match) {
+        return false;
+    }
     if (Object.hasOwn(condition.match, 'value')) {
         return value === condition.match.value;
     }

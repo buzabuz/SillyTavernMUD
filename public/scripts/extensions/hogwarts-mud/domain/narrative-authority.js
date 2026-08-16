@@ -169,7 +169,6 @@ function projectCurrentItems(
             id: item.id,
             type: item.type,
             labelEn: item.labelEn,
-            label: item.label,
             state: item.state,
             physicalForm:
                 item.physicalForm,
@@ -875,7 +874,6 @@ function buildItemAuthorities(
                             item.id,
                             [
                                 item.labelEn,
-                                item.label,
                             ],
                             source.aliases,
                         ),
@@ -1078,9 +1076,6 @@ function buildRoomAuthorities(
             nameEn:
                 worldState.scene
                     ?.nameEn,
-            name:
-                worldState.scene
-                    ?.name,
         });
     }
     return rooms
@@ -1094,7 +1089,6 @@ function buildRoomAuthorities(
                     room.id,
                     [
                         room.nameEn,
-                        room.name,
                     ],
                     room.aliases,
                 ),
@@ -1535,7 +1529,6 @@ function buildSpellAuthorities(
                     [
                         spell.incantation,
                         spell.nameEn,
-                        spell.name,
                     ],
                     spell.aliases,
                 )

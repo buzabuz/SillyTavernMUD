@@ -6,11 +6,14 @@ import {
     buildNarrativePromptContext,
 } from '../domain/narrative-prompt-context.js';
 import {
-    validateHistoricalClaimProvenance,
-} from '../domain/narrative-memory-provenance.js';
-import {
     projectLowTierContextV1,
 } from '../domain/low-tier-context-v1.js';
+import {
+    MODEL_OUTPUT_EVIDENCE_AUTHORITY,
+    collectNonEnglishAuthorityFields,
+    createModelLanguageMismatch,
+    partitionModelSegments,
+} from '../domain/model-language-adoption.js';
 
 const LOW_TIER_NARRATIVE_AUTHORITY_PROMPT_CONTRACT =
     NARRATIVE_AUTHORITY_PROMPT_CONTRACT
@@ -34,15 +37,115 @@ const LOW_SEGMENT_KEYS = {
         new Set([
             'type',
             'textEn',
+            'rawText',
+            'language',
+            'authority',
         ]),
     dialogue:
         new Set([
             'type',
             'actorId',
             'textEn',
+            'rawText',
+            'language',
+            'authority',
             'historicalClaims',
         ]),
 };
+
+function adoptLowPerformanceLanguage(
+    payload,
+) {
+    const partition =
+        partitionModelSegments(
+            payload?.segments,
+            {
+                taskId:
+                    'scene_performance',
+            },
+        );
+    const diagnostics = [
+        ...partition.diagnostics,
+    ];
+    const stateProposals =
+        (
+            Array.isArray(
+                payload?.stateProposals,
+            )
+                ? payload
+                    .stateProposals
+                : []
+        ).filter((
+            proposal,
+            index,
+        ) => {
+            const mismatches =
+                collectNonEnglishAuthorityFields(
+                    proposal,
+                    {
+                        path:
+                            `stateProposals[${index}]`,
+                    },
+                );
+            diagnostics.push(
+                ...mismatches.map(
+                    fieldPath =>
+                        createModelLanguageMismatch({
+                            taskId:
+                                'scene_performance',
+                            fieldPath,
+                            recordId:
+                                proposal?.actorId ||
+                                proposal?.item
+                                    ?.id ||
+                                String(index),
+                        }),
+                ),
+            );
+            return mismatches.length ===
+                0;
+        });
+    const signalMismatches =
+        collectNonEnglishAuthorityFields(
+            payload?.signals,
+            {
+                path: 'signals',
+            },
+        );
+    diagnostics.push(
+        ...signalMismatches.map(
+            fieldPath =>
+                createModelLanguageMismatch({
+                    taskId:
+                        'scene_performance',
+                    fieldPath,
+                    recordId: 'signals',
+                }),
+        ),
+    );
+    const accepted = {
+        ...payload,
+        segments:
+            partition
+                .displaySegments,
+        stateProposals,
+        ...(signalMismatches.length
+            ? {
+                signals: {},
+            }
+            : {}),
+    };
+    Object.defineProperty(
+        accepted,
+        'modelLanguageDiagnostics',
+        {
+            value:
+                diagnostics,
+            enumerable: false,
+        },
+    );
+    return accepted;
+}
 const LOW_PROPOSAL_KEYS = {
     actor_activity:
         new Set([
@@ -150,9 +253,9 @@ export function validateLowScenePerformanceOutputContract(
     payload,
     {
         requireSceneProgression =
-            false,
+        false,
         requirePacingBeatRealized =
-            false,
+        false,
     } = {},
 ) {
     const errors = [];
@@ -190,6 +293,44 @@ export function validateLowScenePerformanceOutputContract(
                     `segments[${index}]`,
                     errors,
                 );
+                const hasTextEn =
+                    Boolean(
+                        String(
+                            segment
+                                ?.textEn ||
+                            '',
+                        ).trim(),
+                    );
+                const hasRawText =
+                    Boolean(
+                        String(
+                            segment
+                                ?.rawText ||
+                            '',
+                        ).trim(),
+                    );
+                if (
+                    hasTextEn ===
+                    hasRawText
+                ) {
+                    errors.push(
+                        `segments[${index}] 必须且只能包含 textEn 或 rawText。`,
+                    );
+                }
+                if (
+                    hasRawText &&
+                    (
+                        segment
+                            ?.authority !==
+                            MODEL_OUTPUT_EVIDENCE_AUTHORITY ||
+                        !segment
+                            ?.language
+                    )
+                ) {
+                    errors.push(
+                        `segments[${index}] rawText 缺少语言证据标记。`,
+                    );
+                }
                 (
                     segment
                         .historicalClaims ||
@@ -430,7 +571,6 @@ export function createTurnPerformanceWorkflow(ports) {
         getAuthoritativeSceneSpells =
         () => [],
         getRequestHeaders,
-        getSettings,
         parseItemOperationDirectives,
         parseJsonObject,
         recoverScenePerformancePayload,
@@ -438,11 +578,9 @@ export function createTurnPerformanceWorkflow(ports) {
         () => {},
         removeExplicitAddressDirective,
         resolvePlayerAddressing,
-        resolveTemporaryActorRevealedName,
         sendModelTaskRequest,
         setLiveSceneStreamPhase,
         settleNarrativeTurnPerformance,
-        translateOpeningValues,
         updateLiveSceneStream,
         validateScenePerformance,
     } = ports;
@@ -738,16 +876,22 @@ export function createTurnPerformanceWorkflow(ports) {
                     },
                     sceneFacts: {
                         authoritySnapshot:
-                            narrativeContext
-                                .authoritySnapshot,
+                            Object.fromEntries(
+                                Object.entries(
+                                    narrativeContext
+                                        .authoritySnapshot,
+                                ).filter(([
+                                    key,
+                                ]) =>
+                                    key !==
+                                    'currentActors'),
+                            ),
                         clockBeforeTurn:
                             state.clock,
                         currentScene:
                             projectCurrentSceneForPerformance(
                                 state.scene,
                             ),
-                        currentLocation:
-                            state.location,
                         currentRoomId:
                             state.map
                                 ?.currentLocalNodeId,
@@ -1174,6 +1318,10 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     recoverScenePerformancePayload(raw) ||
                     parsedPayload;
                 }
+                parsedPayload =
+                    adoptLowPerformanceLanguage(
+                        parsedPayload,
+                    );
                 const outputContract =
                     validateLowScenePerformanceOutputContract(
                         parsedPayload,
@@ -1217,20 +1365,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     movementResolution,
                     playerAction,
                 );
-                const historicalClaimValidation =
-                    validateHistoricalClaimProvenance(
-                        payload.segments,
-                        originalSceneInput
-                            .memoryActivations,
-                    );
-                validation.errors.push(
-                    ...historicalClaimValidation
-                        .errors,
-                );
-                validation.valid =
-                    validation
-                        .errors
-                        .length === 0;
                 recordTurnDiagnostic(
                     'performance_validation',
                     {
@@ -1259,6 +1393,10 @@ ${CANON_WIT_TONE_CONTRACT}`,
                                 ?.length ||
                             0,
                         validation,
+                        languageMismatchCount:
+                            parsedPayload
+                                .modelLanguageDiagnostics
+                                .length,
                         settlementSource:
                             payload
                                 .settlementSource,
@@ -1370,71 +1508,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
         };
     }
 
-    async function localizeTurnTransaction(transaction) {
-        const temporaryActorEntrances =
-        (
-            transaction
-                .temporaryActorEntrances ||
-            []
-        ).map(actor => ({
-            ...actor,
-            nameEn:
-                resolveTemporaryActorRevealedName(
-                    actor,
-                    transaction.segments,
-                ).nameEn ||
-                actor.nameEn,
-        }));
-        const source = {
-            ...transaction,
-            temporaryActorEntrances,
-        };
-        if (!getSettings().translationEnabled) {
-            return source;
-        }
-        const values = [
-            source.publicEventEn,
-            ...source.segments.map(segment => segment.textEn),
-            ...(source.actorUpdates || []).flatMap(update => [
-                update.currentActivityEn || '',
-            ]),
-            ...(source.revealedClues || []).flatMap(clue => [
-                clue.labelEn,
-                clue.detailEn,
-            ]),
-        ];
-        const translated = await translateOpeningValues(values);
-        let cursor = 0;
-        const localized = {
-            ...source,
-            publicEvent: translated[cursor++],
-            segments: source.segments.map(segment => ({
-                ...segment,
-                textZh: translated[cursor++],
-            })),
-            actorUpdates: [],
-            temporaryActorEntrances: [],
-            revealedClues: [],
-        };
-        (source.actorUpdates || []).forEach(update => {
-            const currentActivity = translated[cursor++];
-            localized.actorUpdates.push({
-                ...update,
-                currentActivity,
-            });
-        });
-        localized.temporaryActorEntrances =
-            temporaryActorEntrances;
-        (source.revealedClues || []).forEach(clue => {
-            localized.revealedClues.push({
-                ...clue,
-                label: translated[cursor++],
-                detail: translated[cursor++],
-            });
-        });
-        return localized;
-    }
-
     return {
         EXPLICIT_PROGRESSION_PATTERN,
         createSceneMomentumDirective,
@@ -1443,6 +1516,5 @@ ${CANON_WIT_TONE_CONTRACT}`,
         settleScenePerformance,
         generateScenePerformance,
         buildSceneTransaction,
-        localizeTurnTransaction,
     };
 }

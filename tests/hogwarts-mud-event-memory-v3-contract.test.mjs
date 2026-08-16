@@ -26,9 +26,6 @@ import {
     projectActorEventKnowledge,
     validateEventKnowledgeContract,
 } from '../public/scripts/extensions/hogwarts-mud/presence-witness-contract.js';
-import {
-    selectRecentChronicle,
-} from '../public/scripts/extensions/hogwarts-mud/workflows/directors.js';
 
 const ACTORS = [
     {
@@ -613,41 +610,5 @@ test('Global Chronicle appends once per Scene and rejects conflicting duplicates
                 },
             ),
         /Conflicting/u,
-    );
-});
-
-test('Daily chronicle projection keeps newest whole entries within its hard budget', () => {
-    const entries =
-        Array.from(
-            {
-                length: 5,
-            },
-            (_, index) => ({
-                sceneId:
-                    `scene_${index + 1}`,
-                endedClock:
-                    `1991-09-0${index + 1} · 20:00`,
-                summaryEn:
-                    `${`Scene ${index + 1} preserves a complete semantic summary without truncation. `.repeat(8)}`.trim(),
-            }),
-        );
-    const projected =
-        selectRecentChronicle({
-            globalChronicle: {
-                version: 1,
-                entries,
-            },
-        });
-
-    assert.ok(projected.length <= 3);
-    assert.ok(
-        JSON.stringify(projected)
-            .length <= 1400,
-    );
-    assert.deepEqual(
-        projected,
-        entries.slice(
-            -projected.length,
-        ),
     );
 });

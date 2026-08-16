@@ -1,9 +1,12 @@
 import {
     normalizeMemoryId,
 } from './stable-identity.js';
+import {
+    isEnglishAuthorityText,
+} from './model-language-adoption.js';
 
-export const ITEM_SYSTEM_VERSION = 3;
-export const ITEM_SCHEMA_VERSION = 3;
+export const ITEM_SYSTEM_VERSION = 4;
+export const ITEM_SCHEMA_VERSION = 4;
 export const ITEM_PROPOSAL_VERSION = 1;
 
 export const ITEM_TYPE_VALUES =
@@ -814,15 +817,7 @@ export function normalizeItem(
         labelEn:
             compactText(
                 source.labelEn ||
-                source.label ||
                 `Item ${index + 1}`,
-                160,
-            ),
-        label:
-            compactText(
-                source.label ||
-                source.labelEn ||
-                `物品 ${index + 1}`,
                 160,
             ),
         ownerId:
@@ -837,16 +832,6 @@ export function normalizeItem(
         location,
         appearanceEn:
             compactText(
-                source.appearanceEn ||
-                source.detailEn ||
-                source.appearance ||
-                source.detail,
-                800,
-            ),
-        appearance:
-            compactText(
-                source.appearance ||
-                source.detail ||
                 source.appearanceEn ||
                 source.detailEn,
                 800,
@@ -872,12 +857,6 @@ export function normalizeItem(
             isEquipped,
         notesEn:
             compactText(
-                source.notesEn,
-                800,
-            ),
-        notes:
-            compactText(
-                source.notes ||
                 source.notesEn,
                 800,
             ),
@@ -947,8 +926,6 @@ export function normalizeItem(
             item.sourceEventId,
         detailEn:
             item.appearanceEn,
-        detail:
-            item.appearance,
     };
 }
 
@@ -986,12 +963,77 @@ export function normalizeCurrentPresentation(
                 ),
             ];
     return {
-        ...source,
-        outfit:
+        outfitEn:
             compactText(
-                source.outfit,
+                source.outfitEn ||
+                (
+                    isEnglishAuthorityText(
+                        source.outfit,
+                    )
+                        ? source.outfit
+                        : ''
+                ),
                 500,
             ),
+        accessories:
+            source.accessories &&
+            typeof source
+                .accessories ===
+                'object' &&
+            !Array.isArray(
+                source.accessories,
+            )
+                ? structuredClone(
+                    source.accessories,
+                )
+                : {},
+        heldItems:
+            source.heldItems &&
+            typeof source
+                .heldItems ===
+                'object' &&
+            !Array.isArray(
+                source.heldItems,
+            )
+                ? structuredClone(
+                    source.heldItems,
+                )
+                : {},
+        heldObjectEn:
+            compactText(
+                source.heldObjectEn ||
+                (
+                    isEnglishAuthorityText(
+                        source.heldObject,
+                    )
+                        ? source
+                            .heldObject
+                        : ''
+                ),
+                500,
+            ),
+        hairEn:
+            compactText(
+                source.hairEn ||
+                (
+                    isEnglishAuthorityText(
+                        source.hair,
+                    )
+                        ? source.hair
+                        : ''
+                ),
+                500,
+            ),
+        visibleConditions:
+            Array.isArray(
+                source
+                    .visibleConditions,
+            )
+                ? structuredClone(
+                    source
+                        .visibleConditions,
+                )
+                : [],
         wornItemIds:
             normalizeIds(
                 source.wornItemIds,
@@ -1006,6 +1048,17 @@ export function normalizeCurrentPresentation(
                 clock,
                 80,
             ),
+        ...(
+            source.source
+                ? {
+                    source:
+                        compactText(
+                            source.source,
+                            160,
+                        ),
+                }
+                : {}
+        ),
         ...(
             source.sourceEventId
                 ? {

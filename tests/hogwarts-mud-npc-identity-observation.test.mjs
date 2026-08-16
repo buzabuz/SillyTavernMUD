@@ -366,6 +366,59 @@ test('local observer accepts grounded narration and deterministically repairs an
     );
 });
 
+test('local observer skips non-English identity semantics without turning them into body authority', () => {
+    const adapter =
+        createLocalSemanticAdapter({});
+    const state =
+        identityState();
+    const evidence =
+        'A fresh cut crossed Hermione\'s right palm.';
+    const observation = {
+        result: {
+            identityObservations: [{
+                actorId:
+                    HERMIONE_ID,
+                kind:
+                    'injury_assessment',
+                status:
+                    'visible_injury',
+                injuryType: 'cut',
+                description:
+                    '右手掌有一道新鲜割伤。',
+                evidenceText:
+                    evidence,
+                confidence: 0.95,
+            }],
+        },
+    };
+
+    const projected =
+        adapter
+            .projectObservedIdentityObservations(
+                observation,
+                state,
+                INSPECTION_ACTION,
+                [{
+                    type: 'narration',
+                    textEn:
+                        evidence,
+                }],
+                [
+                    HERMIONE_ID,
+                ],
+            );
+
+    assert.deepEqual(
+        projected,
+        [],
+    );
+    assert.equal(
+        observation.diagnostics
+            .languageMismatchCount,
+        1,
+    );
+});
+
 test('legacy committed inspection is replayed once without using dialogue as authority', () => {
     const state =
         identityState();

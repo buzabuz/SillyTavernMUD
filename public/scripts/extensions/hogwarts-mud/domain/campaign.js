@@ -1,9 +1,6 @@
 export const CAMPAIGN_PRESETS = Object.freeze({
     canon_1991: {
         id: 'canon_1991',
-        name: '与哈利同届',
-        eyebrow: 'Canon Cohort',
-        description: '1991 年收到入学通知。原著人物与事件按既定条件开始运行。',
         startYear: 1991,
         grade: 1,
         lockedYear: true,
@@ -11,9 +8,6 @@ export const CAMPAIGN_PRESETS = Object.freeze({
     },
     hogwarts_student: {
         id: 'hogwarts_student',
-        name: '霍格沃茨在校生',
-        eyebrow: 'Open School Years',
-        description: '从任意年级进入校园。已有课程、关系与能力会写入角色背景。',
         startYear: 1991,
         grade: 3,
         lockedYear: false,
@@ -21,9 +15,6 @@ export const CAMPAIGN_PRESETS = Object.freeze({
     },
     marauders_era: {
         id: 'marauders_era',
-        name: '掠夺者时代',
-        eyebrow: 'Earlier Generation',
-        description: '从 1971 年的霍格沃茨开始，在战争阴影形成前建立自己的因果。',
         startYear: 1971,
         grade: 1,
         lockedYear: true,
@@ -34,18 +25,12 @@ export const CAMPAIGN_PRESETS = Object.freeze({
 export const DIFFICULTY_PRESETS = Object.freeze({
     narrative: {
         id: 'narrative',
-        name: '叙事',
-        description: '后果仍然成立，但危险升级更缓慢，失败更常转化为新情节。',
     },
     standard: {
         id: 'standard',
-        name: '标准',
-        description: '按规则完整结算风险、关系破裂、处分与伤势。',
     },
     harsh: {
         id: 'harsh',
-        name: '严酷',
-        description: '资源紧张、敌人更主动，永久伤势与死亡更早进入结果集合。',
     },
 });
 
@@ -69,26 +54,18 @@ export function normalizeCampaign(campaign = {}) {
         : Math.min(2020, Math.max(1900, Number.parseInt(campaign.startYear, 10) || preset.startYear));
     return {
         presetId: preset.id,
-        presetName: preset.name,
         startYear,
         grade,
         difficulty,
-        difficultyName: DIFFICULTY_PRESETS[difficulty].name,
     };
 }
 
 export function buildCampaignContext(campaign) {
     const normalized = normalizeCampaign(campaign);
-    const preset = CAMPAIGN_PRESETS[normalized.presetId];
-    const difficulty = DIFFICULTY_PRESETS[normalized.difficulty];
     return `CAMPAIGN CONFIGURATION (binding state):
-- Story blueprint: ${preset.name}
-- Starting school year: ${normalized.startYear}
-- Starting grade: ${normalized.grade}
-- Difficulty: ${difficulty.name}
-- Difficulty behavior: ${difficulty.description}
+${JSON.stringify(normalized)}
 
-Begin at a point appropriate to this year and grade. Do not replay first-year admission events for an older student unless their background explicitly requires it.`;
+For older grades, do not replay first-year admission unless the confirmed background requires it.`;
 }
 
 export const DEFAULT_WORLD_PROMPT = `You are the narrative and rules engine for a persistent role-playing game set in the Harry Potter wizarding world.

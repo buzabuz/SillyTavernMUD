@@ -83,10 +83,7 @@ function createEntry(
         id,
         parentId: '',
         entryType: 'event',
-        title: id,
         titleEn: id,
-        summary:
-            `${id} 的公开安排。`,
         summaryEn:
             `Public schedule for ${id}.`,
         tags: [],
@@ -135,7 +132,8 @@ function createState(
         createEntry(
             'charms_exam',
             {
-                title: '魔咒考试',
+                titleEn:
+                    'Charms Exam',
                 tags: [
                     'exam',
                 ],
@@ -156,7 +154,8 @@ function createState(
         createEntry(
             'charms_date',
             {
-                title: '考试中的约会',
+                titleEn:
+                    'Date During the Exam',
                 tags: [
                     'date',
                 ],
@@ -186,16 +185,12 @@ function createState(
         phase: 'playing',
         clock: CURRENT_CLOCK,
         calendar: {
-            version: 2,
+            version: 3,
             storylines: [{
                 id:
                     'first_year_trials',
-                title:
-                    '一年级的考验',
                 titleEn:
                     'First-Year Trials',
-                summary:
-                    '公开的一年级成长线。',
                 summaryEn:
                     'A public first-year growth storyline.',
                 tags: [
@@ -219,12 +214,8 @@ function createState(
                     'first_term_exam_beat',
                 storylineId:
                     'first_year_trials',
-                title:
-                    '第一次考试',
                 titleEn:
                     'The First Exam',
-                summary:
-                    '公开的考试节奏。',
                 summaryEn:
                     'A public examination beat.',
                 tags: [
@@ -284,10 +275,7 @@ function createState(
         },
         sceneArchive: [{
             id: 'legacy_scene',
-            name: '旧场景',
             nameEn: 'Legacy Scene',
-            summary:
-                '旧档案元数据。',
             summaryEn:
                 'Legacy archive metadata.',
             authorQuillEn:
@@ -307,9 +295,7 @@ function createState(
         }],
         scene: {
             id: 'current_scene',
-            name: '走廊',
             nameEn: 'Corridor',
-            summary: '走廊场景。',
             summaryEn:
                 'A corridor scene.',
             startedClock:
@@ -350,7 +336,6 @@ function createPayload() {
         authorQuillEn:
             'The original archive body remains in the archive record.',
         unresolvedThreadsEn: [],
-        relationshipUpdates: [],
         nextScene: {
             id:
                 'great_hall_calendar_moment',
@@ -487,14 +472,9 @@ function createWorkflowHarness(
                 return {
                     id:
                         current.scene.id,
-                    name:
-                        current.scene.name,
                     nameEn:
                         current.scene
                             .nameEn,
-                    summary:
-                        current.scene
-                            .summary,
                     summaryEn:
                         current.scene
                             .summaryEn,
@@ -678,12 +658,8 @@ test('Calendar Moment claims only the selected schedule while overlap settlement
         ),
         id:
             'expired_unobserved_beat',
-        title:
-            '过窗但未观察的节奏',
         titleEn:
             'Expired Unobserved Beat',
-        summary:
-            '正文声称节奏已经完成，但没有关联 Scene。',
         summaryEn:
             'The prose claims completion without any linked Scene.',
         termKey:
@@ -1694,7 +1670,7 @@ test('Calendar transition prompts expose only the selected schedule with public 
                 },
                 transitionContext,
             ),
-        /连续1次无效/u,
+        /invalid response/u,
     );
     assert.equal(
         requests,

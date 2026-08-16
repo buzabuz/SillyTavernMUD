@@ -2,6 +2,18 @@ import {
     buildActorDossierDirectory,
     buildRelationshipProjection,
 } from './domain/actor-dossier-projection.js';
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from './domain/localized-view-model.js';
+import {
+    createActorNameField,
+    createActorRoleField,
+    getActorDisplayName,
+} from './domain/actor-display-name.js';
+import {
+    createCharacterInputLocalizationField,
+} from './domain/localization-candidates.js';
 
 const CYTOSCAPE_CDN_URL =
     'https://cdn.jsdelivr.net/npm/cytoscape@3.34.0/dist/cytoscape.min.js';
@@ -11,28 +23,29 @@ const PREFERENCE_PREFIX = 'hpmud.relationshipGraph';
 export const FILTERED_RELATIONSHIP_EDGE_OPACITY = 0.05;
 
 const DIMENSION_LABELS = Object.freeze({
-    familiarity: '熟悉',
-    closeness: '亲近',
-    warmth: '温暖',
-    trust: '信任',
-    respect: '尊重',
-    influence: '影响',
-    tension: '张力',
-    resentment: '积怨',
-    fear: '恐惧',
-    protectiveness: '保护',
+    familiarity: 'Familiarity',
+    closeness: 'Closeness',
+    warmth: 'Warmth',
+    trust: 'Trust',
+    respect: 'Respect',
+    influence: 'Influence',
+    tension: 'Tension',
+    resentment: 'Resentment',
+    fear: 'Fear',
+    protectiveness: 'Protectiveness',
 });
 
 const STRUCTURAL_LABELS = Object.freeze({
-    family: '家庭',
-    authority: '权威',
-    classmate: '同学',
-    rivalry: '竞争者',
-    rival: '竞争者',
-    mentor: '导师',
-    friend: '朋友',
-    romantic_interest: '青涩好感',
-    enemy: '敌对',
+    family: 'Family',
+    authority: 'Authority',
+    classmate: 'Classmate',
+    rivalry: 'Rival',
+    rival: 'Rival',
+    mentor: 'Mentor',
+    friend: 'Friend',
+    romantic_interest:
+        'Young affection',
+    enemy: 'Hostile',
 });
 
 const HOUSE_COLORS = Object.freeze({
@@ -51,13 +64,55 @@ const HOUSE_NAMES = Object.freeze({
     slytherin: 'Slytherin',
     ravenclaw: 'Ravenclaw',
     hufflepuff: 'Hufflepuff',
-    格兰芬多: '格兰芬多',
-    斯莱特林: '斯莱特林',
-    拉文克劳: '拉文克劳',
-    赫奇帕奇: '赫奇帕奇',
+    格兰芬多: 'Gryffindor',
+    斯莱特林: 'Slytherin',
+    拉文克劳: 'Ravenclaw',
+    赫奇帕奇: 'Hufflepuff',
 });
 
 let cytoscapeLoadPromise = null;
+
+function staticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+) {
+    return getStaticLocaleText(
+        staticKey,
+        normalizeDisplayLocale(
+            displayLocale,
+        ),
+    ) ||
+        sourceTextEn;
+}
+
+function formatStaticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+    values = {},
+) {
+    return Object.entries(
+        values,
+    ).reduce(
+        (
+            text,
+            [
+                key,
+                value,
+            ],
+        ) =>
+            text.replaceAll(
+                `{${key}}`,
+                String(value),
+            ),
+        staticText(
+            displayLocale,
+            staticKey,
+            sourceTextEn,
+        ),
+    );
+}
 
 function asArray(value) {
     return Array.isArray(value) ? value : [];
@@ -179,19 +234,57 @@ function evidenceTimestamp(evidence, index) {
     );
 }
 
-function normalizeEvidence(evidence, index) {
+function normalizeEvidence(
+    evidence,
+    index,
+    getLocalizedField,
+) {
+    const sourceRecordType =
+        firstText(
+            evidence
+                ?.sourceRecordType,
+        );
+    const sourceRecordId =
+        firstText(
+            evidence
+                ?.sourceRecordId,
+        );
+    const sourceSummary =
+        firstText(
+            evidence?.summary,
+            evidence?.summaryEn,
+            evidence?.statement,
+            evidence?.text,
+        );
+    const summaryField = {
+        recordKind:
+            sourceRecordType ||
+            'relationship_evidence',
+        recordId:
+            sourceRecordId ||
+            firstText(
+                evidence?.recordId,
+                evidence?.id,
+                `evidence_${index}`,
+            ),
+        fieldPath: 'summaryEn',
+        sourceTextEn:
+            sourceSummary,
+    };
     return {
         id: firstText(
             evidence?.recordId,
             evidence?.id,
             `evidence_${index}`,
         ),
-        summary: firstText(
-            evidence?.summary,
-            evidence?.summaryEn,
-            evidence?.statement,
-            evidence?.text,
-        ),
+        sourceRecordType,
+        sourceRecordId,
+        summary:
+            getLocalizedField
+                ? getLocalizedField(
+                    summaryField,
+                ).text
+                : sourceSummary,
         clock: firstText(
             evidence?.clock,
             evidence?.worldClock,
@@ -375,39 +468,111 @@ function actorCategories(actor, relatedTags) {
     return [...categories];
 }
 
-function buildDossierDirectory(state) {
+function buildDossierDirectory(
+    state,
+    displayLocale,
+    getLocalizedField,
+) {
     const directory = new Map();
     buildActorDossierDirectory(
         state,
         'player',
+        {
+            displayLocale,
+        },
     ).forEach(dossier => {
+        const core =
+            asArray(
+                state.actorLibrary,
+            ).find(actor =>
+                actor?.id ===
+                    dossier.actorId) ||
+            {};
         directory.set(dossier.actorId, {
             id: dossier.actorId,
-            name: dossier.header.name,
-            role: dossier.header.role,
+            name:
+                getActorDisplayName({
+                    actorId:
+                        dossier.actorId,
+                    nameEn:
+                        core.nameEn ||
+                        dossier.header
+                            .name,
+                    displayLocale,
+                    getLocalizedField:
+                        getLocalizedField ||
+                        (field => ({
+                            text:
+                                field
+                                    .sourceTextEn,
+                        })),
+                }),
+            role:
+                getLocalizedField
+                    ? getLocalizedField(
+                        createActorRoleField(
+                            dossier.actorId,
+                            core.roleEn ||
+                            dossier.header
+                                .role,
+                        ),
+                    ).text
+                    : dossier.header
+                        .role,
             present:
                 dossier.header
-                    .presenceLabel ===
-                '当前在场',
+                    .present,
             identity:
                 dossier.identity,
             relationship:
                 dossier.relationship,
         });
     });
+    const playerName =
+        firstText(
+            state
+                ?.character
+                ?.inputEvidence
+                ?.identity
+                ?.name,
+            state?.character?.name,
+        );
+    const playerNameField =
+        createCharacterInputLocalizationField(
+            'identity.name',
+            playerName,
+        );
     directory.set('player', {
         id: 'player',
-        name: firstText(
-            state?.character?.identity?.name,
-            state?.character?.name,
-            '你',
-        ),
-        role: '玩家角色',
+        name:
+            (
+                getLocalizedField
+                    ? getLocalizedField(
+                        playerNameField,
+                    ).text
+                    : playerName
+            ) ||
+            staticText(
+                displayLocale,
+                'ui.dossier.you',
+                'You',
+            ),
+        role:
+            staticText(
+                displayLocale,
+                'ui.relationship.graph.role.player',
+                'Player character',
+            ),
     });
     return directory;
 }
 
-function normalizeEdge(edge, index, evidenceById) {
+function normalizeEdge(
+    edge,
+    index,
+    evidenceById,
+    getLocalizedField,
+) {
     const { sourceId, targetId } = getEdgeEndpoints(edge);
     if (!sourceId || !targetId || sourceId === targetId) return null;
     const familiarity = clamp(getMetric(edge, 'familiarity'), 0, 100);
@@ -440,7 +605,12 @@ function normalizeEdge(edge, index, evidenceById) {
         edge?.evidenceRefs,
     )
         .map((item, evidenceIndex) =>
-            normalizeEvidence(item, index * 1000 + evidenceIndex));
+            normalizeEvidence(
+                item,
+                index * 1000 +
+                    evidenceIndex,
+                getLocalizedField,
+            ));
     const evidence = [
         ...asArray(edge?.evidenceIds)
             .map(id => evidenceById.get(String(id)))
@@ -484,9 +654,22 @@ function inferHouseColor(house) {
     return HOUSE_COLORS[key] || '#71669b';
 }
 
-function createNode(actor, id, edges, relatedTags) {
+function createNode(
+    actor,
+    id,
+    edges,
+    relatedTags,
+    displayLocale,
+) {
     const name = id === 'player'
-        ? firstText(actor?.name, '你')
+        ? firstText(
+            actor?.name,
+            staticText(
+                displayLocale,
+                'ui.dossier.you',
+                'You',
+            ),
+        )
         : firstText(actor?.name, actor?.nameEn, id);
     const familiarity = edges.reduce(
         (maximum, edge) =>
@@ -500,6 +683,14 @@ function createNode(actor, id, edges, relatedTags) {
         id === 'player' ? 100 : 0,
     );
     const house = getActorHouse(actor);
+    const houseLabel =
+        house
+            ? staticText(
+                displayLocale,
+                `ui.dossier.house.${house.toLocaleLowerCase()}`,
+                house,
+            )
+            : '';
     return {
         id,
         name,
@@ -507,14 +698,27 @@ function createNode(actor, id, edges, relatedTags) {
             actor?.role,
             actor?.roleEn,
             actor?.relationshipToPlayer,
-            id === 'player' ? '玩家角色' : '已知人物',
+            id === 'player'
+                ? staticText(
+                    displayLocale,
+                    'ui.relationship.graph.role.player',
+                    'Player character',
+                )
+                : staticText(
+                    displayLocale,
+                    'ui.relationship.graph.role.known',
+                    'Known character',
+                ),
         ),
-        house,
+        house: houseLabel,
         categories: actorCategories(actor, relatedTags),
         familiarity,
         relevance,
         size: 46 + Math.min(22, relevance / 5),
-        ringColor: inferHouseColor(house),
+        ringColor:
+            inferHouseColor(
+                house,
+            ),
         sigil: makeSigil(name, id === 'player'),
         raw: actor,
     };
@@ -537,18 +741,35 @@ function addCurveDistances(edges) {
     });
 }
 
-export function buildPlayerKnownRelationshipProjection(state = {}) {
+export function buildPlayerKnownRelationshipProjection(
+    state = {},
+    displayLocale =
+    'zh-CN',
+    {
+        getLocalizedField,
+    } = {},
+) {
+    const locale =
+        normalizeDisplayLocale(
+            displayLocale,
+        );
     const relationshipProjection =
         buildRelationshipProjection(
             state,
             'player',
+            locale,
         );
     const evidence = asArray(
         relationshipProjection
             .relationships
             .flatMap(edge =>
                 edge.evidenceRefs),
-    ).map(normalizeEvidence);
+    ).map((entry, index) =>
+        normalizeEvidence(
+            entry,
+            index,
+            getLocalizedField,
+        ));
     const evidenceById = new Map(
         evidence.map(item => [String(item.id), item]),
     );
@@ -559,11 +780,20 @@ export function buildPlayerKnownRelationshipProjection(state = {}) {
     const edges = addCurveDistances(
         rawEdges
             .map((edge, index) =>
-                normalizeEdge(edge, index, evidenceById))
+                normalizeEdge(
+                    edge,
+                    index,
+                    evidenceById,
+                    getLocalizedField,
+                ))
             .filter(Boolean),
     );
     const directory =
-        buildDossierDirectory(state);
+        buildDossierDirectory(
+            state,
+            locale,
+            getLocalizedField,
+        );
     const visibleActorIds = new Set(['player']);
     edges.forEach(edge => {
         visibleActorIds.add(edge.sourceId);
@@ -583,6 +813,7 @@ export function buildPlayerKnownRelationshipProjection(state = {}) {
                 id,
                 actorEdges,
                 relatedTags,
+                locale,
             );
         })
         .filter(Boolean)
@@ -723,9 +954,21 @@ function formatDimensionValue(value) {
     return rounded > 0 ? `+${rounded}` : String(rounded);
 }
 
-function structuralText(tags) {
+function structuralText(
+    tags,
+    displayLocale,
+) {
     return tags
-        .map(tag => STRUCTURAL_LABELS[tag] || tag)
+        .map(tag =>
+            STRUCTURAL_LABELS[tag]
+                ? staticText(
+                    displayLocale,
+                    `ui.relationship.structural.${tag}`,
+                    STRUCTURAL_LABELS[
+                        tag
+                    ],
+                )
+                : tag)
         .filter(Boolean)
         .join(' · ');
 }
@@ -995,6 +1238,14 @@ function projectionElements(projection) {
 
 export function createRelationshipGraphController({
     root,
+    ensureLocalizedFields =
+    async () => [],
+    getLocalizedField =
+    field => ({
+        text:
+            field.sourceTextEn ||
+            '',
+    }),
     getState,
     getTimelineKey,
     onOpenActor,
@@ -1017,8 +1268,44 @@ export function createRelationshipGraphController({
     const empty = root.querySelector('#hpmud_relationship_empty');
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
+    const getDisplayLocale =
+        () =>
+            normalizeDisplayLocale(
+                root.dataset
+                    .hpmudDisplayLocale,
+            );
+    const text =
+        (
+            staticKey,
+            sourceTextEn,
+        ) =>
+            staticText(
+                getDisplayLocale(),
+                staticKey,
+                sourceTextEn,
+            );
+    const formatText =
+        (
+            staticKey,
+            sourceTextEn,
+            values,
+        ) =>
+            formatStaticText(
+                getDisplayLocale(),
+                staticKey,
+                sourceTextEn,
+                values,
+            );
+
     let cy = null;
-    let projection = buildPlayerKnownRelationshipProjection();
+    let projection =
+        buildPlayerKnownRelationshipProjection(
+            {},
+            getDisplayLocale(),
+            {
+                getLocalizedField,
+            },
+        );
     let visibleProjection = filterRelationshipGraphProjection(
         projection,
         defaultPreferences(),
@@ -1031,6 +1318,272 @@ export function createRelationshipGraphController({
 
     function announce(message) {
         status.textContent = message;
+    }
+
+    function setDirectText(
+        node,
+        value,
+    ) {
+        const textNode = [
+            ...(node?.childNodes ||
+                []),
+        ].find(child =>
+            child.nodeType === 3 &&
+            String(
+                child.nodeValue ||
+                '',
+            ).trim());
+        if (textNode) {
+            textNode.nodeValue =
+                value;
+        }
+    }
+
+    function syncStaticChrome() {
+        root.querySelector(
+            '#hpmud_relationship_title',
+        ).textContent =
+            text(
+                'ui.relationship.graph.title',
+                'Relationship Constellation',
+            );
+        root.querySelector(
+            '.hpmud-relationship-header > p',
+        ).textContent =
+            text(
+                'ui.relationship.graph.description',
+                'Shows only the characters and directed relationships known to you on this timeline.',
+            );
+        closeButton.setAttribute(
+            'aria-label',
+            text(
+                'ui.relationship.graph.close_aria',
+                'Close Relationship Constellation',
+            ),
+        );
+        root.querySelector(
+            '.hpmud-relationship-toolbar',
+        ).setAttribute(
+            'aria-label',
+            text(
+                'ui.relationship.graph.filters_aria',
+                'Relationship filters',
+            ),
+        );
+        root.querySelector(
+            '.hpmud-relationship-search .sr-only',
+        ).textContent =
+            text(
+                'ui.relationship.graph.search',
+                'Search characters',
+            );
+        search.setAttribute(
+            'placeholder',
+            text(
+                'ui.relationship.graph.search_placeholder',
+                'Find a character...',
+            ),
+        );
+        const labels = [
+            [
+                '#hpmud_relationship_scope',
+                'ui.relationship.graph.scope',
+                'Scope',
+            ],
+            [
+                '#hpmud_relationship_sentiment',
+                'ui.relationship.graph.relationship',
+                'Relationship',
+            ],
+            [
+                '#hpmud_relationship_category',
+                'ui.relationship.graph.identity',
+                'Identity',
+            ],
+        ];
+        labels.forEach(([
+            selector,
+            key,
+            sourceTextEn,
+        ]) => {
+            const label =
+                root.querySelector(
+                    selector,
+                )?.closest(
+                    'label',
+                )?.querySelector(
+                    ':scope > span',
+                );
+            if (label) {
+                label.textContent =
+                text(
+                    key,
+                    sourceTextEn,
+                );
+            }
+        });
+        [
+            [
+                scope,
+                {
+                    mine:
+                        'ui.relationship.graph.scope.mine',
+                    all:
+                        'ui.relationship.graph.scope.all',
+                },
+            ],
+            [
+                sentiment,
+                {
+                    all:
+                        'ui.relationship.graph.relationship.all',
+                    positive:
+                        'ui.relationship.graph.relationship.positive',
+                    negative:
+                        'ui.relationship.graph.relationship.negative',
+                    complex:
+                        'ui.relationship.graph.relationship.complex',
+                },
+            ],
+            [
+                category,
+                {
+                    all:
+                        'ui.relationship.graph.identity.all',
+                    house:
+                        'ui.relationship.graph.identity.house',
+                    family:
+                        'ui.relationship.graph.identity.family',
+                    classmate:
+                        'ui.relationship.graph.identity.classmate',
+                    professor:
+                        'ui.relationship.graph.identity.professor',
+                },
+            ],
+        ].forEach(([
+            select,
+            keys,
+        ]) => {
+            [
+                ...select.options,
+            ].forEach(option => {
+                const key =
+                    keys[
+                        option.value
+                    ];
+                if (key) {
+                    option.textContent =
+                        text(
+                            key,
+                            option.value,
+                        );
+                }
+            });
+        });
+        setDirectText(
+            reset,
+            text(
+                'ui.relationship.graph.reset',
+                'Reset constellation',
+            ),
+        );
+        canvas.setAttribute(
+            'aria-label',
+            text(
+                'ui.relationship.graph.canvas_aria',
+                'Interactive Relationship Constellation. Use arrow keys to select a character and Enter to inspect. Escape closes.',
+            ),
+        );
+        empty.textContent =
+            text(
+                'ui.relationship.graph.empty',
+                'No player-known relationships match the current filters.',
+            );
+        root.querySelector(
+            '.hpmud-relationship-legend',
+        ).setAttribute(
+            'aria-label',
+            text(
+                'ui.relationship.graph.legend_aria',
+                'Relationship color legend',
+            ),
+        );
+        [
+            ...root.querySelectorAll(
+                '.hpmud-relationship-legend > span',
+            ),
+        ].forEach(node => {
+            const tone =
+                [
+                    ...node.classList,
+                ][0];
+            node.textContent =
+                text(
+                    `ui.relationship.graph.legend.${tone}`,
+                    tone,
+                );
+        });
+        detail.setAttribute(
+            'aria-label',
+            text(
+                'ui.relationship.graph.detail_aria',
+                'Character or relationship details',
+            ),
+        );
+        const fallbackSummary =
+            textFallback
+                .querySelector(
+                    ':scope > summary',
+                );
+        setDirectText(
+            fallbackSummary,
+            text(
+                'ui.relationship.graph.text_fallback',
+                'Open text relationship table',
+            ),
+        );
+        const fallbackHint =
+            fallbackSummary
+                ?.querySelector(
+                    'small',
+                );
+        if (fallbackHint) {
+            fallbackHint.textContent =
+                text(
+                    'ui.relationship.graph.text_fallback_hint',
+                    'Keyboard and visual fallback',
+                );
+        }
+        const nodeTitle =
+            root.querySelector(
+                '#hpmud_relationship_text_nodes',
+            )?.closest(
+                'section',
+            )?.querySelector(
+                'h3',
+            );
+        if (nodeTitle) {
+            nodeTitle.textContent =
+            text(
+                'ui.relationship.graph.known_characters',
+                'Known characters',
+            );
+        }
+        const edgeTitle =
+            root.querySelector(
+                '#hpmud_relationship_text_edges',
+            )?.closest(
+                'section',
+            )?.querySelector(
+                'h3',
+            );
+        if (edgeTitle) {
+            edgeTitle.textContent =
+            text(
+                'ui.relationship.graph.directed_relationships',
+                'Directed relationships',
+            );
+        }
     }
 
     function persistPreferences() {
@@ -1066,11 +1619,21 @@ export function createRelationshipGraphController({
     function renderEmptyDetail() {
         detail.replaceChildren();
         const mark = createElement('span', 'hpmud-relationship-detail-mark', '✦');
-        const title = createElement('h3', '', '选择一颗人物星');
+        const title = createElement(
+            'h3',
+            '',
+            text(
+                'ui.relationship.graph.select_character',
+                'Select a character star',
+            ),
+        );
         const copy = createElement(
             'p',
             '',
-            '点击人物查看一跳关系，点击连线比较两个方向的关系与证据。',
+            text(
+                'ui.relationship.graph.select_help',
+                'Select a character to inspect one-hop relationships, or select an edge to compare both directions and evidence.',
+            ),
         );
         detail.append(mark, title, copy);
     }
@@ -1079,7 +1642,14 @@ export function createRelationshipGraphController({
         const grid = createElement('dl', 'hpmud-relationship-metrics');
         Object.entries(DIMENSION_LABELS).forEach(([key, label]) => {
             const item = createElement('div');
-            const term = createElement('dt', '', label);
+            const term = createElement(
+                'dt',
+                '',
+                text(
+                    `ui.inspector.dimension.${key}`,
+                    label,
+                ),
+            );
             const value = createElement(
                 'dd',
                 key === 'warmth' ||
@@ -1100,13 +1670,25 @@ export function createRelationshipGraphController({
 
     function createEvidenceLedger(edge) {
         const section = createElement('section', 'hpmud-relationship-evidence');
-        section.append(createElement('h4', '', '最近证据'));
+        section.append(
+            createElement(
+                'h4',
+                '',
+                text(
+                    'ui.relationship.graph.recent_evidence',
+                    'Recent evidence',
+                ),
+            ),
+        );
         if (!edge.evidence.length) {
             section.append(
                 createElement(
                     'p',
                     'hpmud-relationship-evidence-empty',
-                    '这条兼容关系没有可展示的玩家知情 evidence。',
+                    text(
+                        'ui.relationship.graph.no_evidence',
+                        'This relationship has no player-known evidence to display.',
+                    ),
                 ),
             );
             return section;
@@ -1117,17 +1699,37 @@ export function createRelationshipGraphController({
                 createElement(
                     'p',
                     '',
-                    evidence.summary || '已记录一次关系变化。',
+                    evidence.summary ||
+                        text(
+                            'ui.relationship.graph.change_recorded',
+                            'A relationship change was recorded.',
+                        ),
                 ),
             );
             const metadata = [
                 evidence.clock,
-                evidence.sceneId && `场景 ${evidence.sceneId}`,
                 evidence.sourceMessageIds.length &&
-                    `消息 ${evidence.sourceMessageIds.join(', ')}`,
+                    formatText(
+                        'ui.relationship.graph.message_refs',
+                        'Messages {ids}',
+                        {
+                            ids:
+                                evidence
+                                    .sourceMessageIds
+                                    .join(', '),
+                        },
+                    ),
             ].filter(Boolean).join(' · ');
             article.append(
-                createElement('small', '', metadata || '来源已验证'),
+                createElement(
+                    'small',
+                    '',
+                    metadata ||
+                        text(
+                            'ui.relationship.graph.source_verified',
+                            'Source verified',
+                        ),
+                ),
             );
             section.append(article);
         });
@@ -1146,7 +1748,11 @@ export function createRelationshipGraphController({
         );
         const relation = createElement('span', '', edge.label);
         heading.append(names, relation);
-        const tags = structuralText(edge.tags);
+        const tags =
+            structuralText(
+                edge.tags,
+                getDisplayLocale(),
+            );
         section.append(heading);
         if (tags) {
             section.append(
@@ -1158,10 +1764,20 @@ export function createRelationshipGraphController({
                 createElement(
                     'p',
                     'hpmud-relationship-tags',
-                    `短期情绪：${edge.activeSentiments
-                        .map(emotion =>
-                            `${emotion.emotion} ${emotion.intensity}`)
-                        .join(' · ')}`,
+                    formatText(
+                        'ui.relationship.graph.short_emotions',
+                        'Short-term emotions: {value}',
+                        {
+                            value:
+                                edge.activeSentiments
+                                    .map(emotion =>
+                                        `${text(
+                                            `ui.inspector.emotion.${emotion.emotion}`,
+                                            emotion.emotion,
+                                        )} ${emotion.intensity}`)
+                                    .join(' · '),
+                        },
+                    ),
                 ),
             );
         }
@@ -1182,7 +1798,14 @@ export function createRelationshipGraphController({
             'hpmud-relationship-detail-eyebrow',
             'Directed relationship',
         );
-        const title = createElement('h3', '', '双向关系');
+        const title = createElement(
+            'h3',
+            '',
+            text(
+                'ui.relationship.graph.bidirectional',
+                'Bidirectional relationship',
+            ),
+        );
         detail.append(eyebrow, title, createDirectionDetail(edge));
         if (reverse) {
             detail.append(createDirectionDetail(reverse));
@@ -1197,7 +1820,10 @@ export function createRelationshipGraphController({
                     '',
                     `${projection.nodeById.get(edge.targetId)?.name || edge.targetId} → ` +
                     `${projection.nodeById.get(edge.sourceId)?.name || edge.sourceId} ` +
-                    '尚无玩家可知记录。',
+                    text(
+                        'ui.relationship.graph.no_direction_record',
+                        'No player-known record.',
+                    ),
                 ),
             );
             detail.append(missing);
@@ -1230,8 +1856,30 @@ export function createRelationshipGraphController({
         renderEdgeDetail(edge);
         if (announceSelection) {
             announce(
-                `已选择 ${projection.nodeById.get(edge.sourceId)?.name || edge.sourceId} ` +
-                `到 ${projection.nodeById.get(edge.targetId)?.name || edge.targetId} 的关系。`,
+                formatText(
+                    'ui.relationship.graph.edge_selected',
+                    'Selected the relationship from {source} to {target}.',
+                    {
+                        source:
+                            projection
+                                .nodeById
+                                .get(
+                                    edge
+                                        .sourceId,
+                                )
+                                ?.name ||
+                            edge.sourceId,
+                        target:
+                            projection
+                                .nodeById
+                                .get(
+                                    edge
+                                        .targetId,
+                                )
+                                ?.name ||
+                            edge.targetId,
+                    },
+                ),
             );
         }
     }
@@ -1246,7 +1894,11 @@ export function createRelationshipGraphController({
             createElement(
                 'small',
                 'hpmud-relationship-detail-eyebrow',
-                node.house || 'Known constellation',
+                node.house ||
+                    text(
+                        'ui.relationship.graph.known_constellation',
+                        'Known constellation',
+                    ),
             ),
             createElement('h3', '', node.name),
             createElement('p', '', node.role),
@@ -1256,7 +1908,10 @@ export function createRelationshipGraphController({
             const openCard = createElement(
                 'button',
                 'hpmud-relationship-card-link',
-                '打开人物卡',
+                text(
+                    'ui.relationship.graph.open_card',
+                    'Open character sheet',
+                ),
             );
             openCard.type = 'button';
             openCard.addEventListener('click', () => {
@@ -1275,25 +1930,53 @@ export function createRelationshipGraphController({
             createElement(
                 'span',
                 '',
-                `${nodeEdges.length} 条当前可见关系`,
+                formatText(
+                    'ui.relationship.graph.visible_relationships',
+                    '{count} visible relationships',
+                    {
+                        count:
+                            nodeEdges.length,
+                    },
+                ),
             ),
             createElement(
                 'span',
                 '',
-                `已知程度 ${Math.round(node.familiarity)}`,
+                formatText(
+                    'ui.relationship.graph.familiarity',
+                    'Familiarity {value}',
+                    {
+                        value:
+                            Math.round(
+                                node.familiarity,
+                            ),
+                    },
+                ),
             ),
         );
         const connections = createElement(
             'section',
             'hpmud-relationship-connections',
         );
-        connections.append(createElement('h4', '', '一跳关系'));
+        connections.append(
+            createElement(
+                'h4',
+                '',
+                text(
+                    'ui.relationship.graph.one_hop',
+                    'One-hop relationships',
+                ),
+            ),
+        );
         if (!nodeEdges.length) {
             connections.append(
                 createElement(
                     'p',
                     'hpmud-relationship-evidence-empty',
-                    '当前筛选下没有可见连线。',
+                    text(
+                        'ui.relationship.graph.no_visible_edges',
+                        'No visible edges under the current filters.',
+                    ),
                 ),
             );
         } else {
@@ -1342,7 +2025,16 @@ export function createRelationshipGraphController({
         }
         renderNodeDetail(node);
         if (announceSelection) {
-            announce(`已选择 ${node.name}，显示一跳关系。`);
+            announce(
+                formatText(
+                    'ui.relationship.graph.node_selected',
+                    'Selected {name}; showing one-hop relationships.',
+                    {
+                        name:
+                            node.name,
+                    },
+                ),
+            );
         }
     }
 
@@ -1351,7 +2043,14 @@ export function createRelationshipGraphController({
         textEdges.replaceChildren();
         if (!visibleProjection.nodes.length) {
             textNodes.append(
-                createElement('li', '', '当前筛选下没有人物。'),
+                createElement(
+                    'li',
+                    '',
+                    text(
+                        'ui.relationship.graph.no_nodes',
+                        'No characters under the current filters.',
+                    ),
+                ),
             );
         } else {
             visibleProjection.nodes.forEach(node => {
@@ -1373,7 +2072,14 @@ export function createRelationshipGraphController({
         }
         if (!visibleProjection.edges.length) {
             textEdges.append(
-                createElement('li', '', '当前筛选下没有关系边。'),
+                createElement(
+                    'li',
+                    '',
+                    text(
+                        'ui.relationship.graph.no_edges',
+                        'No relationship edges under the current filters.',
+                    ),
+                ),
             );
         } else {
             visibleProjection.edges.forEach(edge => {
@@ -1395,7 +2101,20 @@ export function createRelationshipGraphController({
                     createElement(
                         'small',
                         '',
-                        `${edge.label} · 亲近 ${Math.round(edge.dimensions.closeness)}`,
+                        formatText(
+                            'ui.relationship.graph.edge_summary',
+                            '{label} · Closeness {value}',
+                            {
+                                label:
+                                    edge.label,
+                                value:
+                                    Math.round(
+                                        edge
+                                            .dimensions
+                                            .closeness,
+                                    ),
+                            },
+                        ),
                     ),
                 );
                 button.addEventListener('click', () =>
@@ -1455,7 +2174,17 @@ export function createRelationshipGraphController({
         }
         const nodeCount = visibleProjection.nodes.length;
         const edgeCount = visibleProjection.edges.length;
-        count.textContent = `${nodeCount} 人物 · ${edgeCount} 有向关系`;
+        count.textContent =
+            formatText(
+                'ui.relationship.graph.count',
+                '{nodes} characters · {edges} directed relationships',
+                {
+                    nodes:
+                        nodeCount,
+                    edges:
+                        edgeCount,
+                },
+            );
         empty.hidden = nodeCount > 1 || edgeCount > 0;
         renderTextFallback();
         if (
@@ -1539,7 +2268,12 @@ export function createRelationshipGraphController({
         });
         preferences.positions = positions;
         persistPreferences();
-        announce('已为这条时间线保存人物星位。');
+        announce(
+            text(
+                'ui.relationship.graph.positions_saved',
+                'Saved character-star positions for this timeline.',
+            ),
+        );
     }
 
     function bindCytoscapeEvents() {
@@ -1560,7 +2294,12 @@ export function createRelationshipGraphController({
             if (event.target !== cy) return;
             clearGraphFocus();
             renderEmptyDetail();
-            announce('已清除关系焦点。');
+            announce(
+                text(
+                    'ui.relationship.graph.focus_cleared',
+                    'Relationship focus cleared.',
+                ),
+            );
         });
         cy.on('dragfree', 'node', saveNodePositions);
     }
@@ -1580,7 +2319,12 @@ export function createRelationshipGraphController({
 
     async function ensureCytoscape() {
         if (cy) return cy;
-        announce('正在展开关系星图。');
+        announce(
+            text(
+                'ui.relationship.graph.expanding',
+                'Expanding Relationship Constellation.',
+            ),
+        );
         canvas.classList.add('loading');
         try {
             const cytoscape = await loadCytoscape();
@@ -1606,12 +2350,22 @@ export function createRelationshipGraphController({
                 cy.resize();
             });
             resizeObserver.observe(canvas);
-            announce('关系星图已展开。方向键可逐颗选择人物星。');
+            announce(
+                text(
+                    'ui.relationship.graph.expanded',
+                    'Relationship Constellation expanded. Use arrow keys to select character stars.',
+                ),
+            );
             return cy;
         } catch (error) {
             console.error('[Hogwarts MUD] Relationship graph failed to load', error);
             textFallback.open = true;
-            announce('图形运行时不可用，已切换为完整文本关系表。');
+            announce(
+                text(
+                    'ui.relationship.graph.runtime_fallback',
+                    'Graph runtime unavailable. Switched to the complete text relationship table.',
+                ),
+            );
             return null;
         } finally {
             canvas.classList.remove('loading');
@@ -1627,8 +2381,81 @@ export function createRelationshipGraphController({
     }
 
     async function refresh({ focusActorId = '' } = {}) {
+        syncStaticChrome();
         loadTimelinePreferences();
-        projection = buildPlayerKnownRelationshipProjection(getState() || {});
+        const state =
+            getState() ||
+            {};
+        const actorFields =
+            asArray(
+                state.actorLibrary,
+            ).flatMap(actor => [
+                createActorNameField(
+                    actor.id,
+                    actor.nameEn,
+                ),
+                createActorRoleField(
+                    actor.id,
+                    actor.roleEn,
+                ),
+            ]);
+        const evidenceFields = [
+            ...asArray(
+                state.memorySynapse
+                    ?.appraisals,
+            ).map(appraisal => ({
+                recordKind:
+                    'appraisal',
+                recordId:
+                    appraisal.id,
+                fieldPath:
+                    'summaryEn',
+                sourceTextEn:
+                    appraisal
+                        .summaryEn,
+            })),
+            ...asArray(
+                state.eventKnowledge,
+            ).map(event => ({
+                recordKind: 'event',
+                recordId:
+                    event.eventId ||
+                    event.id,
+                fieldPath:
+                    'summaryEn',
+                sourceTextEn:
+                    event.summaryEn,
+            })),
+        ];
+        const playerNameField =
+            createCharacterInputLocalizationField(
+                'identity.name',
+                state.character
+                    ?.inputEvidence
+                    ?.identity
+                    ?.name ||
+                state.character
+                    ?.name ||
+                '',
+            );
+        await ensureLocalizedFields(
+            [
+                playerNameField,
+                ...actorFields,
+                ...evidenceFields,
+            ],
+            {
+                priority: 1,
+            },
+        );
+        projection =
+            buildPlayerKnownRelationshipProjection(
+                state,
+                getDisplayLocale(),
+                {
+                    getLocalizedField,
+                },
+            );
         visibleProjection = filterRelationshipGraphProjection(
             projection,
             preferences,
@@ -1761,7 +2588,12 @@ export function createRelationshipGraphController({
     category.addEventListener('change', updatePreferences);
     reset.addEventListener('click', () => {
         runLayout({ clearPositions: true });
-        announce('已重置为以玩家为中心的同心星位。');
+        announce(
+            text(
+                'ui.relationship.graph.reset_done',
+                'Reset to player-centered concentric positions.',
+            ),
+        );
     });
     canvas.addEventListener('keydown', event => {
         if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {

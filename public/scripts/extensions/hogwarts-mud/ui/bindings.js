@@ -1,3 +1,11 @@
+import {
+    SETUP_STEPS,
+} from './setup-controller.js';
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from '../domain/localized-view-model.js';
+
 export function createUiBindings(ports) {
     const {
         refs,
@@ -56,6 +64,7 @@ export function createUiBindings(ports) {
         setCalendarView,
         setAppScreen,
         setControlValue,
+        setDisplayLocale,
         setTranslationProvider,
         showSetupStep,
         startGameFromSetup,
@@ -85,6 +94,45 @@ export function createUiBindings(ports) {
         workspaceElement,
         setupForm,
     } = refs;
+
+    function staticText(
+        staticKey,
+        sourceTextEn,
+    ) {
+        return getStaticLocaleText(
+            staticKey,
+            normalizeDisplayLocale(
+                session.displayLocale,
+            ),
+        ) ||
+            sourceTextEn;
+    }
+
+    function formatStaticText(
+        staticKey,
+        sourceTextEn,
+        values = {},
+    ) {
+        return Object.entries(
+            values,
+        ).reduce(
+            (
+                text,
+                [
+                    key,
+                    value,
+                ],
+            ) =>
+                text.replaceAll(
+                    `{${key}}`,
+                    String(value),
+                ),
+            staticText(
+                staticKey,
+                sourceTextEn,
+            ),
+        );
+    }
 
     function bindUi() {
         listen(root.querySelector('#hpmud_open_home'), 'click', () => setAppScreen('home'));
@@ -159,6 +207,19 @@ export function createUiBindings(ports) {
                 ),
             );
         });
+        root.querySelectorAll(
+            '[data-hpmud-display-locale]',
+        ).forEach(button => {
+            listen(
+                button,
+                'click',
+                () =>
+                    setDisplayLocale(
+                        button.dataset
+                            .hpmudDisplayLocale,
+                    ),
+            );
+        });
         root.querySelectorAll('[data-hpmud-step]').forEach(button => {
             listen(button, 'click', () => {
                 saveSetupDraft();
@@ -166,12 +227,14 @@ export function createUiBindings(ports) {
             });
         });
         listen(root.querySelector('#hpmud_setup_previous'), 'click', () => {
-            const steps = ['identity', 'background', 'aptitudes', 'models', 'review'];
+            const steps =
+                SETUP_STEPS;
             saveSetupDraft();
             showSetupStep(steps[Math.max(0, steps.indexOf(session.activeSetupStep) - 1)]);
         });
         listen(root.querySelector('#hpmud_setup_next'), 'click', () => {
-            const steps = ['identity', 'background', 'aptitudes', 'models', 'review'];
+            const steps =
+                SETUP_STEPS;
             saveSetupDraft();
             showSetupStep(steps[Math.min(steps.length - 1, steps.indexOf(session.activeSetupStep) + 1)]);
         });
@@ -226,7 +289,12 @@ export function createUiBindings(ports) {
         listen(root.querySelector('#hpmud_edit_profile'), 'click', () => {
             const { profile, role } = getSelectedProfileForEditing();
             if (!profile) {
-                toastr.warning('请先在任一职责槽选择要编辑的 Connection Profile。');
+                toastr.warning(
+                    staticText(
+                        'ui.bindings.profile_select_first',
+                        'Select a Connection Profile in any role slot first.',
+                    ),
+                );
                 return;
             }
             openProfileEditor(profile, role);
@@ -262,7 +330,15 @@ export function createUiBindings(ports) {
             if (!file || !role) return;
             try {
                 const name = await importRoleChatPreset(file, role);
-                toastr.success(`Chat Completion Preset “${name}” 已导入并绑定到该职责。`);
+                toastr.success(
+                    formatStaticText(
+                        'ui.bindings.chat_preset_imported',
+                        'Chat Completion Preset "{name}" imported and bound to this role.',
+                        {
+                            name,
+                        },
+                    ),
+                );
             } catch (error) {
                 console.error('[Hogwarts MUD] Role preset import failed', error);
                 toastr.error(String(error?.message || error));
@@ -283,7 +359,16 @@ export function createUiBindings(ports) {
             if (!file || !role) return;
             try {
                 const preset = await importRoleRegexPreset(file, role);
-                toastr.success(`Regex Preset “${preset.name}” 已导入并绑定到该职责。`);
+                toastr.success(
+                    formatStaticText(
+                        'ui.bindings.regex_preset_imported',
+                        'Regex Preset "{name}" imported and bound to this role.',
+                        {
+                            name:
+                                preset.name,
+                        },
+                    ),
+                );
             } catch (error) {
                 console.error('[Hogwarts MUD] Role regex import failed', error);
                 toastr.error(String(error?.message || error));
@@ -317,7 +402,13 @@ export function createUiBindings(ports) {
         listen(root.querySelector('#hpmud_profile_test'), 'click', () => {
             void testProfileConnection().catch(error => {
                 console.error('[Hogwarts MUD] Profile test failed', error);
-                root.querySelector('#hpmud_profile_test_status').textContent = '连接失败';
+                root.querySelector(
+                    '#hpmud_profile_test_status',
+                ).textContent =
+                    staticText(
+                        'ui.bindings.connection_failed',
+                        'Connection failed',
+                    );
                 toastr.error(String(error?.message || error));
             });
         });
@@ -376,7 +467,18 @@ export function createUiBindings(ports) {
         );
         listen(root.querySelector('#hpmud_focus'), 'click', event => {
             root.classList.toggle('focus-mode');
-            event.currentTarget.textContent = root.classList.contains('focus-mode') ? '退出专注' : '专注';
+            event.currentTarget.textContent =
+                root.classList.contains(
+                    'focus-mode',
+                )
+                    ? staticText(
+                        'ui.game.focus.exit',
+                        'Exit focus',
+                    )
+                    : staticText(
+                        'ui.game.focus.enter',
+                        'Focus',
+                    );
         });
         listen(root.querySelector('#hpmud_character'), 'click', () => {
             if (isGameStarted() && workspaceElement.hidden === false) {
@@ -452,7 +554,10 @@ export function createUiBindings(ports) {
                     'items',
                 );
                 toastr.info(
-                    '已插入操作；请从物品档案引用对象。',
+                    staticText(
+                        'ui.game.item.operation_inserted',
+                        'Operation inserted. Reference the target from the Item archive.',
+                    ),
                 );
             });
         });
@@ -646,15 +751,42 @@ export function createUiBindings(ports) {
             const file = event.target.files?.[0];
             if (!file) return;
             const status = root.querySelector('#hpmud_preset_status');
-            status.textContent = '导入中…';
+            status.textContent =
+                staticText(
+                    'ui.bindings.importing',
+                    'Importing...',
+                );
             try {
                 const result = await importPreset(file);
-                const stripped = result.removed.length ? ` · 已移除敏感字段 ${result.removed.length} 个` : '';
+                const stripped =
+                    result.removed.length
+                        ? formatStaticText(
+                            'ui.bindings.sensitive_removed',
+                            ' · Removed {count} sensitive fields',
+                            {
+                                count:
+                                    result.removed.length,
+                            },
+                        )
+                        : '';
                 status.textContent = `${result.name} · ${result.apiId}${stripped}`;
-                toastr.success(`Preset “${result.name}” 已导入。`);
+                toastr.success(
+                    formatStaticText(
+                        'ui.bindings.preset_imported',
+                        'Preset "{name}" imported.',
+                        {
+                            name:
+                                result.name,
+                        },
+                    ),
+                );
             } catch (error) {
                 console.error('[Hogwarts MUD] Preset import failed', error);
-                status.textContent = '导入失败';
+                status.textContent =
+                    staticText(
+                        'ui.bindings.import_failed',
+                        'Import failed',
+                    );
                 toastr.error(String(error?.message || error));
             } finally {
                 event.target.value = '';
@@ -666,14 +798,39 @@ export function createUiBindings(ports) {
             const files = Array.from(event.target.files || []);
             if (!files.length) return;
             const status = root.querySelector('#hpmud_regex_status');
-            status.textContent = '导入中…';
+            status.textContent =
+                staticText(
+                    'ui.bindings.importing',
+                    'Importing...',
+                );
             try {
                 const scripts = await importRegexFiles(files);
-                status.textContent = `已导入 ${scripts.length} 条`;
-                toastr.success(`已导入 ${scripts.length} 条 Regex。`);
+                status.textContent =
+                    formatStaticText(
+                        'ui.bindings.regex_count',
+                        'Imported {count}',
+                        {
+                            count:
+                                scripts.length,
+                        },
+                    );
+                toastr.success(
+                    formatStaticText(
+                        'ui.bindings.regex_imported',
+                        'Imported {count} Regex entries.',
+                        {
+                            count:
+                                scripts.length,
+                        },
+                    ),
+                );
             } catch (error) {
                 console.error('[Hogwarts MUD] Regex import failed', error);
-                status.textContent = '导入失败';
+                status.textContent =
+                    staticText(
+                        'ui.bindings.import_failed',
+                        'Import failed',
+                    );
                 toastr.error(String(error?.message || error));
             } finally {
                 event.target.value = '';

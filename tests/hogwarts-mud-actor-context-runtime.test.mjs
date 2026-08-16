@@ -19,7 +19,6 @@ import {
     applyWitnessedEventMemories,
 } from '../public/scripts/extensions/hogwarts-mud/domain/event-memory.js';
 import {
-    applyDirectorFoundation,
     applyOpeningWorldPackage,
 } from '../public/scripts/extensions/hogwarts-mud/domain/initial-world.js';
 import {
@@ -27,7 +26,7 @@ import {
 } from '../public/scripts/extensions/hogwarts-mud/domain/pacing-reducer.js';
 import {
     applySocialDirectorResult,
-} from '../public/scripts/extensions/hogwarts-mud/domain/social-reducer.js';
+} from '../public/scripts/extensions/hogwarts-mud/domain/social-v3-reducer.js';
 import {
     applyTurnTransaction,
 } from '../public/scripts/extensions/hogwarts-mud/domain/turn-reducer.js';
@@ -155,6 +154,8 @@ function createLifecycle(
         migrateRelationshipMemoryState:
             unchanged,
         migrateSpellbookState:
+            unchanged,
+        migrateTimelineAppraisalState:
             unchanged,
         normalizeCausalCollapseState:
             value => value,
@@ -309,7 +310,6 @@ test('valid V1 lifecycle never runs legacy actor migrations or copy projectors',
 test('production actor writers contain no legacy copy writes', () => {
     const writers = [
         applyOpeningWorldPackage,
-        applyDirectorFoundation,
         applyTurnTransaction,
         applySceneTransition,
         createLegacyTurnRollbackCheckpoint,

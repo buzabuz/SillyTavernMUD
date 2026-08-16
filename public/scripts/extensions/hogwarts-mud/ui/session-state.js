@@ -5,6 +5,23 @@ export function createUiSessionState({
     archiveTranscriptPageSize = 8,
 } = {}) {
     return {
+        displayLocale: 'zh-CN',
+        localizationRows:
+            new Map(),
+        localizationFieldKeys:
+            new Map(),
+        localizationQueriedKeys:
+            new Set(),
+        localizationPendingFields:
+            new Set(),
+        localizationVisiblePending:
+            new Set(),
+        localizationPriorityKeys:
+            new Set(),
+        localizationTableErrors:
+            new Map(),
+        localizationLastErrorCode:
+            '',
         activeSetupStep: 'identity',
         activeScreen: 'home',
         activeCampaign: campaign,

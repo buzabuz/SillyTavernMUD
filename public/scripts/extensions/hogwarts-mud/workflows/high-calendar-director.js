@@ -11,6 +11,9 @@ import {
 import {
     worldClockToEpochMinutes,
 } from '../domain/time-environment.js';
+import {
+    adoptEnglishFields,
+} from '../domain/model-language-adoption.js';
 
 const HIGH_CALENDAR_TRIGGERS =
     new Set([
@@ -29,6 +32,73 @@ const TERMINAL_STORY_BEAT_STATUSES =
     ]);
 const PRIVATE_STORY_KEY_PATTERN =
     /(?:hidden|private|secret|unlock|clue|storyarc)/iu;
+
+function adoptHighCalendarLanguage(
+    proposal,
+) {
+    const diagnostics = [];
+    const adoptRecords =
+        (
+            records,
+            taskId,
+        ) =>
+            (
+                Array.isArray(records)
+                    ? records
+                    : []
+            )
+                .map(record => {
+                    const candidate = {
+                        ...record,
+                    };
+                    delete candidate.title;
+                    delete candidate.summary;
+                    const result =
+                        adoptEnglishFields(
+                            candidate,
+                            {
+                                taskId,
+                                recordId:
+                                    candidate.id,
+                                requiredFields: [
+                                    'titleEn',
+                                    'summaryEn',
+                                ],
+                            },
+                        );
+                    diagnostics.push(
+                        ...result
+                            .diagnostics,
+                    );
+                    return result.admissible
+                        ? result.accepted
+                        : null;
+                })
+                .filter(Boolean);
+    const accepted = {
+        ...proposal,
+        storylines:
+            adoptRecords(
+                proposal?.storylines,
+                'calendar_high',
+            ),
+        storyBeats:
+            adoptRecords(
+                proposal?.storyBeats,
+                'calendar_high',
+            ),
+    };
+    Object.defineProperty(
+        accepted,
+        'modelLanguageDiagnostics',
+        {
+            value:
+                diagnostics,
+            enumerable: false,
+        },
+    );
+    return accepted;
+}
 
 function isRecord(value) {
     return Boolean(
@@ -107,9 +177,7 @@ function findHiddenStoryLeak(
     }
     for (const record of records) {
         for (const field of [
-            'title',
             'titleEn',
-            'summary',
             'summaryEn',
         ]) {
             const candidate =
@@ -175,15 +243,10 @@ function publicConflictProjection(
     }
     return Object.fromEntries(
         [
-            'title',
             'titleEn',
-            'premise',
             'premiseEn',
-            'immediatePressure',
             'immediatePressureEn',
-            'stakes',
             'stakesEn',
-            'incitingEvent',
             'incitingEventEn',
         ].map(key => [
             key,
@@ -443,28 +506,14 @@ export function projectHighCalendarDirectorContext(
                 ))
             .map(actor => ({
                 id: actor.id,
-                name:
-                    String(
-                        actor.name ||
-                        actor.nameEn ||
-                        actor.id,
-                    ),
                 nameEn:
                     String(
                         actor.nameEn ||
-                        actor.name ||
                         actor.id,
-                    ),
-                role:
-                    String(
-                        actor.role ||
-                        actor.roleEn ||
-                        '',
                     ),
                 roleEn:
                     String(
                         actor.roleEn ||
-                        actor.role ||
                         '',
                     ),
                 identityReady: true,
@@ -659,9 +708,7 @@ Proposal schema:
   "baseStateRevision": 0,
   "storylines": [{
     "id": "stable_snake_case",
-    "title": "player-visible Chinese title",
     "titleEn": "player-visible English title",
-    "summary": "player-visible Chinese summary",
     "summaryEn": "player-visible English summary",
     "tags": ["ordinary_tag"],
     "startClock": "YYYY-MM-DD · HH:MM",
@@ -674,9 +721,7 @@ Proposal schema:
   "storyBeats": [{
     "id": "stable_snake_case",
     "storylineId": "existing or proposed storyline id",
-    "title": "player-visible Chinese title",
     "titleEn": "player-visible English title",
-    "summary": "player-visible Chinese summary",
     "summaryEn": "player-visible English summary",
     "tags": ["ordinary_tag"],
     "termKey": "unique_stable_term_key",
@@ -714,6 +759,8 @@ export function createHighCalendarDirectorWorkflow(
 ) {
     const {
         extractRoleResponseText,
+        enqueueLocalizationCandidates =
+        async () => {},
         getContext,
         getMudState,
         jobRegistry,
@@ -736,83 +783,42 @@ export function createHighCalendarDirectorWorkflow(
                     trigger,
                 },
             );
-        let raw = '';
-        let lastError = null;
-        for (
-            let attempt = 0;
-            attempt < 2;
-            attempt++
+        const response =
+            await sendModelTaskRequest(
+                roleSlot,
+                prompt,
+                {
+                    json: true,
+                },
+            );
+        const proposal =
+            adoptHighCalendarLanguage(
+                parseJsonObject(
+                    extractRoleResponseText(
+                        response,
+                    ),
+                ),
+            );
+        const validation =
+            validateHighCalendarDirectorProposal(
+                proposal,
+                state,
+                {
+                    trigger,
+                },
+            );
+        if (
+            !validation.valid &&
+            !proposal
+                .modelLanguageDiagnostics
+                .length
         ) {
-            const response =
-                await sendModelTaskRequest(
-                    roleSlot,
-                    attempt === 0
-                        ? prompt
-                        : [{
-                            role:
-                                'system',
-                            content:
-                                'Repair the invalid High Calendar proposal. Return exactly baseTimelineEpoch, baseStateRevision, storylines and storyBeats. Remove schedules, locations, Scene content, hidden/private content, unknown actors and past edits. Keep sceneTarget at 4. Output JSON only.',
-                        }, {
-                            role: 'user',
-                            content:
-                                JSON.stringify({
-                                    validationError:
-                                        String(
-                                            lastError
-                                                ?.message ||
-                                            lastError ||
-                                            '',
-                                        ),
-                                    invalidOutput:
-                                        raw,
-                                    originalRequest:
-                                        JSON.parse(
-                                            prompt[1]
-                                                .content,
-                                        ),
-                                }),
-                        }],
-                    {
-                        json: true,
-                    },
-                );
-            raw =
-                extractRoleResponseText(
-                    response,
-                );
-            try {
-                const proposal =
-                    parseJsonObject(
-                        raw,
-                    );
-                const validation =
-                    validateHighCalendarDirectorProposal(
-                        proposal,
-                        state,
-                        {
-                            trigger,
-                        },
-                    );
-                if (!validation.valid) {
-                    throw new Error(
-                        validation.errors
-                            .join('；'),
-                    );
-                }
-                return proposal;
-            } catch (error) {
-                lastError = error;
-            }
+            throw new Error(
+                validation.errors
+                    .join('；'),
+            );
         }
-        throw new Error(
-            `高级 Calendar Director 连续两次未返回合法 proposal：${
-                String(
-                    lastError?.message ||
-                    lastError,
-                )
-            }`,
-        );
+        return proposal;
     }
 
     async function runHighCalendarDirector(
@@ -876,6 +882,42 @@ export function createHighCalendarDirectorWorkflow(
                 );
             const current =
                 getMudState();
+            if (
+                proposal
+                    .modelLanguageDiagnostics
+                    .length &&
+                (
+                    (
+                        trigger ===
+                            'opening_world' &&
+                        (
+                            !proposal
+                                .storylines
+                                .length ||
+                            !proposal
+                                .storyBeats
+                                .length
+                        )
+                    ) ||
+                    (
+                        !proposal
+                            .storylines
+                            .length &&
+                        !proposal
+                            .storyBeats
+                            .length
+                    )
+                )
+            ) {
+                return {
+                    status:
+                        'language_skipped',
+                    diagnostics:
+                        proposal
+                            .modelLanguageDiagnostics,
+                    state: current,
+                };
+            }
             const validation =
                 validateHighCalendarDirectorProposal(
                     proposal,
@@ -935,6 +977,13 @@ export function createHighCalendarDirectorWorkflow(
                 renderAll();
                 throw error;
             }
+            void enqueueLocalizationCandidates(
+                [],
+            ).catch(error =>
+                console.warn(
+                    '[Hogwarts MUD] High Calendar localization candidate enqueue failed',
+                    error,
+                ));
             renderAll();
             return {
                 status:

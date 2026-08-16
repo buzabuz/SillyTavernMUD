@@ -6,6 +6,9 @@ const DIFFICULTY_ADJUSTMENTS = Object.freeze({
     extreme: 7,
 });
 
+const spellStaticLocaleEn = {};
+const spellStaticLocaleZhCn = {};
+
 const createSpell = (
     id,
     incantation,
@@ -17,70 +20,85 @@ const createSpell = (
     curriculumYear,
     difficulty = 'standard',
     options = {},
-) => Object.freeze({
-    id,
-    incantation,
-    name,
-    nameEn,
-    category,
-    effect,
-    effectEn,
-    curriculumYear:
+) => {
+    spellStaticLocaleEn[
+        `spell.${id}.name`
+    ] = nameEn;
+    spellStaticLocaleEn[
+        `spell.${id}.effect`
+    ] = effectEn;
+    spellStaticLocaleZhCn[
+        `spell.${id}.name`
+    ] = name;
+    spellStaticLocaleZhCn[
+        `spell.${id}.effect`
+    ] = effect;
+    return Object.freeze({
+        id,
+        incantation,
+        nameEn,
+        category,
+        effectEn,
+        curriculumYear:
         options.curriculumYear ??
         curriculumYear,
-    subject:
+        subject:
         options.subject ||
         'Charms',
-    difficulty,
-    dcAdjustment:
+        difficulty,
+        dcAdjustment:
         DIFFICULTY_ADJUSTMENTS[
             difficulty
         ] ??
         1,
-    target:
+        target:
         options.target ||
         'object',
-    opposed:
+        opposed:
         Boolean(
             options.opposed,
         ),
-    targetAttribute:
+        targetAttribute:
         options.targetAttribute ||
         (
             options.opposed
                 ? 'agility'
                 : 'willpower'
         ),
-    risk:
+        risk:
         options.risk ||
         'controlled',
-    legality:
+        legality:
         options.legality ||
         'permitted',
-    learningMode:
+        learningMode:
         options.learningMode ||
         (
             curriculumYear > 0
                 ? 'curriculum'
                 : 'independent'
         ),
-    sourceTier:
+        sourceTier:
         options.sourceTier ||
         'book_canon',
-    incantationKnown:
+        incantationKnown:
         options.incantationKnown ??
         Boolean(incantation),
-    sourceUrl:
+        sourceUrl:
         options.sourceUrl ||
         '',
-    aliases:
+        aliases:
         Object.freeze(
-            options.aliases ||
-            [],
+            [
+                name,
+                ...(options.aliases ||
+                    []),
+            ].filter(Boolean),
         ),
-});
+    });
+};
 
-export const SPELL_CATALOG_VERSION = 2;
+export const SPELL_CATALOG_VERSION = 3;
 export const SPELL_DIRECTIVE_PREFIX = '✦';
 
 export const SPELL_CATALOG = Object.freeze([
@@ -1064,31 +1082,26 @@ export const SPELL_PROFICIENCY_RANKS =
     Object.freeze([
         Object.freeze({
             id: 'novice',
-            label: '初学',
             minimumXp: 0,
             modifier: -1,
         }),
         Object.freeze({
             id: 'practiced',
-            label: '练习中',
             minimumXp: 20,
             modifier: 0,
         }),
         Object.freeze({
             id: 'proficient',
-            label: '熟练',
             minimumXp: 60,
             modifier: 1,
         }),
         Object.freeze({
             id: 'mastered',
-            label: '精通',
             minimumXp: 140,
             modifier: 2,
         }),
         Object.freeze({
             id: 'expert',
-            label: '专家',
             minimumXp: 300,
             modifier: 3,
         }),
@@ -1096,11 +1109,70 @@ export const SPELL_PROFICIENCY_RANKS =
 
 export const SPELL_LEARNING_SOURCE_LABELS =
     Object.freeze({
-        class: '课堂教学',
-        prior_schooling: '过往课程',
-        self_study: '自行学习',
-        experiment: '自行实验',
-        special_instruction: '私下教授',
+        class: 'class',
+        prior_schooling:
+            'prior_schooling',
+        self_study: 'self_study',
+        experiment: 'experiment',
+        special_instruction:
+            'special_instruction',
+    });
+
+Object.assign(
+    spellStaticLocaleEn,
+    {
+        'spell.rank.novice':
+            'Novice',
+        'spell.rank.practiced':
+            'Practiced',
+        'spell.rank.proficient':
+            'Proficient',
+        'spell.rank.mastered':
+            'Mastered',
+        'spell.rank.expert':
+            'Expert',
+        'spell.source.class':
+            'Class instruction',
+        'spell.source.prior_schooling':
+            'Prior schooling',
+        'spell.source.self_study':
+            'Self-study',
+        'spell.source.experiment':
+            'Experiment',
+        'spell.source.special_instruction':
+            'Private instruction',
+    },
+);
+Object.assign(
+    spellStaticLocaleZhCn,
+    {
+        'spell.rank.novice': '初学',
+        'spell.rank.practiced':
+            '练习中',
+        'spell.rank.proficient':
+            '熟练',
+        'spell.rank.mastered': '精通',
+        'spell.rank.expert': '专家',
+        'spell.source.class':
+            '课堂教学',
+        'spell.source.prior_schooling':
+            '过往课程',
+        'spell.source.self_study':
+            '自行学习',
+        'spell.source.experiment':
+            '自行实验',
+        'spell.source.special_instruction':
+            '私下教授',
+    },
+);
+
+export const SPELL_STATIC_LOCALE_EN =
+    Object.freeze({
+        ...spellStaticLocaleEn,
+    });
+export const SPELL_STATIC_LOCALE_ZH_CN =
+    Object.freeze({
+        ...spellStaticLocaleZhCn,
     });
 
 function normalizeSpellId(
@@ -1171,11 +1243,6 @@ export function normalizeCustomSpellDefinition(
     return {
         id,
         incantation,
-        name:
-            String(
-                source.name ||
-                `自定义咒语 · ${incantation}`,
-            ).slice(0, 120),
         nameEn:
             String(
                 source.nameEn ||
@@ -1186,11 +1253,6 @@ export function normalizeCustomSpellDefinition(
                 source.category ||
                 'custom',
             ).slice(0, 48),
-        effect:
-            String(
-                source.effect ||
-                '效果由已收录的叙事证据定义。',
-            ).slice(0, 300),
         effectEn:
             String(
                 source.effectEn ||
@@ -1587,8 +1649,6 @@ export function normalizeKnownSpell(
             xp,
         proficiencyRank:
             rank.id,
-        proficiencyLabel:
-            rank.label,
         sortOrder:
             Number(
                 source.sortOrder ??

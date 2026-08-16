@@ -108,7 +108,7 @@ test('local translation inputs receive authoritative glossary targets without pl
     );
     assert.doesNotMatch(
         localized,
-        /\[\[HPMUD_TERM_/,
+        /HPMUD_TERM|⟦术语/u,
     );
     assert.equal(
         applyTranslationGlossaryTargets(
@@ -127,6 +127,45 @@ test('local translation inputs receive authoritative glossary targets without pl
             'She tucked them under one arm and dragged Lavender to Charms class so fast the ink was still wet.',
         ),
         'She 把三本书夹在一只胳膊下 and 以飞快的速度拽着拉文德赶去魔咒课，墨水甚至还没干.',
+    );
+});
+
+test('translation glossary prelocalizes runtime-proven leak phrases', () => {
+    assert.equal(
+        applyTranslationGlossaryTargets(
+            'Alex read Braithwaite\'s Pasties — 2 Sickles each in Diagon Alley.',
+        ),
+        '亚历克斯 read 布雷思韦特馅饼——每个 2 西可 in 对角巷.',
+    );
+    assert.equal(
+        applyTranslationGlossaryTargets(
+            '{quietly, through her teeth} So? SO?',
+        ),
+        '{压低声音，咬着牙} 所以呢？所以呢？',
+    );
+    assert.equal(
+        applyTranslationGlossaryTargets(
+            'She raised the holly wand near the conductor’s podium.',
+        ),
+        'She raised the 冬青木魔杖 near the 指挥台.',
+    );
+    assert.equal(
+        applyTranslationGlossaryTargets(
+            'Bilabibili-bo and WING',
+        ),
+        '比拉比利博 and 翼',
+    );
+    assert.equal(
+        applyTranslationGlossaryTargets(
+            'Student',
+        ),
+        '学生',
+    );
+    assert.equal(
+        applyTranslationGlossaryTargets(
+            'She looked over the mulberry bolt barricade.',
+        ),
+        'She looked over the 桑葚色布卷 路障.',
     );
 });
 
@@ -158,7 +197,10 @@ test('translation term placeholders restore canonical Chinese terms', () => {
     const source = 'Professor McGonagall welcomed Hermione Jean Granger, a Muggle-born student, to Hogwarts.';
     const protectedText = protectTranslationTerms(source);
     assert.doesNotMatch(protectedText, /McGonagall|Muggle-born|Hogwarts/);
-    assert.match(protectedText, /\[\[HPMUD_TERM_\d+]]/);
+    assert.match(
+        protectedText,
+        /⟦术语\d+⟧/u,
+    );
 
     const restored = restoreTranslationTerms(protectedText);
     assert.match(restored, /麦格教授/);

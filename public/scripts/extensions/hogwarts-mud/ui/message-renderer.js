@@ -4,6 +4,28 @@ import {
 import {
     createSpellCandidateCard,
 } from './spell-components.js';
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from '../domain/localized-view-model.js';
+import {
+    createActorNameField,
+    createActorRoleField,
+    getActorDisplayName,
+} from '../domain/actor-display-name.js';
+import {
+    getCanonLocalizationZhCn,
+} from '../canon-localization.zh-cn.js';
+import {
+    getVisibleItemLocalizationFields,
+    localizeItemCard,
+} from '../domain/item-localization.js';
+import {
+    createSpellLocalizationFields,
+} from '../domain/spell-localization.js';
+import {
+    createCharacterInputLocalizationField,
+} from '../domain/localization-candidates.js';
 
 export function createMessageRenderer(ports) {
     const {
@@ -17,18 +39,74 @@ export function createMessageRenderer(ports) {
         acceptSpellCandidate,
         getContext,
         getItemProposalDecision,
+        getLocalizedField =
+        field => ({
+            text:
+                    field.rawText ||
+                    field
+                        .sourceTextEn ||
+                    '',
+            status:
+                    field.rawText
+                        ? 'raw_evidence'
+                        : 'source',
+        }),
         getSpellProposalDecision,
         getSettings,
+        getRoomName =
+        (_state, _mapId, roomId) =>
+            roomId || '',
         getWorldState,
         ignoreItemCandidate,
         ignoreSpellCandidate,
         initials,
+        ensureLocalizedFields =
+        async () => [],
         isSaveRevisionBlocked =
         () => false,
         normalizeTranslationProvider,
         projectItemCard,
         translateMessage,
     } = ports;
+
+    function staticText(
+        staticKey,
+        sourceTextEn,
+    ) {
+        return getStaticLocaleText(
+            staticKey,
+            normalizeDisplayLocale(
+                session.displayLocale,
+            ),
+        ) ||
+            sourceTextEn;
+    }
+
+    function formatStaticText(
+        staticKey,
+        sourceTextEn,
+        values = {},
+    ) {
+        return Object.entries(
+            values,
+        ).reduce(
+            (
+                text,
+                [
+                    key,
+                    value,
+                ],
+            ) =>
+                text.replaceAll(
+                    `{${key}}`,
+                    String(value),
+                ),
+            staticText(
+                staticKey,
+                sourceTextEn,
+            ),
+        );
+    }
 
     function formatMessageText(message, text) {
         const context = getContext();
@@ -53,9 +131,78 @@ export function createMessageRenderer(ports) {
             ? `+${modifier}`
             : String(modifier);
         const rolls = (check.rolls || []).join(' / ');
-        const targetText = check.target?.name
-            ? `对抗 ${check.target.name} · 难度隐藏`
-            : '环境难度隐藏';
+        const targetActorId =
+            check.target?.actorId;
+        const targetActor =
+            targetActorId
+                ? [
+                    ...(
+                        getWorldState()
+                            ?.actorLibrary ||
+                        []
+                    ),
+                    ...(
+                        getWorldState()
+                            ?.actors ||
+                        []
+                    ),
+                ].find(actor =>
+                    actor.id ===
+                    targetActorId)
+                : null;
+        const targetField =
+            targetActor
+                ? {
+                    recordKind:
+                        'actor_core',
+                    recordId:
+                        targetActorId,
+                    fieldPath:
+                        'nameEn',
+                    sourceTextEn:
+                        targetActor
+                            .nameEn ||
+                        targetActorId,
+                }
+                : null;
+        if (targetField) {
+            void Promise.resolve(
+                ensureLocalizedFields(
+                    [
+                        targetField,
+                    ],
+                    {
+                        priority: 1,
+                    },
+                ),
+            ).catch(() => {});
+        }
+        const targetName =
+            targetField
+                ? getActorDisplayName({
+                    actorId:
+                        targetActorId,
+                    nameEn:
+                        targetActor
+                            ?.nameEn,
+                    displayLocale:
+                        session
+                            .displayLocale,
+                    getLocalizedField,
+                })
+                : '';
+        const targetText = targetName
+            ? `${staticText(
+                'check.target.opposed',
+                'Opposed',
+            )} ${targetName} · ${staticText(
+                'check.target.hidden',
+                'hidden difficulty',
+            )}`
+            : staticText(
+                'check.target.environment',
+                'Hidden environment difficulty',
+            );
         const observationSucceeded =
             [
                 'success_with_cost',
@@ -71,23 +218,33 @@ export function createMessageRenderer(ports) {
                         .incantation,
                     check.spell
                         .known
-                        ? `熟练修正 ${
-                            Number(
-                                check
-                                    .modifiers
-                                    ?.proficiency ||
-                                0,
-                            ) >=
-                                0
-                                ? '+'
-                                : ''
-                        }${Number(
-                            check
-                                .modifiers
-                                ?.proficiency ||
-                            0,
-                        )}`
-                        : '未学咒语 · 实验难度',
+                        ? formatStaticText(
+                            'ui.message.proficiency_modifier',
+                            'Proficiency modifier {value}',
+                            {
+                                value:
+                                    `${
+                                        Number(
+                                            check
+                                                .modifiers
+                                                ?.proficiency ||
+                                            0,
+                                        ) >=
+                                            0
+                                            ? '+'
+                                            : ''
+                                    }${Number(
+                                        check
+                                            .modifiers
+                                            ?.proficiency ||
+                                        0,
+                                    )}`,
+                            },
+                        )
+                        : staticText(
+                            'ui.message.unlearned_spell',
+                            'Unlearned spell · experiment difficulty',
+                        ),
                 ].join(' · ')
                 : check.spellObservation
                     ? observationSucceeded
@@ -95,9 +252,15 @@ export function createMessageRenderer(ports) {
                             check
                                 .spellObservation
                                 .incantation,
-                            '主动观测',
+                            staticText(
+                                'ui.message.active_observation',
+                                'Active observation',
+                            ),
                         ].join(' · ')
-                        : '未能辨认咒语'
+                        : staticText(
+                            'ui.message.unidentified_spell',
+                            'Spell not identified',
+                        )
                     : '';
         card.innerHTML = `
         <div class="hpmud-check-die">
@@ -118,23 +281,56 @@ export function createMessageRenderer(ports) {
             .textContent = String(check.keptRoll);
         card.querySelector('.hpmud-check-copy small')
             .textContent = [
-                live ? 'RULES RESOLVED · 续写中' : 'D20 CHECK · 本地判定',
+                live
+                    ? staticText(
+                        'ui.message.rules_resolved',
+                        'RULES RESOLVED · Continuing',
+                    )
+                    : staticText(
+                        'ui.message.d20_check',
+                        'D20 CHECK · Local adjudication',
+                    ),
                 check.rollMode === 'advantage'
-                    ? '优势'
+                    ? staticText(
+                        'ui.message.advantage',
+                        'Advantage',
+                    )
                     : check.rollMode === 'disadvantage'
-                        ? '劣势'
+                        ? staticText(
+                            'ui.message.disadvantage',
+                            'Disadvantage',
+                        )
                         : '',
             ].filter(Boolean).join(' · ');
         card.querySelector('.hpmud-check-copy strong')
-            .textContent = `${check.label} · ${check.outcomeLabel}`;
+            .textContent = [
+                staticText(
+                    `check.rule.${check.kind}`,
+                    check.labelEn ||
+                        check.kind,
+                ),
+                staticText(
+                    `check.outcome.${check.outcome}`,
+                    check.outcomeLabelEn ||
+                        check.outcome,
+                ),
+            ].join(' · ');
         card.querySelector('.hpmud-check-copy span')
             .textContent = [
                 spellText,
-                `${check.attributeLabel} ${rolls} ${modifierText} = ${check.total}`,
+                `${staticText(
+                    `attribute.${check.attribute}`,
+                    check.attributeLabelEn ||
+                        check.attribute,
+                )} ${rolls} ${modifierText} = ${check.total}`,
                 targetText,
             ].filter(Boolean).join(' · ');
         card.querySelector('.hpmud-check-total small')
-            .textContent = '总值';
+            .textContent =
+                staticText(
+                    'check.total',
+                    'Total',
+                );
         card.querySelector('.hpmud-check-total strong')
             .textContent = String(check.total);
         return card;
@@ -160,13 +356,41 @@ export function createMessageRenderer(ports) {
             <span class="hpmud-quill-mark"><i></i></span>
             <span>
                 <small>OUT OF CHARACTER · CHAPTER NOTES</small>
-                <strong>作者的羽毛笔</strong>
+                <strong></strong>
             </span>
-            <b>本章批注</b>
+            <b></b>
         </header>
-        <p class="hpmud-quill-disclaimer">不计入角色认知 · 不含剧透 · 编辑部拒绝承担玩家策略造成的家具损失</p>
+        <p class="hpmud-quill-disclaimer"></p>
         <div class="hpmud-quill-copy"></div>
     `;
+        card.querySelector(
+            'header small',
+        ).textContent =
+            staticText(
+                'ui.message.quill.kicker',
+                'Out of character · Chapter notes',
+            );
+        card.querySelector(
+            'header strong',
+        ).textContent =
+            staticText(
+                'ui.message.quill.title',
+                'The Author\'s Quill',
+            );
+        card.querySelector(
+            'header b',
+        ).textContent =
+            staticText(
+                'ui.message.quill.chapter_note',
+                'Chapter note',
+            );
+        card.querySelector(
+            '.hpmud-quill-disclaimer',
+        ).textContent =
+            staticText(
+                'ui.message.quill.disclaimer',
+                'Not character knowledge · No spoilers · The editorial office assumes no liability for furniture damaged by player strategy',
+            );
         const copy = card.querySelector(
             '.hpmud-quill-copy',
         );
@@ -192,16 +416,31 @@ export function createMessageRenderer(ports) {
     function getTranslationProviderLabel(
         provider,
     ) {
-        return {
-            local: '本地 4B',
-            google: 'Google',
-            bing: 'Bing',
-            off: '不开',
-        }[
+        const normalized =
             normalizeTranslationProvider(
                 provider,
+            );
+        if (
+            [
+                'google',
+                'bing',
+            ].includes(
+                normalized,
             )
-        ];
+        ) {
+            return normalized
+                .charAt(0)
+                .toUpperCase() +
+                normalized.slice(1);
+        }
+        return staticText(
+            normalized === 'off'
+                ? 'ui.translation.off'
+                : 'ui.translation.local',
+            normalized === 'off'
+                ? 'Off'
+                : 'Local 4B',
+        );
     }
 
     function createMessageTranslationControl(
@@ -226,11 +465,21 @@ export function createMessageRenderer(ports) {
             document.createElement(
                 'summary',
             );
-        summary.textContent = 'EN';
+        summary.textContent =
+            staticText(
+                'ui.message.translation.english_short',
+                'EN',
+            );
         summary.title =
             readOnly
-                ? '切换语言'
-                : '切换语言或重新翻译';
+                ? staticText(
+                    'ui.message.translation.toggle',
+                    'Switch language',
+                )
+                : staticText(
+                    'ui.message.translation.toggle_or_retranslate',
+                    'Switch language or retranslate',
+                );
 
         const menu =
             document.createElement(
@@ -245,11 +494,18 @@ export function createMessageRenderer(ports) {
         status.className =
             'hpmud-message-translation-status';
         status.textContent =
-            `当前：${getTranslationProviderLabel(
-                translation.provider ||
-                getSettings()
-                    .translationProvider,
-            )}` +
+            formatStaticText(
+                'ui.message.translation.current',
+                'Current: {provider}',
+                {
+                    provider:
+                        getTranslationProviderLabel(
+                            translation.provider ||
+                            getSettings()
+                                .translationProvider,
+                        ),
+                },
+            ) +
             (
                 translation
                     .translationVersion
@@ -263,7 +519,10 @@ export function createMessageRenderer(ports) {
             );
         chinese.type = 'button';
         chinese.textContent =
-            '显示中文译文';
+            staticText(
+                'ui.message.translation.show_chinese',
+                'Show Chinese translation',
+            );
         chinese.setAttribute(
             'aria-checked',
             'true',
@@ -274,7 +533,10 @@ export function createMessageRenderer(ports) {
             );
         english.type = 'button';
         english.textContent =
-            '显示英文原文';
+            staticText(
+                'ui.message.translation.show_english',
+                'Show English source',
+            );
         english.setAttribute(
             'aria-checked',
             'false',
@@ -299,8 +561,14 @@ export function createMessageRenderer(ports) {
                 );
                 summary.textContent =
                     showOriginal
-                        ? '中'
-                        : 'EN';
+                        ? staticText(
+                            'ui.message.translation.chinese_short',
+                            'ZH',
+                        )
+                        : staticText(
+                            'ui.message.translation.english_short',
+                            'EN',
+                        );
                 details.open = false;
             };
         chinese.addEventListener(
@@ -318,10 +586,17 @@ export function createMessageRenderer(ports) {
             );
         retranslate.type = 'button';
         retranslate.textContent =
-            `重新翻译 · ${getTranslationProviderLabel(
-                getSettings()
-                    .translationProvider,
-            )}`;
+            formatStaticText(
+                'ui.message.translation.retranslate',
+                'Retranslate · {provider}',
+                {
+                    provider:
+                        getTranslationProviderLabel(
+                            getSettings()
+                                .translationProvider,
+                        ),
+                },
+            );
         retranslate.disabled =
             Number(messageId) < 0 ||
             isSaveRevisionBlocked();
@@ -331,11 +606,15 @@ export function createMessageRenderer(ports) {
                 retranslate.disabled =
                     true;
                 status.textContent =
-                    '正在重新翻译…';
+                    staticText(
+                        'ui.message.translation.running',
+                        'Retranslating...',
+                    );
                 await translateMessage(
                     Number(messageId),
                     {
                         force: true,
+                        message,
                     },
                 );
                 if (
@@ -343,7 +622,10 @@ export function createMessageRenderer(ports) {
                         .isConnected
                 ) {
                     status.textContent =
-                        '已重新翻译';
+                        staticText(
+                            'ui.message.translation.done',
+                            'Retranslated',
+                        );
                     retranslate.disabled =
                         isSaveRevisionBlocked();
                     setOriginal(false);
@@ -355,9 +637,7 @@ export function createMessageRenderer(ports) {
             chinese,
             english,
         );
-        if (!readOnly) {
-            menu.append(retranslate);
-        }
+        menu.append(retranslate);
         details.append(
             summary,
             menu,
@@ -374,90 +654,114 @@ export function createMessageRenderer(ports) {
         } = {},
     ) {
         const state = getWorldState();
-        const actorLibrary = new Map([
-            ...(state.actorLibrary || []),
-            ...(state.actors || []),
-        ].map(actor => [
-            actor.id,
-            actor,
-        ]));
+        const actorLibrary =
+            new Map();
+        for (const actor of [
+            ...(state.actorLibrary ||
+                []),
+            ...(state.actors ||
+                []),
+        ]) {
+            actorLibrary.set(
+                actor.id,
+                {
+                    ...(
+                        actorLibrary
+                            .get(
+                                actor.id,
+                            ) ||
+                        {}
+                    ),
+                    ...actor,
+                },
+            );
+        }
         const article = document.createElement('article');
         article.className = 'hpmud-scene-turn';
         article.dataset.messageId = String(messageId);
-        const authorQuill =
-            message.extra?.hogwartsMud?.authorQuill;
         const authorQuillEn =
             message.extra?.hogwartsMud?.authorQuillEn;
-        const hasTranslation =
-            segments.some(segment => segment.textZh) ||
-            Boolean(
-                authorQuill &&
-                authorQuillEn &&
-                authorQuill !== authorQuillEn,
-            );
+        const authorQuillField = {
+            recordKind:
+                'author_quill',
+            recordId:
+                String(messageId),
+            fieldPath:
+                'authorQuillEn',
+            sourceTextEn:
+                authorQuillEn ||
+                '',
+        };
         const check = message.extra?.hogwartsMud
             ?.turnTransaction?.checkResolution;
         if (check) {
             article.append(renderCheckCard(check));
         }
 
-        if (hasTranslation) {
-            article.append(
-                createMessageTranslationControl(
-                    article,
-                    message,
-                    messageId,
-                    {
-                        readOnly,
-                    },
-                ),
-            );
-        }
-
-        const quillCard = renderAuthorQuillCard(
-            {
-                authorQuill,
-                authorQuillEn,
-            },
-            message,
-        );
-        if (quillCard) {
-            article.append(quillCard);
-        }
-
-        segments.forEach(segment => {
-            const block = document.createElement(segment.type === 'dialogue' ? 'section' : 'div');
-            block.className = `hpmud-scene-segment ${segment.type}`;
-            if (segment.type === 'dialogue') {
-                const actor = actorLibrary.get(segment.actorId);
-                const displayName =
-                    actor?.name ||
-                    actor?.display?.name ||
+        const localizationFields =
+            segments.map((
+                segment,
+                index,
+            ) => ({
+                recordKind:
+                    'message_segment',
+                recordId:
+                    `message:${messageId}:segment:${index}`,
+                fieldPath: 'textEn',
+                sourceTextEn:
+                    segment.textEn ||
+                    '',
+                rawText:
+                    segment.rawText ||
+                    '',
+            }));
+        const actorNameFields = [
+            ...new Set(
+                segments
+                    .filter(segment =>
+                        segment.type ===
+                            'dialogue' &&
+                        segment.actorId)
+                    .map(segment =>
+                        segment
+                            .actorId),
+            ),
+        ]
+            .filter(actorId =>
+                !getCanonLocalizationZhCn(
+                    actorId,
+                ))
+            .map(actorId => {
+                const actor =
+                    actorLibrary.get(
+                        actorId,
+                    );
+                return createActorNameField(
+                    actorId,
                     actor?.nameEn ||
-                    segment.actorId;
-                const header = document.createElement('header');
-                header.innerHTML = `
-                <span class="hpmud-turn-avatar">${initials(displayName)}</span>
-                <span class="hpmud-turn-name"><strong></strong><small></small></span>
-            `;
-                header.querySelector('strong').textContent = displayName;
-                header.querySelector('small').textContent = actor?.role || actor?.roleEn || '在场人物';
-                block.append(header);
-            }
-            const body = document.createElement('div');
-            body.className = 'hpmud-scene-segment-body';
-            const translated = document.createElement('div');
-            translated.className = 'hpmud-translation';
-            translated.innerHTML = formatMessageText(message, segment.textZh || segment.textEn);
-            body.append(translated);
-            if (segment.textZh) {
-                const original = document.createElement('div');
-                original.className = 'hpmud-original';
-                original.innerHTML = formatMessageText(message, segment.textEn);
-                body.append(original);
-            }
-            block.append(body);
-            article.append(block);
+                        actorId,
+                );
+            });
+        const actorRoleFields = [
+            ...new Set(
+                segments
+                    .filter(segment =>
+                        segment.type ===
+                            'dialogue' &&
+                        segment.actorId)
+                    .map(segment =>
+                        segment.actorId),
+            ),
+        ].map(actorId => {
+            const actor =
+                actorLibrary.get(
+                    actorId,
+                );
+            return createActorRoleField(
+                actorId,
+                actor?.roleEn ||
+                    '',
+            );
         });
         const itemCandidates =
             message.extra
@@ -465,12 +769,203 @@ export function createMessageRenderer(ports) {
                 ?.turnTransaction
                 ?.itemCandidates ||
             [];
+        const spellCandidates =
+            message.extra
+                ?.hogwartsMud
+                ?.turnTransaction
+                ?.spellCandidates ||
+            [];
+        const spellFieldsByKey =
+            new Map(
+                spellCandidates.map(
+                    candidate => [
+                        candidate.key,
+                        createSpellLocalizationFields(
+                            candidate
+                                .definition,
+                        ),
+                    ],
+                ),
+            );
+        void Promise.resolve(
+            ensureLocalizedFields(
+                [
+                    ...localizationFields,
+                    ...actorNameFields,
+                    ...actorRoleFields,
+                    authorQuillField,
+                    ...itemCandidates
+                        .flatMap(candidate =>
+                            getVisibleItemLocalizationFields(
+                                candidate.item,
+                            )),
+                    ...[
+                        ...spellFieldsByKey
+                            .values(),
+                    ].flatMap(fields =>
+                        fields),
+                ],
+                {
+                    priority:
+                        readOnly
+                            ? 3
+                            : 0,
+                },
+            ),
+        ).catch(error =>
+            console.warn(
+                '[Hogwarts MUD] Visible message localization query failed',
+                error,
+            ));
+        article.append(
+            createMessageTranslationControl(
+                article,
+                message,
+                messageId,
+                {
+                    readOnly,
+                },
+            ),
+        );
+        const quillCard = renderAuthorQuillCard(
+            {
+                authorQuill:
+                    getLocalizedField(
+                        authorQuillField,
+                    ).text,
+                authorQuillEn,
+            },
+            message,
+        );
+        if (quillCard) {
+            article.append(quillCard);
+        }
+        segments.forEach((
+            segment,
+            index,
+        ) => {
+            const block = document.createElement(segment.type === 'dialogue' ? 'section' : 'div');
+            block.className = `hpmud-scene-segment ${segment.type}`;
+            if (segment.type === 'dialogue') {
+                const actor = actorLibrary.get(segment.actorId);
+                const displayName =
+                    getActorDisplayName({
+                        actorId:
+                            segment
+                                .actorId,
+                        nameEn:
+                            actor
+                                ?.nameEn,
+                        displayLocale:
+                            session
+                                .displayLocale,
+                        getLocalizedField,
+                    });
+                const header = document.createElement('header');
+                header.innerHTML = `
+                <span class="hpmud-turn-avatar">${initials(displayName)}</span>
+                <span class="hpmud-turn-name"><strong></strong><small></small></span>
+            `;
+                header.querySelector('strong').textContent = displayName;
+                header.querySelector('small').textContent =
+                    getLocalizedField(
+                        createActorRoleField(
+                            segment.actorId,
+                            actor?.roleEn ||
+                                '',
+                        ),
+                    ).text ||
+                    staticText(
+                        'ui.message.present_actor',
+                        'Present actor',
+                    );
+                block.append(header);
+            }
+            const body = document.createElement('div');
+            body.className = 'hpmud-scene-segment-body';
+            const translated = document.createElement('div');
+            translated.className = 'hpmud-translation';
+            const sourceText =
+                segment.textEn ||
+                segment.rawText ||
+                '';
+            const localized =
+                getLocalizedField(
+                    localizationFields[
+                        index
+                    ],
+                );
+            const displayText =
+                localized.text;
+            translated.innerHTML = formatMessageText(
+                message,
+                displayText,
+            );
+            body.append(translated);
+            if (
+                session.displayLocale ===
+                    'zh-CN' &&
+                [
+                    'pending',
+                    'error',
+                ].includes(
+                    localized.status,
+                )
+            ) {
+                const status =
+                    document.createElement(
+                        'small',
+                    );
+                status.className =
+                    `hpmud-localization-status is-${localized.status}`;
+                status.textContent =
+                    getLocalizedField({
+                        staticKey:
+                            `translation.status.${localized.status}`,
+                        sourceTextEn:
+                            localized.status ===
+                                'pending'
+                                ? 'Translating'
+                                : 'Translation unavailable',
+                    }).text;
+                body.append(status);
+            }
+            if (
+                localized.status ===
+                    'translated' &&
+                displayText !==
+                    sourceText
+            ) {
+                const original = document.createElement('div');
+                original.className = 'hpmud-original';
+                original.innerHTML =
+                    formatMessageText(
+                        message,
+                        sourceText,
+                    );
+                body.append(original);
+            }
+            block.append(body);
+            article.append(block);
+        });
         itemCandidates
             .forEach(candidate => {
-                const item =
+                const projectedItem =
                     projectItemCard(
                         candidate.item,
                         state,
+                        session
+                            .displayLocale,
+                        {
+                            getLocalizedField,
+                            getRoomName,
+                        },
+                    );
+                const item =
+                    localizeItemCard(
+                        projectedItem,
+                        candidate.item,
+                        getLocalizedField,
                     );
                 const decision =
                     getItemProposalDecision(
@@ -491,18 +986,35 @@ export function createMessageRenderer(ports) {
                                 acceptItemCandidate,
                             onIgnore:
                                 ignoreItemCandidate,
+                            displayLocale:
+                                session
+                                    .displayLocale,
                         },
                     ),
                 );
             });
-        const spellCandidates =
-            message.extra
-                ?.hogwartsMud
-                ?.turnTransaction
-                ?.spellCandidates ||
-            [];
         spellCandidates
             .forEach(candidate => {
+                const fields =
+                    spellFieldsByKey
+                        .get(
+                            candidate.key,
+                        );
+                const localizedCandidate = {
+                    ...candidate,
+                    definition: {
+                        ...candidate
+                            .definition,
+                        name:
+                            getLocalizedField(
+                                fields[0],
+                            ).text,
+                        effect:
+                            getLocalizedField(
+                                fields[1],
+                            ).text,
+                    },
+                };
                 const decision =
                     getSpellProposalDecision(
                         state,
@@ -511,7 +1023,7 @@ export function createMessageRenderer(ports) {
                     'pending';
                 article.append(
                     createSpellCandidateCard(
-                        candidate,
+                        localizedCandidate,
                         {
                             decision,
                             disabled:
@@ -521,6 +1033,9 @@ export function createMessageRenderer(ports) {
                                 acceptSpellCandidate,
                             onIgnore:
                                 ignoreSpellCandidate,
+                            displayLocale:
+                                session
+                                    .displayLocale,
                         },
                     ),
                 );
@@ -578,33 +1093,63 @@ export function createMessageRenderer(ports) {
         const phase = session.liveSceneStream?.phase || 'connecting';
         const detailByPhase = {
             connecting:
-                '正在读取玩家行动、现场事实与导演指令。',
+                staticText(
+                    'ui.message.stream.detail.connecting',
+                    'Reading the player action, live facts, and Director instructions.',
+                ),
             receiving:
-                '正在生成完整回复；正文将在校验并提交后一次显示。',
+                staticText(
+                    'ui.message.stream.detail.receiving',
+                    'Generating the complete reply. Text appears only after validation and commit.',
+                ),
             repairing:
-                '初稿未通过结构校验，正在重新整理；正文只在最终提交后显示。',
+                staticText(
+                    'ui.message.stream.detail.repairing',
+                    'The draft failed structural validation and is being reorganized before final commit.',
+                ),
             translating:
-                '完整原稿已通过结构校验，正在翻译并准备提交。',
+                staticText(
+                    'ui.message.stream.detail.translating',
+                    'The complete draft passed validation. Preparing display translation and commit.',
+                ),
             committing:
-                '正在提交世界状态与最终消息。',
+                staticText(
+                    'ui.message.stream.detail.committing',
+                    'Committing world State and the final message.',
+                ),
         };
         return createGenerationStatusCard({
             tier: 'low',
             eyebrow:
                 'ON-SCENE PERFORMER · ATOMIC',
             title:
-                LIVE_STREAM_PHASE_LABELS[
-                    phase
-                ] ||
-                '正在生成完整回复',
+                staticText(
+                    `ui.message.stream.phase.${phase}`,
+                    LIVE_STREAM_PHASE_LABELS[
+                        phase
+                    ] ||
+                    'Generating complete reply',
+                ),
             detail:
                 detailByPhase[phase] ||
                 detailByPhase.receiving,
             steps: [
-                '读取行动',
-                '生成完整回复',
-                '译入中文',
-                '提交状态',
+                staticText(
+                    'ui.message.stream.step.read',
+                    'Read action',
+                ),
+                staticText(
+                    'ui.message.stream.step.generate',
+                    'Generate complete reply',
+                ),
+                staticText(
+                    'ui.message.stream.step.translate',
+                    'Prepare display translation',
+                ),
+                staticText(
+                    'ui.message.stream.step.commit',
+                    'Commit State',
+                ),
             ],
             activeStep:
                 phase === 'connecting'
@@ -631,7 +1176,36 @@ export function createMessageRenderer(ports) {
         if (message.is_system) {
             const system = document.createElement('article');
             system.className = 'hpmud-system-turn';
-            system.innerHTML = formatMessageText(message, message.mes);
+            const field = {
+                recordKind:
+                    'system_message',
+                recordId:
+                    String(messageId),
+                fieldPath: 'mes',
+                sourceTextEn:
+                    message.mes ||
+                    '',
+            };
+            void Promise.resolve(
+                ensureLocalizedFields(
+                    [
+                        field,
+                    ],
+                    {
+                        priority:
+                            readOnly
+                                ? 3
+                                : 0,
+                    },
+                ),
+            ).catch(() => {});
+            system.innerHTML =
+                formatMessageText(
+                    message,
+                    getLocalizedField(
+                        field,
+                    ).text,
+                );
             return system;
         }
 
@@ -647,24 +1221,89 @@ export function createMessageRenderer(ports) {
             );
         }
 
-        const translationEnabled = getSettings().translationEnabled;
-        const translation = translationEnabled ? message.extra?.hogwartsMud : null;
         const article = document.createElement('article');
         article.className = `hpmud-turn ${message.is_user ? 'user' : 'assistant'}`;
         article.dataset.messageId = String(messageId);
 
         let header = null;
         if (message.is_user) {
+            const playerName =
+                getWorldState()
+                    ?.character
+                    ?.inputEvidence
+                    ?.identity
+                    ?.name ||
+                message.name ||
+                '';
+            const playerNameField =
+                createCharacterInputLocalizationField(
+                    'identity.name',
+                    playerName,
+                );
+            void Promise.resolve(
+                ensureLocalizedFields(
+                    [
+                        playerNameField,
+                    ],
+                    {
+                        priority:
+                            readOnly
+                                ? 3
+                                : 1,
+                    },
+                ),
+            ).catch(() => {});
+            const displayName =
+                getLocalizedField(
+                    playerNameField,
+                ).text ||
+                staticText(
+                    'ui.dossier.you',
+                    'You',
+                );
             header = document.createElement('header');
             header.className = 'hpmud-turn-header';
             header.innerHTML = `
-            <span class="hpmud-turn-avatar">${initials(message.name)}</span>
+            <span class="hpmud-turn-avatar">${initials(displayName)}</span>
             <span class="hpmud-turn-name"><strong></strong><small></small></span>
         `;
-            header.querySelector('strong').textContent = message.name || 'You';
-            header.querySelector('small').textContent = '你的回合';
-        } else if (translation?.translatedZh) {
-            article.classList.add('hpmud-manuscript');
+            header.querySelector('strong').textContent =
+                displayName;
+            header.querySelector('small').textContent =
+                staticText(
+                    'ui.message.your_turn',
+                    'Your turn',
+                );
+        }
+
+        const body = document.createElement('div');
+        body.className = 'hpmud-turn-body';
+        if (message.is_user) {
+            body.textContent = message.mes;
+        } else {
+            const field = {
+                recordKind:
+                    'message',
+                recordId:
+                    String(messageId),
+                fieldPath: 'mes',
+                sourceTextEn:
+                    message.mes ||
+                    '',
+            };
+            void Promise.resolve(
+                ensureLocalizedFields(
+                    [
+                        field,
+                    ],
+                    {
+                        priority:
+                            readOnly
+                                ? 3
+                                : 0,
+                    },
+                ),
+            ).catch(() => {});
             article.append(
                 createMessageTranslationControl(
                     article,
@@ -675,24 +1314,16 @@ export function createMessageRenderer(ports) {
                     },
                 ),
             );
-        }
-
-        const body = document.createElement('div');
-        body.className = 'hpmud-turn-body';
-        if (message.is_user) {
-            body.textContent = message.mes;
-        } else {
             const translated = document.createElement('div');
             translated.className = 'hpmud-translation';
-            translated.innerHTML = formatMessageText(message, translation?.translatedZh || message.mes);
+            translated.innerHTML =
+                formatMessageText(
+                    message,
+                    getLocalizedField(
+                        field,
+                    ).text,
+                );
             body.append(translated);
-
-            if (translation?.translatedZh) {
-                const original = document.createElement('div');
-                original.className = 'hpmud-original';
-                original.innerHTML = formatMessageText(message, translation.sourceEn || message.mes);
-                body.append(original);
-            }
         }
 
         if (header) article.append(header);

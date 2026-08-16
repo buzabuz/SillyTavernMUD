@@ -13,13 +13,16 @@ import {
     createChunkedKnowledgeRecords,
     createKnowledgeRecordV2,
     hydrateCanonicalKnowledgeCandidates,
-    hydrateKnowledgeRecords,
     isKnowledgeRecordVisible,
     normalizeKnowledgeId,
 } from './domain/knowledge-projector-v2.js';
 import {
     getLegalAppraisalObserverIds,
 } from './domain/memory-synapse-schema.js';
+import {
+    getLocalMapDefinition,
+    getMapRooms,
+} from './domain/map-access.js';
 
 export const KNOWLEDGE_CATEGORIES = V2_KNOWLEDGE_CATEGORIES;
 const VECTOR_SOURCE = 'transformers';
@@ -429,7 +432,10 @@ export function ensureKnowledgeBaseIdentity(context, state) {
     const chatId = context.getCurrentChatId?.() || context.chatId || '';
     const fallback = [
         state.campaign?.startYear,
-        state.character?.identity?.name,
+        state.character
+            ?.canonicalEn
+            ?.identity
+            ?.nameEn,
         state.campaign?.presetId,
     ].filter(Boolean).join('-');
     state.knowledgeBase.timelineId ||= normalizeId(chatId || fallback || `timeline-${Date.now()}`);
@@ -448,7 +454,10 @@ function resolveKnowledgeBaseIdentity(
         '';
     const fallback = [
         state.campaign?.startYear,
-        state.character?.identity?.name,
+        state.character
+            ?.canonicalEn
+            ?.identity
+            ?.nameEn,
         state.campaign?.presetId,
         state.timelineEpoch,
     ].filter(Boolean).join('-');
@@ -581,15 +590,28 @@ export function buildKnowledgeRecords(state, chat = []) {
                         ? `${segment.actorId}: ${segment.textEn}`
                         : segment.textEn))
             .join('\n\n');
-        const location = isCurrentScene
-            ? state.location
-            : archivedScene?.location || '';
         const mapId = isCurrentScene
             ? state.map?.activeMapId
             : archivedScene?.mapId;
         const roomId = isCurrentScene
             ? state.map?.currentLocalNodeId
             : archivedScene?.roomId;
+        const map =
+            getLocalMapDefinition(
+                mapId,
+                state.map,
+            );
+        const room =
+            getMapRooms(
+                map,
+                state.map,
+            ).find(candidate =>
+                candidate.id ===
+                roomId);
+        const locationEn =
+            room?.nameEn ||
+            roomId ||
+            '';
         const activeInteractionActorIds =
             isCurrentScene
                 ? activeActorIds
@@ -658,17 +680,17 @@ export function buildKnowledgeRecords(state, chat = []) {
         records.push(makeRecord(
             'scenes',
             sceneId,
-            scene?.nameEn || scene?.name || sceneId,
+            scene?.nameEn || sceneId,
             [
-                `Scene: ${scene?.nameEn || scene?.name || sceneId}`,
-                `Summary: ${scene?.summaryEn || scene?.summary || ''}`,
-                `Exploration hook: ${scene?.explorationHookEn || scene?.explorationHook || ''}`,
+                `Scene: ${scene?.nameEn || sceneId}`,
+                `Summary: ${scene?.summaryEn || ''}`,
+                `Exploration hook: ${scene?.explorationHookEn || ''}`,
                 `Closure: ${archivedScene?.closureSummaryEn || ''}`,
                 `Chronicle: ${chronicle?.summaryEn || ''}`,
                 `Time: ${archivedScene
                     ? `${archivedScene.startedClock || ''} to ${archivedScene.endedClock || ''}`
                     : state.scene?.startedClock || state.clock}`,
-                `Location: ${location}`,
+                `Location: ${locationEn}`,
                 `Current room: ${roomId || ''}`,
                 `Active interaction actors: ${activeInteractionActorIds.join(', ')}`,
                 `Local occupants: ${localOccupantActorIds.join(', ')}`,
@@ -680,7 +702,7 @@ export function buildKnowledgeRecords(state, chat = []) {
             {
                 scene,
                 archive: archivedScene || null,
-                location,
+                locationEn,
                 mapId,
                 currentRoomId: roomId,
                 messageIds,

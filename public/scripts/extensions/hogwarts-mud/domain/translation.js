@@ -120,7 +120,13 @@ export const TRANSLATION_TERM_GLOSSARY = Object.freeze([
     Object.freeze({ source: 'dragged Lavender to Charms class so fast the ink was still wet', target: '以飞快的速度拽着拉文德赶去魔咒课，墨水甚至还没干' }),
     Object.freeze({ source: 'tucked them under one arm', target: '把三本书夹在一只胳膊下' }),
     Object.freeze({ source: 'arranged a signed parchment between them', target: '把一张签名羊皮纸摆在两人之间' }),
+    Object.freeze({ source: 'mulberry bolt', target: '桑葚色布卷' }),
+    Object.freeze({ source: 'barricade', target: '路障' }),
     Object.freeze({ source: 'Platform Nine and Three-Quarters', target: '九又四分之三站台' }),
+    Object.freeze({ source: 'Diagon Alley', target: '对角巷' }),
+    Object.freeze({ source: 'Flourish and Blotts', target: '丽痕书店' }),
+    Object.freeze({ source: 'Braithwaite\'s Pasties — 2 Sickles each', target: '布雷思韦特馅饼——每个 2 西可' }),
+    Object.freeze({ source: 'Braithwaite\'s Pasties', target: '布雷思韦特馅饼' }),
     Object.freeze({ source: 'Standard Book of Spells', target: '《标准咒语》' }),
     Object.freeze({ source: 'Sorting notes parchment', target: '分院笔记羊皮纸' }),
     Object.freeze({ source: 'Sorting parchment', target: '分院羊皮纸' }),
@@ -140,6 +146,7 @@ export const TRANSLATION_TERM_GLOSSARY = Object.freeze([
     Object.freeze({ source: 'House Cup', target: '学院杯' }),
     Object.freeze({ source: 'Deputy Headmistress', target: '副校长' }),
     Object.freeze({ source: 'Headmaster', target: '校长' }),
+    Object.freeze({ source: 'Student', target: '学生' }),
     Object.freeze({ source: 'first-years', target: '一年级新生' }),
     Object.freeze({ source: 'first-year', target: '一年级新生' }),
     Object.freeze({ source: 'third-years', target: '三年级学生' }),
@@ -151,6 +158,7 @@ export const TRANSLATION_TERM_GLOSSARY = Object.freeze([
     Object.freeze({ source: 'prefect', target: '级长' }),
     Object.freeze({ source: 'treacle tart', target: '糖浆馅饼' }),
     Object.freeze({ source: 'pumpkin juice', target: '南瓜汁' }),
+    Object.freeze({ source: 'holly wand', target: '冬青木魔杖' }),
     Object.freeze({ source: 'Carriage', target: '车厢' }),
     Object.freeze({ source: 'Compartment', target: '隔间' }),
     Object.freeze({ source: 'Hermione Jean Granger', target: '赫敏·简·格兰杰' }),
@@ -158,9 +166,14 @@ export const TRANSLATION_TERM_GLOSSARY = Object.freeze([
     Object.freeze({ source: 'Hermione', target: '赫敏' }),
     Object.freeze({ source: 'Lavender Brown', target: '拉文德·布朗' }),
     Object.freeze({ source: 'Lavender', target: '拉文德' }),
+    Object.freeze({ source: 'Eddie Cooper', target: '埃迪·库珀' }),
+    Object.freeze({ source: 'Eddie', target: '埃迪' }),
     Object.freeze({ source: 'Dean', target: '迪安' }),
+    Object.freeze({ source: 'Madam Malkin', target: '摩金夫人' }),
+    Object.freeze({ source: 'Malkin', target: '摩金' }),
     Object.freeze({ source: 'Professor Minerva McGonagall', target: '米勒娃·麦格教授' }),
     Object.freeze({ source: 'Professor McGonagall', target: '麦格教授' }),
+    Object.freeze({ source: 'Professor of Charms and Head of Ravenclaw', target: '魔咒课教授兼拉文克劳院长' }),
     Object.freeze({ source: 'Minerva McGonagall', target: '米勒娃·麦格' }),
     Object.freeze({ source: 'Quill of Acceptance', target: '接纳之笔' }),
     Object.freeze({ source: 'Ministry of Magic', target: '魔法部' }),
@@ -176,14 +189,52 @@ export const TRANSLATION_TERM_GLOSSARY = Object.freeze([
     Object.freeze({ source: 'Charms', target: '魔咒课' }),
     Object.freeze({ source: 'Transfiguration', target: '变形术' }),
     Object.freeze({ source: 'McGonagall', target: '麦格' }),
+    Object.freeze({ source: 'Most Creative Misuse of Stationery', target: '最具创意文具误用奖' }),
+    Object.freeze({ source: 'Most Spineless Couch Performance', target: '最没骨气沙发表演奖' }),
+    Object.freeze({ source: 'Boy Who Lived', target: '大难不死的男孩' }),
+    Object.freeze({ source: 'conductor’s podium', target: '指挥台' }),
+    Object.freeze({ source: 'conductor\'s podium', target: '指挥台' }),
+    Object.freeze({ source: 'podium', target: '讲台' }),
+    Object.freeze({ source: 'aggressively winking', target: '拼命地眨眼' }),
+    Object.freeze({ source: '{quietly, through her teeth}', target: '{压低声音，咬着牙}' }),
+    Object.freeze({ source: 'nitwit, blubber, oddment, tweak', target: '笨蛋！哭鼻子！残渣！拧！' }),
+    Object.freeze({ source: 'equal parts amusement and professional caution', target: '既觉得好笑又保持职业警惕' }),
+    Object.freeze({ source: 'Uses \'right\' as an all-purpose intensifier', target: '把“对”当作万能的加强语' }),
+    Object.freeze({ source: 'mildly amused', target: '略感好笑' }),
+    Object.freeze({ source: 'in the meantime', target: '与此同时' }),
+    Object.freeze({ source: 'oversized robes', target: '过大的长袍' }),
+    Object.freeze({ source: 'twitched one ear', target: '一只耳朵抽动了一下' }),
+    Object.freeze({ source: 'territorial squawk', target: '领地性的尖叫' }),
+    Object.freeze({ source: 'live grenade', target: '一枚活手榴弹' }),
+    Object.freeze({ source: 'So? SO?', target: '所以呢？所以呢？' }),
+    Object.freeze({ source: 'Bilabibili-bo', target: '比拉比利博' }),
+    Object.freeze({ source: 'WING', target: '翼' }),
+    Object.freeze({ source: 'Yorkshire puddings', target: '约克郡布丁' }),
+    Object.freeze({ source: 'Minmin', target: '敏敏' }),
     Object.freeze({ source: 'Tina Zhang', target: '蒂娜·张' }),
     Object.freeze({ source: 'Tina', target: '蒂娜' }),
     Object.freeze({ source: 'Alex Zhang', target: '亚历克斯·张' }),
+    Object.freeze({ source: 'Alex', target: '亚历克斯' }),
+    Object.freeze({ source: 'Zhang', target: '张' }),
+    Object.freeze({ source: 'Miss', target: '小姐' }),
+    Object.freeze({ source: 'Mr', target: '先生' }),
+    Object.freeze({ source: 'Player', target: '玩家' }),
     Object.freeze({ source: 'Hogwarts', target: '霍格沃茨' }),
+    Object.freeze({ source: 'Gryffindor', target: '格兰芬多' }),
+    Object.freeze({ source: 'Slytherin', target: '斯莱特林' }),
+    Object.freeze({ source: 'Ravenclaw', target: '拉文克劳' }),
+    Object.freeze({ source: 'Hufflepuff', target: '赫奇帕奇' }),
     Object.freeze({ source: 'Muggles', target: '麻瓜' }),
     Object.freeze({ source: 'Muggle', target: '麻瓜' }),
     Object.freeze({ source: 'Galleons', target: '加隆' }),
     Object.freeze({ source: 'Galleon', target: '加隆' }),
+    Object.freeze({ source: 'Sickles', target: '西可' }),
+    Object.freeze({ source: 'Sickle', target: '西可' }),
+    Object.freeze({ source: 'literally', target: '确实' }),
+    Object.freeze({ source: 'halfway', target: '半途' }),
+    Object.freeze({ source: 'amusement', target: '好笑' }),
+    Object.freeze({ source: 'amused', target: '被逗乐' }),
+    Object.freeze({ source: 'owl', target: '猫头鹰' }),
 ]);
 
 function normalizeTranslationGlossary(glossary) {
@@ -322,7 +373,10 @@ export function protectTranslationTerms(text, glossary = TRANSLATION_TERM_GLOSSA
             `(?<![\\p{L}\\p{N}_])${escapeRegExp(entry.source)}(?![\\p{L}\\p{N}_])`,
             'giu',
         );
-        protectedText = protectedText.replace(pattern, `[[HPMUD_TERM_${index}]]`);
+        protectedText = protectedText.replace(
+            pattern,
+            `⟦术语${index}⟧`,
+        );
     });
     return protectedText;
 }
@@ -330,7 +384,11 @@ export function protectTranslationTerms(text, glossary = TRANSLATION_TERM_GLOSSA
 export function restoreTranslationTerms(text, glossary = TRANSLATION_TERM_GLOSSARY) {
     let restoredText = String(text ?? '');
     normalizeTranslationGlossary(glossary).forEach((entry, index) => {
-        const marker = new RegExp(`\\[\\[\\s*HPMUD_TERM_${index}\\s*]]`, 'g');
+        const marker =
+            new RegExp(
+                `⟦\\s*术语\\s*${index}\\s*⟧`,
+                'gu',
+            );
         restoredText = restoredText.replace(marker, entry.target);
     });
     return restoredText

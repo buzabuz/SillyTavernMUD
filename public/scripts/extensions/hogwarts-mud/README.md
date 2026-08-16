@@ -2,6 +2,11 @@
 
 SillyTavern 内置扩展，用于运行规则托底、AI 叙事驱动的持续世界文字 RPG。
 
+本文只负责使用、运维和开发导航，不是产品或字段权威。活跃 PRD 从仓库根
+`HOGWARTS_MUD_PRODUCT_SPEC.md` 进入；当前运行合同在
+`.trae/specs/hogwarts-runtime-contracts/`；变更治理在
+`.trae/skills/hogwarts-change-governance/SKILL.md`。
+
 ## 工作方式
 
 ### 系统 Prompt
@@ -135,7 +140,7 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 
 职责输入预算为 `Context Size - 输出安全余量`。系统预留取输入预算的 8%，下限 `6000`、上限 `12000`；职责预算下限为 `8192`。当前字符安全线按 `职责预算 × 3` 估算。默认 120K Context 与 12K 输出余量对应 108K 输入预算、99,360 职责 tokens 和 298,080 字符安全线。
 
-普通低档 Performer 与 repair 的结构化 User Payload 固定为 `LowTierContextV1` 六个顶层字段：`playerTurn`、`sceneFacts`、`actorCards`、`actionOpportunities`、`memoryActivations`、`prohibitions`。总量不超过 50 KiB，单 actor card 不超过 4 KiB；每 actor 最多 3 个 active Schema 和 3 个 hydrated Event，全局最多 8 个 Event。超限时先删除 hydrated Event，再删除可重建 opportunity，不会注入 raw Actor Library、完整 Social Graph、完整 Identity、人物记忆正文账本或全量历史补位。初次请求和 repair 使用同一个六字段 projector。
+普通低档 Performer 的结构化 User Payload 固定为 `LowTierContextV1` 六个顶层字段：`playerTurn`、`sceneFacts`、`actorCards`、`actionOpportunities`、`memoryActivations`、`prohibitions`。总量不超过 50 KiB，单 actor card 不超过 4 KiB；每 actor 最多 3 个 active Schema 和 3 个 hydrated Event，全局最多 8 个 Event。超限时先删除 hydrated Event，再删除可重建 opportunity，不会注入 raw Actor Library、完整 Social Graph、完整 Identity、人物记忆正文账本或全量历史补位。Low 每个任务只有一次模型请求；非法输出直接失败，不发送 repair/retry，也不生成模型 fallback。
 
 每个职责槽位实时显示输入预算、系统预留、RAG 条数和三层记忆配额。手工 Context 会自动归入精简、标准或丰裕策略，但不会被快捷档位强制覆盖。
 
@@ -149,13 +154,13 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 - Scene close 在清理边界前必须消费 pending memory boundary，或把稳定 boundary ID 携带到下一 Scene。异步整理提交前同时校验 `timelineEpoch + stateRevision + boundaryId`；stale 结果直接丢弃。Scene Opening 只有保存后才进入事件索引，不能借开场正文创建未提交物品转移、关系、承诺或隐藏事实。
 - 正常调用预算不变：普通回合 1 次低档、0 次新增中/高档；事件边界复用 1 次中档；Scene Transition 保持原中/高档核心 + 原低档开场。Planner、Qdrant、图扩散、hydration 与 Reducer 不调用低/中/高档；本地 Planner 最多 1 次，并在 diagnostics 中单独计数。
 
-本次只统一人物数据、投影与低档输入。初级导演 System Prompt 的章节顺序、规则优先级、输出 Schema、修复 Prompt 和文风编排属于后续独立项目。
+人物数据、投影与低档输入由当前 PRD 和 living contract 共同约束；历史修复 Prompt 不构成再次调用模型的授权。
 
 同一游戏日内的普通回合默认只调用低档现场表演者和本地 Ollama 语义侧车。低档生成前，侧车使用结构化 `playerTurnSequence` 区分实际动作、对白中的未来提及、显式等待、移动、睡眠和事件边界，并以 JSON Schema 返回经过时间及是否需要骰子；低档随后用动作、环境变化和对话覆盖已锁定时长。对白中的“上课吗”“等会儿”“睡过头”等词不会被当作已经发生的长行动；“继续上课”在没有明确完成整节课时仍是普通 15 分钟镜头。生成篇幅不会反向扩大权威时间。跨入新日期时仍由中档刷新日计划。
 
-时间权威校验区分“回合内相对叙事”和“外部时间事实”。`ten minutes ago`、`five minutes later` 等短语只要不超过本回合已授权的 `elapsedMinutes` 就可以使用；超出回合跨度的相对时间、外部倒计时、绝对钟点、日期、营业时间和交通班次仍需来自玩家输入或权威状态，否则拒绝提交。低档 Prompt、修复 Prompt 与本地校验使用同一口径。
+时间权威校验区分“回合内相对叙事”和“外部时间事实”。`ten minutes ago`、`five minutes later` 等短语只要不超过本回合已授权的 `elapsedMinutes` 就可以使用；超出回合跨度的相对时间、外部倒计时、绝对钟点、日期、营业时间和交通班次仍需来自玩家输入或权威状态，否则拒绝提交。低档 Prompt、Schema、validator 与本地校验使用同一口径。
 
-低档使用 narrative-first V2 协议：唯一必填输出是有序 `segments`。人物进出、活动、移动、物品和社交变化只在实际发生时通过稀疏 `stateProposals` 提议；`eventEnded`、节奏完成和程序进度属于可选 `signals`。响应随后进入不调用模型的 `Turn Settlement Graph`，依次接受正文、折叠 proposal、校验权威状态并生成兼容事务。无效 proposal 单独丢弃并记入 `settlementWarnings`，缺失摘要、信号或在场快照不会触发修复调用；服务端图不可用时使用同一组本地 reducer 降级。旧 V1 完整 JSON 继续兼容。
+低档使用 narrative-first V2 协议：唯一必填输出是有序 `segments`。人物进出、活动、移动、物品和社交变化只在实际发生时通过白名单内的稀疏 `stateProposals` 提议；`eventEnded`、节奏完成和程序进度属于可选 `signals`。响应随后进入不调用模型的 `Turn Settlement Graph`，依次接受正文、折叠 proposal、校验权威状态并生成事务。Schema、fold 和 validator 白名单必须一致；解析、Schema、权威、provenance、settlement 或 validation 失败直接返回原错误，不发起第二次模型请求。
 
 生成期间 story 只显示原子 loading card，完整事务提交后才展示正文。新 assistant 消息只在首次提交时定位到消息顶部；翻译和普通重绘不抢滚动。首次加载已有 scene 时固定保留顶部位置，不能把几十像素的空容器误判为“用户在底部”后滚到完整历史末尾。
 
@@ -190,7 +195,7 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 
 人物后置观察同样只提交建议：`presence=absent` 必须有明确离场动作证据，跨房间更新必须在 evidence 中出现目标房间名称或 ID。形态变化、原地显形、后退、坐下、沉默或退出镜头都不会被 Reducer 当作离场；非法 presence/location 建议不会连带丢弃合法 activity update。
 
-场景转场的 `relationshipUpdates` 是稀疏、可选 proposal。只有人物对玩家的看法因具体亲历事件发生变化时才写入完整、唯一的 8–32 词人物视角记忆；`closureSummaryEn` 不能作为人物记忆 fallback。没有合格更新时保持空数组。旧版 `During the closed scene...materially shaped...` 模板会在加载时幂等清理，不调用模型、不影响其他具体记忆。
+场景转场不再拥有 `relationshipUpdates` 或 `worldChanges` writer；游离字段在 normalizer 边界丢弃，不进入 State。关系、Appraisal 与 Memory 只通过已提交 Event 和各自授权的 Social/Memory Reducer 结算，转场摘要不能充当人物记忆 fallback。
 
 历史样本的真实模型基准包含七个前置时间/骰子案例和两个后置观察案例：`qwen3:0.6b` 通过 4/9，`qwen3:1.7b` 通过 9/9，因此常规语义裁判使用 1.7B。4B 仅承担条件式重要物品观察；其 4096 context 实测约占 3.17 GB VRAM，完成后立即卸载。基准可用 `node scripts/benchmark-hogwarts-local-semantic.mjs` 重跑。
 
@@ -222,7 +227,7 @@ Canon 目录中的角色、学院、技能和组织经历只用于 Actor Core、
 
 临时人物使用稳定的暂定 ID，不进入正式 `actorLibrary`、人物预算或社交图，只保存最多 8 条亲历记忆。离场后中档可优先从既有临时人物、正式 guestActor 和 Canon 候选中选择再次出场；相同人物必须复用原 ID。只有叙事中明确说出姓名或出现唯一强证据时，才可把临时人物合并为正式原创或 Canon 身份。合并采用原暂定 ID 作为历史主键，继承记忆和别名；系统不弹提示，人物卡随故事揭晓自然更新。
 
-低档不再提交完整 `actorPresence` 快照。结算图以回合开始集合为默认值，只折叠合法的 `actor_enter`、`actor_exit`、`actor_move` 与临时人物 proposal；没有 proposal 的安静人物保持原状态。旧 V1 `actorPresence/actorUpdates` 仍可作为兼容输入，但不再构成 V2 的必填表格。
+低档不提交完整 `actorPresence` 快照。结算图以回合开始集合为默认值，只折叠合法的 `actor_enter`、`actor_exit`、`actor_move` 与临时人物 proposal；没有 proposal 的安静人物保持原状态。旧 V1 actor 快照不构成当前 Low 输出合同或第二写入来源。
 
 现场表演的分段数、旁白数和词数属于 Prompt 质量目标，不是本地失败门槛；本地只拒绝空分段、无效 actor ID、越权位置或状态等权威错误。瞬时魔法也必须由“施法、念咒、cast a spell”等明确动作触发，正文仅提到魔杖、咒语或魔法不改变普通回合时长。
 
@@ -379,7 +384,7 @@ storyline -> storyBeat -> schedule -> scene
 - Calendar V2.1 只调整日期视图的信息架构，不改变上述 V2 数据模型。桌面固定为左侧日历、中栏【计划】时间网格与【场景】折叠区、右栏精简详情；窄屏按“日期 -> 计划与场景 -> 详情”降为单列。日期切换同时刷新中栏两区，未选择具体项目时右栏不自动预览第一项。
 - 【计划】按纵向时间刻度展示一天；计划卡以 `startClock` 定位、以 `endClock - startClock` 表达时长。重叠 schedule 分列或受控错位，仍保持每项独立可见和可选，不合并、不遮蔽，也不产生认领或出席含义。长期剧情线只在【剧情线】作者视图展示。
 - 重叠 schedule 表示世界并发，不表示玩家同时出席；从某项日程进入时，新 Scene 的 `calendarEntryIds[]` 只认领该 schedule，其他同刻安排不取消、不改期，也不会进入 Performer 或 Scene Transition prompt。
-- Daily Director 可读取当天全部并发 schedule。Performer 与普通 Scene Transition 只读取当前 Scene 明确认领的 schedule 及其公开 storyline/beat 来源；自由 Scene 不会因时间重叠获知其他地点的安排。
+- Calendar projection 保留当天全部世界并发 schedule；旧 Daily Director 已退役。Performer 与普通 Scene Transition 只读取当前 Scene 明确认领的 schedule 及其公开 storyline/beat 来源；自由 Scene 不会因时间重叠获知其他地点的安排。
 - 【自由开场】入口及时间、地点、校验、busy/error 表单都位于中栏【场景】区，不进入右栏。它允许在所选日期选择不早于当前时钟的时间，以及地点权威中的合法 `mapId + roomId`，并通过 `runTimelineMoment()` 复用 guarded Scene Transition；新 Scene 默认 `calendarEntryIds=[]`。打开、填写、选择视图或预览都只是 UI 操作，不保存状态、不调用模型。
 - 【场景】卡默认折叠；展开后只读取该 `sceneArchive` record 自身的 `calendarEntryIds[]`，并显示被认领计划当前已有的四态：【计划中】、【进行中】、【已完成时间段】、【已取消】。旧档缺少该字段或字段为空时显示【未关联计划】，不得按时间、地点、人物或计划区间重叠补链。
 - Calendar V2.1 不新增持久化 `attendance` 或任何同义字段，不显示“去了/没去”，也不从重叠计划推断玩家出席。场景展开状态和自由开场草稿只存在于当前页面；计划状态仍完全来自 `calendar.entries[].status`。
@@ -426,7 +431,7 @@ node scripts/dry-run-hogwarts-calendar.mjs \
 
 - 低档现场表演仍使用 Connection Manager 原生流式响应做截断检测和结构恢复，但生成中的半截英文与 JSON 不进入正文阅读区。
 - 生成期间只保留固定的阶段卡；完整原稿完成翻译并原子写入后，界面自动定位到新回复顶部，再按叙事与对白分段从上到下平滑显影。动画结束后正文节点保持原位，不会被临时预览替换或消失。
-- 中档和高档仍保持结构化原子提交，不展示半截 JSON。场景封存只把中档核心状态作为失败边界；低档开场、社交整理、世界变化、RAG 同步和日计划属于可降级或提交后的任务。界面改用分阶段生成卡显示节奏检查、人物计划、场景封存和世界演算进度。
+- 中档和高档仍保持结构化原子提交，不展示半截 JSON。每个模型任务遵守当前批准 PRD 的调用预算；默认一次请求，非法输出不自动 repair/retry。已提交后的确定性索引、翻译和 UI 工作不构成额外剧情模型调用。
 - 所有生成卡、开场等待、人物等待和地图等待使用统一的学院封印与流动金线动效；系统启用 `prefers-reduced-motion` 时自动关闭动画。
 - Profile 不支持流式时自动回退到一次性请求，完成后使用相同的顶部定位、分段显影和原子校验。
 
@@ -760,6 +765,7 @@ Google 端点使用 `google-translate-api-x`，Bing 端点使用 `bing-translate
 
 ## 真实运行 PRD
 
+活跃产品变更统一从仓库根 `HOGWARTS_MUD_PRODUCT_SPEC.md` 注册表进入。
 `.trae/specs/hogwarts-runtime-contracts/` 是运行时字段与事务的 living contract：
 
 - `spec.md`：模块入口、事务时序、持久化边界和变更规则。
@@ -768,7 +774,6 @@ Google 端点使用 `google-translate-api-x`，Bing 端点使用 `bing-translate
 - `actor-memory.md`：Actor Memory Index、Appraisal/Person Schema、observer 隔离与 boundary guard。
 - `knowledge-runtime.md`：Knowledge V2、Qdrant 降级、Planner/Synapse、Prompt 权威、预算与 Task 7 修复。
 - `presence-scene-transition.md`：active/local/witness 分层及课堂 cohort 转场规则。
-- `ordinary-turn-repair.md`：首次 Performer 输出、流式预览、一次结构修复与失败恢复。
 - `checklist.md`：新增字段、事务和人物状态的提交门禁。
 - `progress.md`：区分 Verified、Tested 与 Indexed，禁止把“有代码”误写成“运行已验证”。
 
@@ -808,7 +813,7 @@ core <- state/domain <- runtime/adapters <- workflows <- ui <- index.js
 | 社交 Schema、迁移、投影、Reducer | `domain/social-*.js` |
 | 判定、时间、节奏、因果 | `domain/checks.js`、`domain/time-environment.js`、`domain/pacing-*.js`、`domain/causal-*.js` |
 | 回合协议、校验、提交、回滚 | `domain/turn-*.js` |
-| 转场、世界变化、档案 | `domain/scene-*.js`、`domain/world-changes.js`、`domain/archive-projection.js` |
+| 转场、档案 | `domain/scene-*.js`、`domain/archive-projection.js` |
 | 地图、寻路、移动、空间 | `domain/maps.js`、`domain/pathfinding.js`、`domain/movement.js`、`domain/spatial-*.js` |
 | 翻译术语、Preset/Regex 导入 | `domain/translation.js`、`domain/preset-import.js` |
 | 模型或宿主 I/O | `adapters/` 或 `runtime/`，领域层只接收显式参数/port |
@@ -826,9 +831,12 @@ core <- state/domain <- runtime/adapters <- workflows <- ui <- index.js
 
 ### 文件大小门禁
 
-- `index.js` 必须不超过 600 行。
+- `index.js` 当前按 610 行执行精确 no-growth ratchet；拆分豁免登记为
+  `TECH_DEBT.md` 的 `HTD-008`。
 - `helpers.js` 必须不超过 350 行，并且只包含 import/export、注释和兼容常量别名。
-- 手写逻辑模块以 1,500 行为拆分目标，达到 2,000 行直接失败。
+- 手写逻辑模块以 1,500 行为拆分目标；九个已超过 2,000 行的模块按各自
+  当前基线执行精确 no-growth ratchet，并由 `HTD-003` 追踪，其他模块达到
+  2,000 行直接失败。
 - 纯数据目录、样式和测试 fixture 可豁免；Presence/Witness 与 Social Director 等逻辑模块不设 grandfather 配额。
 - `tests/hogwarts-mud-task1-baseline.test.mjs` 是模块图、顶层副作用和全局大小门禁的权威检查。
 
@@ -837,8 +845,8 @@ core <- state/domain <- runtime/adapters <- workflows <- ui <- index.js
 每个新回合都会把本地诊断包写入对应消息的
 `extra.hogwartsMud.turnDiagnostics`。诊断只保留最近 8 个回合，每个回合最多
 32 个阶段事件，长文本自动截断；不会记录 Connection Profile、密钥或请求头。
-诊断包含玩家原文、context 裁剪前后的权威输入、initial/repair 原始输出、
-validator/settlement 结果和最终提交摘要。
+诊断包含玩家原文、context 裁剪前后的权威输入、单次原始输出、
+validator/settlement 结果、`willRetry=false` 失败状态和最终提交摘要。
 
 排查回合问题时先读取这些诊断，不得默认重新调用模型。Chrome 中可通过
 `SillyTavern.getContext().chat` 读取，磁盘上可直接查看对应 JSONL 消息。
@@ -855,8 +863,6 @@ validator/settlement 结果和最终提交摘要。
 node --experimental-vm-modules --test \
   tests/hogwarts-mud-task1-baseline.test.mjs \
   tests/hogwarts-mud-task2-modules.test.mjs \
-  tests/hogwarts-mud-task3-contract.test.mjs \
-  tests/hogwarts-mud-task4-boundaries.test.mjs \
   tests/hogwarts-mud-task5-workflows.test.mjs \
   tests/hogwarts-mud-task6-ui-contract.test.mjs
 

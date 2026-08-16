@@ -19,6 +19,10 @@ import {
 import {
     buildSpatialContext,
 } from './spatial-reconciliation.js';
+import {
+    createModelLanguageMismatch,
+    isEnglishAuthorityText,
+} from './model-language-adoption.js';
 
 export function validateLocalMapPack(mapPack = PRESET_LOCAL_MAPS) {
     const errors = [];
@@ -63,14 +67,14 @@ export function resolveLocalMapId(mapState = {}, currentLocation = '') {
     }
     const location = String(currentLocation || '').trim().toLocaleLowerCase();
     const customMatch = (mapState.customLocalMaps || []).find(item =>
-        item.id.toLocaleLowerCase() === location || item.name.toLocaleLowerCase() === location,
+        item.id.toLocaleLowerCase() === location || item.nameEn.toLocaleLowerCase() === location,
     );
     if (customMatch) {
         return customMatch.id;
     }
     return LOCAL_MAP_CATALOG.find(item =>
         item.id.toLocaleLowerCase() === location ||
-        item.name.toLocaleLowerCase() === location ||
+        item.nameEn.toLocaleLowerCase() === location ||
         item.parentWorldNodeId.toLocaleLowerCase() === location,
     )?.id || null;
 }
@@ -112,8 +116,10 @@ export function buildLocalMapModel(mapId, mapState = {}, requestedLevelId = '') 
         }));
     return {
         id: preset.id,
-        name: preset.name,
-        layoutRule: preset.layoutRule || '',
+        nameEn: preset.nameEn,
+        layoutRuleEn:
+            preset.layoutRuleEn ||
+            '',
         levels: preset.levels.map(level => ({ ...level })),
         levelId,
         nodes,
@@ -122,10 +128,97 @@ export function buildLocalMapModel(mapId, mapState = {}, requestedLevelId = '') 
     };
 }
 
-export function buildMapAuthorityContext(worldState = {}) {
+export function buildMapAuthorityContext(
+    worldState = {},
+    {
+        purpose = 'runtime',
+    } = {},
+) {
     const mapState = worldState.map || {};
     const activeMapId = resolveLocalMapId(mapState, worldState.location);
     const activeMap = getLocalMapDefinition(activeMapId, mapState);
+    const expansion =
+        purpose ===
+        'expansion';
+    const activeMapProjection =
+        activeMap
+            ? expansion
+                ? {
+                    id:
+                        activeMap.id,
+                    nameEn:
+                        activeMap
+                            .nameEn,
+                    defaultLevelId:
+                        activeMap
+                            .defaultLevelId,
+                    levels:
+                        (
+                            activeMap
+                                .levels ||
+                            []
+                        ).map(level => ({
+                            id: level.id,
+                            nameEn:
+                                level
+                                    .nameEn ||
+                                level.id,
+                            z: level.z,
+                        })),
+                    nodes:
+                        (
+                            activeMap
+                                .nodes ||
+                            []
+                        ).map(node => ({
+                            id: node.id,
+                            nameEn:
+                                node
+                                    .nameEn ||
+                                node.id,
+                            levelId:
+                                node
+                                    .levelId ||
+                                '',
+                            kind:
+                                node.kind ||
+                                'room',
+                            ...(
+                                node.access
+                                    ? {
+                                        access:
+                                            node
+                                                .access,
+                                    }
+                                    : {}
+                            ),
+                        })),
+                    exits:
+                        (
+                            activeMap
+                                .exits ||
+                            []
+                        ).map(exit => ({
+                            from:
+                                exit.from,
+                            to: exit.to,
+                        })),
+                }
+                : {
+                    id: activeMap.id,
+                    nameEn:
+                        activeMap.nameEn,
+                    layoutRuleEn:
+                        activeMap.layoutRuleEn ||
+                        '',
+                    levels:
+                        activeMap.levels,
+                    nodes:
+                        activeMap.nodes,
+                    exits:
+                        activeMap.exits,
+                }
+            : null;
     const payload = {
         schemaVersion: LOCAL_MAP_SCHEMA_VERSION,
         authority: [
@@ -137,30 +230,73 @@ export function buildMapAuthorityContext(worldState = {}) {
         ],
         worldCatalog: PRESET_WORLD_MAP.nodes.map(item => ({
             id: item.id,
-            name: item.name,
+            nameEn: item.nameEn,
             regionId: item.regionId,
             localMapId: getPresetLocalMap(item.id)?.id || null,
         })),
         localMapCatalog: LOCAL_MAP_CATALOG,
-        activeMap: activeMap ? {
-            id: activeMap.id,
-            name: activeMap.name,
-            layoutRule: activeMap.layoutRule || '',
-            levels: activeMap.levels,
-            nodes: activeMap.nodes,
-            exits: activeMap.exits,
-        } : null,
-        runtimeDiff: {
-            activeMapId,
-            currentLocalNodeId: mapState.currentLocalNodeId || null,
-            currentLevelId: mapState.currentLevelId || null,
-            discoveredLocalNodeIds: mapState.discoveredLocalNodeIds || [],
-            roomStates: mapState.roomStates || {},
-            exitStates: mapState.exitStates || {},
-            generatedLocalNodes: mapState.generatedLocalNodes || [],
-            generatedLocalExits: mapState.generatedLocalExits || [],
-        },
-        spatial: buildSpatialContext(worldState),
+        activeMap:
+            activeMapProjection,
+        runtimeDiff:
+            expansion
+                ? {
+                    activeMapId,
+                    currentLocalNodeId:
+                        mapState
+                            .currentLocalNodeId ||
+                        null,
+                    currentLevelId:
+                        mapState
+                            .currentLevelId ||
+                        null,
+                    generatedLocalNodes:
+                        mapState
+                            .generatedLocalNodes ||
+                        [],
+                    generatedLocalExits:
+                        mapState
+                            .generatedLocalExits ||
+                        [],
+                }
+                : {
+                    activeMapId,
+                    currentLocalNodeId:
+                        mapState
+                            .currentLocalNodeId ||
+                        null,
+                    currentLevelId:
+                        mapState
+                            .currentLevelId ||
+                        null,
+                    discoveredLocalNodeIds:
+                        mapState
+                            .discoveredLocalNodeIds ||
+                        [],
+                    roomStates:
+                        mapState.roomStates ||
+                        {},
+                    exitStates:
+                        mapState.exitStates ||
+                        {},
+                    generatedLocalNodes:
+                        mapState
+                            .generatedLocalNodes ||
+                        [],
+                    generatedLocalExits:
+                        mapState
+                            .generatedLocalExits ||
+                        [],
+                },
+        ...(
+            expansion
+                ? {}
+                : {
+                    spatial:
+                        buildSpatialContext(
+                            worldState,
+                        ),
+                }
+        ),
     };
     return `MUD MAP AUTHORITY (binding JSON):\n${JSON.stringify(payload)}`;
 }
@@ -243,13 +379,36 @@ export function buildMapModel(mapState = {}, currentLocation = '', revealAll = f
     const discovered = new Set(Array.isArray(mapState?.discoveredNodeIds) ? mapState.discoveredNodeIds : []);
     const sourceNodes = [
         ...PRESET_WORLD_MAP.nodes.map(node => ({ ...node, ...(overrides[node.id] || {}) })),
-        ...(Array.isArray(mapState?.generatedNodes) ? mapState.generatedNodes : []),
+        ...(
+            Array.isArray(
+                mapState?.generatedNodes,
+            )
+                ? mapState
+                    .generatedNodes
+                    .map(node => ({
+                        ...node,
+                    }))
+                : []
+        ),
     ];
     const explicitCurrentId = String(mapState?.currentNodeId || '');
     const location = String(currentLocation || '').trim().toLocaleLowerCase();
-    const currentNodeId = explicitCurrentId || sourceNodes.find(node =>
-        node.name.toLocaleLowerCase() === location || node.id.toLocaleLowerCase() === location,
-    )?.id || '';
+    const currentNodeId =
+        explicitCurrentId ||
+        sourceNodes.find(node =>
+            [
+                node.id,
+                node.nameEn,
+                ...(node.aliases ||
+                    []),
+            ]
+                .filter(Boolean)
+                .some(value =>
+                    String(value)
+                        .toLocaleLowerCase() ===
+                    location))
+            ?.id ||
+        '';
 
     const nodes = sourceNodes.map(node => {
         const region = regionById.get(node.regionId);
@@ -310,6 +469,82 @@ export function buildMapModel(mapState = {}, currentLocation = '', revealAll = f
     };
 }
 
+export function adoptMapProposalLanguage(
+    proposal,
+) {
+    const diagnostics = [];
+    const accepted = {
+        ...proposal,
+        changes: (
+            Array.isArray(
+                proposal?.changes,
+            )
+                ? proposal.changes
+                : []
+        ).filter((change, index) => {
+            const node =
+                change?.node;
+            const mismatches = [
+                'nameEn',
+                'summaryEn',
+            ].filter(field => {
+                const value =
+                    String(
+                        node?.[field] ||
+                        '',
+                    ).trim();
+                return value &&
+                    !isEnglishAuthorityText(
+                        value,
+                    );
+            });
+            diagnostics.push(
+                ...mismatches.map(field =>
+                    createModelLanguageMismatch({
+                        taskId:
+                            'map_expansion',
+                        fieldPath:
+                            `changes[${index}].node.${field}`,
+                        recordId:
+                            String(
+                                node?.id ||
+                                index,
+                            ),
+                    })),
+            );
+            return mismatches.length ===
+                0;
+        }),
+    };
+    if (
+        String(
+            accepted.reasonEn ||
+            '',
+        ).trim() &&
+        !isEnglishAuthorityText(
+            accepted.reasonEn,
+        )
+    ) {
+        diagnostics.push(
+            createModelLanguageMismatch({
+                taskId:
+                    'map_expansion',
+                fieldPath: 'reasonEn',
+                recordId:
+                    String(
+                        accepted.id ||
+                        '',
+                    ),
+            }),
+        );
+        accepted.reasonEn = '';
+    }
+    return {
+        proposal: accepted,
+        diagnostics,
+    };
+}
+
 export function validateMapProposal(proposal, options = {}) {
     const trigger = String(options.trigger || '');
     const baseMap = options.baseMap || PRESET_WORLD_MAP;
@@ -322,10 +557,20 @@ export function validateMapProposal(proposal, options = {}) {
     if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) {
         return { valid: false, errors: ['地图提案必须是对象。'] };
     }
+    if (
+        Object.hasOwn(
+            proposal,
+            'reason',
+        )
+    ) {
+        errors.push(
+            '地图提案不得包含已删除字段 reason。',
+        );
+    }
 
     const changes = Array.isArray(proposal.changes) ? proposal.changes : [];
-    if (!changes.length || changes.length > 12) {
-        errors.push('地图提案必须包含 1–12 项变更。');
+    if (changes.length > 12) {
+        errors.push('地图提案最多包含 12 项变更。');
     }
 
     const regions = new Set(baseMap.regions.map(region => region.id));
@@ -344,6 +589,19 @@ export function validateMapProposal(proposal, options = {}) {
             errors.push(`${prefix}的地点 ID 无效。`);
             continue;
         }
+        const removedFields = [
+            'name',
+            'summary',
+        ].filter(field =>
+            Object.hasOwn(
+                node,
+                field,
+            ));
+        if (removedFields.length) {
+            errors.push(
+                `${prefix}包含已删除字段：${removedFields.join('、')}。`,
+            );
+        }
 
         if (change.operation === 'add') {
             if (seenIds.has(node.id)) {
@@ -352,7 +610,14 @@ export function validateMapProposal(proposal, options = {}) {
             if (!regions.has(node.regionId)) {
                 errors.push(`${prefix}引用了不存在的区域。`);
             }
-            if (!String(node.name || '').trim() || !String(node.summary || '').trim()) {
+            if (
+                !isEnglishAuthorityText(
+                    node.nameEn,
+                ) ||
+                !isEnglishAuthorityText(
+                    node.summaryEn,
+                )
+            ) {
                 errors.push(`${prefix}缺少地点名称或说明。`);
             }
             seenIds.add(node.id);
@@ -367,7 +632,15 @@ export function validateMapProposal(proposal, options = {}) {
             if (!['canon_divergence', 'world_event'].includes(trigger)) {
                 errors.push(`${prefix}没有修改原著地点的因果权限。`);
             }
-            const forbidden = ['name', 'regionId', 'x', 'y', 'kind', 'locked'];
+            const forbidden = [
+                'name',
+                'nameEn',
+                'regionId',
+                'x',
+                'y',
+                'kind',
+                'locked',
+            ];
             if (forbidden.some(key => Object.hasOwn(node, key))) {
                 errors.push(`${prefix}试图改写原著地点身份或坐标。`);
             }
@@ -409,7 +682,11 @@ export function applyMapProposal(mapState, proposal) {
     }
     next.proposals.push({
         id: proposal.id || `map-${Date.now()}`,
-        reason: String(proposal.reason || ''),
+        reasonEn:
+            String(
+                proposal.reasonEn ||
+                '',
+            ),
         acceptedAt: Date.now(),
     });
     return next;

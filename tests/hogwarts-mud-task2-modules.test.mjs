@@ -378,11 +378,9 @@ test('Campaign and Character defaults retain exact key order and errors', () => 
         ),
         [
             'presetId',
-            'presetName',
             'startYear',
             'grade',
             'difficulty',
-            'difficultyName',
         ],
     );
     const draft =
@@ -420,16 +418,16 @@ test('mandatory projection preserves dependency use and top-level field order', 
             type: 'scene_soiled',
             operation: 'soil',
             actorId: '',
-            objectText: 'dust',
-            targetText:
+            objectTextEn: 'dust',
+            targetTextEn:
                 'classroom',
-            resultText:
+            resultTextEn:
                 'floating dust',
             persistence:
                 'until_changed',
             committedClock:
                 '1991-09-01 · 10:00',
-            sourceText:
+            sourceTextEn:
                 'duplicate source',
         }],
         actorPresentations: {},
@@ -492,10 +490,10 @@ test('mandatory projection preserves dependency use and top-level field order', 
                 type: 'scene_soiled',
                 operation: 'soil',
                 actorId: '',
-                objectText: 'dust',
-                targetText:
+                objectTextEn: 'dust',
+                targetTextEn:
                     'classroom',
-                resultText:
+                resultTextEn:
                     'floating dust',
                 persistence:
                     'until_changed',

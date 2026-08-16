@@ -52,9 +52,362 @@ const deepFreeze = value => {
     return Object.freeze(value);
 };
 
-export const LOCAL_MAP_SCHEMA_VERSION = 1;
+const mapStaticLocaleEn = {};
+const mapStaticLocaleZhCn = {};
+const LOCAL_MAP_ALIASES_RAW = {
+    hogwarts_castle: [
+        '霍格沃茨城堡',
+        '城堡内部',
+        'hogwarts castle',
+    ],
+    hogwarts_grounds: [
+        '霍格沃茨场地',
+        '城堡场地',
+        'hogwarts grounds',
+    ],
+    hogsmeade: [
+        '霍格莫德',
+        'hogsmeade',
+    ],
+    diagon_alley: [
+        '对角巷',
+        'diagon alley',
+    ],
+    knockturn_alley: [
+        '翻倒巷',
+        'knockturn alley',
+    ],
+    ministry_of_magic: [
+        '英国魔法部',
+        '魔法部',
+        'ministry of magic',
+    ],
+    kings_cross: [
+        '国王十字车站',
+        '国王十字',
+        'kings cross',
+    ],
+    st_mungos: [
+        '圣芒戈魔法伤病医院',
+        '圣芒戈',
+        'st mungos',
+        'st. mungos',
+    ],
+    godrics_hollow: [
+        '戈德里克山谷',
+        'godrics hollow',
+        'godric’s hollow',
+    ],
+    azkaban: [
+        '阿兹卡班',
+        'azkaban',
+    ],
+};
+const MAP_LAYOUT_RULES_EN = {
+    hogwarts_castle:
+        'Floor and room identities are fixed. Moving staircases may only change exits tagged variable_stair.',
+    ministry_of_magic:
+        'Department floors are fixed. Events may temporarily change lifts, Floo access, and visitor entrances.',
+};
+const ROOM_DESCRIPTIONS_EN = {
+    dungeon_stairs:
+        'Stone steps descending from the Entrance Hall.',
+    potions_corridor:
+        'A cold, damp corridor lined with specimen cabinets.',
+    potions_classroom:
+        'A classroom fitted with cauldron benches and ingredient cupboards.',
+    potions_store:
+        'Storage for lesson supplies and controlled ingredients.',
+    professor_snape_office:
+        'A dim office surrounded by preserved specimens.',
+    slytherin_corridor:
+        'A low corridor beside stone walls under the lake.',
+    slytherin_common_entrance:
+        'A concealed stone-wall entrance requiring a password.',
+    kitchen_corridor:
+        'An underground corridor leading to the kitchens and Hufflepuff area.',
+    hogwarts_kitchens:
+        'A kitchen as large as the Great Hall, maintained by house-elves.',
+    hufflepuff_common_entrance:
+        'An entrance concealed behind a row of large wooden barrels.',
+    entrance_hall:
+        'The castle entrance connecting the Great Hall, stairs, and courtyard.',
+    front_steps:
+        'Steps leading out to the Hogwarts grounds.',
+    great_hall:
+        'The hall containing four House tables and the staff table.',
+    great_hall_antechamber:
+        'A side chamber where new students wait before Sorting.',
+    marble_staircase:
+        'The castle\'s main vertical circulation point.',
+    ground_gallery:
+        'A broad corridor hung with talking portraits.',
+    staff_room:
+        'A resting area for professors and staff.',
+    transfiguration_courtyard:
+        'A stone courtyard enclosed by cloisters.',
+    boathouse_stairs:
+        'Steps descending the cliff toward the boathouse.',
+    first_floor_bridge:
+        'An enclosed bridge connecting two castle wings.',
+    myrtle_bathroom:
+        'A girls\' bathroom that has long seen little use.',
+    chamber_sink:
+        'The known Chamber entrance, sealed under ordinary conditions.',
+    forbidden_corridor:
+        'A corridor explicitly forbidden by the school in 1991.',
+    trapdoor_chamber:
+        'The first entrance guarding the Philosopher\'s Stone in 1991.',
+    humpbacked_witch:
+        'A concealed entrance to the tunnel toward Hogsmeade.',
+    restricted_section:
+        'An area requiring a professor\'s signature or special permission.',
+    room_requirement_wall:
+        'The variable entrance to the Room of Requirement.',
+    gryffindor_girls_dormitory:
+        'The spiral stair to the right of the common room leads into the girls\' dormitory.',
+};
 
-export const PRESET_LOCATION_ACTORS = deepFreeze({
+function titleFromId(
+    value,
+) {
+    return String(value || '')
+        .split('_')
+        .filter(Boolean)
+        .map(part =>
+            part.charAt(0)
+                .toUpperCase() +
+            part.slice(1))
+        .join(' ');
+}
+
+function englishAlias(
+    aliases,
+    fallback,
+) {
+    return (
+        aliases || []
+    ).find(alias =>
+        /^[\x20-\x7E]+$/u.test(
+            String(alias),
+        )) ||
+        fallback;
+}
+
+function splitPresetActors(
+    actors,
+) {
+    return Object.fromEntries(
+        Object.entries(actors)
+            .map(([
+                actorId,
+                actor,
+            ]) => {
+                const next = {
+                    ...actor,
+                    aliases: [
+                        actor.name,
+                        ...(actor.aliases ||
+                            []),
+                    ].filter(Boolean),
+                };
+                for (const key of
+                    Object.keys(next)) {
+                    if (
+                        !key.endsWith(
+                            'En',
+                        ) &&
+                        Object.hasOwn(
+                            next,
+                            `${key}En`,
+                        )
+                    ) {
+                        mapStaticLocaleZhCn[
+                            `actor.${actorId}.${key}`
+                        ] = next[key];
+                        mapStaticLocaleEn[
+                            `actor.${actorId}.${key}`
+                        ] =
+                            next[
+                                `${key}En`
+                            ];
+                        delete next[key];
+                    }
+                }
+                return [
+                    actorId,
+                    next,
+                ];
+            }),
+    );
+}
+
+function splitPresetMapPack(
+    maps,
+) {
+    return Object.fromEntries(
+        Object.entries(maps)
+            .map(([
+                mapId,
+                map,
+            ]) => {
+                const mapNameEn =
+                    englishAlias(
+                        LOCAL_MAP_ALIASES_RAW[
+                            mapId
+                        ],
+                        titleFromId(
+                            mapId,
+                        ),
+                    );
+                mapStaticLocaleEn[
+                    `map.${mapId}.name`
+                ] = mapNameEn;
+                mapStaticLocaleZhCn[
+                    `map.${mapId}.name`
+                ] = map.name;
+                const layoutRuleEn =
+                    MAP_LAYOUT_RULES_EN[
+                        mapId
+                    ] ||
+                    (
+                        /^[\x20-\x7E\s]*$/u
+                            .test(
+                                map.layoutRule ||
+                                '',
+                            )
+                            ? map.layoutRule
+                            : ''
+                    );
+                if (map.layoutRule) {
+                    mapStaticLocaleEn[
+                        `map.${mapId}.layout_rule`
+                    ] = layoutRuleEn;
+                    mapStaticLocaleZhCn[
+                        `map.${mapId}.layout_rule`
+                    ] = map.layoutRule;
+                }
+                const semanticMap = {
+                    ...map,
+                };
+                delete semanticMap.name;
+                delete semanticMap
+                    .layoutRule;
+                return [
+                    mapId,
+                    {
+                        ...semanticMap,
+                        nameEn:
+                            mapNameEn,
+                        aliases: [
+                            ...(map.aliases ||
+                                []),
+                            ...(
+                                LOCAL_MAP_ALIASES_RAW[
+                                    mapId
+                                ] ||
+                                []
+                            ),
+                        ],
+                        layoutRuleEn,
+                        levels:
+                            map.levels.map(
+                                level => {
+                                    const nameEn =
+                                        titleFromId(
+                                            level.id,
+                                        );
+                                    mapStaticLocaleEn[
+                                        `map.${mapId}.level.${level.id}.name`
+                                    ] = nameEn;
+                                    mapStaticLocaleZhCn[
+                                        `map.${mapId}.level.${level.id}.name`
+                                    ] =
+                                        level.name;
+                                    const next = {
+                                        ...level,
+                                        nameEn,
+                                    };
+                                    delete next.name;
+                                    return next;
+                                },
+                            ),
+                        nodes:
+                            map.nodes.map(
+                                room => {
+                                    const nameEn =
+                                        englishAlias(
+                                            room.aliases,
+                                            titleFromId(
+                                                room.id,
+                                            ),
+                                        );
+                                    mapStaticLocaleEn[
+                                        `map.${mapId}.room.${room.id}.name`
+                                    ] = nameEn;
+                                    mapStaticLocaleZhCn[
+                                        `map.${mapId}.room.${room.id}.name`
+                                    ] =
+                                        room.name;
+                                    let descriptionEn =
+                                        '';
+                                    if (
+                                        room
+                                            .description
+                                    ) {
+                                        descriptionEn =
+                                            ROOM_DESCRIPTIONS_EN[
+                                                room.id
+                                            ] ||
+                                            (
+                                                /^[\x20-\x7E\s]*$/u
+                                                    .test(
+                                                        room.description,
+                                                    )
+                                                    ? room.description
+                                                    : ''
+                                            );
+                                        if (
+                                            !descriptionEn
+                                        ) {
+                                            throw new TypeError(
+                                                `Missing English preset room description for ${mapId}/${room.id}.`,
+                                            );
+                                        }
+                                        mapStaticLocaleEn[
+                                            `map.${mapId}.room.${room.id}.description`
+                                        ] =
+                                            descriptionEn;
+                                        mapStaticLocaleZhCn[
+                                            `map.${mapId}.room.${room.id}.description`
+                                        ] =
+                                            room.description;
+                                    }
+                                    const next = {
+                                        ...room,
+                                        nameEn,
+                                        descriptionEn,
+                                        aliases: [
+                                            room.name,
+                                            ...(room.aliases ||
+                                                []),
+                                        ].filter(Boolean),
+                                    };
+                                    delete next.name;
+                                    delete next
+                                        .description;
+                                    return next;
+                                },
+                            ),
+                    },
+                ];
+            }),
+    );
+}
+
+export const LOCAL_MAP_SCHEMA_VERSION = 2;
+
+export const PRESET_LOCATION_ACTORS = deepFreeze(splitPresetActors({
     garrick_ollivander: {
         id: 'garrick_ollivander',
         nameEn: 'Mr Ollivander',
@@ -153,16 +506,16 @@ export const PRESET_LOCATION_ACTORS = deepFreeze({
         source:
             'preset_location_resident',
     },
-});
+}));
 
-export const PRESET_LOCAL_MAPS = deepFreeze({
+export const PRESET_LOCAL_MAPS = deepFreeze(splitPresetMapPack({
     hogwarts_castle: {
         id: 'hogwarts_castle',
         parentWorldNodeId: 'hogwarts_castle',
         name: '霍格沃茨城堡',
         coordinateSystem: 'abstract-grid-100',
         defaultLevelId: 'ground',
-        layoutRule: '楼层与房间身份固定；活动楼梯只允许改变标记为 variable_stair 的出口状态。',
+        layoutRule: '楼层与房间身份固定；活动楼梯只允许改变可变楼梯出口的状态。',
         levels: [
             { id: 'dungeons', name: '地下层', z: -1 },
             { id: 'ground', name: '底层', z: 0 },
@@ -826,13 +1179,22 @@ export const PRESET_LOCAL_MAPS = deepFreeze({
             exit('high_security_corridor', 'north_watchtower', 'north', 'stairs'),
         ],
     },
-});
+}));
+
+export const MAP_STATIC_LOCALE_EN =
+    deepFreeze({
+        ...mapStaticLocaleEn,
+    });
+export const MAP_STATIC_LOCALE_ZH_CN =
+    deepFreeze({
+        ...mapStaticLocaleZhCn,
+    });
 
 export const LOCAL_MAP_CATALOG = deepFreeze(
     Object.values(PRESET_LOCAL_MAPS).map(map => ({
         id: map.id,
         parentWorldNodeId: map.parentWorldNodeId,
-        name: map.name,
+        nameEn: map.nameEn,
         defaultLevelId: map.defaultLevelId,
         levelCount: map.levels.length,
         nodeCount: map.nodes.length,
@@ -844,18 +1206,10 @@ export function getPresetLocalMap(mapId) {
     return PRESET_LOCAL_MAPS[String(mapId || '')] || null;
 }
 
-const LOCAL_MAP_ALIASES = deepFreeze({
-    hogwarts_castle: ['霍格沃茨城堡', '城堡内部', 'hogwarts castle'],
-    hogwarts_grounds: ['霍格沃茨场地', '城堡场地', 'hogwarts grounds'],
-    hogsmeade: ['霍格莫德', 'hogsmeade'],
-    diagon_alley: ['对角巷', 'diagon alley'],
-    knockturn_alley: ['翻倒巷', 'knockturn alley'],
-    ministry_of_magic: ['英国魔法部', '魔法部', 'ministry of magic'],
-    kings_cross: ['国王十字车站', '国王十字', 'kings cross'],
-    st_mungos: ['圣芒戈魔法伤病医院', '圣芒戈', 'st mungos', 'st. mungos'],
-    godrics_hollow: ['戈德里克山谷', 'godrics hollow', 'godric’s hollow'],
-    azkaban: ['阿兹卡班', 'azkaban'],
-});
+const LOCAL_MAP_ALIASES =
+    deepFreeze({
+        ...LOCAL_MAP_ALIASES_RAW,
+    });
 
 export function findPresetLocalMapInText(text) {
     const source = String(text || '').toLocaleLowerCase();

@@ -47,6 +47,7 @@ function createPerson(
     actorId,
     actorById,
     profileById,
+    options,
 ) {
     const actor = actorById.get(actorId) || null;
     const profile = profileById.get(actorId) || null;
@@ -58,6 +59,7 @@ function createPerson(
             state,
             actorId,
             'player',
+            options,
         );
     if (!dossier) {
         return null;
@@ -99,6 +101,7 @@ function getActiveIds(state) {
  */
 export function projectPeoplePanel(
     state = {},
+    options = {},
 ) {
     const actors = Array.isArray(state.actors)
         ? state.actors
@@ -130,6 +133,7 @@ export function projectPeoplePanel(
                 actorId,
                 actorById,
                 profileById,
+                options,
             ))
         .filter(Boolean);
     const activeIds = new Set(
@@ -181,6 +185,7 @@ export function projectPeoplePanel(
                     actorId,
                     actorById,
                     profileById,
+                    options,
                 ))
             .filter(Boolean)
         : [];

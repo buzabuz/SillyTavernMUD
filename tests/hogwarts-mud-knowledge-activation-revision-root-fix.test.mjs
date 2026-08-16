@@ -161,26 +161,22 @@ test('real Tina State-backed seeds produce actor-scoped quill Events through can
         buildAuthoritativeKnowledgeProjection(
             authority,
         );
-    const committedAssistant =
-        chat.findLast(message =>
-            !message.is_user &&
-            message.extra
-                ?.hogwartsMud
-                ?.turnDiagnostics
-                ?.status ===
-                'committed');
-    const assistantIndex =
-        chat.indexOf(
-            committedAssistant,
-        );
+    const seededQuillEventId =
+        'event_gryffindor_common_room_quill_repair_1bc78241e1942a8d';
+    const seededQuillEvent =
+        state.eventKnowledge.find(event =>
+            event.eventId ===
+            seededQuillEventId);
+    assert.ok(seededQuillEvent);
+    const playerMessageId =
+        seededQuillEvent
+            .sourceMessageIds
+            .find(messageId =>
+                chat[messageId]
+                    ?.is_user);
     const playerMessage =
-        chat
-            .slice(
-                0,
-                assistantIndex,
-            )
-            .findLast(message =>
-                message.is_user);
+        chat[playerMessageId];
+    assert.ok(playerMessage);
     const actorIds = [
         'canon_harry_james_potter',
         'canon_hermione_jean_granger',
@@ -200,7 +196,7 @@ test('real Tina State-backed seeds produce actor-scoped quill Events through can
         );
     assert.ok(
         seeds.recordIds.includes(
-            'events_event_gryffindor_common_room_quill_repair_1bc78241e1942a8d',
+            `events_${seededQuillEventId}`,
         ),
     );
     const input = {
@@ -266,7 +262,7 @@ test('real Tina State-backed seeds produce actor-scoped quill Events through can
     assert.ok(
         selectedCandidates.some(record =>
             record.recordId ===
-            'events_event_transfiguration_after_break_18d50cd8847574f4'),
+            `events_${seededQuillEventId}`),
     );
     const selected =
         hydrateCanonicalKnowledgeCandidates({

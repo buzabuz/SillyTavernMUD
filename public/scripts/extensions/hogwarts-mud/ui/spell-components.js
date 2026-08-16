@@ -1,3 +1,22 @@
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from '../domain/localized-view-model.js';
+
+function staticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+) {
+    return getStaticLocaleText(
+        staticKey,
+        normalizeDisplayLocale(
+            displayLocale,
+        ),
+    ) ||
+        sourceTextEn;
+}
+
 export function createSpellCandidateCard(
     candidate,
     {
@@ -6,8 +25,48 @@ export function createSpellCandidateCard(
         readOnly = false,
         onAccept,
         onIgnore,
+        displayLocale =
+        'zh-CN',
     } = {},
 ) {
+    const acceptLabel =
+        staticText(
+            displayLocale,
+            'ui.proposal.accept',
+            'Accept',
+        );
+    const ignoreLabel =
+        staticText(
+            displayLocale,
+            'ui.proposal.ignore',
+            'Ignore',
+        );
+    const processingLabel =
+        staticText(
+            displayLocale,
+            'ui.proposal.processing',
+            'Processing...',
+        );
+    const decisionLabel =
+        value =>
+            value === 'pending'
+                ? staticText(
+                    displayLocale,
+                    'ui.proposal.discovered_spell',
+                    'New spell discovered',
+                )
+                : value ===
+                    'accepted'
+                    ? staticText(
+                        displayLocale,
+                        'ui.proposal.accepted',
+                        'Accepted',
+                    )
+                    : staticText(
+                        displayLocale,
+                        'ui.proposal.ignored',
+                        'Ignored',
+                    );
     const card =
         document.createElement(
             'aside',
@@ -45,12 +104,9 @@ export function createSpellCandidateCard(
             'small',
         );
     status.textContent =
-        decision === 'pending'
-            ? '发现新咒语'
-            : decision ===
-                'accepted'
-                ? '已收录'
-                : '已忽略';
+        decisionLabel(
+            decision,
+        );
     const title =
         document.createElement(
             'strong',
@@ -67,8 +123,16 @@ export function createSpellCandidateCard(
         candidate
             .authorityConflicts
             ?.length
-            ? '非权威咒文 · 需玩家确认'
-            : '自定义咒语 · 需玩家确认';
+            ? staticText(
+                displayLocale,
+                'ui.proposal.spell_conflict',
+                'Non-authoritative incantation · Player confirmation required',
+            )
+            : staticText(
+                displayLocale,
+                'ui.proposal.spell_custom',
+                'Custom spell · Player confirmation required',
+            );
     copy.append(
         status,
         title,
@@ -116,7 +180,11 @@ export function createSpellCandidateCard(
         candidate
             .definition
             ?.effectEn ||
-        '效果由这段叙事证据定义。';
+        staticText(
+            displayLocale,
+            'ui.proposal.spell_effect_evidence',
+            'The effect is defined by this narrative evidence.',
+        );
     details.append(effect);
     if (candidate.evidenceText) {
         const evidence =
@@ -141,7 +209,12 @@ export function createSpellCandidateCard(
     info.type = 'button';
     info.className =
         'hpmud-item-candidate-info';
-    info.textContent = '详情';
+    info.textContent =
+        staticText(
+            displayLocale,
+            'ui.proposal.details',
+            'Details',
+        );
     info.setAttribute(
         'aria-expanded',
         'false',
@@ -174,7 +247,7 @@ export function createSpellCandidateCard(
         accept.className =
             'is-primary';
         accept.textContent =
-            '收录';
+            acceptLabel;
         accept.disabled =
             disabled;
         const ignore =
@@ -183,7 +256,7 @@ export function createSpellCandidateCard(
             );
         ignore.type = 'button';
         ignore.textContent =
-            '忽略';
+            ignoreLabel;
         ignore.disabled =
             disabled;
         const resolve =
@@ -196,7 +269,7 @@ export function createSpellCandidateCard(
                 ignore.disabled =
                     true;
                 button.textContent =
-                    '处理中…';
+                    processingLabel;
                 try {
                     await handler?.(
                         candidate.key,
@@ -211,9 +284,11 @@ export function createSpellCandidateCard(
                                     : 'ignored'
                             }`;
                         status.textContent =
-                            accepted
-                                ? '已收录'
-                                : '已忽略';
+                            decisionLabel(
+                                accepted
+                                    ? 'accepted'
+                                    : 'ignored',
+                            );
                         actions
                             .replaceChildren(
                                 info,
@@ -221,11 +296,19 @@ export function createSpellCandidateCard(
                     }
                     if (accepted) {
                         toastr.success(
-                            '已收录到咒语学习列表',
+                            staticText(
+                                displayLocale,
+                                'ui.proposal.spell_accepted',
+                                'Added to learned spells',
+                            ),
                         );
                     } else {
                         toastr.info(
-                            '已忽略这条咒语候选',
+                            staticText(
+                                displayLocale,
+                                'ui.proposal.spell_ignored',
+                                'Ignored this spell candidate',
+                            ),
                         );
                     }
                 } catch (error) {
@@ -235,8 +318,8 @@ export function createSpellCandidateCard(
                         false;
                     button.textContent =
                         button === accept
-                            ? '收录'
-                            : '忽略';
+                            ? acceptLabel
+                            : ignoreLabel;
                     toastr.error(
                         String(
                             error

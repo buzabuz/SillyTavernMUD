@@ -4,6 +4,9 @@ import test from 'node:test';
 
 import { createModelAdapter } from '../public/scripts/extensions/hogwarts-mud/adapters/model.js';
 import { createTranslationController } from '../public/scripts/extensions/hogwarts-mud/ui/translation-controller.js';
+import {
+    createUiSessionState,
+} from '../public/scripts/extensions/hogwarts-mud/ui/session-state.js';
 import { createTurnController } from '../public/scripts/extensions/hogwarts-mud/ui/turn-controller.js';
 import {
     SaveRevisionConflictError,
@@ -1944,7 +1947,7 @@ test('storage fallback finishes a chat-only host write before a competing metada
     );
 });
 
-test('a stale translation chat save is rejected and blocks the next model request', async () => {
+test('display localization performs no chat or metadata save on a stale page', async () => {
     const storage = createStorage();
     const pageA = createHostContext(
         createWorldState({
@@ -1984,93 +1987,56 @@ test('a stale translation chat save is rejected and blocks the next model reques
 
     const translation =
         createTranslationController({
-            TRANSLATION_FORMAT_VERSION:
-                12,
-            automaticWork: {
-                suppressed: false,
-            },
-            composeSceneSegments:
-                () => '',
-            getContext:
-                portsB.getContext,
             getMudState: () =>
                 portsB
                     .getContext()
                     .chatMetadata
                     .hogwartsMud,
             getSettings: () => ({
-                translationEnabled:
-                    true,
                 translationProvider:
                     'local',
             }),
-            jobRegistry: {
-                translation:
-                    new Map(),
+            idleLocalizationScheduler: {
+                schedule: () => {},
             },
-            localizeTurnTransaction:
-                async () => null,
+            localizationQueue: {
+                raisePriority:
+                    () => {},
+            },
+            localizationTable: {
+                queryRows:
+                    async () => ({
+                        rows: {},
+                    }),
+                requestRetranslation:
+                    async () => {},
+            },
             renderAll: () => {},
             scheduleRender: () => {},
-            shouldTranslateToChinese:
-                () => true,
-            translateOpeningValues:
-                async values =>
-                    values,
-            translateWithProvider:
-                async () =>
-                    '课程开始了。',
-            updateNativeMessageBlock:
-                () => {},
+            session:
+                createUiSessionState(),
+            storage: {
+                getItem:
+                    () => 'zh-CN',
+                setItem:
+                    () => {},
+            },
         });
     await translation
         .translateMessage(0);
-
-    let modelCalls = 0;
-    const adapter =
-        createModelAdapter({
-            beforeRequest:
-                portsB
-                    .assertSaveRevisionWritable,
-            getConnectionProfiles:
-                () => [{
-                    id: 'low',
-                }],
-            applyRegexPresetById:
-                async () => {},
-            createContextBudgetPlan:
-                () => null,
-            limitMessagesToContext:
-                value => value,
-            parseCompleteJsonObject:
-                JSON.parse,
-            uuidv4: () => 'request',
-            ConnectionManagerRequestService:
-                class {
-                    async sendRequest() {
-                        modelCalls += 1;
-                        return {};
-                    }
-                },
-        });
-    await assert.rejects(
-        adapter.sendRoleRequest(
-            {
-                profileId: 'low',
-            },
-            [],
-        ),
-        SaveRevisionConflictError,
-    );
 
     assert.equal(
         pageB.chatSaves.length,
         0,
     );
-    assert.equal(modelCalls, 0);
+    assert.equal(
+        pageB.metadataSaves
+            .length,
+        0,
+    );
 });
 
-test('a conflict raised after a failed stream blocks the automatic one-shot retry', async () => {
+test('a failed stream is surfaced after one save guard and one model request', async () => {
     const profiles = [{
         id: 'low',
     }];
@@ -2128,12 +2094,12 @@ test('a conflict raised after a failed stream blocks the automatic one-shot retr
                 stream: true,
             },
         ),
-        SaveRevisionConflictError,
+        /stream disconnected/u,
     );
 
     assert.equal(
         requestChecks,
-        2,
+        1,
     );
     assert.equal(
         modelCalls,

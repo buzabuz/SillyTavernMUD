@@ -18,6 +18,9 @@ import {
     OPENING_ID_PATTERN,
     SPATIAL_STATE_VERSION,
 } from './spatial-foundation.js';
+import {
+    LOCAL_MAP_SCHEMA_VERSION,
+} from '../map-pack.js';
 
 const INTERIOR_CONTAINER_KINDS =
     new Set([
@@ -106,13 +109,8 @@ export function getInteriorMapRequest(
                 : 'missing',
         parentMapId,
         parentRoomId,
-        parentMapName:
-            parentMap.name ||
-            parentMap.nameEn ||
-            parentMapId,
         parentMapNameEn:
             parentMap.nameEn ||
-            parentMap.name ||
             parentMapId,
         worldAnchorId:
             parentMap
@@ -120,19 +118,13 @@ export function getInteriorMapRequest(
             parentMap
                 .parentWorldNodeId ||
             '',
-        parentRoomName:
-            room.name ||
-            room.nameEn ||
-            parentRoomId,
         parentRoomNameEn:
             room.nameEn ||
-            room.name ||
             parentRoomId,
         parentRoomKind:
             room.kind || 'container',
         parentRoomDescriptionEn:
             room.descriptionEn ||
-            room.description ||
             '',
         suggestedMapId:
             `${parentMapId}_${parentRoomId}_interior`
@@ -153,121 +145,73 @@ export function getInteriorMapRequest(
 export function normalizeGeneratedInteriorMapLabels(
     worldState,
 ) {
-    let changed = false;
     const next =
         structuredClone(worldState);
+    let changed =
+        Number(
+            next.map
+                ?.localMapVersion,
+        ) !==
+            LOCAL_MAP_SCHEMA_VERSION;
     next.map.customLocalMaps =
         (next.map.customLocalMaps || [])
             .map(map => {
-                const mount =
-                    getInteriorMount(
-                        map,
-                    );
-                if (
-                    map.generatedBy !==
-                        'medium-scene-director' ||
-                    !mount
-                ) {
-                    return map;
-                }
-                const parentMap =
-                    getLocalMapDefinition(
-                        mount.parentMapId,
-                        next.map,
-                    );
-                const parentRoom =
-                    getMapRooms(
-                        parentMap,
-                        next.map,
-                    ).find(room =>
-                        room.id ===
-                            mount
-                                .parentRoomId);
-                const isTrain =
-                    parentRoom?.kind ===
-                        'train';
-                const normalizeLabel =
-                    value => isTrain
-                        ? String(value || '')
-                            .replace(
-                                /快速/g,
-                                '特快',
-                            )
-                            .replace(
-                                /马车/g,
-                                '车厢',
-                            )
-                            .replace(
-                                /登机/g,
-                                '上车',
-                            )
-                        : String(
-                            value || '',
-                        );
-                const name =
-                    parentRoom?.name
-                        ? `${parentRoom.name} · 内部`
-                        : normalizeLabel(
-                            map.name ||
-                            map.nameEn,
-                        );
+                const normalized = {
+                    ...map,
+                };
+                delete normalized.name;
                 const levels =
                     (map.levels || [])
-                        .map(level => ({
-                            ...level,
-                            name:
-                                normalizeLabel(
-                                    level.name ||
-                                    level.nameEn,
-                                ),
-                        }));
+                        .map(level => {
+                            const nextLevel = {
+                                ...level,
+                            };
+                            delete nextLevel.name;
+                            return nextLevel;
+                        });
                 const nodes =
                     (map.nodes || [])
-                        .map(node => ({
-                            ...node,
-                            name:
-                                normalizeLabel(
-                                    node.name ||
-                                    node.nameEn,
-                                ),
-                        }));
+                        .map(node => {
+                            const nextNode = {
+                                ...node,
+                            };
+                            delete nextNode.name;
+                            delete nextNode
+                                .description;
+                            return nextNode;
+                        });
                 if (
-                    name !== map.name ||
-                    levels.some(
-                        (level, index) =>
-                            level.name !==
-                            map.levels?.[
-                                index
-                            ]?.name) ||
-                    nodes.some(
-                        (node, index) =>
-                            node.name !==
-                            map.nodes?.[
-                                index
-                            ]?.name)
+                    Object.hasOwn(
+                        map,
+                        'name',
+                    ) ||
+                    (map.levels || [])
+                        .some(level =>
+                            Object.hasOwn(
+                                level,
+                                'name',
+                            )) ||
+                    (map.nodes || [])
+                        .some(node =>
+                            Object.hasOwn(
+                                node,
+                                'name',
+                            ) ||
+                            Object.hasOwn(
+                                node,
+                                'description',
+                            ))
                 ) {
                     changed = true;
                 }
                 return {
-                    ...map,
-                    name,
+                    ...normalized,
                     levels,
                     nodes,
                 };
             });
-    if (changed) {
-        const activeMap =
-            next.map.customLocalMaps
-                .find(map =>
-                    map.id ===
-                        next.map.activeMapId);
-        if (activeMap) {
-            next.location =
-                activeMap.name ||
-                activeMap.nameEn ||
-                next.location;
-        }
-    }
+    next.map.localMapVersion =
+        LOCAL_MAP_SCHEMA_VERSION;
     return {
         state: changed
             ? next
@@ -307,7 +251,8 @@ export function validateGeneratedInteriorMap(
         };
     }
     if (
-        generatedMap.version !== 1 ||
+        generatedMap.version !==
+            LOCAL_MAP_SCHEMA_VERSION ||
         !OPENING_ID_PATTERN.test(
             String(
                 generatedMap.id || '',
@@ -495,63 +440,31 @@ function enterInteriorMap(
 ) {
     const next =
         structuredClone(worldState);
-    const displayMap =
+    const persistedMap =
         structuredClone(customMap);
-    const normalizeTrainLabel = value =>
-        request.parentRoomKind === 'train'
-            ? String(value || '')
-                .replace(/快速/g, '特快')
-                .replace(/马车/g, '车厢')
-                .replace(/登机/g, '上车')
-            : String(value || '');
-    displayMap.name =
-        request.parentRoomName
-            ? `${request.parentRoomName} · 内部`
-            : normalizeTrainLabel(
-                displayMap.name ||
-                displayMap.nameEn,
-            );
-    displayMap.levels =
-        (displayMap.levels || [])
-            .map(level => ({
-                ...level,
-                name: normalizeTrainLabel(
-                    level.name ||
-                    level.nameEn,
-                ),
-            }));
-    displayMap.nodes =
-        (displayMap.nodes || [])
-            .map(node => ({
-                ...node,
-                name: normalizeTrainLabel(
-                    node.name ||
-                    node.nameEn,
-                ),
-            }));
     next.map.customLocalMaps = [
         ...(
             next.map.customLocalMaps ||
             []
         ).filter(map =>
-            map.id !== displayMap.id),
-        displayMap,
+            map.id !== persistedMap.id),
+        persistedMap,
     ];
     const room =
-        displayMap.nodes.find(node =>
+        persistedMap.nodes.find(node =>
             node.id ===
-                displayMap.currentRoomId) ||
-        displayMap.nodes.find(node =>
+                persistedMap.currentRoomId) ||
+        persistedMap.nodes.find(node =>
             node.id ===
-                displayMap.defaultRoomId) ||
-        displayMap.nodes[0];
+                persistedMap.defaultRoomId) ||
+        persistedMap.nodes[0];
     next.map.activeMapId =
-        displayMap.id;
+        persistedMap.id;
     next.map.currentLocalNodeId =
         room.id;
     next.map.currentLevelId =
         room.levelId ||
-        displayMap.defaultLevelId;
+        persistedMap.defaultLevelId;
     next.map.discoveredLocalNodeIds =
         [...new Set([
             ...(
@@ -559,16 +472,11 @@ function enterInteriorMap(
                     .discoveredLocalNodeIds ||
                 []
             ),
-            `${displayMap.id}:${room.id}`,
+            `${persistedMap.id}:${room.id}`,
         ])];
-    next.location =
-        displayMap.name ||
-        displayMap.nameEn ||
-        room.name ||
-        room.nameEn;
     if (next.scene) {
         next.scene.mapId =
-            displayMap.id;
+            persistedMap.id;
         next.scene.roomId =
             room.id;
         if (
@@ -584,7 +492,7 @@ function enterInteriorMap(
             next.scene.nextSceneIntent = {
                 ...next.scene
                     .nextSceneIntent,
-                mapId: displayMap.id,
+                mapId: persistedMap.id,
                 roomId: room.id,
             };
         }
@@ -600,7 +508,7 @@ function enterInteriorMap(
                 request.parentRoomId
                 ? {
                     ...actor,
-                    mapId: displayMap.id,
+                    mapId: persistedMap.id,
                     roomId: room.id,
                 }
                 : actor);
@@ -609,7 +517,7 @@ function enterInteriorMap(
             next.items,
             {
                 playerMapId:
-                    displayMap.id,
+                    persistedMap.id,
                 playerRoomId:
                     room.id,
                 actors:
@@ -623,7 +531,7 @@ function enterInteriorMap(
             createSceneItemStates(
                 next.items,
                 {
-                    mapId: displayMap.id,
+                    mapId: persistedMap.id,
                     roomId: room.id,
                 },
             );
@@ -636,7 +544,7 @@ function enterInteriorMap(
                 ?.openingGroundingVersion ||
             0,
         player: {
-            mapId: displayMap.id,
+            mapId: persistedMap.id,
             roomId: room.id,
         },
         lastMovement:
@@ -665,8 +573,6 @@ export function applyGeneratedInteriorMap(
             validation.errors.join('；'),
         );
     }
-    const display =
-        generatedMap.display || {};
     const customMap = {
         id: generatedMap.id,
         worldAnchorId:
@@ -682,9 +588,6 @@ export function applyGeneratedInteriorMap(
             'medium-scene-director',
         generatedAt:
             new Date().toISOString(),
-        name:
-            display.mapName ||
-            generatedMap.nameEn,
         nameEn:
             generatedMap.nameEn,
         coordinateSystem:
@@ -696,17 +599,12 @@ export function applyGeneratedInteriorMap(
             generatedMap.currentRoomId,
         currentRoomId:
             generatedMap.currentRoomId,
-        layoutRule:
+        layoutRuleEn:
             'This generated interior is persistent local topology. Medium-tier scene directors may create it once but may not silently rewrite it later.',
         levels:
             generatedMap.levels
-                .map((level, index) => ({
+                .map(level => ({
                     id: level.id,
-                    name:
-                        display
-                            .levelNames
-                            ?.[index] ||
-                        level.nameEn,
                     nameEn:
                         level.nameEn,
                     z: Number(
@@ -715,13 +613,8 @@ export function applyGeneratedInteriorMap(
                 })),
         nodes:
             generatedMap.rooms
-                .map((room, index) => ({
+                .map(room => ({
                     id: room.id,
-                    name:
-                        display
-                            .roomNames
-                            ?.[index] ||
-                        room.nameEn,
                     nameEn:
                         room.nameEn,
                     levelId:
@@ -734,8 +627,6 @@ export function applyGeneratedInteriorMap(
                     access:
                         room.access ||
                         'ticketed',
-                    description:
-                        room.descriptionEn,
                     descriptionEn:
                         room.descriptionEn,
                     tags: [

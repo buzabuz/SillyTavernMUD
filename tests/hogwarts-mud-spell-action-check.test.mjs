@@ -1211,7 +1211,27 @@ test('check resolution is validated and persisted with the turn transaction', ()
     const check = resolveActionCheck(
         state,
         '我仔细检查桌下。',
-        { randomInt: () => 12 },
+        {
+            randomInt:
+                () => 12,
+            sourceMessageId:
+                44,
+        },
+    );
+    assert.equal(
+        check.reasonCode,
+        'perception',
+    );
+    assert.equal(
+        check.sourceMessageId,
+        44,
+    );
+    assert.equal(
+        Object.hasOwn(
+            check,
+            'reasonEn',
+        ),
+        false,
     );
     const transaction = {
         elapsedMinutes: 15,

@@ -1205,6 +1205,8 @@ test('lifecycle applies Identity migration before a loaded world resumes', () =>
                 unchanged,
             migrateSpellbookState:
                 unchanged,
+            migrateTimelineAppraisalState:
+                unchanged,
             normalizeCausalCollapseState:
                 value => value,
             normalizeModelSlots:

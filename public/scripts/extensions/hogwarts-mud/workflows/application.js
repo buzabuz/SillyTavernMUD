@@ -7,10 +7,28 @@ import {
 import { createModelAdapter } from '../adapters/model.js';
 import { createKnowledgeAdapter } from '../adapters/knowledge.js';
 import { createTranslationAdapter } from '../adapters/translation.js';
+import {
+    createLocalizationTableAdapter,
+} from '../adapters/localization-table.js';
 import { createLocalSemanticAdapter } from '../adapters/local-semantic.js';
+import {
+    createLocalizationQueue,
+} from '../domain/localization-queue.js';
+import {
+    collectChatLocalizationCandidates,
+    collectStateLocalizationCandidates,
+} from '../domain/localization-candidates.js';
+import {
+    TRANSLATION_TABLE_LIMITS,
+    createTranslationRowKey,
+    hashTranslationSource,
+} from '../domain/localization-contract.js';
 import {
     createModelEventScheduler,
 } from '../runtime/model-event-scheduler.js';
+import {
+    createIdleLocalizationScheduler,
+} from '../runtime/idle-localization-scheduler.js';
 import { createOpeningWorkflow } from './opening.js';
 import { createInteriorMapWorkflow } from './interior-map.js';
 import { createDirectorWorkflows } from './directors.js';
@@ -27,6 +45,67 @@ function highPlanningAllowsMedium(
 ) {
     return result?.status !==
         'failed';
+}
+
+export async function filterPersistedLocalizationCandidates({
+    candidates,
+    timelineEpoch,
+    localizationTable,
+    maxQueryKeys =
+    TRANSLATION_TABLE_LIMITS
+        .maxQueryKeys,
+}) {
+    const prepared =
+        Array.isArray(candidates)
+            ? candidates
+            : [];
+    const keys = [
+        ...new Set(
+            prepared
+                .map(candidate =>
+                    String(
+                        candidate?.key ||
+                        '',
+                    ))
+                .filter(Boolean),
+        ),
+    ];
+    const persistedKeys =
+        new Set();
+    for (
+        let offset = 0;
+        offset < keys.length;
+        offset += maxQueryKeys
+    ) {
+        const response =
+            await localizationTable
+                .queryRows(
+                    timelineEpoch,
+                    keys.slice(
+                        offset,
+                        offset +
+                            maxQueryKeys,
+                    ),
+                );
+        const rowKeys =
+            await Promise.all(
+                (
+                    response.rows ||
+                    []
+                ).map(row =>
+                    createTranslationRowKey(
+                        row,
+                    )),
+            );
+        rowKeys.forEach(key =>
+            persistedKeys.add(key));
+    }
+    return prepared.filter(
+        candidate =>
+            !persistedKeys.has(
+                candidate.key,
+            ),
+    );
 }
 
 export async function finalizeCalendarMomentPostCommit({
@@ -84,12 +163,12 @@ export function createWorkflowApplication(ports) {
         NPC_IDENTITY_PROMPT_BOUNDARY,
         PRESET_WORLD_MAP,
         SOCIAL_GRAPH_EXTRACTOR_VERSION,
-        TRANSLATION_FORMAT_VERSION,
         TRANSLATION_TERM_GLOSSARY,
         admitCurrentLocationResidents,
         admitMentionedKnownActors,
         analyzeMemoryConsolidation,
         analyzePacingSignals,
+        automaticWork,
         applyGeneratedInteriorMap,
         applyNativeRoleSettings,
         applyOpeningWorldPackage,
@@ -164,7 +243,6 @@ export function createWorkflowApplication(ports) {
         normalizeActorMemoryProfile,
         normalizeCausalCollapseState,
         normalizeEventKnowledge,
-        normalizeGeneratedInteriorMapLabels,
         normalizeLocalTranslationText,
         normalizeMemoryConsolidationPayload,
         normalizeModelSlots,
@@ -203,7 +281,6 @@ export function createWorkflowApplication(ports) {
         resolveItemCandidate,
         resolvePlayerAddressing,
         resolveSpellCandidate,
-        resolveTemporaryActorRevealedName,
         restoreTranslationTerms,
         retrieveKnowledge,
         saveMetadataDebounced,
@@ -211,6 +288,7 @@ export function createWorkflowApplication(ports) {
         selectSharedMemoriesForContext,
         setLiveSceneStreamPhase,
         settleNarrativeTurnPerformance,
+        shouldTranslateToChinese,
         splitTranslationChunks,
         stripSyntheticSceneOpeningActorSegments,
         synchronizeHeldItemLocations,
@@ -231,9 +309,9 @@ export function createWorkflowApplication(ports) {
     } = ports;
 
     const {
-        getSettings,
         resolveRoleSlots,
         getMudState,
+        getSettings,
     } = createStatePorts({
         DEFAULT_SETTINGS,
         DEFAULT_WORLD_PROMPT,
@@ -520,6 +598,7 @@ export function createWorkflowApplication(ports) {
     });
 
     const {
+        translateLocalizationBatch,
         translateOpeningValues,
         translateWithProvider,
     } = createTranslationAdapter({
@@ -534,17 +613,378 @@ export function createWorkflowApplication(ports) {
         normalizeTranslationProvider,
         protectTranslationTerms,
         restoreTranslationTerms,
+        shouldTranslateToChinese,
         runLocalModelTask:
             modelEventScheduler
                 .runLocalTask,
         splitTranslationChunks,
     });
+    const localizationTable =
+        createLocalizationTableAdapter({
+            getRequestHeaders,
+        });
+    const localizationQueue =
+        createLocalizationQueue();
+    const idleLocalizationScheduler =
+        createIdleLocalizationScheduler({
+            queue:
+                localizationQueue,
+            automaticWork,
+            jobRegistry,
+            getProviderId:
+                () =>
+                    getSettings()
+                        .translationProvider,
+            getActionId:
+                () =>
+                    String(
+                        getMudState()
+                            ?.modelTaskRuntime
+                            ?.activeActionId ||
+                        '',
+                    ),
+            isDocumentVisible:
+                () =>
+                    globalThis.document
+                        ?.visibilityState !==
+                    'hidden',
+            translateBatch:
+                translateLocalizationBatch,
+            upsertRows:
+                async translated => {
+                    const timelineEpoch =
+                        String(
+                            getMudState()
+                                ?.timelineEpoch ||
+                            '',
+                        );
+                    const rows =
+                        await Promise.all(
+                            translated.map(
+                                candidate =>
+                                    candidate
+                                        .translationStatus ===
+                                        'error'
+                                        ? localizationTable
+                                            .createErrorRow({
+                                                timelineEpoch,
+                                                recordKind:
+                                                    candidate
+                                                        .recordKind,
+                                                recordId:
+                                                    candidate
+                                                        .recordId,
+                                                fieldPath:
+                                                    candidate
+                                                        .fieldPath,
+                                                sourceText:
+                                                    candidate
+                                                        .sourceText,
+                                                providerId:
+                                                    candidate
+                                                        .providerId ||
+                                                    getSettings()
+                                                        .translationProvider,
+                                                translatorVersion:
+                                                    Number(
+                                                        candidate
+                                                            .translatorVersion ||
+                                                        1,
+                                                    ),
+                                                glossaryVersion:
+                                                    Number(
+                                                        candidate
+                                                            .glossaryVersion ||
+                                                        1,
+                                                    ),
+                                                errorCode:
+                                                    candidate
+                                                        .errorCode ||
+                                                    'TARGET_LOCALE_MISMATCH',
+                                            })
+                                        : localizationTable
+                                            .createReadyRow({
+                                                timelineEpoch,
+                                                recordKind:
+                                                    candidate
+                                                        .recordKind,
+                                                recordId:
+                                                    candidate
+                                                        .recordId,
+                                                fieldPath:
+                                                    candidate
+                                                        .fieldPath,
+                                                sourceText:
+                                                    candidate
+                                                        .sourceText,
+                                                translatedText:
+                                                    candidate
+                                                        .translatedText,
+                                                providerId:
+                                                    candidate
+                                                        .providerId ||
+                                                    getSettings()
+                                                        .translationProvider,
+                                                translatorVersion:
+                                                    Number(
+                                                        candidate
+                                                            .translatorVersion ||
+                                                        1,
+                                                    ),
+                                                glossaryVersion:
+                                                    Number(
+                                                        candidate
+                                                            .glossaryVersion ||
+                                                        1,
+                                                    ),
+                                            }),
+                            ),
+                        );
+                    await localizationTable
+                        .upsertRows(
+                            timelineEpoch,
+                            rows.map(
+                                entry =>
+                                    entry.row,
+                            ),
+                        );
+                    if (
+                        globalThis
+                            .CustomEvent &&
+                        globalThis
+                            .dispatchEvent
+                    ) {
+                        globalThis
+                            .dispatchEvent(
+                                new globalThis
+                                    .CustomEvent(
+                                        'hogwarts-mud-localization-rows',
+                                        {
+                                            detail:
+                                                rows,
+                                        },
+                                    ),
+                            );
+                    }
+                },
+            recordFailure:
+                async ({
+                    candidates,
+                    errorCode,
+                }) => {
+                    const timelineEpoch =
+                        String(
+                            getMudState()
+                                ?.timelineEpoch ||
+                            '',
+                        );
+                    const rows =
+                        await Promise.all(
+                            candidates.map(
+                                candidate =>
+                                    localizationTable
+                                        .createErrorRow({
+                                            timelineEpoch,
+                                            recordKind:
+                                                candidate
+                                                    .recordKind,
+                                            recordId:
+                                                candidate
+                                                    .recordId,
+                                            fieldPath:
+                                                candidate
+                                                    .fieldPath,
+                                            sourceText:
+                                                candidate
+                                                    .sourceText,
+                                            providerId:
+                                                candidate
+                                                    .providerId ||
+                                                getSettings()
+                                                    .translationProvider,
+                                            translatorVersion:
+                                                Number(
+                                                    candidate
+                                                        .translatorVersion ||
+                                                    1,
+                                                ),
+                                            glossaryVersion:
+                                                Number(
+                                                    candidate
+                                                        .glossaryVersion ||
+                                                    1,
+                                                ),
+                                            errorCode,
+                                        }),
+                            ),
+                        );
+                    await localizationTable
+                        .upsertRows(
+                            timelineEpoch,
+                            rows.map(
+                                entry =>
+                                    entry.row,
+                            ),
+                        );
+                },
+            render:
+                () => renderAll(),
+        });
+
+    async function enqueueLocalizationCandidates(
+        candidates,
+    ) {
+        const state =
+            getMudState();
+        const providerId =
+            getSettings()
+                .translationProvider;
+        if (
+            !state?.timelineEpoch ||
+            providerId === 'off'
+        ) {
+            return;
+        }
+        const allCandidates = [
+            ...(candidates || []),
+            ...collectStateLocalizationCandidates(
+                state,
+            ),
+            ...collectChatLocalizationCandidates(
+                getContext()
+                    ?.chat ||
+                [],
+            ),
+        ];
+        const prepared =
+            await Promise.all(
+                allCandidates
+                    .filter(candidate =>
+                        String(
+                            candidate
+                                ?.sourceText ||
+                            '',
+                        ).trim())
+                    .map(async candidate => {
+                        const sourceHash =
+                            await hashTranslationSource(
+                                candidate
+                                    .sourceText,
+                            );
+                        const identity = {
+                            timelineEpoch:
+                                state
+                                    .timelineEpoch,
+                            recordKind:
+                                candidate
+                                    .recordKind,
+                            recordId:
+                                candidate
+                                    .recordId,
+                            fieldPath:
+                                candidate
+                                    .fieldPath,
+                            sourceHash,
+                            sourceLocale:
+                                'en',
+                            targetLocale:
+                                'zh-CN',
+                            providerId,
+                            translatorVersion:
+                                Number(
+                                    candidate
+                                        .translatorVersion ||
+                                    1,
+                                ),
+                            glossaryVersion:
+                                Number(
+                                    candidate
+                                        .glossaryVersion ||
+                                    1,
+                                ),
+                        };
+                        return {
+                            ...candidate,
+                            ...identity,
+                            key:
+                                await createTranslationRowKey(
+                                    identity,
+                                ),
+                        };
+                    }),
+            );
+        const uniquePrepared =
+            new Map();
+        prepared.forEach(candidate => {
+            const current =
+                uniquePrepared.get(
+                    candidate.key,
+                );
+            uniquePrepared.set(
+                candidate.key,
+                current
+                    ? {
+                        ...current,
+                        priority:
+                            Math.min(
+                                current
+                                    .priority,
+                                candidate
+                                    .priority,
+                            ),
+                    }
+                    : candidate,
+            );
+        });
+        let pending;
+        try {
+            pending =
+                await filterPersistedLocalizationCandidates({
+                    candidates: [
+                        ...uniquePrepared
+                            .values(),
+                    ],
+                    timelineEpoch:
+                        state.timelineEpoch,
+                    localizationTable,
+                });
+        } catch (error) {
+            console.warn(
+                '[Hogwarts MUD] Localization candidate table query failed',
+                error,
+            );
+            return {
+                enqueued: 0,
+                skipped:
+                    uniquePrepared.size,
+                errorCode:
+                    String(
+                        error?.code ||
+                        'TABLE_UNAVAILABLE',
+                    ).slice(0, 64),
+            };
+        }
+        localizationQueue.enqueue(
+            pending,
+        );
+        idleLocalizationScheduler
+            .schedule();
+        return {
+            enqueued:
+                pending.length,
+            skipped:
+                uniquePrepared.size -
+                pending.length,
+            errorCode: '',
+        };
+    }
 
     const {
         runHighCalendarDirector,
         runHighCalendarDirectorSafely,
     } = createHighCalendarDirectorWorkflow({
         buildMapAuthorityContext,
+        enqueueLocalizationCandidates,
         extractRoleResponseText,
         getContext,
         getMudState,
@@ -562,6 +1002,7 @@ export function createWorkflowApplication(ports) {
     } = createMediumCalendarDirectorWorkflow({
         applySystemPrompt,
         buildMapAuthorityContext,
+        enqueueLocalizationCandidates,
         extractRoleResponseText,
         getContext,
         getMudState,
@@ -580,12 +1021,11 @@ export function createWorkflowApplication(ports) {
         initializeOpeningWorld:
             initializeOpeningWorldBase,
     } = createOpeningWorkflow({
-        CANON_WIT_TONE_CONTRACT,
         PRESET_WORLD_MAP,
-        TRANSLATION_FORMAT_VERSION,
         applyNativeRoleSettings,
         applyOpeningWorldPackage,
         applySystemPrompt,
+        enqueueLocalizationCandidates,
         extractRoleResponseText,
         getContext,
         getMudState,
@@ -600,7 +1040,6 @@ export function createWorkflowApplication(ports) {
         sendOpeningWorldRequest:
             roleRequests.openingWorld,
         syncLocalKnowledge,
-        translateOpeningValues,
         validateOpeningWorldPackage,
     });
 
@@ -666,9 +1105,7 @@ export function createWorkflowApplication(ports) {
         getInteriorMapRequest,
         getLocalMapDefinition,
         getMudState,
-        getSettings,
         jobRegistry,
-        normalizeGeneratedInteriorMapLabels,
         parseJsonObject,
         renderAll,
         resetInspectorMapScope,
@@ -676,7 +1113,6 @@ export function createWorkflowApplication(ports) {
         sendModelTaskRequest:
             roleRequests
                 .interiorCartographer,
-        translateOpeningValues,
         validateGeneratedInteriorMap,
     });
 
@@ -730,11 +1166,11 @@ export function createWorkflowApplication(ports) {
         buildSocialAudienceProjection,
         captureMemoryBoundaryGuard,
         createContextBudgetPlan,
+        enqueueLocalizationCandidates,
         extractRoleResponseText,
         getContext,
         getMudState,
         getRequestHeaders,
-        getSettings,
         isMemoryBoundaryGuardCurrent,
         jobRegistry,
         normalizeActorMemoryProfile,
@@ -746,7 +1182,6 @@ export function createWorkflowApplication(ports) {
         sendModelTaskRequest:
             roleRequests.socialDirector,
         syncLocalKnowledge,
-        translateOpeningValues,
         validateMemoryConsolidation,
         validateSocialDirectorResult,
     });
@@ -758,14 +1193,12 @@ export function createWorkflowApplication(ports) {
         buildSceneTransitionMessage,
         generateSceneTransitionOpening,
         generateSceneTransitionPackage,
-        localizeSceneTransitionPackage,
     } = createSceneTransitionWorkflow({
         CANON_CAST_IDENTITY_CONTRACT,
         CANON_WIT_TONE_CONTRACT,
         CONTEXT_SIZE_PRESETS,
         DEFAULT_MODEL_SLOTS,
         NPC_IDENTITY_PROMPT_BOUNDARY,
-        TRANSLATION_FORMAT_VERSION,
         admitCurrentLocationResidents,
         applySceneTransition,
         applySystemPrompt,
@@ -776,6 +1209,7 @@ export function createWorkflowApplication(ports) {
         buildSceneCastRotationPolicy,
         composeSceneSegments,
         createContextBudgetPlan,
+        enqueueLocalizationCandidates,
         ensureCurrentInteriorMap,
         ensureSceneLifecycleState,
         ensureSocialDirectorCatchup,
@@ -786,7 +1220,6 @@ export function createWorkflowApplication(ports) {
         getContext,
         getMudState,
         getSceneDestinationAuthority,
-        getSettings,
         jobRegistry,
         normalizeSceneTransitionPackage,
         parseJsonObject,
@@ -803,7 +1236,6 @@ export function createWorkflowApplication(ports) {
         stripSyntheticSceneOpeningActorSegments,
         synchronizeHeldItemLocations,
         syncLocalKnowledge,
-        translateOpeningValues,
         validateSceneTransitionPackage,
     });
 
@@ -826,7 +1258,6 @@ export function createWorkflowApplication(ports) {
         getMudState,
         guardedSaveTransaction,
         jobRegistry,
-        localizeSceneTransitionPackage,
         renderAll,
         resolveRoleSlots,
         retrieveLocalKnowledge,
@@ -914,7 +1345,6 @@ export function createWorkflowApplication(ports) {
         createSceneMomentumDirective,
         generateScenePerformance,
         buildSceneTransaction,
-        localizeTurnTransaction,
     } = createTurnPerformanceWorkflow({
         CANON_CAST_IDENTITY_CONTRACT,
         CANON_WIT_TONE_CONTRACT,
@@ -935,7 +1365,6 @@ export function createWorkflowApplication(ports) {
         getActiveAddressingState,
         getAuthoritativeSceneSpells,
         getRequestHeaders,
-        getSettings,
         parseItemOperationDirectives,
         parseJsonObject,
         projectNpcRuntimeActorsForPrompt,
@@ -943,12 +1372,10 @@ export function createWorkflowApplication(ports) {
         recoverScenePerformancePayload,
         removeExplicitAddressDirective,
         resolvePlayerAddressing,
-        resolveTemporaryActorRevealedName,
         sendModelTaskRequest:
             roleRequests.scenePerformance,
         setLiveSceneStreamPhase,
         settleNarrativeTurnPerformance,
-        translateOpeningValues,
         updateLiveSceneStream,
         validateScenePerformance,
     });
@@ -979,7 +1406,6 @@ export function createWorkflowApplication(ports) {
         retryFailedPlayerTurn,
         preparePlayableState,
     } = createTurnWorkflow({
-        TRANSLATION_FORMAT_VERSION,
         admitCurrentLocationResidents,
         admitMentionedKnownActors,
         applyObservedActorUpdates,
@@ -999,6 +1425,7 @@ export function createWorkflowApplication(ports) {
         createSceneMomentumDirective,
         createTurnPerformanceBudget,
         createTurnRetryCheckpoint,
+        enqueueLocalizationCandidates,
         ensureCurrentInteriorMap,
         assertWorldFoundationReady,
         ensurePacingDirectorAssessment,
@@ -1018,7 +1445,6 @@ export function createWorkflowApplication(ports) {
         getInspectorMapScope,
         isObservedEventBoundary,
         jobRegistry,
-        localizeTurnTransaction,
         normalizeEventKnowledge,
         parseItemOperationDirectives,
         parseSpellCastDirectives,
@@ -1043,7 +1469,6 @@ export function createWorkflowApplication(ports) {
         resolveRoleSlots,
         retrieveLocalKnowledge,
         setLiveSceneStreamPhase,
-        stripSyntheticSceneOpeningActorSegments,
         syncLocalKnowledge,
         updateNativeMessageBlock,
         validateTurnTransaction,
@@ -1148,6 +1573,10 @@ export function createWorkflowApplication(ports) {
         retrieveLocalKnowledge,
         translateOpeningValues,
         translateWithProvider,
+        localizationTable,
+        localizationQueue,
+        idleLocalizationScheduler,
+        enqueueLocalizationCandidates,
         runHighCalendarDirector,
         runHighCalendarDirectorSafely,
         runMediumCalendarDirector,
@@ -1169,7 +1598,6 @@ export function createWorkflowApplication(ports) {
         createSceneMomentumDirective,
         generateScenePerformance,
         buildSceneTransaction,
-        localizeTurnTransaction,
         buildLocalSemanticRoomContext,
         requestLocalTurnAdjudication,
         isObservedEventBoundary,

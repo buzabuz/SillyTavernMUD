@@ -20,8 +20,8 @@
 - `actor-memory.md`：人物记忆证据、转场稀疏更新、质量门禁与旧档清理。
 - `knowledge-runtime.md`：Knowledge V2、可降级后端、Planner/Relational Synapse、Prompt 权威、调用预算与 Task 7 修复。
 - `spell-observation.md`：咒语观测 D20、获知边界、教学旁路与 Catalog 权威。
-- `ordinary-turn-repair.md`：首次 Performer 输出、流式预览、一次结构修复与失败恢复。
-- `item-npc-calendar-readiness.md`：Item 成熟度、NPC Identity 与 Calendar 开发准入。
+- `state-fields.md`：当前 State、消息、Prompt、Knowledge 与 UI 字段的唯一文档注册表；Low 非法输出直接失败且不 repair。
+- `item-lifecycle.md`：当前 Item V3 proposal、Reducer、physicalForm、迁移、呈现与 UI 可见性。
 - `../add-calendar-storyline-system/spec.md`：Calendar V2 四层权威，以及 V2.1 日期视图、导演边界、并发日程、自由开场、迁移与 UI。
 
 ## 持久化边界
@@ -35,33 +35,30 @@
 
 当前 State 与同次提交的消息 transaction 共同构成运行时事实事务：State 表达当前态，消息 transaction 表达已发生事件、玩家尝试和 Reducer 结算证据。`message.mes`、Scene transcript、Schema、向量结果或 JSON 检索文件都不能单独覆盖这两者。
 
-### Pending Actor Lifecycle Authority Revision
+### Actor Lifecycle Authority
 
-`../unify-actor-context-memory/` 的 2026-08-13 审计确认，当前半成品 Actor Context V1 过度收窄了人物权威：
+Actor lifecycle cutover is implemented:
 
-- Story Cast 仍读取已删除的 `source/introducedClock/relationshipTags/sharedMemories`
-- People/Appearance 仍各自读取 Actor known 标记
-- Scene Transition 仍校验 `lifeStatusPermanent/lifeStatusDetailEn`，但 V1 Runtime 不持久化
+- `ActorCoreV1.cast` uniquely owns origin and first player introduction;
+- `ActorRuntimeV1` uniquely owns the four-field life state;
+- Runtime `temporary` owns provisional lifecycle state while Identity
+  provenance stores reveal evidence;
+- Dossier remains eight business fields and LowTier remains six top-level
+  fields.
 
-待批准目标是：
-
-- `ActorCoreV1.cast` 单写来源与首次玩家认识
-- `ActorRuntimeV1` 单写完整四字段生命状态
-- Runtime `temporary` 单写临时身份；Identity provenance 保存揭晓证据引用
-- Dossier 保持 8 个业务顶层字段，LowTier 保持 6 个顶层字段
-
-批准和实现前，`state-fields.md` 中标记 **Pending lifecycle revision** 的行不得被视为已落地行为。
+Current field ownership is registered in `state-fields.md`; the historical
+implementation record remains in `../unify-actor-context-memory/`.
 
 ## 模块运行索引
 
 | 模块 | 生产入口 | 权威输入 | 权威输出 | 模型权限 | 主要测试 |
 | --- | --- | --- | --- | --- | --- |
 | 组合根 | `index.js`、`workflows/application.js` | 宿主 API、domain/runtime ports | workflow/UI 实例 | 无业务裁决权 | `hogwarts-mud-task1-baseline`、`task6-ui` |
-| Campaign / Character / Initial World | `domain/campaign.js`、`character.js`、`initial-world.js` | 用户建档选择 | 初始 `hogwartsMud` 世界状态 | 开局模型只提议 package | `hogwarts-mud.test.mjs` |
+| Campaign / Character / Initial World | `domain/campaign.js`、`character.js`、`initial-world.js` | 用户建档选择 | 初始 `hogwartsMud` 世界状态 | 开局模型只提议 package | focused `hogwarts-mud-{campaign,initial-world,opening}-*.test.mjs` owners |
 | Context / JSON | `core/context-budget.js`、`json-recovery.js` | role slot、结构化消息 | 受保护 prompt、恢复后的 JSON | 不写世界状态 | `hogwarts-mud-task2-modules` |
 | Model Adapter | `adapters/model.js` | role slot、prompt | 原始模型响应、request diagnostics | 只返回文本/JSON | `hogwarts-mud-task5-workflows` |
 | Opening | `workflows/opening.js` | 初始草稿、导演基础 | opening package、首幕消息 | 模型提议，Reducer 提交 | `hogwarts-mud-task5-workflows`、主测试 |
-| Ordinary Turn | `workflows/turn.js`、`turn-performance.js`、`domain/turn-*` | 玩家消息、当前世界 | turn transaction、消息、世界新状态 | 低档写正文和稀疏 proposal | 主测试、`task5-workflows` |
+| Ordinary Turn | `workflows/turn.js`、`turn-performance.js`、`domain/turn-*` | 玩家消息、当前世界 | turn transaction、消息、世界新状态 | 低档写正文和稀疏 proposal | focused turn validation/recovery/prompt/workflow tests |
 | Local Semantic | `adapters/local-semantic.js` | 玩家动作、英文 segments、当前状态 | adjudication、observation、perception proposal | 本地模型只提议受限 Schema | 主测试、presence contract |
 | Presence / Witness | `presence-witness-contract.js`、`domain/presence-witness-schema.js`、`transition-presence.js` | movement、actor position、scene/cohort roster、perception | active/local/witness/event knowledge | 模型不可写最终名单 | `hogwarts-mud-presence-witness`、主测试 |
 | Scene Transition / Archive | `workflows/scene-transition.js`、`domain/scene-transition.js`、`archive-projection.js` | 当前 scene、next intent、actor states | 新 scene、archive、active/local、opening message | 中/高档只提议 transition package | 主测试 |
@@ -87,7 +84,7 @@
 
 低优先级来源只能解释当前态，不能覆盖 Item `physicalForm/holder`、Actor Runtime presence/room/life、Scene destination/clock、Identity 或 spell identity。中档只读取经过 timeline/revision/clock/audience hydration 的 evidence；locked clue、private fact 除明确授权流程外不得进入。
 
-普通低档 Performer 与 repair 的 User Payload 只使用 `LowTierContextV1`：
+普通低档 Performer 的 User Payload 只使用 `LowTierContextV1`：
 
 ```text
 playerTurn
@@ -100,7 +97,7 @@ prohibitions
 
 `sceneFacts` 收拢当前 authority、Scene、Room、Material、Item 与 Calendar 事实；`actorCards` 只从 Actor Core/Runtime、Social projection 与当前呈现构造；`memoryActivations` 按 observer 密封 Schema expectation 与按需 hydrated Event。顶层严格为六字段，总量不超过 50 KiB，单 actor 不超过 4 KiB，每 actor 最多 3 个 active Schema 和 3 个 Event，全局最多 8 个 Event。具体旧事必须由 matching actor activation 中带 `sourceRefs` 的 Event 支撑。
 
-裁剪先删除 hydrated Event，再删除可重建 opportunity，不得重新注入 raw Actor Library、完整 Social Graph、完整 Identity、人物记忆正文、Knowledge Actor 聚合历史或无界 transcript。初次输出与 repair 都经同一 `projectLowTierContextV1()` 构造。
+裁剪先删除 hydrated Event，再删除可重建 opportunity，不得重新注入 raw Actor Library、完整 Social Graph、完整 Identity、人物记忆正文、Knowledge Actor 聚合历史或无界 transcript。Low 只有一次请求；非法输出直接失败，不构造 repair/retry 或模型 fallback。
 
 正常成功预算保持不变：普通回合为既有 1 次低档、0 次新增中/高档；事件边界复用既有 1 次中档；Scene Transition 保持既有中/高档核心与低档开场。Qdrant、Planner、图扩散、hydration 和 Reducer 的低/中/高档调用均为 0；可选本地 Planner 最多 1 次。diagnostics 记录 revision、subquery、实际 backend、degraded、record/source path、suppressed conflict、capsule ID 及 high/medium/low/local call count，不保存 secret 或完整私有 Prompt。
 
@@ -156,7 +153,7 @@ preview one planned schedule
 -> persist state + opening message in one guarded transaction
 ```
 
-`runTimelineMoment({ startClock, mapId, roomId })` 使用同一事务，但锁定玩家选择的合法地点并创建 `calendarEntryIds=[]` 的自由 Scene。Daily Director 可读取当天全部世界并发 schedule；Performer 与 Scene Transition 只读取当前 Scene 明确认领的 schedule 及公开剧情来源。重叠不代表玩家同时出席，也不会自动取消、改期或编造其他安排的结果。Clock settlement 只执行 schedule 的 `planned -> active` 与 `planned|active -> completed`；它不实现 storyBeat，也不写 Item、Identity、Social、Memory、score、grade 或 attendance。
+`runTimelineMoment({ startClock, mapId, roomId })` 使用同一事务，但锁定玩家选择的合法地点并创建 `calendarEntryIds=[]` 的自由 Scene。Calendar projection 保留当天全部世界并发 schedule；Performer 与 Scene Transition 只读取当前 Scene 明确认领的 schedule 及公开剧情来源。重叠不代表玩家同时出席，也不会自动取消、改期或编造其他安排的结果。Clock settlement 只执行 schedule 的 `planned -> active` 与 `planned|active -> completed`；它不实现 storyBeat，也不写 Item、Identity、Social、Memory、score、grade 或 attendance。旧 `dailyDirector` 已退役且无生产读写者。
 
 ### Calendar 导演与关系
 

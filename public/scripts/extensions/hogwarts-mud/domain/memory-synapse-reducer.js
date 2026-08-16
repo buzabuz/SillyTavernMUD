@@ -1044,6 +1044,7 @@ function createSchemaFromOperation(
             {
                 appraisals:
                     synapse.appraisals,
+                eventKnowledge,
             },
         );
     throwValidationErrors(

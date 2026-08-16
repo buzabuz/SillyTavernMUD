@@ -89,11 +89,9 @@ test('campaign presets normalize locked and open school starts', () => {
         difficulty: 'harsh',
     }), {
         presetId: 'canon_1991',
-        presetName: '与哈利同届',
         startYear: 1991,
         grade: 1,
         difficulty: 'harsh',
-        difficultyName: '严酷',
     });
 
     const open = normalizeCampaign({

@@ -66,10 +66,33 @@ test('campaign configuration becomes authoritative world and prompt state', () =
 
     assert.equal(state.campaign.grade, 5);
     assert.equal(state.phase, 'initializing');
-    assert.equal(state.chapter, '正在编排首幕');
+    assert.equal(
+        state.chapterEn,
+        'Opening World',
+    );
+    assert.equal(
+        Object.hasOwn(
+            state,
+            'chapter',
+        ),
+        false,
+    );
+    assert.equal(
+        Object.hasOwn(
+            state,
+            'location',
+        ),
+        false,
+    );
     assert.match(state.clock, /^1986/);
-    assert.match(prompt, /Starting school year: 1986/);
-    assert.match(prompt, /Difficulty: 严酷/);
+    assert.match(
+        prompt,
+        /"startYear":1986/u,
+    );
+    assert.match(
+        prompt,
+        /"difficulty":"harsh"/u,
+    );
     assert.deepEqual(createDefaultCampaign(), {
         presetId: 'canon_1991',
         startYear: 1991,
@@ -90,7 +113,17 @@ test('opening world package commits a home map, present NPCs, and dramatic confl
 
     const state = applyOpeningWorldPackage(createInitialWorldState(character, {}, campaign), opening);
     assert.equal(state.phase, 'opening_narration');
-    assert.equal(state.location, '张家厨房');
+    assert.equal(
+        state.chapterEn,
+        opening.chapterEn,
+    );
+    assert.equal(
+        Object.hasOwn(
+            state,
+            'location',
+        ),
+        false,
+    );
     assert.equal(
         state.actorLibrary.find(actor =>
             actor.id ===
@@ -141,10 +174,19 @@ test('opening world package commits a home map, present NPCs, and dramatic confl
     assert.deepEqual(state.scene.timelineEntries, [{
         clock:
             opening.clock,
-        label:
-            opening.display
-                .incitingEvent,
+        summaryEn:
+            opening.scene
+                .summaryEn,
+        sourceRef:
+            `scene:${opening.scene.id}:opening`,
     }]);
+    assert.equal(
+        Object.hasOwn(
+            state.opening.package,
+            'display',
+        ),
+        false,
+    );
     assert.deepEqual(
         state.items,
         [],
@@ -165,13 +207,13 @@ test('opening world package commits a home map, present NPCs, and dramatic confl
 test('scene destination matching resolves a player move to an existing room', () => {
     const state = createCurrentPlayingState();
     assert.deepEqual(
-        findSceneDestination('我跑到后花园去找猫头鹰。', state),
+        findSceneDestination('I run into the Back Garden to find the owl.', state),
         {
             mapId: 'zhang_home',
             roomId: 'back_garden',
-            mapName: '张家',
+            mapName: 'Zhang Home',
             mapNameEn: 'Zhang Home',
-            roomName: '后花园',
+            roomName: 'Back Garden',
             roomNameEn: 'Back Garden',
             levelId: 'ground_floor',
         },
@@ -253,12 +295,12 @@ test('movement requires an explicit marker and historical place mentions stay pu
     );
 
     const marked =
-        `${historical}\n→【后花园】`;
+        `${historical}\n→【Back Garden】`;
     assert.equal(
         parseExplicitMovementDirective(
             marked,
         ).destinationText,
-        '后花园',
+        'Back Garden',
     );
     assert.equal(
         removeExplicitMovementDirective(
@@ -293,7 +335,17 @@ test('current scene carries a valid editable default next-scene intent', () => {
     assert.equal(intent.mapId, 'zhang_home');
     assert.equal(intent.roomId, 'kitchen');
     assert.equal(intent.tier, 'medium');
-    assert.match(intent.summary, /继续推进/);
+    assert.match(
+        intent.summaryEn,
+        /Continue the unresolved public action/,
+    );
+    assert.equal(
+        Object.hasOwn(
+            intent,
+            'summary',
+        ),
+        false,
+    );
     assert.deepEqual(
         validateNextSceneIntent(intent, state),
         { valid: true, errors: [] },
@@ -370,6 +422,8 @@ test('event-boundary director refreshes intent text without changing structural 
 
 test('ordinary player movement commits a reachable room before AI performance', () => {
     const state = createCurrentPlayingState();
+    const legacyLocation =
+        state.location;
     const path = findLocalRoomPath(
         'zhang_home',
         'kitchen',
@@ -380,13 +434,16 @@ test('ordinary player movement commits a reachable room before AI performance', 
 
     const result = applyPlayerMovement(
         state,
-        '→【后花园】\n我跑到后花园去找猫头鹰。',
+        '→【Back Garden】\n我跑到后花园去找猫头鹰。',
     );
     assert.equal(result.movement.moved, true);
     assert.equal(result.movement.minutes, 1);
     assert.equal(result.state.map.currentLocalNodeId, 'back_garden');
     assert.equal(result.state.scene.roomId, 'back_garden');
-    assert.equal(result.state.location, '后花园');
+    assert.equal(
+        result.state.location,
+        legacyLocation,
+    );
     assert.equal(result.state.spatial.player.roomId, 'back_garden');
 });
 
@@ -396,7 +453,7 @@ test('guided movement commits a leader-known destination hidden from the player'
         '→【跟随麦格】\n我牵着爸爸跟着麦格走向下一个购物点，她给我们带路。';
     const destination =
         findSceneDestination(
-            '麦格带他们前往后花园。',
+            'McGonagall leads them to the Back Garden.',
             state,
         );
 
@@ -1005,8 +1062,6 @@ test('bound interior and parent map movement commits without archiving the scene
             parentRoomId:
                 'kitchen',
         },
-        name:
-            '厨房内部',
         nameEn:
             'Kitchen Interior',
         defaultLevelId:
@@ -1015,15 +1070,12 @@ test('bound interior and parent map movement commits without archiving the scene
             'kitchen_table',
         levels: [{
             id: 'inside',
-            name: '内部',
             nameEn: 'Inside',
             z: 0,
         }],
         nodes: [{
             id:
                 'kitchen_table',
-            name:
-                '厨房餐桌',
             nameEn:
                 'Kitchen Table',
             levelId:
@@ -1076,7 +1128,7 @@ test('bound interior and parent map movement commits without archiving the scene
     const exited =
         applyPlayerMovement(
             state,
-            '→【和Minerva一起去后花园】',
+            '→【Go with Minerva to Back Garden】',
         );
     assert.equal(
         exited.movement.moved,

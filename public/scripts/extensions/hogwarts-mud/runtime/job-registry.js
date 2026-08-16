@@ -14,6 +14,8 @@ export function createJobRegistry() {
         interiorMap: null,
         turnActive: false,
         sceneTransitionActive: false,
+        localizationActiveBatch:
+            null,
         translation: new Map(),
         turnSettlement: new Map(),
         socialCatchupAttempts: new Set(),

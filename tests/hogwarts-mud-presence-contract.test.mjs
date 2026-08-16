@@ -7,7 +7,7 @@ import {
     createDefaultCharacterDraft,
     createInitialWorldState,
     createStableContractId,
-    EVENT_KNOWLEDGE_CONTRACT_KEYS,
+    EVENT_KNOWLEDGE_OBSERVED_KEYS,
     getActiveInteractionActorIds,
     normalizeCohort,
     normalizeEventKnowledge,
@@ -388,7 +388,10 @@ test('witness resolution is stable, includes participants, and requires a basis 
 
 test('event knowledge receives an idempotent id and survives normalized serialization', () => {
     const source = {
+        version: 2,
+        eventKind: 'observed',
         sceneId: 'first_charms_class',
+        clock: '1991-09-02 · 11:30',
         sourceMessageIds: [191, 190, 191],
         summaryEn:
             'Tina levitated Ron instead of the feather.',
@@ -423,6 +426,7 @@ test('event knowledge receives an idempotent id and survives normalized serializ
             confidence: 0.95,
             source: 'post_turn_observer',
         },
+        knownToPlayer: true,
         source: 'post_turn_observer',
     };
     const options = {
@@ -458,7 +462,7 @@ test('event knowledge receives an idempotent id and survives normalized serializ
     assert.deepEqual(second, first);
     assert.deepEqual(
         Object.keys(first),
-        EVENT_KNOWLEDGE_CONTRACT_KEYS,
+        EVENT_KNOWLEDGE_OBSERVED_KEYS,
     );
     assert.equal(
         validateEventKnowledgeContract(

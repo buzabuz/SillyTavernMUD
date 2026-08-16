@@ -56,8 +56,8 @@ export function splitActorVisualDescription(
     if (!source) {
         return {
             physicalDescriptionEn: '',
-            outfit: '',
-            heldObject: '',
+            outfitEn: '',
+            heldObjectEn: '',
         };
     }
     const outfit =
@@ -94,14 +94,14 @@ export function splitActorVisualDescription(
         physicalDescriptionEn:
             physicalDescriptionEn ||
             source,
-        outfit:
+        outfitEn:
             String(outfit)
                 .replace(
                     /,\s*(?:holding|carrying|surrounded by)\b.*$/iu,
                     '',
                 )
                 .trim(),
-        heldObject:
+        heldObjectEn:
             String(heldObject)
                 .trim(),
     };
@@ -144,9 +144,10 @@ export function normalizeActorVisualRecord(
                 ACTOR_VISUAL_DESCRIPTION_VERSION,
         },
         presentationSeed: {
-            outfit: split.outfit,
-            heldObject:
-                split.heldObject,
+            outfitEn:
+                split.outfitEn,
+            heldObjectEn:
+                split.heldObjectEn,
         },
     };
 }
@@ -205,16 +206,16 @@ export function migrateActorPresentationState(
             const previous =
                 seeds.get(source.id) || {};
             seeds.set(source.id, {
-                outfit:
-                    previous.outfit ||
+                outfitEn:
+                    previous.outfitEn ||
                     normalized
                         .presentationSeed
-                        .outfit,
-                heldObject:
-                    previous.heldObject ||
+                        .outfitEn,
+                heldObjectEn:
+                    previous.heldObjectEn ||
                     normalized
                         .presentationSeed
-                        .heldObject,
+                        .heldObjectEn,
             });
             return normalized.record;
         });
@@ -234,7 +235,7 @@ export function migrateActorPresentationState(
         }
         const seed =
             seeds.get(actor.id);
-        if (!seed?.outfit) {
+        if (!seed?.outfitEn) {
             continue;
         }
         const previous =
@@ -245,9 +246,9 @@ export function migrateActorPresentationState(
             actor.id
         ] = {
             ...previous,
-            outfit:
-                previous.outfit ||
-                seed.outfit,
+            outfitEn:
+                previous.outfitEn ||
+                seed.outfitEn,
             updatedClock:
                 previous
                     .updatedClock ||
@@ -404,9 +405,9 @@ export function buildActorAppearanceView(
             typeof condition ===
                 'string'
                 ? condition
-                : condition.value ||
+                : condition.valueEn ||
                     condition
-                        .resultText)
+                        .resultTextEn)
         .filter(Boolean);
     const wornItems =
         normalizedPresentation
@@ -417,8 +418,7 @@ export function buildActorAppearanceView(
                         itemId,
                     );
                 return item
-                    ? item.label ||
-                        item.labelEn
+                    ? item.labelEn
                     : '';
             })
             .filter(Boolean);
@@ -435,7 +435,6 @@ export function buildActorAppearanceView(
                         hand:
                             'unspecified',
                         item:
-                            item.label ||
                             item.labelEn,
                         itemId,
                     }
@@ -474,13 +473,13 @@ export function buildActorAppearanceView(
     if (
         !heldItems.length &&
         !hasFormalHeldReferences &&
-        presentation.heldObject
+        presentation.heldObjectEn
     ) {
         heldItems.push({
             hand: 'unspecified',
             item:
                 presentation
-                    .heldObject,
+                    .heldObjectEn,
         });
     }
     return {
@@ -497,12 +496,12 @@ export function buildActorAppearanceView(
         presentation: {
             outfit:
                 normalizedPresentation
-                    .outfit ||
+                    .outfitEn ||
                 '',
             accessories,
             wornItems,
             hair:
-                presentation.hair ||
+                presentation.hairEn ||
                 '',
             visibleConditions,
             heldItems,

@@ -228,6 +228,49 @@ function createWorldState() {
             }),
         memorySynapse:
             normalizeMemorySynapse(),
+        eventKnowledge: [{
+            version: 2,
+            eventKind: 'reported',
+            eventId:
+                'reported_ivy_self',
+            sceneId: 'charms_class',
+            clock: CURRENT_CLOCK,
+            report: {
+                speakerId: IVY_ID,
+                recipientIds: [
+                    'player',
+                    IVY_ID,
+                ],
+            },
+        }, {
+            version: 2,
+            eventKind: 'reported',
+            eventId:
+                'reported_draco_hidden',
+            sceneId: 'charms_class',
+            clock: CURRENT_CLOCK,
+            report: {
+                speakerId: DRACO_ID,
+                recipientIds: [
+                    DRACO_ID,
+                ],
+            },
+        }, {
+            version: 2,
+            eventKind: 'reported',
+            eventId:
+                'reported_ivy_future',
+            sceneId: 'charms_class',
+            clock:
+                '1992-09-02 · 12:00',
+            report: {
+                speakerId: IVY_ID,
+                recipientIds: [
+                    'player',
+                    IVY_ID,
+                ],
+            },
+        }],
         actorPresentations: {},
         items: [],
         storyArcs: [],
@@ -252,14 +295,9 @@ function createWorldState() {
                         'lineage.status',
                     value: 'pure_blood',
                     sourceKind: 'self',
-                    speakerId: IVY_ID,
-                    sourceMessageIds: [7],
-                    witnessedBy: [
-                        'player',
-                        IVY_ID,
-                    ],
-                    clock:
-                        CURRENT_CLOCK,
+                    reportedEventId:
+                        'reported_ivy_self',
+                    authoritySourceRef: '',
                 }, {
                     id:
                         'draco_hidden_lineage',
@@ -268,13 +306,9 @@ function createWorldState() {
                         'lineage.status',
                     value: 'muggle_born',
                     sourceKind: 'other',
-                    speakerId: DRACO_ID,
-                    sourceMessageIds: [8],
-                    witnessedBy: [
-                        DRACO_ID,
-                    ],
-                    clock:
-                        CURRENT_CLOCK,
+                    reportedEventId:
+                        'reported_draco_hidden',
+                    authoritySourceRef: '',
                 }, {
                     id:
                         'ivy_future_claim',
@@ -284,14 +318,9 @@ function createWorldState() {
                     value:
                         'future-claim',
                     sourceKind: 'self',
-                    speakerId: IVY_ID,
-                    sourceMessageIds: [9],
-                    witnessedBy: [
-                        'player',
-                        IVY_ID,
-                    ],
-                    clock:
-                        '1992-09-02 · 12:00',
+                    reportedEventId:
+                        'reported_ivy_future',
+                    authoritySourceRef: '',
                 }],
                 personReferences: [{
                     id:
@@ -311,14 +340,9 @@ function createWorldState() {
                     targetRefId:
                         'ivy_brother_ref',
                     sourceKind: 'self',
-                    speakerId: IVY_ID,
-                    sourceMessageIds: [7],
-                    witnessedBy: [
-                        'player',
-                        IVY_ID,
-                    ],
-                    clock:
-                        CURRENT_CLOCK,
+                    reportedEventId:
+                        'reported_ivy_self',
+                    authoritySourceRef: '',
                 }],
             }),
     };
@@ -492,14 +516,14 @@ function createTierProjectionState() {
     state.stateRevision = 17;
     state.actorLibrary[0]
         .privateFacts = {
-        ...state.actorLibrary[0]
-            .privateFacts,
-        secretEn:
+            ...state.actorLibrary[0]
+                .privateFacts,
+            secretEn:
             'MEDIUM_ACTOR_SECRET',
-        knowledgeEn: [
-            'MEDIUM_PRIVATE_GOAL',
-        ],
-    };
+            knowledgeEn: [
+                'MEDIUM_PRIVATE_GOAL',
+            ],
+        };
     state.actors[0]
         .privateGoalEn =
         'MEDIUM_RUNTIME_PRIVATE_GOAL';
@@ -773,19 +797,10 @@ test('[defect-probing] ordinary-turn prompt uses ActorCore English authority wit
     );
 });
 
-test('[defect-probing] Daily and Pacing Director prompts never serialize raw runtime Identity', () => {
+test('[defect-probing] Pacing Director never serializes raw runtime Identity', () => {
     const state = createWorldState();
     const directors =
         createDirectorHarness(state);
-    const dailyPayload =
-        JSON.parse(
-            directors
-                .createDailyDirectorPrompt(
-                    state,
-                    [],
-                    createContextPlan(),
-                )[1].content,
-        );
     const pacingPayload =
         JSON.parse(
             directors
@@ -799,69 +814,11 @@ test('[defect-probing] Daily and Pacing Director prompts never serialize raw run
                 )[1].content,
         );
 
-    assert.equal(
-        Object.hasOwn(
-            dailyPayload
-                .presentActors[0],
-            'identity',
+    assert.doesNotMatch(
+        JSON.stringify(
+            pacingPayload,
         ),
-        false,
-    );
-    assert.equal(
-        dailyPayload.actorLibrary[0]
-            .identityProjection
-            .authority.body.eyeColor,
-        'unknown',
-    );
-    assert.equal(
-        Object.hasOwn(
-            pacingPayload
-                .presentActors[0],
-            'identity',
-        ),
-        false,
-    );
-    assert.equal(
-        pacingPayload
-            .knownAbsentActors[0]
-            .identityProjection
-            .authority,
-        null,
-    );
-});
-
-test('[defect-probing] Daily production prompt excludes private goals, secrets, locked clues, and hidden arcs', () => {
-    const state =
-        createTierProjectionState();
-    const payload =
-        JSON.parse(
-            createDirectorHarness(
-                state,
-            )
-                .createDailyDirectorPrompt(
-                    state,
-                    [],
-                    createContextPlan(),
-                )[1].content,
-        );
-
-    assertMediumPromptIsProjected(
-        'Daily',
-        payload,
-        [
-            'MEDIUM_PRIVATE_GOAL',
-            'MEDIUM_ACTOR_SECRET',
-            'MEDIUM_RUNTIME_PRIVATE_GOAL',
-            'MEDIUM_RUNTIME_SECRET',
-            'MEDIUM_HIDDEN_STORY_ARC',
-            'MEDIUM_LOCKED_CLUE',
-        ],
-    );
-    assert.deepEqual(
-        payload.discoveredClues
-            .map(clue =>
-                clue.id),
-        ['public_clue'],
+        /violet-after-1992|future-claim|authority-only|A private secret/u,
     );
 });
 
@@ -894,12 +851,6 @@ test('[defect-probing] Pacing production prompt excludes private goals, secrets,
             'MEDIUM_HIDDEN_STORY_ARC',
             'MEDIUM_LOCKED_CLUE',
         ],
-    );
-    assert.deepEqual(
-        payload.discoveredClues
-            .map(clue =>
-                clue.id),
-        ['public_clue'],
     );
 });
 
@@ -1097,145 +1048,7 @@ test('[defect-probing] Calendar, Moment, Memory, and Transition production promp
     );
 });
 
-test('dedicated high Transition keeps authorized private facts, locked knowledge, and hidden arcs', () => {
-    const state =
-        createTierProjectionState();
-    const payload =
-        JSON.parse(
-            createTierProjectionTransitionWorkflow(
-                state,
-            )
-                .createSceneTransitionPrompt(
-                    state,
-                    'high',
-                    '',
-                    null,
-                    {
-                        changed: false,
-                    },
-                    [{
-                        recordId:
-                            'locked_high_record',
-                        nodeType: 'clue',
-                        text:
-                            'HIGH_LOCKED_KNOWLEDGE',
-                        visibility: {
-                            scope:
-                                'locked',
-                            actorIds: [],
-                        },
-                    }],
-                    createContextPlan(),
-                )[1].content,
-        );
-
-    assert.equal(
-        payload.actorLibrary[0]
-            .privateFacts
-            .secretEn,
-        'MEDIUM_ACTOR_SECRET',
-    );
-    assert.deepEqual(
-        payload.actorLibrary[0]
-            .privateFacts
-            .knowledgeEn,
-        ['MEDIUM_PRIVATE_GOAL'],
-    );
-    assert.equal(
-        payload.hiddenStoryArcs[0]
-            .hiddenFactEn,
-        'MEDIUM_HIDDEN_STORY_ARC',
-    );
-    assert.match(
-        payload
-            .historicalKnowledgeEvidence,
-        /HIGH_LOCKED_KNOWLEDGE/u,
-    );
-});
-
-test('[defect-probing] Scene Transition uses filtered Identity and keeps activity outside it', () => {
-    const state = createWorldState();
-    const directors =
-        createDirectorHarness(state);
-    const workflow =
-        createSceneTransitionWorkflow({
-            CANON_CAST_IDENTITY_CONTRACT:
-                '',
-            CANON_WIT_TONE_CONTRACT: '',
-            NPC_IDENTITY_PROMPT_BOUNDARY,
-            buildActorContinuityCapsules:
-                () => [],
-            buildBehavioralEnvironment:
-                () => ({}),
-            buildMapAuthorityContext:
-                () => ({}),
-            buildSceneCastRotationPolicy:
-                () => ({}),
-            createContextBudgetPlan:
-                createContextPlan,
-            formatRetrievedKnowledge:
-                () => '',
-            getContext: () => ({
-                chat: [],
-            }),
-            projectActorLibraryForContext:
-                directors
-                    .projectActorLibraryForContext,
-            projectNpcRuntimeActorsForPrompt,
-            synchronizeHeldItemLocations:
-                items => items,
-        });
-    const prompt =
-        workflow.createSceneTransitionPrompt(
-            state,
-            'medium',
-            '',
-            null,
-            {
-                changed: false,
-            },
-            [],
-            createContextPlan(),
-        );
-    const systemPrompt =
-        prompt[0].content;
-    const payload =
-        JSON.parse(
-            prompt[1].content,
-        );
-
-    assert.equal(
-        Object.hasOwn(
-            payload.currentActors[0],
-            'identity',
-        ),
-        false,
-    );
-    assert.equal(
-        payload.actorLibrary[0]
-            .identityProjection
-            .authority.body.eyeColor,
-        'unknown',
-    );
-    assert.equal(
-        payload.currentActors[0]
-            .currentActivityEn,
-        'Holding her wand ready.',
-    );
-    assert.doesNotMatch(
-        JSON.stringify(
-            payload.actorLibrary[0]
-                .identityProjection,
-        ),
-        /Holding her wand ready|Win the lesson|anxious/u,
-    );
-    assert.match(
-        systemPrompt,
-        /person reference resolution/iu,
-    );
-});
-
-test('Social Director keeps attributed statements as the only identity claim proposal channel', () => {
+test('Social Director binds structured identity claims to reported Events', () => {
     const state = createWorldState();
     const workflow =
         createSocialMemoryWorkflow({
@@ -1279,11 +1092,11 @@ test('Social Director keeps attributed statements as the only identity claim pro
 
     assert.match(
         prompt[0].content,
-        /statements are evidence-grounded claim proposals/iu,
+        /Identity and relationship claims are structured records that cite localReportId/iu,
     );
     assert.match(
         prompt[0].content,
-        /never write authority Identity, person reference resolution, or a formal family edge/iu,
+        /Never write authority Identity, resolve a person reference, or create a formal family edge/iu,
     );
     assert.equal(
         Object.hasOwn(
@@ -1292,6 +1105,6 @@ test('Social Director keeps attributed statements as the only identity claim pro
                 .value.properties,
             'identityClaims',
         ),
-        false,
+        true,
     );
 });

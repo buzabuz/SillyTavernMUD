@@ -5,7 +5,6 @@ import {
 } from '../spell-catalog.js';
 
 import {
-    countTextWords,
     FIRST_IMPRESSION_MAX_WORDS,
     IMPRESSION_MAX_WORDS,
     isValidFirstImpression,
@@ -241,7 +240,9 @@ export function validateScenePerformance(
     segments.forEach(segment => {
         const text =
             String(
-                segment.textEn || '',
+                segment.textEn ||
+                segment.rawText ||
+                '',
             ).trim();
         const placeholderOnly =
             /^(?:[.\u2026…\-_*~\s]+|tbd|todo|placeholder|same as above)$/iu
@@ -260,7 +261,14 @@ export function validateScenePerformance(
     });
     const narrationConsistency =
         validateNarrationConsistency(
-            segments,
+            segments.filter(
+                segment =>
+                    String(
+                        segment
+                            ?.textEn ||
+                        '',
+                    ).trim(),
+            ),
             worldState,
             {
                 actors:
@@ -696,8 +704,26 @@ export function validateTurnTransaction(
         if (!['narration', 'dialogue'].includes(segment.type)) {
             errors.push('叙事分段类型只能是 narration 或 dialogue。');
         }
-        if (!String(segment.textEn || '').trim()) {
+        const text =
+            String(
+                segment.textEn ||
+                segment.rawText ||
+                '',
+            ).trim();
+        if (!text) {
             errors.push('叙事分段不能为空。');
+        }
+        if (
+            segment.rawText &&
+            (
+                segment.authority !==
+                    'model_output_evidence' ||
+                !segment.language
+            )
+        ) {
+            errors.push(
+                'rawText 分段缺少语言证据标记。',
+            );
         }
         if (segment.type === 'dialogue' && !actorIds.has(segment.actorId)) {
             errors.push(`对白引用了不存在的角色 ${segment.actorId || '?'}。`);
@@ -705,7 +731,14 @@ export function validateTurnTransaction(
     });
     const narrationConsistency =
         validateNarrationConsistency(
-            segments,
+            segments.filter(
+                segment =>
+                    String(
+                        segment
+                            ?.textEn ||
+                        '',
+                    ).trim(),
+            ),
             worldState,
             {
                 actors:

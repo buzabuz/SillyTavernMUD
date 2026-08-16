@@ -209,7 +209,7 @@ test('Item V2 normalization separates owner, holder and legacy custody while pre
     const presentation =
         normalizeCurrentPresentation(
             {
-                outfit:
+                outfitEn:
                     'Standard school robes.',
                 wornItemIds: [
                     'borrowed_wand',
@@ -218,7 +218,7 @@ test('Item V2 normalization separates owner, holder and legacy custody while pre
                 heldItemIds: [
                     'missing_item',
                 ],
-                hair: 'ponytail',
+                hairEn: 'ponytail',
                 visibleConditions: [
                     'ink-stained',
                 ],
@@ -241,7 +241,7 @@ test('Item V2 normalization separates owner, holder and legacy custody while pre
         [],
     );
     assert.equal(
-        presentation.hair,
+        presentation.hairEn,
         'ponytail',
     );
     assert.deepEqual(
@@ -1404,12 +1404,8 @@ test('a completed loan promotes an ordinary quill to a player-confirmed candidat
                 type: 'tool',
                 labelEn:
                     'Harry\'s Spare Brass Quill',
-                labelZh:
-                    '哈利的备用黄铜羽毛笔',
                 appearanceEn:
                     'A spare writing quill with a brass nib.',
-                appearanceZh:
-                    '一支带黄铜笔尖的备用羽毛笔。',
                 ownerId:
                     'canon_harry_james_potter',
                 holderId: 'player',
@@ -1923,7 +1919,7 @@ test('[defect-probing] scene item states exclude nonphysical items and preserve 
         itemStates[1],
         {
             id: 'broken_quill',
-            version: 3,
+            version: 4,
             type: 'tool',
             custody: 'carried',
             ownerId: 'player',
@@ -2021,12 +2017,8 @@ test('[defect-probing] observer rejects an unrelated ordinary acquisition that r
                     type: 'document',
                     labelEn:
                         'Harry Potter Autograph',
-                    labelZh:
-                        '哈利·波特的签名',
                     appearanceEn:
                         'A signed parchment.',
-                    appearanceZh:
-                        '一张签名羊皮纸。',
                     ownerId: 'player',
                     holderId: 'player',
                     transferMode:
@@ -2050,11 +2042,8 @@ test('[defect-probing] observer rejects an unrelated ordinary acquisition that r
                         'acquire',
                     type: 'consumable',
                     labelEn: 'Toast',
-                    labelZh: '烤面包',
                     appearanceEn:
                         'An ordinary breakfast item.',
-                    appearanceZh:
-                        '普通早餐。',
                     ownerId: 'player',
                     holderId: 'player',
                     transferMode:
@@ -2117,7 +2106,7 @@ test('appearance resolves visible formal IDs before legacy fallback', () => {
         view.presentation
             .wornItems,
         [
-            '粉色丝带',
+            'Pink Ribbon',
         ],
     );
     assert.deepEqual(
@@ -2126,7 +2115,7 @@ test('appearance resolves visible formal IDs before legacy fallback', () => {
         [
             {
                 hand: 'unspecified',
-                item: '粉色丝带',
+                item: 'Pink Ribbon',
                 itemId:
                     'pink_ribbon',
             },

@@ -588,13 +588,18 @@ function applyCharmsMigration(
         });
     const event =
         normalizeEventKnowledge({
-            version: 1,
+            version: 2,
+            eventKind:
+                'observed',
             eventId,
             sceneId:
                 CHARMS_SCENE_ID,
+            clock:
+                state.clock,
             sourceMessageIds,
             summaryEn:
                 'Tina cast Wingardium Leviosa at Ron, levitating him in front of the whole Charms class.',
+            activationSchemaIds: [],
             participantActorIds: [
                 'canon_ronald_bilius_weasley',
             ],
@@ -606,6 +611,7 @@ function applyCharmsMigration(
             ],
             witnessBasis,
             perception,
+            knownToPlayer: true,
             source: 'migration',
         }, {
             actors,

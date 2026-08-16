@@ -106,12 +106,12 @@ function projectMandatorySceneState(
                             effect.operation,
                         actorId:
                             effect.actorId,
-                        objectText:
-                            effect.objectText,
-                        targetText:
-                            effect.targetText,
-                        resultText:
-                            effect.resultText,
+                        objectTextEn:
+                            effect.objectTextEn,
+                        targetTextEn:
+                            effect.targetTextEn,
+                        resultTextEn:
+                            effect.resultTextEn,
                         persistence:
                             effect.persistence,
                         committedClock:

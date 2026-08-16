@@ -18,43 +18,109 @@ import {
     listMapsByMountHierarchy,
 } from '../domain/interior-mount.js';
 import {
+    createLocalMapField,
+    createLocalMapLevelField,
+    createLocalMapRoomField,
+} from '../domain/map-localization.js';
+import {
+    getStaticLocaleText,
+    normalizeDisplayLocale,
+} from '../domain/localized-view-model.js';
+import {
+    getActorDisplayName,
+} from '../domain/actor-display-name.js';
+import {
+    getSceneTimelineDisplaySummary,
+} from '../domain/scene-timeline-display.js';
+import {
     calculateCalendarDayGrid,
     calculateCalendarWeekGrid,
 } from './calendar-day-grid.js';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
-const WEEKDAYS = Object.freeze(['一', '二', '三', '四', '五', '六', '日']);
-const STATUS_LABELS = Object.freeze({
-    planned: '计划中',
-    active: '进行中',
-    completed: '已完成时间段',
-    cancelled: '已取消',
-});
-const SCHEDULE_KIND_LABELS = Object.freeze({
-    routine: '日常',
-    class: '课程',
-    story: '剧情',
-    social: '社交',
-    personal: '个人',
-});
-const STORYLINE_STATUS_LABELS = Object.freeze({
-    planned: '规划中',
-    active: '推进中',
-    resolved: '已收束',
-    cancelled: '已取消',
-});
-const BEAT_STATUS_LABELS = Object.freeze({
-    planned: '待排演',
-    active: '进行中',
-    realized: '已实现',
-    deferred: '已顺延',
-    cancelled: '已取消',
-});
-const TIER_LABELS = Object.freeze({
-    high: '高级规划',
-    medium: '中级规划',
-});
+const WEEKDAY_KEYS =
+    Object.freeze([
+        'mon',
+        'tue',
+        'wed',
+        'thu',
+        'fri',
+        'sat',
+        'sun',
+    ]);
+
+function staticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+) {
+    return getStaticLocaleText(
+        staticKey,
+        normalizeDisplayLocale(
+            displayLocale,
+        ),
+    ) ||
+        sourceTextEn;
+}
+
+function formatStaticText(
+    displayLocale,
+    staticKey,
+    sourceTextEn,
+    values = {},
+) {
+    return Object.entries(
+        values,
+    ).reduce(
+        (
+            text,
+            [
+                key,
+                value,
+            ],
+        ) =>
+            text.replaceAll(
+                `{${key}}`,
+                String(value),
+            ),
+        staticText(
+            displayLocale,
+            staticKey,
+            sourceTextEn,
+        ),
+    );
+}
+
+function weekdayText(
+    displayLocale,
+    index,
+) {
+    const key =
+        WEEKDAY_KEYS[
+            index
+        ] ||
+        WEEKDAY_KEYS[0];
+    return staticText(
+        displayLocale,
+        `ui.calendar.weekday.${key}`,
+        key.charAt(0)
+            .toUpperCase() +
+            key.slice(1),
+    );
+}
+
+function keyedLabel(
+    displayLocale,
+    group,
+    value,
+) {
+    return staticText(
+        displayLocale,
+        `ui.calendar.${group}.${value}`,
+        value,
+    );
+}
 
 function asArray(value) {
     return Array.isArray(value) ? value : [];
@@ -64,6 +130,26 @@ function firstText(...values) {
     return values
         .map(value => String(value || '').normalize('NFKC').trim())
         .find(Boolean) || '';
+}
+
+function localizedText(
+    getLocalizedField,
+    recordKind,
+    recordId,
+    fieldPath,
+    sourceTextEn,
+) {
+    const source =
+        firstText(
+            sourceTextEn,
+        );
+    return getLocalizedField({
+        recordKind,
+        recordId:
+            String(recordId || ''),
+        fieldPath,
+        sourceTextEn: source,
+    })?.text || source;
 }
 
 export function calendarDateFromClock(clock) {
@@ -113,31 +199,98 @@ function weekdayIndex(date) {
     return value ? (value.getUTCDay() + 6) % 7 : 0;
 }
 
-function fullDateLabel(date) {
+function fullDateLabel(
+    date,
+    displayLocale,
+) {
     const value = parseDate(date);
     if (!value) return date;
-    return `${value.getUTCFullYear()} 年 ${value.getUTCMonth() + 1} 月 ${value.getUTCDate()} 日 · 周${WEEKDAYS[weekdayIndex(date)]}`;
+    return formatStaticText(
+        displayLocale,
+        'ui.calendar.date.full',
+        '{year}-{month}-{day} · {weekday}',
+        {
+            year:
+                value.getUTCFullYear(),
+            month:
+                value.getUTCMonth() + 1,
+            day:
+                value.getUTCDate(),
+            weekday:
+                weekdayText(
+                    displayLocale,
+                    weekdayIndex(date),
+                ),
+        },
+    );
 }
 
-function fullMonthLabel(date) {
+function fullMonthLabel(
+    date,
+    displayLocale,
+) {
     const value = parseDate(date);
     if (!value) return date;
-    return `${value.getUTCFullYear()} 年 ${value.getUTCMonth() + 1} 月`;
+    return formatStaticText(
+        displayLocale,
+        'ui.calendar.date.month',
+        '{year}-{month}',
+        {
+            year:
+                value.getUTCFullYear(),
+            month:
+                value.getUTCMonth() + 1,
+        },
+    );
 }
 
-function timeLabel(clock) {
+function timeLabel(
+    clock,
+    displayLocale,
+) {
     const value = String(clock || '');
     return value.includes(' · ')
         ? value.split(' · ').at(-1)
-        : value || '时间未知';
+        : value ||
+            staticText(
+                displayLocale,
+                'ui.calendar.time.unknown',
+                'Time unknown',
+            );
 }
 
-function intervalLabel(startClock, endClock) {
-    if (!startClock && !endClock) return '时间未知';
-    return `${startClock || '未知'} → ${endClock || '未知'}`;
+function intervalLabel(
+    startClock,
+    endClock,
+    displayLocale,
+) {
+    if (!startClock && !endClock) {
+        return staticText(
+            displayLocale,
+            'ui.calendar.time.unknown',
+            'Time unknown',
+        );
+    }
+    const unknown =
+        staticText(
+            displayLocale,
+            'ui.calendar.unknown',
+            'Unknown',
+        );
+    return `${
+        startClock ||
+        unknown
+    } → ${
+        endClock ||
+        unknown
+    }`;
 }
 
-function durationLabel(startClock, endClock) {
+function durationLabel(
+    startClock,
+    endClock,
+    displayLocale,
+) {
     const start = worldClockToEpochMinutes(startClock);
     const end = worldClockToEpochMinutes(endClock);
     if (
@@ -145,15 +298,44 @@ function durationLabel(startClock, endClock) {
         !Number.isFinite(end) ||
         end < start
     ) {
-        return '时长未知';
+        return staticText(
+            displayLocale,
+            'ui.calendar.duration.unknown',
+            'Duration unknown',
+        );
     }
     const minutes = end - start;
-    if (minutes < 60) return `${minutes} 分钟`;
+    if (minutes < 60) {
+        return formatStaticText(
+            displayLocale,
+            'ui.calendar.duration.minutes',
+            '{minutes} min',
+            {
+                minutes,
+            },
+        );
+    }
     const hours = Math.floor(minutes / 60);
     const remainder = minutes % 60;
     return remainder
-        ? `${hours} 小时 ${remainder} 分钟`
-        : `${hours} 小时`;
+        ? formatStaticText(
+            displayLocale,
+            'ui.calendar.duration.hours_minutes',
+            '{hours} hr {minutes} min',
+            {
+                hours,
+                minutes:
+                    remainder,
+            },
+        )
+        : formatStaticText(
+            displayLocale,
+            'ui.calendar.duration.hours',
+            '{hours} hr',
+            {
+                hours,
+            },
+        );
 }
 
 function actorDirectory(worldState) {
@@ -173,54 +355,115 @@ function actorDirectory(worldState) {
     return directory;
 }
 
-function participantViews(worldState, participantIds) {
+function participantViews(
+    worldState,
+    participantIds,
+    getLocalizedField,
+    displayLocale,
+) {
     const directory = actorDirectory(worldState);
-    return asArray(participantIds).map(id => ({
-        id,
-        name: firstText(
-            directory.get(id)?.name,
-            directory.get(id)?.nameEn,
+    return asArray(participantIds).map(id => {
+        const nameEn =
+            firstText(
+                directory
+                    .get(id)
+                    ?.nameEn,
+                id,
+            );
+        return {
             id,
-        ),
-    }));
+            nameEn,
+            name:
+                getActorDisplayName({
+                    actorId: id,
+                    nameEn,
+                    displayLocale,
+                    getLocalizedField,
+                }),
+        };
+    });
 }
 
-function readOnlyReason(worldState, entry) {
+function readOnlyReason(
+    worldState,
+    entry,
+    displayLocale,
+) {
     if (entry.status === 'completed') {
-        return '安排时间已经发生；完成状态不代表叙事结果。';
+        return staticText(
+            displayLocale,
+            'ui.calendar.readonly.completed',
+            'The scheduled time has passed. Completion does not imply a narrative outcome.',
+        );
     }
     if (entry.status === 'cancelled') {
-        return '该安排已经取消，只能阅读。';
+        return staticText(
+            displayLocale,
+            'ui.calendar.readonly.cancelled',
+            'This schedule was cancelled and is read-only.',
+        );
     }
     if (entry.status === 'active') {
-        return '该安排已经开始，只能阅读当前记录。';
+        return staticText(
+            displayLocale,
+            'ui.calendar.readonly.active',
+            'This schedule has started. Only the current record is readable.',
+        );
     }
     const current = worldClockToEpochMinutes(worldState?.clock);
     const start = worldClockToEpochMinutes(entry.startClock);
     const end = worldClockToEpochMinutes(entry.endClock);
     if (Number.isFinite(end) && Number.isFinite(current) && end < current) {
-        return '该安排的时间已经过去，只能阅读。';
+        return staticText(
+            displayLocale,
+            'ui.calendar.readonly.ended',
+            'This scheduled time has passed and is read-only.',
+        );
     }
     if (Number.isFinite(start) && Number.isFinite(current) && start < current) {
-        return '该安排的开始时间已经过去，不能重新进入。';
+        return staticText(
+            displayLocale,
+            'ui.calendar.readonly.started',
+            'This schedule has already started and cannot be entered again.',
+        );
     }
     try {
         getCalendarMomentContext(worldState, entry.id);
         return '';
     } catch {
-        return '安排引用已失效，当前只能阅读。';
+        return staticText(
+            displayLocale,
+            'ui.calendar.readonly.invalid_reference',
+            'The schedule reference is invalid and is currently read-only.',
+        );
     }
 }
 
-function roomLabel(getRoomName, worldState, mapId, roomId) {
+function roomLabel(
+    getRoomName,
+    worldState,
+    mapId,
+    roomId,
+    displayLocale,
+) {
     try {
         return getRoomName(worldState, mapId, roomId);
     } catch {
-        return roomId || '位置未知';
+        return roomId ||
+            staticText(
+                displayLocale,
+                'map.location.unknown',
+                'Unknown location',
+            );
     }
 }
 
-function createStorySourceView(worldState, entry) {
+function createStorySourceView(
+    worldState,
+    entry,
+    getLocalizedField,
+    displayLocale,
+) {
     if (!entry.sourceBeatId) return null;
     const beat = asArray(worldState?.calendar?.storyBeats)
         .find(candidate => candidate.id === entry.sourceBeatId);
@@ -233,51 +476,145 @@ function createStorySourceView(worldState, entry) {
     );
     return {
         storylineId: storyline.id,
-        storylineTitle: firstText(
-            storyline.title,
-            storyline.titleEn,
-            storyline.id,
-        ),
+        storylineTitle:
+            localizedText(
+                getLocalizedField,
+                'calendar_storyline',
+                storyline.id,
+                'titleEn',
+                firstText(
+                    storyline.titleEn,
+                    storyline.id,
+                ),
+            ),
         beatId: beat.id,
-        beatTitle: firstText(beat.title, beat.titleEn, beat.id),
+        beatTitle:
+            localizedText(
+                getLocalizedField,
+                'calendar_story_beat',
+                beat.id,
+                'titleEn',
+                firstText(
+                    beat.titleEn,
+                    beat.id,
+                ),
+            ),
         termKey: beat.termKey,
         beatSlot: entry.beatSlot,
         sceneProgress,
         sceneTarget: beat.sceneTarget,
-        progressLabel: `${sceneProgress} / ${beat.sceneTarget} 场景`,
+        progressLabel:
+            formatStaticText(
+                displayLocale,
+                'ui.calendar.scene_progress',
+                '{current} / {target} Scenes',
+                {
+                    current:
+                        sceneProgress,
+                    target:
+                        beat
+                            .sceneTarget,
+                },
+            ),
     };
 }
 
-function createEntryView(worldState, entry, getRoomName) {
-    const reason = readOnlyReason(worldState, entry);
+function createEntryView(
+    worldState,
+    entry,
+    getRoomName,
+    getLocalizedField,
+    displayLocale,
+) {
+    const reason =
+        readOnlyReason(
+            worldState,
+            entry,
+            displayLocale,
+        );
     return {
         id: entry.id,
         kind: 'calendar_entry',
-        title: firstText(entry.title, entry.titleEn, entry.id),
+        title: localizedText(
+            getLocalizedField,
+            'calendar_entry',
+            entry.id,
+            'titleEn',
+            entry.titleEn ||
+                entry.id,
+        ),
         titleEn: firstText(entry.titleEn),
-        summary: firstText(entry.summary, entry.summaryEn),
+        summary: localizedText(
+            getLocalizedField,
+            'calendar_entry',
+            entry.id,
+            'summaryEn',
+            entry.summaryEn,
+        ),
         summaryEn: firstText(entry.summaryEn),
         startClock: entry.startClock,
         endClock: entry.endClock,
-        timeLabel: timeLabel(entry.startClock),
-        endTimeLabel: timeLabel(entry.endClock),
-        intervalLabel: intervalLabel(entry.startClock, entry.endClock),
-        durationLabel: durationLabel(entry.startClock, entry.endClock),
+        timeLabel:
+            timeLabel(
+                entry.startClock,
+                displayLocale,
+            ),
+        endTimeLabel:
+            timeLabel(
+                entry.endClock,
+                displayLocale,
+            ),
+        intervalLabel:
+            intervalLabel(
+                entry.startClock,
+                entry.endClock,
+                displayLocale,
+            ),
+        durationLabel:
+            durationLabel(
+                entry.startClock,
+                entry.endClock,
+                displayLocale,
+            ),
         status: entry.status,
-        statusLabel: STATUS_LABELS[entry.status] || entry.status,
+        statusLabel:
+            keyedLabel(
+                displayLocale,
+                'status.schedule',
+                entry.status,
+            ),
         statusTone: entry.status,
         entryType: entry.entryType,
-        entryTypeLabel: '日程',
+        entryTypeLabel:
+            staticText(
+                displayLocale,
+                'ui.calendar.entry_type.schedule',
+                'Schedule',
+            ),
         scheduleKind: entry.scheduleKind,
         scheduleKindLabel:
-            SCHEDULE_KIND_LABELS[entry.scheduleKind] ||
-            entry.scheduleKind,
+            keyedLabel(
+                displayLocale,
+                'kind',
+                entry
+                    .scheduleKind,
+            ),
         planningTier: entry.planningTier,
         planningTierLabel:
-            TIER_LABELS[entry.planningTier] || entry.planningTier,
+            keyedLabel(
+                displayLocale,
+                'tier',
+                entry
+                    .planningTier,
+            ),
         parentId: entry.parentId,
         tags: [...entry.tags],
-        participants: participantViews(worldState, entry.participantIds),
+        participants: participantViews(
+            worldState,
+            entry.participantIds,
+            getLocalizedField,
+            displayLocale,
+        ),
         mapId: entry.mapId,
         roomId: entry.roomId,
         location: roomLabel(
@@ -285,32 +622,66 @@ function createEntryView(worldState, entry, getRoomName) {
             worldState,
             entry.mapId,
             entry.roomId,
+            displayLocale,
         ),
         createdClock: entry.createdClock,
         updatedClock: entry.updatedClock,
-        source: createStorySourceView(worldState, entry),
+        source:
+            createStorySourceView(
+                worldState,
+                entry,
+                getLocalizedField,
+                displayLocale,
+            ),
         readOnly: Boolean(reason),
         readOnlyReason: reason,
         canEnter: !reason,
     };
 }
 
-function createSceneView(worldState, scene, getRoomName) {
+function createSceneView(
+    worldState,
+    scene,
+    getRoomName,
+    getLocalizedField,
+    displayLocale,
+) {
     const record = readSceneArchiveRecord(worldState, scene.id);
     const linkedEntries = asArray(scene.calendarEntryIds)
         .map(id => worldState?.calendar?.entries?.find(entry => entry.id === id))
         .filter(Boolean)
-        .map(entry => createEntryView(worldState, entry, getRoomName));
+        .map(entry =>
+            createEntryView(
+                worldState,
+                entry,
+                getRoomName,
+                getLocalizedField,
+                displayLocale,
+            ));
     const timelineEntries = asArray(record?.timelineEntries)
-        .map(entry => {
+        .map((entry, index) => {
             const clock = firstText(entry?.clock);
-            const label = firstText(entry?.label, entry?.labelEn);
+            const summaryEn =
+                getSceneTimelineDisplaySummary(
+                    entry?.summaryEn,
+                );
             return {
                 clock,
-                label,
+                summaryEn,
+                label:
+                    localizedText(
+                        getLocalizedField,
+                        'scene_timeline',
+                        `${scene.id}:${index}`,
+                        'summaryEn',
+                        summaryEn,
+                    ),
                 timeLabel: firstText(
                     entry?.timeLabel,
-                    timeLabel(clock),
+                    timeLabel(
+                        clock,
+                        displayLocale,
+                    ),
                 ),
             };
         })
@@ -318,30 +689,55 @@ function createSceneView(worldState, scene, getRoomName) {
     return {
         id: scene.id,
         kind: 'scene_archive',
-        title: firstText(scene.title, scene.titleEn, scene.id),
+        title: localizedText(
+            getLocalizedField,
+            'scene_archive',
+            scene.id,
+            'nameEn',
+            scene.titleEn ||
+                scene.id,
+        ),
         titleEn: firstText(scene.titleEn),
-        summary: firstText(scene.summary, scene.summaryEn),
+        summary: localizedText(
+            getLocalizedField,
+            'scene_archive',
+            scene.id,
+            'summaryEn',
+            scene.summaryEn,
+        ),
         summaryEn: firstText(scene.summaryEn),
         startClock: scene.startClock,
         endClock: scene.endClock,
-        timeLabel: timeLabel(scene.startClock),
-        intervalLabel: intervalLabel(scene.startClock, scene.endClock),
+        timeLabel:
+            timeLabel(
+                scene.startClock,
+                displayLocale,
+            ),
+        intervalLabel:
+            intervalLabel(
+                scene.startClock,
+                scene.endClock,
+                displayLocale,
+            ),
         mapId: scene.mapId,
         roomId: scene.roomId,
-        location: firstText(
-            record?.location,
-            roomLabel(
-                getRoomName,
-                worldState,
-                scene.mapId,
-                scene.roomId,
-            ),
+        location: roomLabel(
+            getRoomName,
+            worldState,
+            scene.mapId,
+            scene.roomId,
+            displayLocale,
         ),
         linkedEntries,
         calendarEntryIds: [...asArray(scene.calendarEntryIds)],
         timelineEntries,
         readOnly: true,
-        statusLabel: '已封存 · 只读',
+        statusLabel:
+            staticText(
+                displayLocale,
+                'ui.calendar.archived_readonly',
+                'Archived · Read-only',
+            ),
     };
 }
 
@@ -365,6 +761,7 @@ function createMonthDates(
     selectedDate,
     currentDate,
     history,
+    displayLocale,
 ) {
     const month = parseDate(displayMonth);
     if (!month) return [];
@@ -378,14 +775,44 @@ function createMonthDates(
         return {
             date,
             day: Number(date.slice(8, 10)),
-            weekdayLabel: `周${WEEKDAYS[weekdayIndex(date)]}`,
+            weekdayLabel:
+                formatStaticText(
+                    displayLocale,
+                    'ui.calendar.date.weekday',
+                    '{weekday}',
+                    {
+                        weekday:
+                            weekdayText(
+                                displayLocale,
+                                weekdayIndex(
+                                    date,
+                                ),
+                            ),
+                    },
+                ),
             outsideMonth: date.slice(0, 7) !== targetMonth,
             isSelected: date === selectedDate,
             isToday: date === currentDate,
             entryCount,
             sceneCount,
             itemCount: entryCount + sceneCount,
-            ariaLabel: `${fullDateLabel(date)}，${entryCount} 项计划，${sceneCount} 个场景`,
+            ariaLabel:
+                formatStaticText(
+                    displayLocale,
+                    'ui.calendar.date_aria',
+                    '{date}, {plans} plans, {scenes} Scenes',
+                    {
+                        date:
+                            fullDateLabel(
+                                date,
+                                displayLocale,
+                            ),
+                        plans:
+                            entryCount,
+                        scenes:
+                            sceneCount,
+                    },
+                ),
         };
     });
 }
@@ -403,6 +830,8 @@ function createWeekDays(
     currentDate,
     history,
     getRoomName,
+    getLocalizedField,
+    displayLocale,
 ) {
     const weekStart = shiftDate(
         selectedDate,
@@ -415,40 +844,116 @@ function createWeekDays(
                 worldState,
                 entry,
                 getRoomName,
+                getLocalizedField,
+                displayLocale,
             ));
         const sceneCount = historyOnDate(history, date).length;
         return {
             date,
             day: Number(date.slice(8, 10)),
             month: Number(date.slice(5, 7)),
-            weekdayLabel: `周${WEEKDAYS[index]}`,
+            weekdayLabel:
+                formatStaticText(
+                    displayLocale,
+                    'ui.calendar.date.weekday',
+                    '{weekday}',
+                    {
+                        weekday:
+                            weekdayText(
+                                displayLocale,
+                                index,
+                            ),
+                    },
+                ),
             isSelected: date === selectedDate,
             isToday: date === currentDate,
             entries,
             entryCount: entries.length,
             sceneCount,
             itemCount: entries.length + sceneCount,
-            ariaLabel: `${fullDateLabel(date)}，${entries.length} 项计划，${sceneCount} 个场景`,
+            ariaLabel:
+                formatStaticText(
+                    displayLocale,
+                    'ui.calendar.date_aria',
+                    '{date}, {plans} plans, {scenes} Scenes',
+                    {
+                        date:
+                            fullDateLabel(
+                                date,
+                                displayLocale,
+                            ),
+                        plans:
+                            entries
+                                .length,
+                        scenes:
+                            sceneCount,
+                    },
+                ),
         };
     });
 }
 
-function weekRangeLabel(weekDays) {
+function weekRangeLabel(
+    weekDays,
+    displayLocale,
+) {
     const start = weekDays[0];
     const end = weekDays.at(-1);
-    if (!start || !end) return '本周日程';
+    if (!start || !end) {
+        return staticText(
+            displayLocale,
+            'ui.calendar.week.fallback',
+            'This week',
+        );
+    }
     const sameYear = start.date.slice(0, 4) === end.date.slice(0, 4);
     const sameMonth = start.date.slice(0, 7) === end.date.slice(0, 7);
     if (sameMonth) {
-        return `${start.date.slice(0, 4)} 年 ${start.month} 月 ${start.day}—${end.day} 日`;
+        return formatStaticText(
+            displayLocale,
+            'ui.calendar.week.same_month',
+            '{year}-{month}-{startDay} to {endDay}',
+            {
+                year:
+                    start.date
+                        .slice(0, 4),
+                month:
+                    start.month,
+                startDay:
+                    start.day,
+                endDay:
+                    end.day,
+            },
+        );
     }
     if (sameYear) {
-        return `${start.date.slice(0, 4)} 年 ${start.month} 月 ${start.day} 日—${end.month} 月 ${end.day} 日`;
+        return formatStaticText(
+            displayLocale,
+            'ui.calendar.week.same_year',
+            '{year}-{startMonth}-{startDay} to {endMonth}-{endDay}',
+            {
+                year:
+                    start.date
+                        .slice(0, 4),
+                startMonth:
+                    start.month,
+                startDay:
+                    start.day,
+                endMonth:
+                    end.month,
+                endDay:
+                    end.day,
+            },
+        );
     }
     return `${start.date}—${end.date}`;
 }
 
-function createStorylineViews(worldState) {
+function createStorylineViews(
+    worldState,
+    getLocalizedField,
+    displayLocale,
+) {
     let projected = [];
     try {
         projected = projectCalendarStorylines(worldState);
@@ -458,13 +963,22 @@ function createStorylineViews(worldState) {
     return projected.map(storyline => ({
         id: storyline.id,
         kind: 'storyline',
-        title: firstText(
-            storyline.title,
-            storyline.titleEn,
+        title: localizedText(
+            getLocalizedField,
+            'calendar_storyline',
             storyline.id,
+            'titleEn',
+            storyline.titleEn ||
+                storyline.id,
         ),
         titleEn: firstText(storyline.titleEn),
-        summary: firstText(storyline.summary, storyline.summaryEn),
+        summary: localizedText(
+            getLocalizedField,
+            'calendar_storyline',
+            storyline.id,
+            'summaryEn',
+            storyline.summaryEn,
+        ),
         summaryEn: firstText(storyline.summaryEn),
         tags: [...storyline.tags],
         startClock: storyline.startClock,
@@ -472,21 +986,41 @@ function createStorylineViews(worldState) {
         intervalLabel: intervalLabel(
             storyline.startClock,
             storyline.endClock,
+            displayLocale,
         ),
         participants: participantViews(
             worldState,
             storyline.participantIds,
+            getLocalizedField,
+            displayLocale,
         ),
         status: storyline.status,
         statusLabel:
-            STORYLINE_STATUS_LABELS[storyline.status] ||
-            storyline.status,
+            keyedLabel(
+                displayLocale,
+                'status.storyline',
+                storyline
+                    .status,
+            ),
         statusTone: storyline.status,
         beats: storyline.storyBeats.map(beat => ({
             id: beat.id,
-            title: firstText(beat.title, beat.titleEn, beat.id),
+            title: localizedText(
+                getLocalizedField,
+                'calendar_story_beat',
+                beat.id,
+                'titleEn',
+                beat.titleEn ||
+                    beat.id,
+            ),
             titleEn: firstText(beat.titleEn),
-            summary: firstText(beat.summary, beat.summaryEn),
+            summary: localizedText(
+                getLocalizedField,
+                'calendar_story_beat',
+                beat.id,
+                'summaryEn',
+                beat.summaryEn,
+            ),
             summaryEn: firstText(beat.summaryEn),
             tags: [...beat.tags],
             termKey: beat.termKey,
@@ -496,15 +1030,31 @@ function createStorylineViews(worldState) {
             windowLabel: intervalLabel(
                 beat.windowStartClock,
                 beat.windowEndClock,
+                displayLocale,
             ),
             status: beat.status,
             statusLabel:
-                BEAT_STATUS_LABELS[beat.status] ||
-                beat.status,
+                keyedLabel(
+                    displayLocale,
+                    'status.beat',
+                    beat.status,
+                ),
             sceneProgress: beat.sceneProgress,
             sceneTarget: beat.sceneTarget,
             progressLabel:
-                `${beat.sceneProgress} / ${beat.sceneTarget} 场景`,
+                formatStaticText(
+                    displayLocale,
+                    'ui.calendar.scene_progress',
+                    '{current} / {target} Scenes',
+                    {
+                        current:
+                            beat
+                                .sceneProgress,
+                        target:
+                            beat
+                                .sceneTarget,
+                    },
+                ),
             scheduleCount: asArray(worldState?.calendar?.entries)
                 .filter(entry => entry.sourceBeatId === beat.id)
                 .length,
@@ -512,7 +1062,15 @@ function createStorylineViews(worldState) {
     }));
 }
 
-export function buildCalendarLocationOptions(worldState) {
+export function buildCalendarLocationOptions(
+    worldState,
+    getLocalizedField =
+    field => ({
+        text:
+            field.sourceTextEn ||
+            '',
+    }),
+) {
     const mapState = worldState?.map || {};
     const hierarchy =
         listMapsByMountHierarchy(
@@ -543,22 +1101,79 @@ export function buildCalendarLocationOptions(worldState) {
                         room.id ===
                             mount.parentRoomId)
                     : null;
-            const levelNames = new Map(
-                asArray(map.levels).map(level => [
-                    level.id,
-                    firstText(level.name, level.nameEn, level.id),
-                ]),
-            );
+            const mapField =
+                createLocalMapField(
+                    map,
+                );
+            const parentRoomField =
+                parentRoom
+                    ? createLocalMapRoomField(
+                        mount.parentMapId,
+                        parentRoom,
+                    )
+                    : null;
+            const levelFields =
+                new Map(
+                    asArray(
+                        map.levels,
+                    ).map(level => [
+                        level.id,
+                        createLocalMapLevelField(
+                            map.id,
+                            level,
+                        ),
+                    ]),
+                );
+            const levelNames =
+                new Map(
+                    [
+                        ...levelFields,
+                    ].map(([
+                        levelId,
+                        field,
+                    ]) => [
+                        levelId,
+                        firstText(
+                            getLocalizedField(
+                                field,
+                            )?.text,
+                            field
+                                .sourceTextEn,
+                            levelId,
+                        ),
+                    ]),
+                );
             const rooms = getMapRooms(map, mapState)
-                .map(room => ({
-                    id: room.id,
-                    name: firstText(room.name, room.nameEn, room.id),
-                    levelId: firstText(room.levelId),
-                    levelName: firstText(
-                        levelNames.get(room.levelId),
-                        room.levelId,
-                    ),
-                }))
+                .map(room => {
+                    const roomField =
+                        createLocalMapRoomField(
+                            map.id,
+                            room,
+                        );
+                    return {
+                        id: room.id,
+                        name: firstText(
+                            getLocalizedField(
+                                roomField,
+                            )?.text,
+                            roomField
+                                .sourceTextEn,
+                            room.id,
+                        ),
+                        levelId: firstText(
+                            room.levelId,
+                        ),
+                        levelName: firstText(
+                            levelNames.get(
+                                room.levelId,
+                            ),
+                            room.levelId,
+                        ),
+                        localizationFields: [
+                            roomField,
+                        ],
+                    };
+                })
                 .filter(room => room.id)
                 .sort((left, right) =>
                     left.levelName.localeCompare(right.levelName, 'zh-CN') ||
@@ -571,14 +1186,38 @@ export function buildCalendarLocationOptions(worldState) {
                         ? `${'  '.repeat(depth)}↳`
                         : '',
                     parentRoom
-                        ? `${firstText(parentRoom.name, parentRoom.nameEn, mount.parentRoomId)} /`
+                        ? `${firstText(
+                            getLocalizedField(
+                                parentRoomField,
+                            )?.text,
+                            parentRoomField
+                                .sourceTextEn,
+                            mount.parentRoomId,
+                        )} /`
                         : '',
-                    firstText(map.name, map.nameEn, map.id),
+                    firstText(
+                        getLocalizedField(
+                            mapField,
+                        )?.text,
+                        mapField
+                            .sourceTextEn,
+                        map.id,
+                    ),
                 ].filter(Boolean)
                     .join(' '),
                 depth,
                 mount,
                 rooms,
+                localizationFields: [
+                    mapField,
+                    parentRoomField,
+                    ...levelFields
+                        .values(),
+                    ...rooms
+                        .flatMap(room =>
+                            room
+                                .localizationFields),
+                ].filter(Boolean),
             };
         })
         .filter(map =>
@@ -593,19 +1232,30 @@ export function validateCalendarTimelineMoment(
         time = '',
         mapId = '',
         roomId = '',
+        displayLocale = 'zh-CN',
     } = {},
 ) {
     if (!DATE_PATTERN.test(date)) {
         return {
             valid: false,
-            error: '请先选择有效日期。',
+            error:
+                staticText(
+                    displayLocale,
+                    'ui.calendar.validation.date',
+                    'Select a valid date first.',
+                ),
             startClock: '',
         };
     }
     if (!TIME_PATTERN.test(time)) {
         return {
             valid: false,
-            error: '请选择有效的开始时间。',
+            error:
+                staticText(
+                    displayLocale,
+                    'ui.calendar.validation.time',
+                    'Select a valid start time.',
+                ),
             startClock: '',
         };
     }
@@ -618,14 +1268,24 @@ export function validateCalendarTimelineMoment(
     ) {
         return {
             valid: false,
-            error: '当前世界时钟或所选时间无效。',
+            error:
+                staticText(
+                    displayLocale,
+                    'ui.calendar.validation.clock',
+                    'The current world clock or selected time is invalid.',
+                ),
             startClock,
         };
     }
     if (target < current) {
         return {
             valid: false,
-            error: '自由开场时间不得早于当前世界时钟。',
+            error:
+                staticText(
+                    displayLocale,
+                    'ui.calendar.validation.past',
+                    'A Free Scene cannot begin before the current world clock.',
+                ),
             startClock,
         };
     }
@@ -634,14 +1294,24 @@ export function validateCalendarTimelineMoment(
     if (!map) {
         return {
             valid: false,
-            error: '请选择权威地图。',
+            error:
+                staticText(
+                    displayLocale,
+                    'ui.calendar.validation.map',
+                    'Select an authoritative Map.',
+                ),
             startClock,
         };
     }
     if (!map.rooms.some(room => room.id === roomId)) {
         return {
             valid: false,
-            error: '请选择该地图中的权威房间。',
+            error:
+                staticText(
+                    displayLocale,
+                    'ui.calendar.validation.room',
+                    'Select an authoritative room in that Map.',
+                ),
             startClock,
         };
     }
@@ -683,8 +1353,20 @@ export function buildCalendarViewModel(
         selectedEntryId = '',
         selectedSceneId = '',
         selectedStorylineId = '',
+        displayLocale = 'zh-CN',
         getRoomName = (_state, _mapId, roomId) =>
-            roomId || '位置未知',
+            roomId ||
+                staticText(
+                    displayLocale,
+                    'map.location.unknown',
+                    'Unknown location',
+                ),
+        getLocalizedField =
+        field => ({
+            text:
+                    field.sourceTextEn ||
+                    '',
+        }),
     } = {},
 ) {
     const history = projectSceneArchiveHistory(worldState);
@@ -696,13 +1378,33 @@ export function buildCalendarViewModel(
     const month = DATE_PATTERN.test(displayMonth) ? displayMonth : date;
     const currentDate = calendarDateFromClock(worldState?.clock);
     const entries = entriesOnDate(worldState, date)
-        .map(entry => createEntryView(worldState, entry, getRoomName));
+        .map(entry =>
+            createEntryView(
+                worldState,
+                entry,
+                getRoomName,
+                getLocalizedField,
+                displayLocale,
+            ));
     const scenes = historyOnDate(history, date)
-        .map(scene => createSceneView(worldState, scene, getRoomName));
+        .map(scene =>
+            createSceneView(
+                worldState,
+                scene,
+                getRoomName,
+                getLocalizedField,
+                displayLocale,
+            ));
     let selectedEntry = entries.find(entry => entry.id === selectedEntryId) || null;
     let selectedScene = history.find(scene => scene.id === selectedSceneId) || null;
     const preview = selectedScene
-        ? createSceneView(worldState, selectedScene, getRoomName)
+        ? createSceneView(
+            worldState,
+            selectedScene,
+            getRoomName,
+            getLocalizedField,
+            displayLocale,
+        )
         : selectedEntry;
     const monthDates = createMonthDates(
         worldState,
@@ -710,6 +1412,7 @@ export function buildCalendarViewModel(
         date,
         currentDate,
         history,
+        displayLocale,
     );
     const weekDays = createWeekDays(
         worldState,
@@ -717,8 +1420,15 @@ export function buildCalendarViewModel(
         currentDate,
         history,
         getRoomName,
+        getLocalizedField,
+        displayLocale,
     );
-    const storylines = createStorylineViews(worldState);
+    const storylines =
+        createStorylineViews(
+            worldState,
+            getLocalizedField,
+            displayLocale,
+        );
     const selectedStoryline = storylines
         .find(storyline => storyline.id === selectedStorylineId) ||
         null;
@@ -727,21 +1437,49 @@ export function buildCalendarViewModel(
         currentDate,
         selectedDate: date,
         displayMonth: month,
-        monthLabel: fullMonthLabel(month),
-        selectedDateLabel: fullDateLabel(date),
-        weekLabel: weekRangeLabel(weekDays),
+        monthLabel:
+            fullMonthLabel(
+                month,
+                displayLocale,
+            ),
+        selectedDateLabel:
+            fullDateLabel(
+                date,
+                displayLocale,
+            ),
+        weekLabel:
+            weekRangeLabel(
+                weekDays,
+                displayLocale,
+            ),
         monthDates,
         compactDates: createCompactDates(monthDates, date),
         weekDays,
-        weekGrid: calculateCalendarWeekGrid(weekDays),
+        weekGrid:
+            calculateCalendarWeekGrid(
+                weekDays,
+                {
+                    displayLocale,
+                },
+            ),
         entries,
-        dayGrid: calculateCalendarDayGrid(entries),
+        dayGrid:
+            calculateCalendarDayGrid(
+                entries,
+                {
+                    displayLocale,
+                },
+            ),
         scenes,
         preview,
         storylines,
         selectedStoryline,
         selectedStorylineId: selectedStoryline?.id || '',
-        locationOptions: buildCalendarLocationOptions(worldState),
+        locationOptions:
+            buildCalendarLocationOptions(
+                worldState,
+                getLocalizedField,
+            ),
         selectedEntryId: selectedEntry?.id || '',
         selectedSceneId: selectedScene?.id || '',
         totalItems: entries.length + scenes.length,

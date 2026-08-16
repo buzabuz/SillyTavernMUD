@@ -17,16 +17,12 @@ export const CANON_ITEM_CATALOG =
                 'wand',
             labelEn:
                 'Harry Potter\'s Holly Wand',
-            label:
-                '哈利·波特的冬青木魔杖',
             ownerId:
                 'canon_harry_james_potter',
             holderId:
                 'canon_harry_james_potter',
             appearanceEn:
                 'A 12½-inch holly wand with a phoenix feather core and unbending flexibility.',
-            appearance:
-                '一根十二又二分之一英寸、凤凰羽毛杖芯、质地不易弯曲的冬青木魔杖。',
             state:
                 'intact',
             sourceEventId:
@@ -37,8 +33,6 @@ export const CANON_ITEM_CATALOG =
                 false,
             notesEn:
                 'The wand chose Harry at Ollivanders.',
-            notes:
-                '这根魔杖在奥利凡德选择了哈利。',
             storyRoles: [
                 'signature',
             ],
@@ -62,16 +56,12 @@ export const CANON_ITEM_CATALOG =
                 'eyewear',
             labelEn:
                 'Harry Potter\'s Round Spectacles',
-            label:
-                '哈利·波特的圆框眼镜',
             ownerId:
                 'canon_harry_james_potter',
             holderId:
                 'canon_harry_james_potter',
             appearanceEn:
                 'A pair of round spectacles strongly associated with Harry\'s appearance.',
-            appearance:
-                '一副与哈利外貌紧密相连的圆框眼镜。',
             state:
                 'intact',
             sourceEventId:
@@ -82,8 +72,6 @@ export const CANON_ITEM_CATALOG =
                 true,
             notesEn:
                 'The official editorial site describes the round spectacles as one of Harry\'s most iconic props.',
-            notes:
-                '官方编辑网站将圆框眼镜称为哈利最具标志性的道具之一。',
             storyRoles: [
                 'signature',
             ],
@@ -107,16 +95,12 @@ export const CANON_ITEM_CATALOG =
                 'wand',
             labelEn:
                 'Charlie Weasley\'s Hand-me-down Wand',
-            label:
-                '查理·韦斯莱传给罗恩的旧魔杖',
             ownerId:
                 'canon_charles_weasley',
             holderId:
                 'canon_ronald_bilius_weasley',
             appearanceEn:
                 'An ash wand with a unicorn hair core, handed down from Charlie Weasley to Ron.',
-            appearance:
-                '一根白蜡木、独角兽毛杖芯的旧魔杖，由查理·韦斯莱传给罗恩。',
             state:
                 'intact',
             sourceEventId:
@@ -127,8 +111,6 @@ export const CANON_ITEM_CATALOG =
                 false,
             notesEn:
                 'The wand did not choose Ron and remained associated with its original owner.',
-            notes:
-                '这根魔杖没有选择罗恩，仍与原主人存在强烈联系。',
             storyRoles: [
                 'signature',
                 'social',
@@ -153,16 +135,12 @@ export const CANON_ITEM_CATALOG =
                 'wand',
             labelEn:
                 'Hermione Granger\'s Vine Wand',
-            label:
-                '赫敏·格兰杰的葡萄藤木魔杖',
             ownerId:
                 'canon_hermione_jean_granger',
             holderId:
                 'canon_hermione_jean_granger',
             appearanceEn:
                 'A 12½-inch vine wand with a dragon heartstring core and pliant flexibility.',
-            appearance:
-                '一根十二又二分之一英寸、龙心弦杖芯、柔韧的葡萄藤木魔杖。',
             state:
                 'intact',
             sourceEventId:
@@ -173,8 +151,6 @@ export const CANON_ITEM_CATALOG =
                 false,
             notesEn:
                 'Hermione owned the wand before beginning her first Hogwarts year.',
-            notes:
-                '赫敏在进入霍格沃茨一年级前已经拥有这根魔杖。',
             storyRoles: [
                 'signature',
             ],
