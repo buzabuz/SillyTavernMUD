@@ -64,6 +64,11 @@ export function createLifecycleRuntime(ports) {
         migrateTimelineAppraisalLifecycleV4,
         normalizeCausalCollapseState,
         normalizeModelSlots,
+        normalizePostTurnSemanticProvider =
+        value =>
+            value === 'local'
+                ? 'local'
+                : 'low',
         projectActorSocialRelationships,
         projectSceneTransitionPresence =
         null,
@@ -134,6 +139,18 @@ export function createLifecycleRuntime(ports) {
         ) {
             state.modelSlots =
             normalizedModelSlots;
+            changed = true;
+        }
+        const postTurnSemanticProvider =
+            normalizePostTurnSemanticProvider(
+                state.postTurnSemanticProvider,
+            );
+        if (
+            state.postTurnSemanticProvider !==
+            postTurnSemanticProvider
+        ) {
+            state.postTurnSemanticProvider =
+                postTurnSemanticProvider;
             changed = true;
         }
         const normalizedTaskRuntime =
