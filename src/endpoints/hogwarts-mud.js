@@ -41,6 +41,7 @@ import {
     adjudicateTurn,
     getLocalSemanticStatus,
     observeTurn,
+    settlePostTurnModelResult,
     translateText,
 } from '../hogwarts-mud/local-semantic-adjudicator.js';
 import {
@@ -1601,6 +1602,59 @@ router.post('/local/observe', async (request, response) => {
                     error?.message ||
                     error,
                 ).slice(0, 1_000),
+        });
+    }
+});
+
+router.post('/post/observe/settle', async (request, response) => {
+    const input =
+        request.body?.input;
+    const raw =
+        request.body?.raw;
+    const rawLength =
+        typeof raw === 'string'
+            ? raw.length
+            : JSON.stringify(
+                raw || null,
+            ).length;
+    if (
+        !input ||
+        typeof input !== 'object' ||
+        Array.isArray(input) ||
+        !Array.isArray(
+            input.narrativeSegments,
+        ) ||
+        input.narrativeSegments
+            .length > 24 ||
+        JSON.stringify(input)
+            .length > 150_000 ||
+        !raw ||
+        rawLength > 150_000
+    ) {
+        return response
+            .sendStatus(400);
+    }
+    try {
+        return response.json(
+            settlePostTurnModelResult(
+                input,
+                raw,
+                {
+                    taskId:
+                        'post_turn_semantic_proposal',
+                    transport:
+                        'connection_profile',
+                },
+            ),
+        );
+    } catch (error) {
+        console.warn(
+            '[Hogwarts MUD] Post-turn semantic result rejected',
+            error,
+        );
+        return response.status(422).json({
+            error:
+                'Post-turn semantic result rejected.',
         });
     }
 });

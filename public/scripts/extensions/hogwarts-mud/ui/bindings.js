@@ -45,6 +45,7 @@ export function createUiBindings(ports) {
         openSceneTransitionDialog,
         openSpellPicker,
         persistModelSlots,
+        persistPostTurnSemanticProvider,
         polishCharacterBackground,
         refreshTranslationsForProvider,
         renderComposerAddressing,
@@ -305,6 +306,18 @@ export function createUiBindings(ports) {
                 syncModelSlotControls();
             });
         });
+        listen(
+            root.querySelector(
+                '[data-hpmud-post-semantic-provider]',
+            ),
+            'change',
+            event => {
+                persistPostTurnSemanticProvider(
+                    event.currentTarget.value,
+                );
+                syncModelSlotControls();
+            },
+        );
         root.querySelectorAll('[data-hpmud-preset-slot], [data-hpmud-regex-slot]').forEach(select => {
             listen(select, 'change', () => persistModelSlots(collectModelSlots()));
         });

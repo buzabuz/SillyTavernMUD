@@ -49,6 +49,7 @@ import {
 } from './core/json-recovery.js';
 import { admitCurrentLocationResidents, admitMentionedKnownActors } from './domain/actor-admission.js';
 import { migrateActorContextV1 } from './domain/actor-context-cutover.js';
+import { normalizePostTurnSemanticProvider } from './domain/post-turn-semantic-provider.js';
 import {
     buildStructuredPlayerTurnSequence,
     reconcileCanonActorDisplayNames,
@@ -264,7 +265,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     targetLanguage: 'zh-CN',
     worldPrompt: DEFAULT_WORLD_PROMPT,
     setupDraft: createDefaultCharacterDraft(),
-    modelSlots: DEFAULT_MODEL_SLOTS,
+    modelSlots: DEFAULT_MODEL_SLOTS, postTurnSemanticProvider: 'low',
     campaignDraft: createDefaultCampaign(),
 });
 const PROFILE_SECRET_KEYS = Object.freeze({
@@ -438,7 +439,7 @@ const platform = {
     normalizeGeneratedInteriorMapLabels,
     normalizeLocalTranslationText,
     normalizeMemoryConsolidationPayload,
-    normalizeModelSlots,
+    normalizeModelSlots, normalizePostTurnSemanticProvider,
     normalizePacingAssessmentPayload,
     normalizeRegexScripts,
     normalizeSceneTransitionPackage,
@@ -518,7 +519,6 @@ const compatibility = createSocialMemoryWorkflow({
     normalizeSocialGraph,
     selectSharedMemoriesForContext,
 });
-
 async function initialize() {
     const html =
         await renderExtensionTemplateAsync(

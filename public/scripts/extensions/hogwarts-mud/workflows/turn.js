@@ -1249,7 +1249,13 @@ export function createTurnWorkflow(ports) {
                 transaction.materialExtraction = {
                     schemaVersion: 1,
                     source:
-                    'ollama_structured_observer',
+                    'post_turn_semantic_provider',
+                    provider:
+                    localObservation
+                        .observation
+                        ?.diagnostics
+                        ?.provider ||
+                    'unknown',
                     ...(
                         localObservation
                             .observation

@@ -406,7 +406,10 @@ export const MODEL_TASK_CATALOG =
             {
                 family: 'local_semantic',
                 kind: 'local_observer',
-                tiers: ['local'],
+                tiers: [
+                    'local',
+                    'low',
+                ],
                 triggerEvents: [
                     'turn.post_commit',
                 ],
