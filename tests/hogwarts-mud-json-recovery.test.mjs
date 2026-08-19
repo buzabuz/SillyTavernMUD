@@ -78,12 +78,10 @@ test('truncated scene recovery keeps only the complete Low output contract', () 
     {"type":"actor_activity","actorId":"alex_zhang","currentActivityEn":"Listening to both children."}
   ],
   "signals": {
-    "eventEnded": false,
     "pacingBeatRealized": false,
     "sceneProgression": {
       "type": "social_shift",
-      "summaryEn": "Alex hears both children and takes charge.",
-      "completedRequestedStep": false
+      "summaryEn": "Alex hears both children and takes charge."
     }
   }`;
     const recovered =
@@ -130,12 +128,10 @@ test('scene recovery drops an incomplete state proposal instead of creating a le
     {"type":"dialogue","actorId":"eddie_grandmother_cooper","textEn":"Edward Cooper."}
   ],
   "signals":{
-    "eventEnded":false,
     "pacingBeatRealized":true,
     "sceneProgression":{
       "type":"npc_initiative",
-      "summaryEn":"Gran Cooper finds Eddie in Gringotts.",
-      "completedRequestedStep":false
+      "summaryEn":"Gran Cooper finds Eddie in Gringotts."
     }
   },
   "stateProposals":[

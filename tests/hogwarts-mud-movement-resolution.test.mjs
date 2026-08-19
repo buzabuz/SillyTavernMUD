@@ -19,12 +19,17 @@ import {
 } from '../public/scripts/extensions/hogwarts-mud/domain/maps.js';
 import {
     applyPlayerMovement,
+    buildFollowMovementContext,
     inspectPlayerMovementIntent,
-    isGuidedMovementAction,
     parseExplicitMovementDirective,
     removeExplicitMovementDirective,
     resolvePlayerMovement,
+    settleFollowMovementIntent,
 } from '../public/scripts/extensions/hogwarts-mud/domain/movement.js';
+import {
+    createMovementOutcome,
+    ensureMovementOutcomeFact,
+} from '../public/scripts/extensions/hogwarts-mud/domain/movement-outcome.js';
 import {
     findLocalRoomPath,
 } from '../public/scripts/extensions/hogwarts-mud/domain/pathfinding.js';
@@ -32,7 +37,6 @@ import {
     applyEventBoundaryNextSceneIntent,
     createFallbackNextSceneIntent,
     findSceneDestination,
-    resolveSceneTransitionDestination,
     validateEventBoundaryNextSceneIntent,
     validateNextSceneIntent,
 } from '../public/scripts/extensions/hogwarts-mud/domain/scene-destination.js';
@@ -233,18 +237,13 @@ test('scene destination matching resolves a player move to an existing room', ()
     );
 });
 
-test('express arrival intent binds the canonical Hogsmeade station room', () => {
+test('scene destination uses the catalog room instead of arrival prose inference', () => {
     const state =
         createCurrentPlayingState();
-    state.map.activeMapId =
-        'kings_cross_hogwarts_express_interior';
-    state.scene.mapId =
-        'kings_cross_hogwarts_express_interior';
-
     const destination =
-        resolveSceneTransitionDestination(
+        findSceneDestination(
+            '→【hogsmeade_station】',
             state,
-            '到达霍格沃茨准备晚餐和分院',
         );
     assert.equal(
         destination.mapId,
@@ -255,9 +254,9 @@ test('express arrival intent binds the canonical Hogsmeade station room', () => 
         'hogsmeade_station',
     );
     assert.equal(
-        resolveSceneTransitionDestination(
-            state,
+        findSceneDestination(
             '我想起了霍格沃茨',
+            state,
         ),
         null,
     );
@@ -458,7 +457,14 @@ test('guided movement commits a leader-known destination hidden from the player'
         );
 
     assert.equal(
-        isGuidedMovementAction(action),
+        inspectPlayerMovementIntent(
+            state,
+            action,
+            {
+                guidedDestination:
+                    destination,
+            },
+        ).guided,
         true,
     );
     const result = applyPlayerMovement(
@@ -468,6 +474,10 @@ test('guided movement commits a leader-known destination hidden from the player'
             guidedDestination: destination,
             guidedByActorId:
                 'minerva_mcgonagall',
+            companionIds: [
+                'alex_zhang',
+                'minerva_mcgonagall',
+            ],
         },
     );
 
@@ -493,7 +503,7 @@ test('guided movement commits a leader-known destination hidden from the player'
     );
     assert.equal(
         unresolved.movement.reason,
-        'guide_destination_unknown',
+        'no_known_destination',
     );
 });
 
@@ -502,25 +512,16 @@ test('passive guided movement reaches Platform Nine and Three Quarters with the 
     const action =
         '→【九又四分之三站台】\n*紧紧拉住麦格教授，另外一只手拉住爸爸，希望被拉去九又四分之三站台*麦格教授你来拉我过去我不敢！！\n*扯扯爸爸，大喊*爸我们跟麦格教授走。她懂行！！';
 
-    assert.equal(
-        isGuidedMovementAction(
-            '爸我们跟麦格教授走。',
-        ),
-        true,
-    );
-    assert.equal(
-        isGuidedMovementAction(
-            '希望被拉去九又四分之三站台。',
-        ),
-        true,
-    );
-
     const result = applyPlayerMovement(
         state,
         action,
         {
             guidedByActorId:
                 'minerva_mcgonagall',
+            companionIds: [
+                'alex_zhang',
+                'minerva_mcgonagall',
+            ],
         },
     );
 
@@ -584,6 +585,58 @@ test('passive guided movement reaches Platform Nine and Three Quarters with the 
             'platform_nine_three_quarters',
             'hogwarts_express',
         ],
+    );
+});
+
+test('school travel uses stable Item ID instead of item labels or action prose', () => {
+    const mislabeledState =
+        createCurrentKingsCrossState(
+            'platform_nine_three_quarters',
+        );
+    mislabeledState.items = [{
+        ...mislabeledState.items[0],
+        id: 'ordinary_paper',
+        labelEn: 'Hogwarts acceptance letter',
+        label: '霍格沃茨录取通知书',
+    }];
+
+    const denied = applyPlayerMovement(
+        mislabeledState,
+        '→【霍格沃茨特快】\n我举起录取通知书登上霍格沃茨特快。',
+    );
+    assert.equal(
+        denied.movement.moved,
+        false,
+    );
+    assert.equal(
+        denied.movement.reason,
+        'no_passable_route',
+    );
+    assert.equal(
+        denied.state,
+        mislabeledState,
+    );
+
+    const authorizedState =
+        createCurrentKingsCrossState(
+            'platform_nine_three_quarters',
+        );
+    authorizedState.items[0].labelEn =
+        'Blank parchment';
+    authorizedState.items[0].label =
+        '空白羊皮纸';
+    const allowed = applyPlayerMovement(
+        authorizedState,
+        '→【霍格沃茨特快】\n我登上列车。',
+    );
+    assert.equal(
+        allowed.movement.moved,
+        true,
+    );
+    assert.equal(
+        allowed.state.map
+            .currentLocalNodeId,
+        'hogwarts_express',
     );
 });
 
@@ -689,6 +742,10 @@ test('guided movement retry replaces a stale guide-context destination', () => {
             },
             guidedByActorId:
                 'minerva_mcgonagall',
+            companionIds: [
+                'alex_zhang',
+                'minerva_mcgonagall',
+            ],
         },
     );
 
@@ -1202,5 +1259,332 @@ test('bound interior and parent map movement commits without archiving the scene
         entered.state.map
             .currentLocalNodeId,
         'kitchen_table',
+    );
+});
+
+test('only the finite follow-tag grammar opens the follow-NPC semantic route', () => {
+    const state =
+        createCurrentPlayingState();
+
+    assert.equal(
+        buildFollowMovementContext(
+            state,
+            '→【Wait for McGonagall】\nI remain here.',
+            [],
+        ),
+        null,
+    );
+    assert.equal(
+        buildFollowMovementContext(
+            state,
+            '→【跟随麦格】\n我立即跟上。',
+            [],
+        )
+            .eligibleGuideCandidates
+            .some(candidate =>
+                candidate.id ===
+                    'minerva_mcgonagall'),
+        true,
+    );
+});
+
+test('unresolved follow marker uses bounded committed evidence and settles one existing room', () => {
+    const state =
+        createCurrentPlayingState();
+    const chat = [{
+        is_user: false,
+        extra: {
+            hogwartsMud: {
+                role:
+                    'scene_turn',
+                turnTransaction: {
+                    publicEventEn:
+                        'Professor McGonagall told Tina to follow her to the Back Garden.',
+                    actorPresence: {
+                        presentActorIdsAfterTurn: [
+                            'minerva_mcgonagall',
+                        ],
+                    },
+                    actorUpdates: [],
+                },
+                segments: [{
+                    type:
+                        'narration',
+                    textEn:
+                        'McGonagall held the garden door open and waited for Tina to follow.',
+                }],
+            },
+        },
+    }];
+    const action =
+        '→【跟随麦格】\n我立即跟着麦格教授走。';
+    const context =
+        buildFollowMovementContext(
+            state,
+            action,
+            chat,
+        );
+
+    assert.equal(
+        context
+            .eligibleGuideCandidates
+            .some(candidate =>
+                candidate.id ===
+                    'minerva_mcgonagall'),
+        true,
+    );
+    assert.equal(
+        context
+            .recentGuideEvidence[0]
+            .textEn,
+        chat[0].extra.hogwartsMud
+            .turnTransaction
+            .publicEventEn,
+    );
+
+    const result =
+        settleFollowMovementIntent(
+            state,
+            action,
+            context,
+            {
+                requested: true,
+                guideActorId:
+                    'minerva_mcgonagall',
+                destinationRoomId:
+                    'back_garden',
+                intentEvidenceText:
+                    '跟随麦格',
+                destinationEvidenceSourceRef:
+                    'message:0:publicEventEn',
+                destinationEvidenceText:
+                    'follow her to the Back Garden',
+                confidence: 0.99,
+            },
+        );
+    const outcome =
+        createMovementOutcome(
+            state,
+            result.movement,
+            {
+                mode:
+                    'follow_actor',
+            },
+        );
+
+    assert.equal(
+        result.state.map
+            .currentLocalNodeId,
+        'back_garden',
+    );
+    assert.equal(
+        outcome.status,
+        'moved',
+    );
+    assert.equal(
+        outcome.guideActorId,
+        'minerva_mcgonagall',
+    );
+    assert.equal(
+        outcome.minutes,
+        15,
+    );
+});
+
+test('unknown guide destination commits a visible failed outcome without moving the player', () => {
+    const state =
+        createCurrentPlayingState();
+    const action =
+        '→【跟随麦格】\n我立即跟着麦格教授走。';
+    const context =
+        buildFollowMovementContext(
+            state,
+            action,
+            [],
+        );
+    const result =
+        settleFollowMovementIntent(
+            state,
+            action,
+            context,
+            {
+                requested: true,
+                guideActorId:
+                    'minerva_mcgonagall',
+                destinationRoomId: '',
+                intentEvidenceText:
+                    '跟随麦格',
+                destinationEvidenceSourceRef:
+                    '',
+                destinationEvidenceText:
+                    '',
+                confidence: 0.99,
+            },
+        );
+    const outcome =
+        createMovementOutcome(
+            state,
+            result.movement,
+            {
+                mode:
+                    'follow_actor',
+            },
+        );
+    const paidSegment = {
+        type: 'narration',
+        textEn:
+            'McGonagall adjusted the brim of her hat.',
+    };
+    const folded =
+        ensureMovementOutcomeFact(
+            {
+                segments: [
+                    paidSegment,
+                ],
+            },
+            outcome,
+        );
+
+    assert.equal(
+        result.state,
+        state,
+    );
+    assert.equal(
+        outcome.status,
+        'failed',
+    );
+    assert.equal(
+        outcome.reasonCode,
+        'destination_unknown',
+    );
+    assert.equal(
+        outcome.remainingRoomId,
+        state.map
+            .currentLocalNodeId,
+    );
+    assert.equal(
+        outcome.minutes,
+        15,
+    );
+    assert.equal(
+        folded.segments[0]
+            .textEn,
+        outcome
+            .movementOutcomeFactEn,
+    );
+    assert.deepEqual(
+        folded.segments.slice(1),
+        [
+            paidSegment,
+        ],
+    );
+});
+
+test('following the immediately prior departed Actor reaches the known room and reactivates local presence', () => {
+    const state =
+        createCurrentPlayingState();
+    const guide =
+        state.actors.find(actor =>
+            actor.id ===
+                'minerva_mcgonagall');
+    guide.present = false;
+    guide.roomId =
+        'back_garden';
+    state.activeInteractionActorIds =
+        [];
+    state.localPresence
+        .occupantActorIds =
+        [];
+    const chat = [{
+        is_user: false,
+        extra: {
+            hogwartsMud: {
+                role:
+                    'scene_turn',
+                turnTransaction: {
+                    publicEventEn:
+                        'Professor McGonagall left through the garden door.',
+                    actorPresence: {
+                        presentActorIdsAfterTurn: [],
+                    },
+                    actorUpdates: [{
+                        id:
+                            'minerva_mcgonagall',
+                        present: false,
+                        mapId:
+                            state.map
+                                .activeMapId,
+                        roomId:
+                            'back_garden',
+                    }],
+                },
+                segments: [],
+            },
+        },
+    }];
+    const action =
+        '→【跟随麦格】\n我马上追着麦格教授出去。';
+    const context =
+        buildFollowMovementContext(
+            state,
+            action,
+            chat,
+        );
+    const candidate =
+        context
+            .eligibleGuideCandidates
+            .find(item =>
+                item.id ===
+                    'minerva_mcgonagall');
+    assert.equal(
+        candidate.eligibility,
+        'prior_departure',
+    );
+
+    const result =
+        settleFollowMovementIntent(
+            state,
+            action,
+            context,
+            {
+                requested: true,
+                guideActorId:
+                    'minerva_mcgonagall',
+                destinationRoomId:
+                    'back_garden',
+                intentEvidenceText:
+                    '跟随麦格',
+                destinationEvidenceSourceRef:
+                    '',
+                destinationEvidenceText:
+                    '',
+                confidence: 0.99,
+            },
+        );
+
+    assert.equal(
+        result.movement.moved,
+        true,
+    );
+    assert.equal(
+        result.state.map
+            .currentLocalNodeId,
+        'back_garden',
+    );
+    assert.equal(
+        result.state.actors
+            .find(actor =>
+                actor.id ===
+                    'minerva_mcgonagall')
+            .present,
+        true,
+    );
+    assert.equal(
+        result.state.localPresence
+            .occupantActorIds
+            .includes(
+                'minerva_mcgonagall',
+            ),
+        true,
     );
 });

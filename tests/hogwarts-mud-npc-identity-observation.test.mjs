@@ -282,144 +282,146 @@ test('direct visible injury observation adds an active injury and observation pr
     );
 });
 
-test('local observer accepts grounded narration and deterministically repairs an omitted negative assessment', () => {
+test('dynamic Identity uses the structured perception target and preserves the endpoint result', async () => {
+    const requests = [];
     const adapter =
-        createLocalSemanticAdapter({});
-    const state =
-        identityState();
-    const segments = [{
-        type: 'narration',
-        textEn:
-            NEGATIVE_EVIDENCE,
-    }];
-    const repaired =
-        adapter
-            .projectObservedIdentityObservations(
+        createLocalSemanticAdapter({
+            getRequestHeaders:
+                () => ({}),
+            runLocalModelTask:
+                async (
+                    taskId,
+                    invoke,
+                    event,
+                ) => {
+                    assert.equal(
+                        taskId,
+                        'local_dynamic_identity_observer',
+                    );
+                    assert.equal(
+                        event.eventType,
+                        'turn.post_commit',
+                    );
+                    return invoke();
+                },
+            fetchImpl:
+                async (
+                    _url,
+                    options,
+                ) => {
+                    requests.push(
+                        JSON.parse(
+                            options.body,
+                        ),
+                    );
+                    return {
+                        ok: true,
+                        json:
+                            async () => ({
+                                result: {
+                                    identityObservations: [
+                                        noVisibleInjuryObservation(),
+                                    ],
+                                },
+                                diagnostics: {
+                                    routed: true,
+                                    modelCalls: 1,
+                                },
+                            }),
+                    };
+                },
+        });
+    const result =
+        await adapter
+            .requestDynamicIdentityObservation(
+                [{
+                    type: 'narration',
+                    textEn:
+                        NEGATIVE_EVIDENCE,
+                }],
+                [{
+                    id:
+                        HERMIONE_ID,
+                    nameEn:
+                        'Hermione Granger',
+                }],
                 {
-                    result: {
-                        identityObservations:
-                            [],
+                    kind:
+                        'perception',
+                    target: {
+                        actorId:
+                            HERMIONE_ID,
                     },
                 },
-                state,
-                INSPECTION_ACTION,
-                segments,
-                [
-                    HERMIONE_ID,
-                ],
             );
 
     assert.deepEqual(
-        repaired,
+        result.identityObservations,
         [
             noVisibleInjuryObservation(),
         ],
     );
     assert.deepEqual(
-        adapter
-            .projectObservedIdentityObservations(
-                {
-                    result: {
-                        identityObservations:
-                            [],
-                    },
-                },
-                state,
-                '*仔细观察赫敏手里的课本*',
-                [{
-                    type: 'narration',
-                    textEn:
-                        'The book showed no visible damage.',
-                }],
-                [
-                    HERMIONE_ID,
-                ],
-            ),
-        [],
+        requests[0].input
+            .identityTargetActorIds,
+        [
+            HERMIONE_ID,
+        ],
     );
     assert.deepEqual(
-        adapter
-            .projectObservedIdentityObservations(
-                {
-                    result: {
-                        identityObservations: [{
-                            ...noVisibleInjuryObservation(),
-                            evidenceText:
-                                'I am perfectly uninjured.',
-                        }],
-                    },
-                },
-                state,
-                INSPECTION_ACTION,
-                [{
-                    type: 'dialogue',
-                    actorId:
-                        HERMIONE_ID,
-                    textEn:
-                        'I am perfectly uninjured.',
-                }],
-                [
-                    HERMIONE_ID,
-                ],
-            ),
-        [],
+        requests[0].input
+            .inspectionTargetActorIds,
+        [
+            HERMIONE_ID,
+        ],
     );
 });
 
-test('local observer skips non-English identity semantics without turning them into body authority', () => {
+test('dynamic Identity makes no call or Regex inference without a structured target', async () => {
+    let calls = 0;
     const adapter =
-        createLocalSemanticAdapter({});
-    const state =
-        identityState();
-    const evidence =
-        'A fresh cut crossed Hermione\'s right palm.';
-    const observation = {
-        result: {
-            identityObservations: [{
-                actorId:
-                    HERMIONE_ID,
-                kind:
-                    'injury_assessment',
-                status:
-                    'visible_injury',
-                injuryType: 'cut',
-                description:
-                    '右手掌有一道新鲜割伤。',
-                evidenceText:
-                    evidence,
-                confidence: 0.95,
-            }],
-        },
-    };
-
-    const projected =
-        adapter
-            .projectObservedIdentityObservations(
-                observation,
-                state,
-                INSPECTION_ACTION,
+        createLocalSemanticAdapter({
+            fetchImpl:
+                async () => {
+                    calls++;
+                    throw new Error(
+                        'must not call',
+                    );
+                },
+        });
+    const result =
+        await adapter
+            .requestDynamicIdentityObservation(
                 [{
                     type: 'narration',
                     textEn:
-                        evidence,
+                        NEGATIVE_EVIDENCE,
                 }],
-                [
-                    HERMIONE_ID,
-                ],
+                [{
+                    id:
+                        HERMIONE_ID,
+                    nameEn:
+                        'Hermione Granger',
+                }],
+                null,
             );
 
+    assert.equal(
+        calls,
+        0,
+    );
     assert.deepEqual(
-        projected,
+        result.identityObservations,
         [],
     );
     assert.equal(
-        observation.diagnostics
-            .languageMismatchCount,
-        1,
+        result.diagnostics
+            .modelCalls,
+        0,
     );
 });
 
-test('legacy committed inspection is replayed once without using dialogue as authority', () => {
+test('legacy committed inspection does not infer an observation from prose', () => {
     const state =
         identityState();
     delete state.actorContextVersion;
@@ -478,15 +480,18 @@ test('legacy committed inspection is replayed once without using dialogue as aut
     assert.equal(
         migrated.diagnostics
             .observationsReplayed,
-        1,
+        0,
     );
-    assert.equal(
+    assert.deepEqual(
         migrated.state
             .actorLibrary[0]
             .identity.body
-            .injuryAssessment
-            .status,
-        'no_visible_injury',
+            .injuryAssessment,
+        {
+            status: 'unknown',
+            summary: '',
+            asOfClock: '',
+        },
     );
     assert.equal(
         migrateNpcIdentityObservations(

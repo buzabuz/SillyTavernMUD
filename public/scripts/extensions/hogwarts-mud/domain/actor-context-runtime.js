@@ -197,6 +197,9 @@ export function updateActorRuntimeV1(
             roomId:
                 patch.roomId ??
                 current.roomId,
+            locationKnown:
+                patch.locationKnown ??
+                current.locationKnown,
             present:
                 patch.present ??
                 current.present,

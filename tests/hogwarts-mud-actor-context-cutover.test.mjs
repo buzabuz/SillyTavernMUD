@@ -135,6 +135,7 @@ test('cutover emits exact V1 records and removes all legacy actor copies', () =>
             'id',
             'mapId',
             'roomId',
+            'locationKnown',
             'present',
             'lifeStatus',
             'lifeStatusPermanent',
@@ -243,6 +244,60 @@ test('cutover is idempotent for valid V1 state', () => {
     assert.notEqual(
         second.state,
         first.state,
+    );
+});
+
+test('Actor Context V1 upgrades atomically to V2 locationKnown records', () => {
+    const current =
+        migrateActorContextV1(
+            legacyState(),
+        ).state;
+    current.actorContextVersion = 1;
+    current.actors =
+        current.actors.map(
+            (
+                {
+                    locationKnown:
+                        _locationKnown,
+                    ...actor
+                },
+                index,
+            ) => index === 0
+                ? {
+                    ...actor,
+                    mapId: '',
+                    roomId: '',
+                    present: false,
+                }
+                : actor,
+        );
+
+    const upgraded =
+        migrateActorContextV1(
+            current,
+        );
+
+    assert.equal(
+        upgraded.changed,
+        true,
+    );
+    assert.equal(
+        upgraded.state
+            .actorContextVersion,
+        2,
+    );
+    assert.deepEqual(
+        upgraded.state.actors[0],
+        {
+            ...current.actors[0],
+            locationKnown: false,
+        },
+    );
+    assert.equal(
+        validateActorContextStateV1(
+            upgraded.state,
+        ).valid,
+        true,
     );
 });
 
@@ -843,6 +898,7 @@ test('V1 actor mutations keep runtime exact and persist memory only through Appr
             'id',
             'mapId',
             'roomId',
+            'locationKnown',
             'present',
             'lifeStatus',
             'lifeStatusPermanent',

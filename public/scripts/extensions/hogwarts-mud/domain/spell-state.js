@@ -1,5 +1,4 @@
 import {
-    findSpellReferences,
     getSpellDefinition,
     getSpellProficiency,
     normalizeKnownSpell,
@@ -7,12 +6,6 @@ import {
     parseSpellCastDirectives,
     SPELL_CATALOG_VERSION,
 } from '../spell-catalog.js';
-const SPELL_TEACHING_PATTERN =
-    /(?:教学|教会|讲解|解释|说明|示范|演示|练习|念出|说出|写下|尝试这个咒语|跟着念|照着第?\s*\d+\s*页|teach|taught|explain|demonstrat|practi[cs]e|pronounc|try (?:it|this spell)|repeat after|writ(?:e|es|ten).{0,40}(?:board|blackboard)|page\s+\d+)/iu;
-const SPELL_SELF_STUDY_PATTERN =
-    /(?:自学|学习|研究|阅读|照着书|查阅|笔记|偷偷学|self[- ]?study|learn|study|research|read(?:ing)?|from (?:a|the) book|notes?)/iu;
-const SPELL_OBSERVATION_INTENT_PATTERN =
-    /(?:(?:看清|辨认|认出|观察|查看|阅读|解读|研究|学习|记住|理解|identify|observe|inspect|read|study|learn|understand).{0,120}(?:咒语|咒文|法术|变形术|incantation|spell|transfiguration)|(?:咒语|咒文|法术|变形术|incantation|spell|transfiguration).{0,120}(?:看清|辨认|认出|观察|查看|阅读|解读|研究|学习|记住|理解|identify|observe|inspect|read|study|learn|understand))/iu;
 const SPELL_SOURCE_PRIORITY =
     Object.freeze({
         experiment: 0,
@@ -37,71 +30,10 @@ const SPELL_OBSERVATION_LEARNED_OUTCOMES =
     ]);
 
 export function resolveSpellObservation(
-    worldState,
-    playerAction,
+    _worldState,
+    _playerAction,
 ) {
-    const action =
-        String(playerAction || '');
-    if (
-        !SPELL_OBSERVATION_INTENT_PATTERN
-            .test(action)
-    ) {
-        return null;
-    }
-    const scene =
-        worldState?.scene ||
-        {};
-    const intent =
-        scene.nextSceneIntent ||
-        {};
-    const actionReferences =
-        findSpellReferences(
-            action,
-        );
-    const contextValues = [
-        scene.nameEn,
-        scene.summaryEn,
-        intent.titleEn,
-        intent.summaryEn,
-        intent.triggerEn,
-    ].filter(Boolean);
-    const contextReferences =
-        findSpellReferences(
-            contextValues.join('\n'),
-        );
-    const spell =
-        actionReferences[0] ||
-        contextReferences[0];
-    if (!spell) {
-        return null;
-    }
-    return {
-        version: 1,
-        spellId:
-            spell.id,
-        nameEn:
-            spell.nameEn,
-        incantation:
-            spell.incantation,
-        incantationKnown:
-            spell.incantationKnown,
-        source:
-            actionReferences.length
-                ? 'player_reference'
-                : 'scene_instruction',
-        evidenceText:
-            actionReferences.length
-                ? action.slice(0, 500)
-                : String(
-                    contextValues.find(value =>
-                        findSpellReferences(
-                            value,
-                        ).some(reference =>
-                            reference.id ===
-                            spell.id)) ||
-                    '',
-                ).slice(0, 500),
-    };
+    return null;
 }
 
 function createLearnedSpellEntry(
@@ -240,35 +172,9 @@ function upsertLearnedSpell(
 }
 
 function getSpellLearningSource(
-    text,
+    _text,
 ) {
-    const source =
-        String(text || '');
-    if (
-        SPELL_SELF_STUDY_PATTERN
-            .test(source)
-    ) {
-        return 'self_study';
-    }
     return 'experiment';
-}
-
-function getSpellTextFromMessage(
-    message,
-) {
-    const mud =
-        message?.extra
-            ?.hogwartsMud;
-    return [
-        message?.mes,
-        ...(
-            mud?.segments ||
-            []
-        ).map(segment =>
-            segment.textEn),
-    ]
-        .filter(Boolean)
-        .join('\n');
 }
 
 export function migrateSpellbookState(
@@ -340,94 +246,14 @@ export function migrateSpellbookState(
             ) +
                 1,
         );
-    (
+    const chatLength =
         Array.isArray(chat)
-            ? chat
-            : []
-    )
-        .slice(startIndex)
-        .forEach(
-            (
-                message,
-                offset,
-            ) => {
-                const messageId =
-                    startIndex +
-                    offset;
-                const text =
-                    getSpellTextFromMessage(
-                        message,
-                    );
-                if (
-                    message
-                        ?.is_user
-                ) {
-                    parseSpellCastDirectives(
-                        text,
-                        next,
-                    ).forEach(cast => {
-                        const source =
-                            getSpellLearningSource(
-                                text,
-                            );
-                        upsertLearnedSpell(
-                            next.spellbook,
-                            cast.spellId,
-                            {
-                                source,
-                                detail:
-                                    source ===
-                                        'self_study'
-                                        ? 'Learned through the player\'s own study.'
-                                        : 'Discovered through the player\'s own experiment.',
-                                clock:
-                                    next.clock ||
-                                    '',
-                                turn:
-                                    next.turn
-                                        ?.count ||
-                                    0,
-                                proficiencyXp:
-                                    source ===
-                                        'self_study'
-                                        ? 5
-                                        : 1,
-                            },
-                        );
-                    });
-                } else if (
-                    SPELL_TEACHING_PATTERN
-                        .test(text)
-                ) {
-                    findSpellReferences(
-                        text,
-                        next,
-                    ).forEach(spell => {
-                        upsertLearnedSpell(
-                            next.spellbook,
-                            spell.id,
-                            {
-                                source:
-                                    'class',
-                                detail:
-                                    `Taught or demonstrated in ${next.scene?.nameEn || 'class'}.`,
-                                clock:
-                                    next.clock ||
-                                    '',
-                                turn:
-                                    next.turn
-                                        ?.count ||
-                                    0,
-                                proficiencyXp:
-                                    8,
-                            },
-                        );
-                    });
-                }
-                next.spellbook
-                    .lastScannedMessageId =
-                    messageId;
-            },
+            ? chat.length
+            : 0;
+    next.spellbook.lastScannedMessageId =
+        Math.max(
+            startIndex - 1,
+            chatLength - 1,
         );
     next.spellbook.version =
         SPELL_CATALOG_VERSION;
@@ -501,21 +327,6 @@ export function settleSpellProgress(
                 playerAction,
                 worldState,
             );
-    const narrativeText = [
-        transaction.publicEventEn,
-        ...(
-            transaction.segments ||
-            []
-        ).map(segment =>
-            segment.textEn),
-    ]
-        .filter(Boolean)
-        .join('\n');
-    const narrativeDirectives =
-        parseSpellCastDirectives(
-            narrativeText,
-            worldState,
-        );
     const spellObservation =
         transaction
             .checkResolution
@@ -523,11 +334,7 @@ export function settleSpellProgress(
         null;
     if (
         !casts.length &&
-        !narrativeDirectives
-            .length &&
-        !spellObservation &&
-        !SPELL_TEACHING_PATTERN
-            .test(narrativeText)
+        !spellObservation
     ) {
         return worldState;
     }
@@ -551,39 +358,6 @@ export function settleSpellProgress(
     const sceneLabel =
         next.scene?.nameEn ||
         'the current scene';
-    const classObservation =
-        /(?:class|lesson|教室|课堂|课)/iu
-            .test(sceneLabel);
-    narrativeDirectives
-        .forEach(cast => {
-            const spell =
-                getSpellDefinition(
-                    cast.spellId,
-                    next,
-                );
-            if (!spell) {
-                return;
-            }
-            upsertLearnedSpell(
-                next.spellbook,
-                spell.id,
-                {
-                    source:
-                        classObservation
-                            ? 'class'
-                            : 'self_study',
-                    detail:
-                        `Observed ${spell.incantation || spell.nameEn} during ${sceneLabel}.`,
-                    clock:
-                        next.clock,
-                    turn:
-                        next.turn
-                            ?.count ||
-                        0,
-                    proficiencyXp: 1,
-                },
-            );
-        });
     if (spellObservation) {
         const spell =
             getSpellDefinition(
@@ -606,10 +380,7 @@ export function settleSpellProgress(
                 next.spellbook,
                 spell.id,
                 {
-                    source:
-                        classObservation
-                            ? 'class'
-                            : 'self_study',
+                    source: 'experiment',
                     detail,
                     clock:
                         next.clock,
@@ -628,34 +399,6 @@ export function settleSpellProgress(
             );
         }
     }
-    findSpellReferences(
-        narrativeText,
-        next,
-    ).forEach(spell => {
-        if (
-            SPELL_TEACHING_PATTERN
-                .test(narrativeText)
-        ) {
-            upsertLearnedSpell(
-                next.spellbook,
-                spell.id,
-                {
-                    source:
-                        'class',
-                    detail:
-                        `Taught or demonstrated in ${next.scene?.nameEn || 'class'}.`,
-                    clock:
-                        next.clock,
-                    turn:
-                        next.turn
-                            ?.count ||
-                        0,
-                    proficiencyXp:
-                        8,
-                },
-            );
-        }
-    });
     casts.forEach(cast => {
         const existing =
             getKnownSpell(

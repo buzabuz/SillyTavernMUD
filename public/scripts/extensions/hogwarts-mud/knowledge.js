@@ -471,6 +471,28 @@ function resolveKnowledgeBaseIdentity(
 
 export function buildKnowledgeRecords(state, chat = []) {
     const records = [];
+    const isTranscriptAuthority =
+        message => {
+            if (message?.is_user) {
+                return true;
+            }
+            const mud =
+                message?.extra
+                    ?.hogwartsMud;
+            return (
+                Array.isArray(
+                    mud?.segments,
+                ) &&
+                (
+                    mud.role !==
+                        'scene_turn' ||
+                    Boolean(
+                        mud
+                            .turnTransaction,
+                    )
+                )
+            );
+        };
     const activeActorIds =
         getActiveInteractionActorIds(
             state,
@@ -582,7 +604,9 @@ export function buildKnowledgeRecords(state, chat = []) {
                 .map(entry => entry.index);
         const transcript = messageIds
             .map(messageId => chat[messageId])
-            .filter(Boolean)
+            .filter(
+                isTranscriptAuthority,
+            )
             .flatMap(message => message.is_user
                 ? [`Player: ${message.mes}`]
                 : (message.extra?.hogwartsMud?.segments || []).map(segment =>

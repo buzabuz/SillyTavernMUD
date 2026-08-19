@@ -26,9 +26,6 @@ import {
 import {
     normalizeNpcIdentityObservation,
 } from './npc-identity-observation.js';
-import {
-    validateNarrationConsistency,
-} from './narrative-authority.js';
 
 import {
     normalizeSpellProposal,
@@ -55,93 +52,6 @@ import {
 import {
     NARRATIVE_TURN_PROTOCOL_VERSION,
 } from './turn-protocol.js';
-
-import {
-    validateSceneTemporalConsistency,
-} from './turn-time.js';
-
-function projectNarrativeActorAuthority(
-    payload,
-    worldState,
-) {
-    const actorsById =
-        new Map(
-            (
-                worldState.actors ||
-                []
-            ).map(actor => [
-                actor.id,
-                actor,
-            ]),
-        );
-    (
-        payload
-            .temporaryActorEntrances ||
-        []
-    ).forEach(actor =>
-        actorsById.set(
-            actor.id,
-            actor,
-        ));
-    (
-        payload.actorUpdates ||
-        []
-    ).forEach(update => {
-        actorsById.set(
-            update.id,
-            {
-                ...(
-                    actorsById.get(
-                        update.id,
-                    ) ||
-                    {}
-                ),
-                ...update,
-            },
-        );
-    });
-    const presentIds =
-        Array.isArray(
-            payload.actorPresence
-                ?.presentActorIdsAfterTurn,
-        )
-            ? new Set(
-                payload
-                    .actorPresence
-                    .presentActorIdsAfterTurn,
-            )
-            : null;
-    return [
-        ...actorsById.values(),
-    ].map(actor => ({
-        ...actor,
-        present:
-            presentIds
-                ? presentIds.has(
-                    actor.id,
-                )
-                : actor.present !==
-                    false,
-    }));
-}
-
-function getNarrativeMutableItemIds(
-    payload,
-) {
-    return [
-        ...(
-            payload.itemUpdates ||
-            []
-        ).map(update =>
-            update.id),
-        ...(
-            payload.itemOperations ||
-            []
-        ).map(operation =>
-            operation.itemId ||
-            operation.id),
-    ].filter(Boolean);
-}
 
 export function validateScenePerformance(
     payload,
@@ -199,23 +109,31 @@ export function validateScenePerformance(
         ],
     );
     const publicEvent = String(payload.publicEventEn || '').trim();
-    if (
-        !narrativeFirst &&
+    const hasStructuredPublicEvent =
+        Boolean(
+            String(
+                payload.sceneProgression
+                    ?.summaryEn ||
+                '',
+            ).trim(),
+        ) ||
         (
-            !publicEvent ||
-            /player completes|player acts|characters respond/i
-                .test(publicEvent)
-        )
-    ) {
-        errors.push('现场记录必须是具体事件摘要，不能使用通用占位句。');
-    }
+            payload.segments ||
+            []
+        ).some(segment =>
+            segment?.type ===
+                'narration' &&
+            String(
+                segment.textEn ||
+                '',
+            ).trim(),
+        );
     if (
         !narrativeFirst &&
-        typeof payload.eventEnded !==
-        'boolean') {
-        errors.push(
-            '低档必须明确提交 eventEnded 布尔信号。',
-        );
+        !publicEvent &&
+        !hasStructuredPublicEvent
+    ) {
+        errors.push('现场记录必须提供摘要或一段可归纳的叙述。');
     }
     if (
         !narrativeFirst &&
@@ -259,44 +177,6 @@ export function validateScenePerformance(
             errors.push(`现场对白引用了不存在的在场角色 ${segment.actorId || '?'}。`);
         }
     });
-    const narrationConsistency =
-        validateNarrationConsistency(
-            segments.filter(
-                segment =>
-                    String(
-                        segment
-                            ?.textEn ||
-                        '',
-                    ).trim(),
-            ),
-            worldState,
-            {
-                actors:
-                    projectNarrativeActorAuthority(
-                        payload,
-                        worldState,
-                    ),
-                elapsedMinutes:
-                    budget
-                        ?.elapsedMinutes,
-                mutableItemIds:
-                    getNarrativeMutableItemIds(
-                        payload,
-                    ),
-            },
-        );
-    errors.push(
-        ...narrationConsistency
-            .errors,
-    );
-    const temporalValidation =
-        validateSceneTemporalConsistency(
-            payload,
-            worldState,
-            budget,
-            temporalSourceText,
-        );
-    errors.push(...temporalValidation.errors);
     const inventoryNarrative = [
         payload.publicEventEn,
         payload.sceneProgression?.summaryEn,
@@ -349,6 +229,49 @@ export function validateScenePerformance(
                 `已提交移动必须在本回合明确抵达 ${movementResolution.toRoomName || movementResolution.toRoomNameEn || movementResolution.toRoomId}，不能停在途中。`,
             );
         }
+    } else if (
+        movementResolution &&
+        [
+            'failed',
+            'already_there',
+        ].includes(
+            movementResolution.status,
+        )
+    ) {
+        const fact =
+            String(
+                movementResolution
+                    .movementOutcomeFactEn ||
+                '',
+            ).trim();
+        if (
+            !fact ||
+            !segments.some(segment =>
+                segment?.type ===
+                    'narration' &&
+                String(
+                    segment.textEn ||
+                    '',
+                ).includes(fact))
+        ) {
+            errors.push(
+                '未移动结果必须在正文中保留确定性 movementOutcomeFactEn。',
+            );
+        }
+        if (
+            movementResolution
+                .remainingMapId !==
+                worldState.map
+                    ?.activeMapId ||
+            movementResolution
+                .remainingRoomId !==
+                worldState.map
+                    ?.currentLocalNodeId
+        ) {
+            errors.push(
+                '未移动结果的 remaining room 必须等于玩家当前权威房间。',
+            );
+        }
     }
 
     if (
@@ -375,28 +298,6 @@ export function validateScenePerformance(
             ).trim();
             if (!summary) {
                 errors.push('sceneProgression 缺少已完成的具体变化。');
-            }
-            const checkBlocksCompletion =
-                [
-                    'catastrophic_failure',
-                    'failure',
-                ].includes(
-                    checkResolution
-                        ?.outcome,
-                );
-            if (
-                momentumDirective
-                    .explicitProgressionRequest &&
-                !checkBlocksCompletion &&
-                progression.completedRequestedStep !== true) {
-                errors.push('玩家明确要求的程序性推进没有在本回合完成。');
-            }
-            if (
-                momentumDirective
-                    .explicitProgressionRequest &&
-                !checkBlocksCompletion &&
-                /\b(?:prepares?|preparing|about to|ready to|waits? to|will|intends? to)\b/i.test(summary)) {
-                errors.push('程序性推进停在了准备阶段，必须完成动作后再停。');
             }
         }
     }
@@ -627,14 +528,112 @@ export function validateTurnTransaction(
         errors.push('回合结算必须包含玩家可知的事件摘要。');
     }
     if (
-        transaction.eventEnded !==
-            undefined &&
-        typeof transaction.eventEnded !==
-            'boolean'
+        transaction.movementOutcome !==
+        undefined
     ) {
-        errors.push(
-            '回合 eventEnded 必须是布尔值。',
-        );
+        const movement =
+            transaction
+                .movementOutcome;
+        if (
+            !movement ||
+            typeof movement !==
+                'object' ||
+            Array.isArray(
+                movement,
+            ) ||
+            movement.version !==
+                1 ||
+            ![
+                'moved',
+                'already_there',
+                'failed',
+            ].includes(
+                movement.status,
+            )
+        ) {
+            errors.push(
+                'movementOutcome 必须是有效的 MovementOutcomeV1。',
+            );
+        } else {
+            const changed =
+                movement.status ===
+                'moved';
+            if (
+                movement.moved !==
+                    changed ||
+                movement.attempted !==
+                    true
+            ) {
+                errors.push(
+                    'movementOutcome 的 attempted/moved 与 status 不一致。',
+                );
+            }
+            if (
+                !Number.isInteger(
+                    movement.minutes,
+                ) ||
+                movement.minutes <
+                    1 ||
+                movement.minutes >
+                    10_080 ||
+                (
+                    !changed &&
+                    movement.minutes !==
+                        15
+                )
+            ) {
+                errors.push(
+                    'movementOutcome minutes 不符合移动时间合同。',
+                );
+            }
+            if (
+                movement
+                    .remainingMapId !==
+                    worldState.map
+                        ?.activeMapId ||
+                movement
+                    .remainingRoomId !==
+                    worldState.map
+                        ?.currentLocalNodeId
+            ) {
+                errors.push(
+                    'movementOutcome remaining room 与权威玩家位置不一致。',
+                );
+            }
+            if (
+                !changed
+            ) {
+                const fact =
+                    String(
+                        movement
+                            .movementOutcomeFactEn ||
+                        '',
+                    ).trim();
+                const hasFact =
+                    (
+                        transaction
+                            .segments ||
+                        []
+                    ).some(segment =>
+                        segment?.type ===
+                            'narration' &&
+                        String(
+                            segment
+                                .textEn ||
+                            '',
+                        ).includes(
+                            fact,
+                        ));
+                if (
+                    !fact ||
+                    !hasFact
+                ) {
+                    errors.push(
+                        '未移动 transaction 缺少确定性可见事实。',
+                    );
+                }
+            }
+        }
     }
     if (transaction.checkResolution) {
         const checkValidation = validateCheckResolution(
@@ -729,34 +728,6 @@ export function validateTurnTransaction(
             errors.push(`对白引用了不存在的角色 ${segment.actorId || '?'}。`);
         }
     });
-    const narrationConsistency =
-        validateNarrationConsistency(
-            segments.filter(
-                segment =>
-                    String(
-                        segment
-                            ?.textEn ||
-                        '',
-                    ).trim(),
-            ),
-            worldState,
-            {
-                actors:
-                    projectNarrativeActorAuthority(
-                        transaction,
-                        worldState,
-                    ),
-                elapsedMinutes,
-                mutableItemIds:
-                    getNarrativeMutableItemIds(
-                        transaction,
-                    ),
-            },
-        );
-    errors.push(
-        ...narrationConsistency
-            .errors,
-    );
     const narrationTexts =
         segments
             .filter(segment =>
@@ -949,6 +920,32 @@ export function validateTurnTransaction(
             errors.push(`人物更新引用了不存在的角色 ${update.id || '?'}。`);
         }
         if (
+            update.locationKnown ===
+                false &&
+            (
+                update.mapId ||
+                update.roomId ||
+                update.present !==
+                    false
+            )
+        ) {
+            errors.push(
+                `人物更新 ${update.id || '?'} 的未知位置必须清空 map/room 且 present=false。`,
+            );
+        }
+        if (
+            update.locationKnown ===
+                true &&
+            (
+                !update.mapId ||
+                !update.roomId
+            )
+        ) {
+            errors.push(
+                `人物更新 ${update.id || '?'} 的已知位置缺少 map/room。`,
+            );
+        }
+        if (
             update
                 .firstImpressionOfPlayerEn !=
                 null &&
@@ -998,7 +995,11 @@ export function validateTurnTransaction(
                 `人物更新 ${update.id || '?'} 的 notable 记忆缺少长期影响。`,
             );
         }
-        if (update.roomId) {
+        if (
+            update.locationKnown !==
+                false &&
+            update.roomId
+        ) {
             const actor = (worldState.actors || [])
                 .find(item => item.id === update.id);
             const mapId = update.mapId || actor?.mapId ||

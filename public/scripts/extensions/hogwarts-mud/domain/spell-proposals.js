@@ -10,10 +10,6 @@ export const SPELL_PROPOSAL_VERSION = 1;
 
 const SPELL_PROPOSAL_LIMIT = 24;
 const SPELL_DECISION_LIMIT = 120;
-const ENGLISH_INCANTATION_PATTERN =
-    /\b(?:the\s+)?incantation\s+(?:is|was|will be|:)\s*[“"'‘]?([A-Z][A-Za-z'’-]*(?:\s+[A-Z][A-Za-z'’-]*){0,3})/gu;
-const CHINESE_INCANTATION_PATTERN =
-    /(?:咒语|咒文)\s*(?:是|叫|为|：|:)\s*[“"'‘]?([A-Za-z][A-Za-z'’-]*(?:\s+[A-Za-z][A-Za-z'’-]*){0,3})/gu;
 const CUSTOM_FREEFORM_MARKER_PATTERN =
     /(?:✦\s*)?【\s*咒语\s*:\s*([A-Za-z][A-Za-z'’ -]{0,78}[A-Za-z'’])\s*】/gu;
 const INVALID_INCANTATION_WORDS =
@@ -24,10 +20,6 @@ const INVALID_INCANTATION_WORDS =
         'It',
         'On',
     ]);
-const INDEPENDENT_CUSTOM_SPELL_PATTERN =
-    /(?:\b(?:new|different|separate|original|custom|invented|devised|created|made[- ]?up|undocumented|unknown)\s+(?:spell|incantation|charm|hex|jinx|curse)\b|\b(?:invented|devised|created|made[- ]?up)\b.{0,32}\b(?:spell|incantation|charm|hex|jinx|curse)\b|(?:新的|不同的|独立的|原创|自创|发明|创造|未记载|未知).{0,12}(?:咒语|咒文|法术))/iu;
-const CUSTOM_SPELL_EFFECT_PATTERN =
-    /(?:(?:\bit\b|\bthis\s+(?:spell|incantation|charm|hex|jinx|curse)\b).{0,36}\b(?:make|makes|made|cause|causes|create|creates|turn|turns|transform|transforms|reveal|reveals|conceal|conceals|summon|summons|banish|banishes|repair|repairs|heal|heals|light|lights|darken|darkens|glow|glows)\b|(?:这个|该|此)(?:咒语|咒文|法术).{0,24}(?:使|让|造成|创造|变成|转化|显现|隐藏|召唤|驱逐|修复|治愈|发光))/iu;
 const AUTHORITY_CONTEXT_STOP_WORDS =
     new Set([
         'a',
@@ -142,138 +134,17 @@ function getAuthorityContextTerms(
 }
 
 function isIndependentCustomIncantation(
-    match,
-    segmentText,
-    authoritative,
+    _match,
+    _segmentText,
+    _authoritative,
 ) {
-    if (!authoritative.length) {
-        return true;
-    }
-    const text =
-        compactText(
-            segmentText,
-            800,
-        );
-    if (
-        !INDEPENDENT_CUSTOM_SPELL_PATTERN
-            .test(text) &&
-        !CUSTOM_SPELL_EFFECT_PATTERN
-            .test(text)
-    ) {
-        return false;
-    }
-    const authorityTerms =
-        getAuthorityContextTerms(
-            authoritative,
-        );
-    const segmentTerms =
-        new Set(
-            extractContextTerms(
-                text,
-            ),
-        );
-    const authorityTermOverlap =
-        [...authorityTerms]
-            .filter(term =>
-                segmentTerms.has(term))
-            .length;
-    const referencesAuthority =
-        authorityTermOverlap >=
-        Math.min(
-            2,
-            authorityTerms.size,
-        );
-    const incantationTerms =
-        new Set(
-            extractContextTerms(
-                match.incantation,
-            ),
-        );
-    const hasDistinctEffect =
-        CUSTOM_SPELL_EFFECT_PATTERN
-            .test(text) &&
-        [...segmentTerms]
-            .some(term =>
-                !authorityTerms.has(term) &&
-                !incantationTerms.has(term) &&
-                !AUTHORITY_CONTEXT_STOP_WORDS
-                    .has(term));
-    const matchesAuthorityIncantation =
-        authoritative.some(spell =>
-            compactText(
-                spell.incantation,
-                80,
-            )
-                .toLocaleLowerCase() ===
-            match.incantation
-                .toLocaleLowerCase());
-    return (
-        !referencesAuthority &&
-        !matchesAuthorityIncantation &&
-        (
-            INDEPENDENT_CUSTOM_SPELL_PATTERN
-                .test(text) ||
-            hasDistinctEffect
-        )
-    );
+    return false;
 }
 
 function extractExplicitIncantations(
-    text,
+    _text,
 ) {
-    const source =
-        String(text || '');
-    const matches = [];
-    for (
-        const pattern of [
-            ENGLISH_INCANTATION_PATTERN,
-            CHINESE_INCANTATION_PATTERN,
-        ]
-    ) {
-        pattern.lastIndex = 0;
-        for (
-            const match of source
-                .matchAll(pattern)
-        ) {
-            const incantation =
-                compactText(
-                    match[1],
-                    80,
-                );
-            if (
-                !incantation ||
-                INVALID_INCANTATION_WORDS
-                    .has(incantation)
-            ) {
-                continue;
-            }
-            matches.push({
-                incantation,
-                evidenceText:
-                    compactText(
-                        match[0],
-                        240,
-                    ),
-            });
-        }
-    }
-    return matches.filter(
-        (
-            match,
-            index,
-            values,
-        ) =>
-            values.findIndex(
-                candidate =>
-                    candidate
-                        .incantation
-                        .toLocaleLowerCase() ===
-                    match
-                        .incantation
-                        .toLocaleLowerCase(),
-            ) ===
-            index,
-    );
+    return [];
 }
 
 function extractPlayerDeclaredIncantations(
@@ -282,19 +153,7 @@ function extractPlayerDeclaredIncantations(
     const source =
         String(text || '');
     const byIncantation =
-        new Map(
-            extractExplicitIncantations(
-                source,
-            ).map(match => [
-                match.incantation
-                    .toLocaleLowerCase(),
-                {
-                    ...match,
-                    playerDeclared:
-                        false,
-                },
-            ]),
-        );
+        new Map();
     CUSTOM_FREEFORM_MARKER_PATTERN
         .lastIndex = 0;
     for (

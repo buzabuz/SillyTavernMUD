@@ -39,7 +39,6 @@ test('an offstage actor cannot form impression or memory without a sightline', (
     const payload = {
         publicEventEn:
             'Tina argues with Eddie inside Madam Malkin.',
-        eventEnded: false,
         actorPresence: {
             presentActorIdsAfterTurn: [
                 'tom_leaky_bartender',

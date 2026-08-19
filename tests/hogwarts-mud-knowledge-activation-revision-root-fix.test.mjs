@@ -332,7 +332,7 @@ test('real Tina State-backed seeds produce actor-scoped quill Events through can
                 .length,
             0,
         );
-        assert.ok(
+        const hasQuillEvent =
             capsules
                 .byActorId[
                     actorId
@@ -341,8 +341,21 @@ test('real Tina State-backed seeds produce actor-scoped quill Events through can
                 .some(event =>
                     /quill/u.test(
                         `${event.recordId} ${event.text}`,
-                    )),
-            `${actorId} should receive an authorized quill Event.`,
+                    ));
+        const retainsTargetEvent =
+            (
+                seeds
+                    .retainedEventIdsByActorId[
+                        actorId
+                    ] ||
+                []
+            ).includes(
+                seededQuillEventId,
+            );
+        assert.equal(
+            hasQuillEvent,
+            retainsTargetEvent,
+            `${actorId} must receive the quill Event only through its own retained Event authority.`,
         );
     }
     const productionRetrieval =
@@ -370,7 +383,7 @@ test('real Tina State-backed seeds produce actor-scoped quill Events through can
         );
     for (const actorId of
         actorIds) {
-        assert.ok(
+        const hasQuillEvent =
             narrativeContext
                 .memoryActivationCapsules
                 .byActorId[
@@ -380,8 +393,21 @@ test('real Tina State-backed seeds produce actor-scoped quill Events through can
                 .some(event =>
                     /quill/u.test(
                         `${event.recordId} ${event.text}`,
-                    )),
-            `${actorId} production narrative context should receive a quill Event.`,
+                    ));
+        const retainsTargetEvent =
+            (
+                seeds
+                    .retainedEventIdsByActorId[
+                        actorId
+                    ] ||
+                []
+            ).includes(
+                seededQuillEventId,
+            );
+        assert.equal(
+            hasQuillEvent,
+            retainsTargetEvent,
+            `${actorId} production context must preserve actor-scoped retained Event authority.`,
         );
     }
     const after =

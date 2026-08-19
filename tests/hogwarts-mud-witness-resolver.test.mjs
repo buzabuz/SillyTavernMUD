@@ -241,7 +241,7 @@ test('a public classroom accident reaches every occupant and the stable class co
     );
 });
 
-test('public classroom achievement overrides direct-address privacy', () => {
+test('unstructured classroom prose does not override direct-address privacy', () => {
     const perception =
         createDeterministicPerceptionFallback({
             playerAction:
@@ -262,15 +262,15 @@ test('public classroom achievement overrides direct-address privacy', () => {
 
     assert.equal(
         perception.visualScope,
-        'room',
+        'none',
     );
     assert.equal(
         perception.audibleScope,
-        'room',
+        'target',
     );
     assert.equal(
         perception.salience,
-        'notable',
+        'normal',
     );
 });
 
@@ -608,7 +608,7 @@ test('Event player ACL is false by default, ignores model input, and becomes vis
     );
 });
 
-test('whispers and notes stay with their direct target when concealment succeeds', () => {
+test('structured perception owns private witness scope while fallback stays neutral', () => {
     const whisper =
         resolveEventWitnesses({
             perception:
@@ -667,19 +667,19 @@ test('whispers and notes stay with their direct target when concealment succeeds
     );
     assert.equal(
         noteFallback.visualScope,
-        'target',
+        'nearby',
     );
     assert.equal(
         noteFallback.audibleScope,
-        'none',
+        'nearby',
     );
     assert.equal(
         noteFallback.concealment,
-        'successful',
+        'none',
     );
 });
 
-test('covert magic follows successful concealment or the failed public result', () => {
+test('fallback spell visibility comes from structured spell input, not concealment prose', () => {
     const fallback =
         createDeterministicPerceptionFallback({
             playerAction:
@@ -729,7 +729,7 @@ test('covert magic follows successful concealment or the failed public result', 
 
     assert.equal(
         fallback.concealment,
-        'attempted',
+        'none',
     );
     assert.equal(
         fallback.visualScope,
@@ -745,11 +745,11 @@ test('covert magic follows successful concealment or the failed public result', 
     );
     assert.equal(
         successful.concealment,
-        'successful',
+        'none',
     );
     assert.equal(
         successful.visualScope,
-        'target',
+        'room',
     );
 });
 

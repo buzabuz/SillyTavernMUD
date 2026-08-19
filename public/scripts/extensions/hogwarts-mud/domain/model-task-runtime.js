@@ -8,8 +8,8 @@ export const MODEL_TASK_RUNTIME_VERSION = 1;
 function activeDefinitions() {
     return MODEL_TASK_CATALOG
         .filter(task =>
-            task.status !==
-            'retired');
+            task.status !== 'retired' &&
+            task.ledgerScope !== 'server_ephemeral');
 }
 
 function emptyTaskRuntime() {

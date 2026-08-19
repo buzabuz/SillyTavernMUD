@@ -24,6 +24,13 @@ import {
     hashTranslationSource,
 } from '../domain/localization-contract.js';
 import {
+    buildFollowMovementContext,
+    settleFollowMovementIntent,
+} from '../domain/movement.js';
+import {
+    createMovementOutcome,
+} from '../domain/movement-outcome.js';
+import {
     createModelEventScheduler,
 } from '../runtime/model-event-scheduler.js';
 import {
@@ -36,6 +43,9 @@ import { createSocialMemoryWorkflow } from './social-memory.js';
 import { createSceneTransitionWorkflow } from './scene-transition.js';
 import { createTurnPerformanceWorkflow } from './turn-performance.js';
 import { createTurnWorkflow } from './turn.js';
+import {
+    createBackgroundEventBoundaryWorkflow,
+} from './background-event-boundary.js';
 import { createHighCalendarDirectorWorkflow } from './high-calendar-director.js';
 import { createMediumCalendarDirectorWorkflow } from './medium-calendar-director.js';
 import { createCalendarMomentWorkflow } from './calendar-moment.js';
@@ -201,7 +211,6 @@ export function createWorkflowApplication(ports) {
         clearLiveSceneStream,
         consumePacingBeat,
         createContextBudgetPlan,
-        createDeterministicPerceptionFallback,
         createFallbackNextSceneIntent,
         createTranslationBatches,
         createTurnPerformanceBudget,
@@ -261,7 +270,6 @@ export function createWorkflowApplication(ports) {
         projectSceneTransitionPresence,
         protectTranslationTerms,
         reconcileCanonActorDisplayNames,
-        reconcileObservedPerceptionWithFallback,
         reconcileSpatialState,
         reconcileAuthoritativeSpellNarrative,
         reconcileTemporaryActorDisplayNames,
@@ -1384,21 +1392,31 @@ export function createWorkflowApplication(ports) {
         buildLocalSemanticRoomContext,
         requestLocalTurnAdjudication,
         requestLocalTurnAppraisals,
-        isObservedEventBoundary,
         applyObservedActorUpdates,
-        requestLocalTurnObservation,
+        requestPostTurnSemanticObservation,
     } = createLocalSemanticAdapter({
         buildLocalMapModel,
         buildStructuredPlayerTurnSequence,
-        createDeterministicPerceptionFallback,
         findLocalRoomPath,
         getRequestHeaders,
         projectObservedInventoryUpdates,
-        reconcileObservedPerceptionWithFallback,
         runLocalModelTask:
             modelEventScheduler
                 .runLocalTask,
         validatePerceptionContract,
+    });
+    const {
+        scheduleBackgroundEventBoundary,
+    } = createBackgroundEventBoundaryWorkflow({
+        getContext,
+        getMudState,
+        getRequestHeaders,
+        jobRegistry,
+        runLocalModelTask:
+            modelEventScheduler
+                .runLocalTask,
+        ensureSocialDirectorForAction,
+        renderAll,
     });
 
     const {
@@ -1410,6 +1428,7 @@ export function createWorkflowApplication(ports) {
         admitMentionedKnownActors,
         applyObservedActorUpdates,
         applyPlayerMovement,
+        buildFollowMovementContext,
         applyPresenceWitnessTransaction,
         applySystemPrompt,
         applyTurnTransaction,
@@ -1422,6 +1441,7 @@ export function createWorkflowApplication(ports) {
         composeSceneSegments,
         consumePacingBeat,
         createContextBudgetPlan,
+        createMovementOutcome,
         createSceneMomentumDirective,
         createTurnPerformanceBudget,
         createTurnRetryCheckpoint,
@@ -1443,7 +1463,6 @@ export function createWorkflowApplication(ports) {
         getMudState,
         getSettings,
         getInspectorMapScope,
-        isObservedEventBoundary,
         jobRegistry,
         normalizeEventKnowledge,
         parseItemOperationDirectives,
@@ -1461,14 +1480,17 @@ export function createWorkflowApplication(ports) {
         resetInspectorMapScope,
         requestLocalTurnAdjudication,
         requestLocalTurnAppraisals,
-        requestLocalTurnObservation,
+        requestPostTurnSemanticObservation,
         recordTurnDiagnostic,
         resolveActionCheck,
         resolveEventWitnesses,
         resolvePlayerAddressing,
         resolveRoleSlots,
         retrieveLocalKnowledge,
+        runMediumCalendarDirectorSafely,
+        scheduleBackgroundEventBoundary,
         setLiveSceneStreamPhase,
+        settleFollowMovementIntent,
         syncLocalKnowledge,
         updateNativeMessageBlock,
         validateTurnTransaction,
@@ -1600,9 +1622,8 @@ export function createWorkflowApplication(ports) {
         buildSceneTransaction,
         buildLocalSemanticRoomContext,
         requestLocalTurnAdjudication,
-        isObservedEventBoundary,
         applyObservedActorUpdates,
-        requestLocalTurnObservation,
+        requestPostTurnSemanticObservation,
         runStructuredTurn,
         retryFailedPlayerTurn,
         preparePlayableState,

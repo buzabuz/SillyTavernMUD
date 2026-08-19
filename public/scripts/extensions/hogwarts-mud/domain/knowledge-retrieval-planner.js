@@ -13,6 +13,8 @@ const INTENT_SET =
     new Set(
         KNOWLEDGE_RETRIEVAL_INTENTS,
     );
+const DETERMINISTIC_RETRIEVAL_INTENTS =
+    Object.freeze(['direct']);
 const NODE_TYPES_BY_INTENT =
     Object.freeze({
         direct: [
@@ -45,12 +47,6 @@ const NODE_TYPES_BY_INTENT =
             'fact',
         ],
     });
-const CAUSAL_PATTERN =
-    /\b(?:why|because|cause|caused|reason|how did|led to|result|consequence|before|after)\b|为什么|为何|原因|如何|怎么|导致|结果|后果/iu;
-const PARTICIPANT_PATTERN =
-    /\b(?:who|whom|whose|participant|involved|with whom|between)\b|谁|哪些人|参与|涉及|人物/iu;
-const PATTERN_PATTERN =
-    /\b(?:again|always|often|usually|pattern|habit|repeated|relationship|tendency)\b|反复|总是|经常|惯常|模式|习惯|关系/iu;
 
 function stableUnique(values) {
     return [
@@ -224,38 +220,6 @@ function createSubquery(
     };
 }
 
-function selectDeterministicIntents(query) {
-    const intents = ['direct'];
-    if (CAUSAL_PATTERN.test(query)) {
-        intents.push(
-            'cause',
-            'consequence',
-            'participant',
-        );
-    } else {
-        if (
-            PARTICIPANT_PATTERN
-                .test(query)
-        ) {
-            intents.push(
-                'participant',
-            );
-        }
-        if (
-            PATTERN_PATTERN
-                .test(query)
-        ) {
-            intents.push('pattern');
-        }
-    }
-    return [
-        ...new Set(intents),
-    ].slice(
-        0,
-        MAX_KNOWLEDGE_SUBQUERIES,
-    );
-}
-
 function buildPlan({
     query,
     intents,
@@ -305,9 +269,7 @@ export function createDeterministicRetrievalPlan(
     return buildPlan({
         query,
         intents:
-            selectDeterministicIntents(
-                query,
-            ),
+            DETERMINISTIC_RETRIEVAL_INTENTS,
         constraints,
         limit,
         source: 'deterministic',

@@ -3,7 +3,7 @@ import {
     validateNpcIdentity,
 } from './npc-identity-schema.js';
 
-export const actorContextVersion = 1;
+export const actorContextVersion = 2;
 export const memoryReferenceVersion = 3;
 export const actorDossierProjectionVersion = 1;
 
@@ -72,6 +72,7 @@ const ACTOR_RUNTIME_KEYS = Object.freeze([
     'id',
     'mapId',
     'roomId',
+    'locationKnown',
     'present',
     'lifeStatus',
     'lifeStatusPermanent',
@@ -540,20 +541,38 @@ export function normalizeActorRuntime(
         isRecord(source)
             ? source
             : {};
+    const normalizedMapId =
+        normalizeIdentifier(
+            record.mapId,
+        );
+    const normalizedRoomId =
+        normalizeIdentifier(
+            record.roomId,
+        );
+    const locationKnown =
+        record.locationKnown ===
+            false
+            ? false
+            : Boolean(
+                normalizedMapId &&
+                normalizedRoomId,
+            );
     return {
         id:
             normalizeIdentifier(
                 record.id,
             ),
         mapId:
-            normalizeIdentifier(
-                record.mapId,
-            ),
+            locationKnown
+                ? normalizedMapId
+                : '',
         roomId:
-            normalizeIdentifier(
-                record.roomId,
-            ),
+            locationKnown
+                ? normalizedRoomId
+                : '',
+        locationKnown,
         present:
+            locationKnown &&
             record.present === true,
         lifeStatus:
             ACTOR_LIFE_STATUS_VALUES
@@ -650,6 +669,7 @@ export function validateActorRuntime(
     for (
         const key of [
             'present',
+            'locationKnown',
             'lifeStatusPermanent',
             'temporary',
         ]
@@ -678,6 +698,32 @@ export function validateActorRuntime(
     ) {
         errors.push(
             'Actor Runtime lifeStatusDetailEn is required.',
+        );
+    }
+    if (
+        source?.locationKnown ===
+            true &&
+        (
+            !value.mapId ||
+            !value.roomId
+        )
+    ) {
+        errors.push(
+            'Known Actor Runtime location requires mapId and roomId.',
+        );
+    }
+    if (
+        source?.locationKnown ===
+            false &&
+        (
+            source?.mapId ||
+            source?.roomId ||
+            source?.present ===
+                true
+        )
+    ) {
+        errors.push(
+            'Unknown Actor Runtime location requires empty mapId/roomId and present=false.',
         );
     }
     if (

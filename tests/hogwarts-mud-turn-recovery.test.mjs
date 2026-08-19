@@ -474,7 +474,7 @@ test('unsettled turn detection resumes only an explicit trailing player turn', (
     );
 });
 
-test('turn settlement never lets legacy model item updates create formal possessions directly', () => {
+test('turn settlement ignores legacy item updates without prose-based acquisition fallback', () => {
     const state =
         createCurrentPlayingState();
     state.clock =
@@ -494,6 +494,7 @@ test('turn settlement never lets legacy model item updates create formal possess
                 'diagon_alley',
             roomId:
                 'ollivanders',
+            locationKnown: true,
         }));
     const transaction = {
         elapsedMinutes: 15,
@@ -528,13 +529,15 @@ test('turn settlement never lets legacy model item updates create formal possess
     const missingWand =
         structuredClone(transaction);
     missingWand.itemUpdates = [];
-    assert.throws(
-        () => applyTurnTransaction(
+    const missingResult =
+        applyTurnTransaction(
             state,
             missingWand,
             'I accept the wand.',
-        ),
-        /必须提交 acquire itemUpdate/,
+        );
+    assert.equal(
+        missingResult.items.length,
+        0,
     );
 
     const food = {
@@ -556,13 +559,15 @@ test('turn settlement never lets legacy model item updates create formal possess
             ownerId: 'player',
         }],
     };
-    assert.throws(
-        () => applyTurnTransaction(
+    const consumed =
+        applyTurnTransaction(
             state,
             food,
             'I eat the pasty.',
-        ),
-        /明确要求保留或携带/,
+        );
+    assert.equal(
+        consumed.items.length,
+        0,
     );
     const kept = applyTurnTransaction(
         state,

@@ -16,6 +16,7 @@ import {
 import {
     extractSpellCandidates,
     getAuthoritativeSceneSpells,
+    normalizeSpellProposal,
     queueSpellCandidates,
     reconcileAuthoritativeSpellNarrative,
     resolveSpellCandidate,
@@ -92,13 +93,16 @@ test('long scene prose advances additional time instead of failing', () => {
                 {
                     instantaneousMagicMinutes: 2,
                 },
+                {
+                    adjudicatedMinutes: 2,
+                },
             ),
         ),
         2,
     );
 });
 
-test('local checks ignore deterministic conversation and detect a physical contest', () => {
+test('local checks require a structured semantic proposal for a physical contest', () => {
     const state = createCurrentPlayingState();
     state.character.attributes.physique = 10;
     state.actorLibrary.push({
@@ -127,14 +131,23 @@ test('local checks ignore deterministic conversation and detect a physical conte
         detectActionCheck(
             state,
             '我把那个男孩推到一边。',
-        ).target.actorId,
-        'eddie_cooper',
+        ),
+        null,
     );
     const values = [14, 9];
     const check = resolveActionCheck(
         state,
         '我把Eddie Cooper推到一边。',
-        { randomInt: () => values.shift() },
+        {
+            semanticCheck: {
+                required: true,
+                ruleId: 'physical_force',
+                targetActorId: 'eddie_cooper',
+                rollMode: 'normal',
+            },
+            randomInt:
+                () => values.shift(),
+        },
     );
 
     assert.equal(check.kind, 'physical_force');
@@ -268,7 +281,7 @@ test('a structured spell always rolls even when semantic adjudication says no ch
     );
 });
 
-test('active scene-spell observation rolls once and learns only on a successful result', () => {
+test('ordinary player prose cannot create a spell observation', () => {
     const state =
         createCurrentPlayingState();
     state.scene.nameEn =
@@ -281,22 +294,12 @@ test('active scene-spell observation rolls once and learns only on a successful 
     };
     const action =
         '*眯着眼睛想要看清黑板上的咒语，但麦格教授的草书太模糊了。*';
-    const observation =
+    assert.equal(
         resolveSpellObservation(
             state,
             action,
-        );
-    assert.equal(
-        observation.spellId,
-        'match_to_needle_transfiguration',
-    );
-    assert.equal(
-        observation.incantationKnown,
-        true,
-    );
-    assert.equal(
-        observation.incantation,
-        'Acufors',
+        ),
+        null,
     );
     const check =
         resolveActionCheck(
@@ -312,26 +315,7 @@ test('active scene-spell observation rolls once and learns only on a successful 
                     () => 3,
             },
         );
-    assert.equal(
-        check.kind,
-        'perception',
-    );
-    assert.deepEqual(
-        check.rolls,
-        [3],
-    );
-    assert.equal(
-        check.spellObservation
-            .spellId,
-        observation.spellId,
-    );
-    assert.equal(
-        validateCheckResolution(
-            check,
-            state,
-        ).valid,
-        true,
-    );
+    assert.equal(check, null);
     const next =
         settleSpellProgress(
             state,
@@ -344,65 +328,19 @@ test('active scene-spell observation rolls once and learns only on a successful 
                 segments: [],
             },
         );
-    const failedLearning =
+    const learning =
         next.spellbook
             .known
             .find(entry =>
                 entry.spellId ===
-                observation.spellId);
+                'match_to_needle_transfiguration');
     assert.equal(
-        failedLearning,
+        learning,
         undefined,
-    );
-    const successfulCheck =
-        resolveActionCheck(
-            state,
-            action,
-            {
-                semanticCheck: {
-                    required: false,
-                    ruleId: 'none',
-                    targetActorId: '',
-                },
-                randomInt:
-                    () => 15,
-            },
-        );
-    const successfulState =
-        settleSpellProgress(
-            state,
-            action,
-            {
-                checkResolution:
-                    successfulCheck,
-                publicEventEn:
-                    'Tina identifies Acufors on the blackboard.',
-                segments: [],
-            },
-        );
-    const learned =
-        successfulState
-            .spellbook
-            .known
-            .find(entry =>
-                entry.spellId ===
-                observation.spellId);
-    assert.ok(learned);
-    assert.equal(
-        learned.learnedSource,
-        'class',
-    );
-    assert.equal(
-        learned.attempts,
-        0,
-    );
-    assert.match(
-        learned.learnedSourceDetail,
-        /Acufors/u,
     );
 });
 
-test('explicit NPC explanation teaches a spell after failed player observation', () => {
+test('NPC explanatory prose cannot teach a spell without a structured proposal', () => {
     const state =
         createCurrentPlayingState();
     state.scene.nameEn =
@@ -446,16 +384,17 @@ test('explicit NPC explanation teaches a spell after failed player observation',
                 }],
             },
         );
-    assert.ok(
+    assert.equal(
         next.spellbook
             .known
             .some(entry =>
                 entry.spellId ===
                 'match_to_needle_transfiguration'),
+        false,
     );
 });
 
-test('scene authority reconciles a conflicting taught incantation and blocks a custom candidate', () => {
+test('paid Spell prose is preserved and does not create a candidate', () => {
     const state =
         createCurrentPlayingState();
     state.scene.nameEn =
@@ -512,24 +451,19 @@ test('scene authority reconciles a conflicting taught incantation and blocks a c
         );
     assert.deepEqual(
         result.corrections,
-        [{
-            from: 'Acus',
-            to: 'Acufors',
-            spellId:
-                'match_to_needle_transfiguration',
-        }],
+        [],
     );
     assert.equal(
         result.transaction
             .segments[0]
             .textEn,
-        'The incantation is Acufors. Repeat it precisely.',
+        'The incantation is Acus. Repeat it precisely.',
     );
     assert.equal(
         result.transaction
             .segments[1]
             .textEn,
-        'Acufors!',
+        'Acus!',
     );
     assert.deepEqual(
         extractSpellCandidates(
@@ -540,7 +474,7 @@ test('scene authority reconciles a conflicting taught incantation and blocks a c
     );
 });
 
-test('scene authority corrects a replacement while preserving a distinct custom spell', () => {
+test('paid prose neither rewrites incantations nor creates custom Spell candidates', () => {
     const state =
         createCurrentPlayingState();
     state.scene.nameEn =
@@ -588,26 +522,13 @@ test('scene authority corrects a replacement while preserving a distinct custom 
 
     assert.deepEqual(
         result.corrections,
-        [
-            {
-                from: 'Acus',
-                to: 'Acufors',
-                spellId:
-                    'match_to_needle_transfiguration',
-            },
-            {
-                from: 'Mutare',
-                to: 'Acufors',
-                spellId:
-                    'match_to_needle_transfiguration',
-            },
-        ],
+        [],
     );
     assert.match(
         result.transaction
             .segments[0]
             .textEn,
-        /The incantation is Acufors\./u,
+        /The incantation is Acus\./u,
     );
     assert.match(
         result.transaction
@@ -619,7 +540,7 @@ test('scene authority corrects a replacement while preserving a distinct custom 
         result.transaction
             .segments[2]
             .textEn,
-        /The incantation is Acufors\./u,
+        /The incantation is Mutare\./u,
     );
     const candidates =
         extractSpellCandidates(
@@ -634,17 +555,8 @@ test('scene authority corrects a replacement while preserving a distinct custom 
                     '1991-09-02 · 12:45',
             },
         );
-    assert.equal(
-        candidates.length,
-        1,
-    );
-    assert.equal(
-        candidates[0].id,
-        'custom_nebula_verto',
-    );
     assert.deepEqual(
-        candidates[0]
-            .authorityConflicts,
+        candidates,
         [],
     );
 });
@@ -731,7 +643,7 @@ test('a player-declared freeform spell becomes a review candidate under scene au
     );
 });
 
-test('explicit non-catalog teaching becomes a player-reviewed custom spell', () => {
+test('structured non-catalog proposal becomes a player-reviewed custom spell', () => {
     const state =
         createCurrentPlayingState();
     state.scene.nameEn =
@@ -753,10 +665,20 @@ test('explicit non-catalog teaching becomes a player-reviewed custom spell', () 
                 'The incantation is Nebula Verto. It makes the writing glow.',
         }],
     };
-    const candidates =
-        extractSpellCandidates(
-            transaction,
-            state,
+    const candidates = [
+        normalizeSpellProposal(
+            {
+                incantation:
+                    'Nebula Verto',
+                sourceActorId:
+                    'canon_hermione_jean_granger',
+                evidenceText:
+                    transaction
+                        .segments[0]
+                        .textEn,
+                effectEn:
+                    'It makes the writing glow.',
+            },
             {
                 sourceEventId:
                     'custom_spell_event',
@@ -765,7 +687,8 @@ test('explicit non-catalog teaching becomes a player-reviewed custom spell', () 
                 clock:
                     '1991-09-02 · 12:30',
             },
-        );
+        ),
+    ];
     assert.equal(
         candidates.length,
         1,
@@ -898,7 +821,7 @@ test('explicit non-catalog teaching becomes a player-reviewed custom spell', () 
     );
 });
 
-test('an AI-visible spell marker records the referenced spell without counting a cast', () => {
+test('narrative spell markers do not record a spell without a structured cast', () => {
     const state =
         createCurrentPlayingState();
     state.scene.nameEn =
@@ -923,14 +846,10 @@ test('an AI-visible spell marker records the referenced spell without counting a
             .find(entry =>
                 entry.spellId ===
                 'match_to_needle_transfiguration');
-    assert.ok(learned);
-    assert.equal(
-        learned.attempts,
-        0,
-    );
+    assert.equal(learned, undefined);
 });
 
-test('first-year players may self-study or experiment with later curriculum spells', () => {
+test('explicit casts stay experiments; self-study prose cannot change source', () => {
     const state =
         createCurrentPlayingState();
     assert.equal(
@@ -982,7 +901,7 @@ test('first-year players may self-study or experiment with later curriculum spel
     assert.ok(learned);
     assert.equal(
         learned.learnedSource,
-        'self_study',
+        'experiment',
     );
     assert.equal(
         learned.attempts,
@@ -990,6 +909,8 @@ test('first-year players may self-study or experiment with later curriculum spel
     );
     assert.ok(
         learned.proficiencyXp >
+        0 &&
+        learned.proficiencyXp <
         5,
     );
     assert.equal(
@@ -1039,7 +960,7 @@ test('an unknown spell cast in class remains an experiment unless it was actuall
     );
 });
 
-test('spellbook migration learns classroom spells from existing narrative', () => {
+test('spellbook migration does not learn classroom spells from old narrative', () => {
     const state =
         createCurrentPlayingState();
     state.scene.nameEn =
@@ -1072,11 +993,7 @@ test('spellbook migration learns classroom spells from existing narrative', () =
             .find(entry =>
                 entry.spellId ===
                 'wingardium_leviosa');
-    assert.ok(learned);
-    assert.equal(
-        learned.learnedSource,
-        'class',
-    );
+    assert.equal(learned, undefined);
 });
 
 test('later-year starts seed prior curriculum but never gate other spells', () => {
@@ -1164,7 +1081,16 @@ test('local checks handle advantage, disadvantage, natural rolls and forced chec
     const advantage = resolveActionCheck(
         state,
         '我借助一根工具绳翻越柜台。',
-        { randomInt: () => values.shift() },
+        {
+            semanticCheck: {
+                required: true,
+                ruleId: 'agility',
+                targetActorId: '',
+                rollMode: 'advantage',
+            },
+            randomInt:
+                () => values.shift(),
+        },
     );
     assert.equal(advantage.rollMode, 'advantage');
     assert.deepEqual(advantage.rolls, [4, 17]);
@@ -1177,7 +1103,16 @@ test('local checks handle advantage, disadvantage, natural rolls and forced chec
     const disadvantage = resolveActionCheck(
         state,
         '我闪避飞来的箱子。',
-        { randomInt: () => values.shift() },
+        {
+            semanticCheck: {
+                required: true,
+                ruleId: 'agility',
+                targetActorId: '',
+                rollMode: 'disadvantage',
+            },
+            randomInt:
+                () => values.shift(),
+        },
     );
     assert.equal(disadvantage.rollMode, 'disadvantage');
     assert.equal(disadvantage.keptRoll, 5);
@@ -1186,14 +1121,32 @@ test('local checks handle advantage, disadvantage, natural rolls and forced chec
     const naturalOne = resolveActionCheck(
         state,
         '我攀爬湿滑的高墙。',
-        { randomInt: () => 1 },
+        {
+            semanticCheck: {
+                required: true,
+                ruleId: 'agility',
+                targetActorId: '',
+                rollMode: 'normal',
+            },
+            randomInt:
+                () => 1,
+        },
     );
     assert.equal(naturalOne.outcome, 'catastrophic_failure');
 
     const naturalTwenty = resolveActionCheck(
         state,
         '我仔细检查隐藏的刻痕。',
-        { randomInt: () => 20 },
+        {
+            semanticCheck: {
+                required: true,
+                ruleId: 'perception',
+                targetActorId: '',
+                rollMode: 'normal',
+            },
+            randomInt:
+                () => 20,
+        },
     );
     assert.equal(naturalTwenty.outcome, 'critical_success');
 
@@ -1212,6 +1165,12 @@ test('check resolution is validated and persisted with the turn transaction', ()
         state,
         '我仔细检查桌下。',
         {
+            semanticCheck: {
+                required: true,
+                ruleId: 'perception',
+                targetActorId: '',
+                rollMode: 'normal',
+            },
             randomInt:
                 () => 12,
             sourceMessageId:

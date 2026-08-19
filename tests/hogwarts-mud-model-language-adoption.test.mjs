@@ -200,7 +200,7 @@ test('local pre-turn adoption preserves structural decisions while omitting non-
     );
 });
 
-test('local post-turn adoption skips non-English records without blocking independent English records', () => {
+test('local post-turn adoption skips non-English core records without blocking independent English records', () => {
     const adopted =
         adoptLocalPostTurnLanguage({
             schemaVersion: 1,
@@ -216,11 +216,6 @@ test('local post-turn adoption skips non-English records without blocking indepe
                         '黄铜羽毛笔',
                 },
             ],
-            eventBoundary: {
-                ended: false,
-                reasonEn:
-                    '互动仍在继续。',
-            },
             actorUpdates: [
                 {
                     actorId: 'harry',
@@ -231,19 +226,6 @@ test('local post-turn adoption skips non-English records without blocking indepe
                     actorId: 'ron',
                     currentActivityEn:
                         '躲到哈利身后。',
-                },
-            ],
-            identityObservations: [
-                {
-                    actorId: 'harry',
-                    injuryType: '',
-                    description: '',
-                },
-                {
-                    actorId: 'ron',
-                    injuryType: 'bruise',
-                    description:
-                        '右手臂有一块淤青。',
                 },
             ],
         });
@@ -265,24 +247,9 @@ test('local post-turn adoption skips non-English records without blocking indepe
             'harry',
         ],
     );
-    assert.deepEqual(
-        adopted.result
-            .identityObservations
-            .map(record =>
-                record.actorId),
-        [
-            'harry',
-        ],
-    );
-    assert.equal(
-        adopted.result
-            .eventBoundary
-            .reasonEn,
-        '',
-    );
     assert.equal(
         adopted.diagnostics.length,
-        4,
+        2,
     );
 });
 
@@ -349,11 +316,11 @@ test('local inventory and Appraisal adoption skip only proposals with non-Englis
     );
 });
 
-test('local inventory model contract is English-only', async () => {
+test('dynamic Inventory model contract is English-only', async () => {
     const source =
         await readFile(
             new URL(
-                '../src/hogwarts-mud/local-semantic-adjudicator.js',
+                '../src/hogwarts-mud/inventory-observation-contract.js',
                 import.meta.url,
             ),
             'utf8',

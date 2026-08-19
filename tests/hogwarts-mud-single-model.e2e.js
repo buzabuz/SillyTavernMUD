@@ -25,6 +25,8 @@ const REAL_ACCEPTANCE_ENABLED =
     process.env.HOGWARTS_REAL_MODEL_ACCEPTANCE === '1';
 const PREFLIGHT_ONLY =
     process.env.HOGWARTS_ACCEPTANCE_PREFLIGHT_ONLY === '1';
+const REAL_LOCAL_SEMANTIC_ENABLED =
+    process.env.HOGWARTS_ACCEPTANCE_REAL_LOCAL === '1';
 const ACCEPTANCE_TEST_ENABLED =
     REAL_ACCEPTANCE_ENABLED || PREFLIGHT_ONLY;
 const GENERATE_BUDGET =
@@ -66,6 +68,44 @@ function readFileStatus(filePath) {
     };
 }
 
+function readMudState(filePath) {
+    const [headerLine] =
+        readFileSync(
+            filePath,
+            'utf8',
+        ).split('\n');
+    return JSON.parse(
+        headerLine,
+    ).chat_metadata.hogwartsMud;
+}
+
+function withoutKnowledgeMetadata(state) {
+    const copy =
+        structuredClone(state);
+    delete copy.knowledgeBase;
+    return copy;
+}
+
+function changedTopLevelKeys(
+    before,
+    after,
+) {
+    return [
+        ...new Set([
+            ...Object.keys(before),
+            ...Object.keys(after),
+        ]),
+    ]
+        .filter(key =>
+            JSON.stringify(
+                before[key],
+            ) !==
+            JSON.stringify(
+                after[key],
+            ))
+        .sort();
+}
+
 function listFiles(directory) {
     if (!existsSync(directory)) return [];
     return readdirSync(directory, {
@@ -88,8 +128,25 @@ function createQaFixture(runId) {
     const state = header.chat_metadata.hogwartsMud;
     const messageCount = lines.filter(Boolean).length - 1;
     const currentTurn = Number(state.turn?.count || 0);
+    const sharedProfileId =
+        state.modelSlots?.low
+            ?.profileId ||
+        '';
 
-    state.character.identity.name = qaDisplayName;
+    state.character.inputEvidence
+        .identity.name =
+        qaDisplayName;
+    state.character.canonicalEn
+        .identity.nameEn =
+        qaDisplayName;
+    for (const tier of [
+        'low',
+        'medium',
+        'high',
+    ]) {
+        state.modelSlots[tier].profileId =
+            sharedProfileId;
+    }
     state.turn = {
         ...(state.turn || {}),
         status: 'idle',
@@ -181,8 +238,10 @@ function readProfilePreflight() {
         item.id === profile?.['secret-id']);
     const slotProfileIds = [
         slots.low.profileId,
-        slots.medium.profileId,
-        slots.high.profileId,
+        slots.medium.profileId ||
+            slots.low.profileId,
+        slots.high.profileId ||
+            slots.low.profileId,
     ];
 
     return {
@@ -245,6 +304,34 @@ function restoreAcceptanceSettings(
             temporaryProfiles.map(item => item.id),
         status: readFileStatus(SETTINGS_PATH),
     };
+}
+
+function disableAcceptanceTranslationSettings() {
+    const settings =
+        JSON.parse(
+            readFileSync(
+                SETTINGS_PATH,
+                'utf8',
+            ),
+        );
+    settings.extension_settings
+        .hogwartsMud ??= {};
+    settings.extension_settings
+        .hogwartsMud
+        .translationProvider =
+        'off';
+    settings.extension_settings
+        .hogwartsMud
+        .translationEnabled =
+        false;
+    writeFileSync(
+        SETTINGS_PATH,
+        JSON.stringify(
+            settings,
+            null,
+            4,
+        ),
+    );
 }
 
 function restoreAcceptanceFile(
@@ -437,13 +524,37 @@ async function getStateSummary(page, rememberBefore = false) {
             clock: state.clock,
             turnCount: state.turn?.count,
             turnStatus: state.turn?.status,
+            turnError:
+                state.turn?.error ||
+                '',
             lastElapsedMinutes:
                 state.turn?.lastElapsedMinutes,
             sceneId: state.scene?.id,
             activeInteractionActorIds:
                 state.activeInteractionActorIds,
             localPresence:
-                state.localPresence,
+                state.localPresence
+                    ? {
+                        version:
+                            state.localPresence
+                                .version,
+                        mapId:
+                            state.localPresence
+                                .mapId,
+                        roomId:
+                            state.localPresence
+                                .roomId,
+                        occupantActorIds:
+                            state.localPresence
+                                .occupantActorIds,
+                        cohortIds:
+                            state.localPresence
+                                .cohortIds,
+                        updatedTurn:
+                            state.localPresence
+                                .updatedTurn,
+                    }
+                    : null,
             socialCursor:
                 state.socialGraph?.lastProcessedMessageId,
             lastMessageRole:
@@ -468,6 +579,15 @@ async function validateCommittedTurn(page, before, action) {
                 message.extra?.hogwartsMud?.role === 'scene_turn');
         const transaction =
             assistant?.extra?.hogwartsMud?.turnTransaction;
+        const diagnosticEvents =
+            assistant?.extra?.hogwartsMud
+                ?.turnDiagnostics?.events ||
+            [];
+        const milestone = stage =>
+            diagnosticEvents.find(event =>
+                event.stage === stage)
+                ?.data?.elapsedMs ??
+            null;
         const {
             validateScenePerformance,
             validateTurnTransaction,
@@ -551,6 +671,36 @@ async function validateCommittedTurn(page, before, action) {
                     warning.code === 'local_semantic_fallback') || false,
             perceptionSource:
                 transaction?.perception?.source || '',
+            localObserverTaskId:
+                transaction
+                    ?.materialExtraction
+                    ?.taskId ||
+                '',
+            localObserverModel:
+                transaction
+                    ?.materialExtraction
+                    ?.model ||
+                '',
+            perceptionRejected:
+                transaction
+                    ?.materialExtraction
+                    ?.perceptionRejected ===
+                true,
+            temporalClaimsRejected:
+                Number(
+                    transaction
+                        ?.materialExtraction
+                        ?.temporalClaimsRejected ||
+                    0,
+                ),
+            narrativeVisibleMs:
+                milestone(
+                    'narrative_visible',
+                ),
+            stateSettledMs:
+                milestone(
+                    'state_settled',
+                ),
             runtimeProfileIds,
         };
     }, {
@@ -592,6 +742,8 @@ test.describe('Task 8 single real-model acceptance', () => {
             runId,
             optIn: REAL_ACCEPTANCE_ENABLED,
             preflightOnly: PREFLIGHT_ONLY,
+            realLocalSemantic:
+                REAL_LOCAL_SEMANTIC_ENABLED,
             configuredBudget: GENERATE_BUDGET,
             testRetry: testInfo.retry,
             profile: {
@@ -619,6 +771,7 @@ test.describe('Task 8 single real-model acceptance', () => {
                 localAdjudicateAttempts: 0,
                 localObserveAttempts: 0,
                 localForwardedToServer: 0,
+                localAppraisalAttempts: 0,
                 translationAttempts: 0,
                 socialAttempts: 0,
                 directOllamaAttempts: 0,
@@ -677,6 +830,7 @@ test.describe('Task 8 single real-model acceptance', () => {
                 sourceMessageCount: fixture.messageCount,
             };
             expect(readFileStatus(TINA_CHAT_PATH)).toEqual(tinaBefore);
+            disableAcceptanceTranslationSettings();
             proxy = await createOneShotProxy(
                 profile.upstreamBaseUrl,
                 evidence,
@@ -745,6 +899,14 @@ test.describe('Task 8 single real-model acceptance', () => {
                     url.pathname === '/api/hogwarts-mud/local/adjudicate'
                 ) {
                     evidence.browser.localAdjudicateAttempts++;
+                    if (
+                        REAL_LOCAL_SEMANTIC_ENABLED
+                    ) {
+                        evidence.browser
+                            .localForwardedToServer++;
+                        await route.continue();
+                        return;
+                    }
                     await route.fulfill({
                         status: 503,
                         contentType: 'application/json',
@@ -757,10 +919,34 @@ test.describe('Task 8 single real-model acceptance', () => {
                     url.pathname === '/api/hogwarts-mud/local/observe'
                 ) {
                     evidence.browser.localObserveAttempts++;
+                    if (
+                        REAL_LOCAL_SEMANTIC_ENABLED
+                    ) {
+                        evidence.browser
+                            .localForwardedToServer++;
+                        await route.continue();
+                        return;
+                    }
                     await route.fulfill({
                         status: 503,
                         contentType: 'application/json',
                         body: '{"error":"Task 8 deterministic observation fallback"}',
+                    });
+                    return;
+                }
+                if (
+                    isPost &&
+                    url.pathname ===
+                        '/api/hogwarts-mud/local/appraise'
+                ) {
+                    evidence.browser
+                        .localAppraisalAttempts++;
+                    await route.fulfill({
+                        status: 503,
+                        contentType:
+                            'application/json',
+                        body:
+                            '{"error":"Task 8 Appraisal work prohibited"}',
                     });
                     return;
                 }
@@ -895,8 +1081,17 @@ test.describe('Task 8 single real-model acceptance', () => {
                     intervals: [1_000, 2_000, 3_000],
                 },
             ).not.toBe('pending');
+            evidence.terminalTurn =
+                await getStateSummary(
+                    page,
+                    false,
+                );
+            expect(
+                evidence.terminalTurn
+                    .turnStatus,
+            ).toBe('idle');
             await expect(submitTurnButton).toBeEnabled({
-                timeout: EXPECT_TIMEOUT,
+                timeout: TURN_TIMEOUT,
             });
 
             evidence.committedTurn = await validateCommittedTurn(
@@ -908,6 +1103,10 @@ test.describe('Task 8 single real-model acceptance', () => {
                 await getStateSummary(page, false);
             const persistedFileAfterTurn =
                 readFileStatus(fixture.qaFilePath);
+            const mudStateAfterTurn =
+                readMudState(
+                    fixture.qaFilePath,
+                );
             evidence.fixture.persistedFileAfterTurn =
                 persistedFileAfterTurn;
 
@@ -920,19 +1119,64 @@ test.describe('Task 8 single real-model acceptance', () => {
             expect(evidence.proxy.authorizationPreserved).toBe(true);
             expect(evidence.browser.localAdjudicateAttempts).toBe(1);
             expect(evidence.browser.localObserveAttempts).toBe(1);
-            expect(evidence.browser.localForwardedToServer).toBe(0);
+            expect(
+                evidence.browser
+                    .localForwardedToServer,
+            ).toBe(
+                REAL_LOCAL_SEMANTIC_ENABLED
+                    ? 2
+                    : 0,
+            );
             expect(evidence.browser.directOllamaAttempts).toBe(0);
             expect(evidence.browser.translationAttempts).toBe(0);
             expect(evidence.browser.socialAttempts).toBe(0);
+            expect(
+                evidence.browser
+                    .localAppraisalAttempts,
+            ).toBe(1);
             expect(evidence.committedTurn).toMatchObject({
                 chatLengthDelta: 2,
                 playerMessageDelta: 1,
                 assistantMessageDelta: 1,
                 turnCountDelta: 1,
                 turnStatus: 'idle',
-                localSemanticFallback: true,
-                perceptionSource: 'deterministic_fallback',
             });
+            if (
+                REAL_LOCAL_SEMANTIC_ENABLED
+            ) {
+                expect(
+                    evidence.committedTurn
+                        .localObserverTaskId,
+                ).toBe(
+                    'post_turn_semantic_proposal',
+                );
+                expect(
+                    evidence.committedTurn
+                        .localObserverModel,
+                ).toBe('qwen3:1.7b');
+            } else {
+                expect(
+                    evidence.committedTurn
+                        .localSemanticFallback,
+                ).toBe(true);
+                expect(
+                    evidence.committedTurn
+                        .perceptionSource,
+                ).toBe(
+                    'deterministic_fallback',
+                );
+            }
+            expect(
+                evidence.committedTurn
+                    .narrativeVisibleMs,
+            ).toBeGreaterThan(0);
+            expect(
+                evidence.committedTurn
+                    .stateSettledMs,
+            ).toBeGreaterThanOrEqual(
+                evidence.committedTurn
+                    .narrativeVisibleMs,
+            );
             expect(evidence.committedTurn.runtimeProfileIds).toEqual(
                 profile.runtimeProfileIds,
             );
@@ -977,13 +1221,63 @@ test.describe('Task 8 single real-model acceptance', () => {
             evidence.afterRefresh = await getStateSummary(page, false);
             const persistedFileAfterRefresh =
                 readFileStatus(fixture.qaFilePath);
+            const mudStateAfterRefresh =
+                readMudState(
+                    fixture.qaFilePath,
+                );
             evidence.fixture.persistedFileAfterRefresh =
                 persistedFileAfterRefresh;
+            evidence.refreshPersistence = {
+                changedTopLevelKeys:
+                    changedTopLevelKeys(
+                        mudStateAfterTurn,
+                        mudStateAfterRefresh,
+                    ),
+                worldStateBeforeSha256:
+                    sha256(
+                        JSON.stringify(
+                            withoutKnowledgeMetadata(
+                                mudStateAfterTurn,
+                            ),
+                        ),
+                    ),
+                worldStateAfterSha256:
+                    sha256(
+                        JSON.stringify(
+                            withoutKnowledgeMetadata(
+                                mudStateAfterRefresh,
+                            ),
+                        ),
+                    ),
+            };
             expect(evidence.browser.refreshGenerateAttempts).toBe(0);
             expect(evidence.afterRefresh).toEqual(persistedAfterTurn);
-            expect(persistedFileAfterRefresh).toEqual(
-                persistedFileAfterTurn,
-            );
+            if (
+                REAL_LOCAL_SEMANTIC_ENABLED
+            ) {
+                expect(
+                    withoutKnowledgeMetadata(
+                        mudStateAfterRefresh,
+                    ),
+                ).toEqual(
+                    withoutKnowledgeMetadata(
+                        mudStateAfterTurn,
+                    ),
+                );
+                expect(
+                    evidence
+                        .refreshPersistence
+                        .changedTopLevelKeys,
+                ).toEqual(
+                    ['knowledgeBase'],
+                );
+            } else {
+                expect(
+                    persistedFileAfterRefresh,
+                ).toEqual(
+                    persistedFileAfterTurn,
+                );
+            }
             evidence.result = 'passed';
         } catch (error) {
             failure = error;
@@ -1066,8 +1360,14 @@ test.describe('Task 8 single real-model acceptance', () => {
                 settingsCleanup.status.sha256 === settingsBefore.sha256;
             evidence.tinaAfter = readFileStatus(TINA_CHAT_PATH);
             evidence.secretsUnchanged =
-                JSON.stringify(secretsAfter) ===
-                JSON.stringify(secretsBefore);
+                secretsAfter.sha256 ===
+                    secretsBefore.sha256 &&
+                secretsAfter.bytes ===
+                    secretsBefore.bytes &&
+                Math.abs(
+                    secretsAfter.mtimeMs -
+                    secretsBefore.mtimeMs,
+                ) < 1;
             writeFileSync(
                 EVIDENCE_PATH,
                 `${JSON.stringify(evidence, null, 2)}\n`,

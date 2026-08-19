@@ -9,6 +9,7 @@ export const MODEL_TASK_EVENT_TYPES =
         'turn.pre_generation',
         'turn.generation',
         'turn.post_commit',
+        'turn.event_checkpoint',
         'scene.close_requested',
         'scene.transition_committed',
         'memory.event_boundary_committed',
@@ -401,7 +402,7 @@ export const MODEL_TASK_CATALOG =
             },
         ),
         task(
-            'local_post_turn_observer',
+            'post_turn_semantic_proposal',
             {
                 family: 'local_semantic',
                 kind: 'local_observer',
@@ -412,9 +413,9 @@ export const MODEL_TASK_CATALOG =
                 phase: 'post_generation',
                 blocking: true,
                 quotaGroup:
-                    'local_turn',
+                    'post_turn_semantic',
                 budgetPolicyId:
-                    'local_post_turn',
+                    'post_turn_semantic',
                 owner:
                     'adapters/local-semantic.js',
             },
@@ -435,7 +436,71 @@ export const MODEL_TASK_CATALOG =
                 budgetPolicyId:
                     'local_inventory',
                 owner:
-                    'adapters/local-semantic.js',
+                    'src/hogwarts-mud/dynamic-inventory-observer.js',
+            },
+        ),
+        task(
+            'local_dynamic_identity_observer',
+            {
+                family: 'local_semantic',
+                kind: 'local_observer',
+                tiers: ['local'],
+                triggerEvents: [
+                    'turn.post_commit',
+                ],
+                phase: 'post_generation',
+                blocking: false,
+                quotaGroup:
+                    'local_turn',
+                budgetPolicyId:
+                    'local_dynamic_identity',
+                owner:
+                    'src/hogwarts-mud/dynamic-identity-observer.js',
+                ledgerScope:
+                    'server_ephemeral',
+            },
+        ),
+        task(
+            'local_dynamic_turn_observer',
+            {
+                family: 'local_semantic',
+                kind: 'local_observer',
+                tiers: ['local'],
+                triggerEvents: [
+                    'turn.post_commit',
+                ],
+                phase: 'post_generation',
+                blocking: false,
+                quotaGroup:
+                    'local_turn',
+                budgetPolicyId:
+                    'local_dynamic_turn',
+                owner:
+                    'src/hogwarts-mud/dynamic-turn-observer.js',
+                ledgerScope:
+                    'server_ephemeral',
+            },
+        ),
+        task(
+            'local_event_boundary_observer',
+            {
+                family:
+                    'local_semantic',
+                kind:
+                    'local_observer',
+                tiers: ['local'],
+                triggerEvents: [
+                    'turn.event_checkpoint',
+                ],
+                phase:
+                    'post_commit_background',
+                blocking: false,
+                quotaGroup:
+                    'local_background',
+                budgetPolicyId:
+                    'local_event_boundary',
+                owner:
+                    'workflows/background-event-boundary.js',
             },
         ),
         task(
@@ -507,10 +572,10 @@ export function validateModelTaskCatalog() {
         );
     }
     if (
-        MODEL_TASK_CATALOG.length !== 20
+        MODEL_TASK_CATALOG.length !== 23
     ) {
         errors.push(
-            'Model task catalog must account for exactly 20 current tasks.',
+            'Model task catalog must account for exactly 23 current tasks.',
         );
     }
     for (const definition of

@@ -433,7 +433,6 @@ test('coherent orphan actor references recover into one temporary entrance', () 
         protocolVersion: 1,
         publicEventEn:
             'Tina asks an older student his name.',
-        eventEnded: false,
         actorPresence: {
             presentActorIdsAfterTurn: [
                 ...state

@@ -1,0 +1,623 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-19T10:36:37.904Z",
+  "scope": "validator-revision-17",
+  "archive": {
+    "path": "/Users/bytedance/sillytavern/SillyTavern/data/default-user/chats/Hogwarts_World_Director/Hogwarts World Director - 2026-08-02@22h16m07s339ms.jsonl",
+    "sha256": "597e69e069d10e771b4197f54a9ceeffd8801ce8175ce5c927ff2868b2adff06",
+    "bytes": 3852365,
+    "mtimeMs": 1786822439030.9084,
+    "unchanged": true
+  },
+  "modelSlots": {
+    "low": {
+      "profileId": "8ba05151-dd42-4bfa-a0b1-8f59e710ddd7",
+      "presetName": "",
+      "regexPresetId": "",
+      "contextSize": 120000,
+      "maxResponseLength": 12000,
+      "responseHeadroomVersion": 2
+    },
+    "medium": {
+      "profileId": "",
+      "presetName": "",
+      "regexPresetId": "",
+      "contextSize": 120000,
+      "maxResponseLength": 12000,
+      "responseHeadroomVersion": 2
+    },
+    "high": {
+      "profileId": "",
+      "presetName": "",
+      "regexPresetId": "",
+      "contextSize": 120000,
+      "maxResponseLength": 12000,
+      "responseHeadroomVersion": 2
+    }
+  },
+  "contextPlans": {
+    "low": {
+      "mode": "rich",
+      "label": "丰裕",
+      "ragLimit": 10,
+      "recentMessageLimit": 16,
+      "chapterMessageLimit": 32,
+      "memoryLimits": {
+        "core": 3,
+        "recent": 6,
+        "everyday": 8
+      },
+      "contextSize": 120000,
+      "maxResponseLength": 12000,
+      "inputBudget": 108000,
+      "mandatoryReserveTokens": 8640,
+      "roleBudgetTokens": 99360,
+      "maxPromptCharacters": 298080
+    },
+    "medium": {
+      "mode": "rich",
+      "label": "丰裕",
+      "ragLimit": 10,
+      "recentMessageLimit": 16,
+      "chapterMessageLimit": 32,
+      "memoryLimits": {
+        "core": 3,
+        "recent": 6,
+        "everyday": 8
+      },
+      "contextSize": 120000,
+      "maxResponseLength": 12000,
+      "inputBudget": 108000,
+      "mandatoryReserveTokens": 8640,
+      "roleBudgetTokens": 99360,
+      "maxPromptCharacters": 298080
+    },
+    "high": {
+      "mode": "rich",
+      "label": "丰裕",
+      "ragLimit": 10,
+      "recentMessageLimit": 16,
+      "chapterMessageLimit": 32,
+      "memoryLimits": {
+        "core": 3,
+        "recent": 6,
+        "everyday": 8
+      },
+      "contextSize": 120000,
+      "maxResponseLength": 12000,
+      "inputBudget": 108000,
+      "mandatoryReserveTokens": 8640,
+      "roleBudgetTokens": 99360,
+      "maxPromptCharacters": 298080
+    }
+  },
+  "representativeInput": {
+    "playerAction": {
+      "characters": 37,
+      "bytes": 111,
+      "estimatedTokens": 13
+    },
+    "performanceBudget": {
+      "elapsedMinutes": 15,
+      "minimumWords": 240,
+      "maximumWords": 560
+    },
+    "socialEvidence": {
+      "messages": 24,
+      "events": 12,
+      "actors": 11
+    },
+    "retrievalRecords": 0,
+    "retrievalNote": "Prompt builders are measured with empty model-free retrieval. Retrieval field ceilings are audited separately from production planner limits."
+  },
+  "prompts": {
+    "scenePerformance": {
+      "source": "workflows/turn-performance.js::generateScenePerformance",
+      "audience": "low",
+      "system": {
+        "characters": 26904,
+        "bytes": 26908,
+        "estimatedTokens": 8968
+      },
+      "embeddedOutputSchema": {
+        "characters": 2599,
+        "bytes": 2599,
+        "estimatedTokens": 867
+      },
+      "transportOutputSchema": {
+        "characters": 0,
+        "bytes": 0,
+        "estimatedTokens": 0
+      },
+      "user": {
+        "characters": 16961,
+        "bytes": 17134,
+        "estimatedTokens": 5654
+      },
+      "messageTotal": {
+        "characters": 43865,
+        "bytes": 44042,
+        "estimatedTokens": 14622
+      },
+      "transportTotal": {
+        "characters": 43865,
+        "bytes": 43865,
+        "estimatedTokens": 14622
+      },
+      "runtimeCeilingCharacters": 298080,
+      "exceedsRuntimeCeiling": false,
+      "topLevelKeys": [
+        "playerTurn",
+        "sceneFacts",
+        "actorCards",
+        "actionOpportunities",
+        "memoryActivations",
+        "prohibitions"
+      ],
+      "fields": {
+        "sceneFacts": {
+          "characters": 10109,
+          "bytes": 10132,
+          "estimatedTokens": 3370
+        },
+        "actorCards": {
+          "characters": 3137,
+          "bytes": 3139,
+          "estimatedTokens": 1046
+        },
+        "actionOpportunities": {
+          "characters": 1955,
+          "bytes": 1955,
+          "estimatedTokens": 652
+        },
+        "memoryActivations": {
+          "characters": 876,
+          "bytes": 876,
+          "estimatedTokens": 292
+        },
+        "playerTurn": {
+          "characters": 505,
+          "bytes": 653,
+          "estimatedTokens": 169
+        },
+        "prohibitions": {
+          "characters": 276,
+          "bytes": 276,
+          "estimatedTokens": 92
+        }
+      },
+      "repeatedStrings": {
+        "distinctRepeatedStrings": 4,
+        "repeatedCharacters": 206,
+        "largest": [
+          {
+            "characters": 27,
+            "sections": [
+              "sceneFacts",
+              "actorCards",
+              "actionOpportunities",
+              "memoryActivations"
+            ],
+            "preview": "canon_hermione_jean_granger"
+          },
+          {
+            "characters": 27,
+            "sections": [
+              "sceneFacts",
+              "actionOpportunities"
+            ],
+            "preview": "canon_ronald_bilius_weasley"
+          },
+          {
+            "characters": 26,
+            "sections": [
+              "sceneFacts",
+              "actionOpportunities"
+            ],
+            "preview": "gryffindor_girls_dormitory"
+          },
+          {
+            "characters": 24,
+            "sections": [
+              "sceneFacts",
+              "actorCards",
+              "actionOpportunities",
+              "memoryActivations"
+            ],
+            "preview": "canon_harry_james_potter"
+          }
+        ]
+      }
+    }
+  },
+  "localPrompts": {
+    "preTurn": {
+      "source": "local-semantic-adjudicator.js::adjudicateTurn",
+      "audience": "local semantic model",
+      "systemRules": {
+        "characters": 6345,
+        "bytes": 6819,
+        "estimatedTokens": 2115
+      },
+      "systemWithEmbeddedSchema": {
+        "characters": 6345,
+        "bytes": 6819,
+        "estimatedTokens": 2115
+      },
+      "embeddedOutputSchema": {
+        "characters": 0,
+        "bytes": 0,
+        "estimatedTokens": 0
+      },
+      "transportOutputSchema": {
+        "characters": 1869,
+        "bytes": 1869,
+        "estimatedTokens": 623
+      },
+      "user": {
+        "characters": 4034,
+        "bytes": 4187,
+        "estimatedTokens": 1345
+      },
+      "promptTotal": {
+        "characters": 10379,
+        "bytes": 10379,
+        "estimatedTokens": 3460
+      },
+      "transportTotal": {
+        "characters": 12248,
+        "bytes": 12248,
+        "estimatedTokens": 4083
+      },
+      "configuredContextTokens": 4096,
+      "estimatedPromptTokens": 3460,
+      "estimatedContextOverflow": false,
+      "endpointInputLimit": 100000,
+      "endpointInputLimitExceeded": false,
+      "fields": {
+        "room": {
+          "characters": 1408,
+          "bytes": 1408,
+          "estimatedTokens": 470
+        },
+        "scene": {
+          "characters": 1370,
+          "bytes": 1374,
+          "estimatedTokens": 457
+        },
+        "actors": {
+          "characters": 857,
+          "bytes": 857,
+          "estimatedTokens": 286
+        },
+        "timePolicy": {
+          "characters": 125,
+          "bytes": 125,
+          "estimatedTokens": 42
+        },
+        "playerTurnSequence": {
+          "characters": 80,
+          "bytes": 154,
+          "estimatedTokens": 27
+        },
+        "playerAction": {
+          "characters": 39,
+          "bytes": 113,
+          "estimatedTokens": 13
+        },
+        "clock": {
+          "characters": 20,
+          "bytes": 21,
+          "estimatedTokens": 7
+        },
+        "forcedCheck": {
+          "characters": 5,
+          "bytes": 5,
+          "estimatedTokens": 2
+        },
+        "movementResolution": {
+          "characters": 4,
+          "bytes": 4,
+          "estimatedTokens": 2
+        }
+      },
+      "repeatedStrings": {
+        "distinctRepeatedStrings": 2,
+        "repeatedCharacters": 89,
+        "largest": [
+          {
+            "characters": 37,
+            "sections": [
+              "playerAction",
+              "playerTurnSequence"
+            ],
+            "preview": "我把双手规规矩矩地放在桌边，认真看着赫敏，安静等她继续讲解，不碰任何物品。"
+          },
+          {
+            "characters": 26,
+            "sections": [
+              "scene",
+              "room",
+              "actors"
+            ],
+            "preview": "gryffindor_girls_dormitory"
+          }
+        ]
+      }
+    },
+    "preTurnFollow": {
+      "source": "local-semantic-adjudicator.js::adjudicateTurn follow movement",
+      "audience": "local semantic model",
+      "systemRules": {
+        "characters": 9236,
+        "bytes": 9786,
+        "estimatedTokens": 3079
+      },
+      "systemWithEmbeddedSchema": {
+        "characters": 9236,
+        "bytes": 9786,
+        "estimatedTokens": 3079
+      },
+      "embeddedOutputSchema": {
+        "characters": 0,
+        "bytes": 0,
+        "estimatedTokens": 0
+      },
+      "transportOutputSchema": {
+        "characters": 1869,
+        "bytes": 1869,
+        "estimatedTokens": 623
+      },
+      "user": {
+        "characters": 5264,
+        "bytes": 5382,
+        "estimatedTokens": 1755
+      },
+      "promptTotal": {
+        "characters": 14500,
+        "bytes": 14500,
+        "estimatedTokens": 4834
+      },
+      "transportTotal": {
+        "characters": 16369,
+        "bytes": 16369,
+        "estimatedTokens": 5457
+      },
+      "configuredContextTokens": 4096,
+      "estimatedPromptTokens": 4834,
+      "estimatedContextOverflow": true,
+      "endpointInputLimit": 100000,
+      "endpointInputLimitExceeded": false,
+      "fields": {
+        "room": {
+          "characters": 1408,
+          "bytes": 1408,
+          "estimatedTokens": 470
+        },
+        "scene": {
+          "characters": 1370,
+          "bytes": 1374,
+          "estimatedTokens": 457
+        },
+        "movementContext": {
+          "characters": 1247,
+          "bytes": 1292,
+          "estimatedTokens": 416
+        },
+        "actors": {
+          "characters": 857,
+          "bytes": 857,
+          "estimatedTokens": 286
+        },
+        "timePolicy": {
+          "characters": 125,
+          "bytes": 125,
+          "estimatedTokens": 42
+        },
+        "playerTurnSequence": {
+          "characters": 62,
+          "bytes": 96,
+          "estimatedTokens": 21
+        },
+        "playerAction": {
+          "characters": 21,
+          "bytes": 55,
+          "estimatedTokens": 7
+        },
+        "clock": {
+          "characters": 20,
+          "bytes": 21,
+          "estimatedTokens": 7
+        },
+        "forcedCheck": {
+          "characters": 5,
+          "bytes": 5,
+          "estimatedTokens": 2
+        },
+        "movementResolution": {
+          "characters": 4,
+          "bytes": 4,
+          "estimatedTokens": 2
+        }
+      },
+      "repeatedStrings": {
+        "distinctRepeatedStrings": 5,
+        "repeatedCharacters": 383,
+        "largest": [
+          {
+            "characters": 147,
+            "sections": [
+              "scene",
+              "movementContext"
+            ],
+            "preview": "Hermione successfully performed the Reparo charm, fixing Harry's spare quill in front of Tina and Lavender, demonstrating her practical competence."
+          },
+          {
+            "characters": 107,
+            "sections": [
+              "scene",
+              "movementContext"
+            ],
+            "preview": "The study session concludes as Hermione finishes her demonstration and suggests they retreat to their beds."
+          },
+          {
+            "characters": 27,
+            "sections": [
+              "actors",
+              "movementContext"
+            ],
+            "preview": "canon_hermione_jean_granger"
+          },
+          {
+            "characters": 26,
+            "sections": [
+              "scene",
+              "room",
+              "actors",
+              "movementContext"
+            ],
+            "preview": "gryffindor_girls_dormitory"
+          },
+          {
+            "characters": 24,
+            "sections": [
+              "actors",
+              "movementContext"
+            ],
+            "preview": "canon_harry_james_potter"
+          }
+        ]
+      }
+    },
+    "postTurn": {
+      "source": "local-semantic-adjudicator.js::observeTurn core",
+      "audience": "local semantic model",
+      "systemRules": {
+        "characters": 5806,
+        "bytes": 5852,
+        "estimatedTokens": 1936
+      },
+      "systemWithEmbeddedSchema": {
+        "characters": 5806,
+        "bytes": 5852,
+        "estimatedTokens": 1936
+      },
+      "embeddedOutputSchema": {
+        "characters": 0,
+        "bytes": 0,
+        "estimatedTokens": 0
+      },
+      "transportOutputSchema": {
+        "characters": 3839,
+        "bytes": 3839,
+        "estimatedTokens": 1280
+      },
+      "user": {
+        "characters": 4463,
+        "bytes": 4612,
+        "estimatedTokens": 1488
+      },
+      "promptTotal": {
+        "characters": 10269,
+        "bytes": 10269,
+        "estimatedTokens": 3423
+      },
+      "transportTotal": {
+        "characters": 14108,
+        "bytes": 14108,
+        "estimatedTokens": 4703
+      },
+      "configuredContextTokens": 4096,
+      "estimatedPromptTokens": 3423,
+      "estimatedContextOverflow": false,
+      "endpointInputLimit": 150000,
+      "endpointInputLimitExceeded": false,
+      "fields": {
+        "narrativeSegments": {
+          "characters": 2021,
+          "bytes": 2021,
+          "estimatedTokens": 674
+        },
+        "room": {
+          "characters": 1408,
+          "bytes": 1408,
+          "estimatedTokens": 470
+        },
+        "actors": {
+          "characters": 562,
+          "bytes": 562,
+          "estimatedTokens": 188
+        },
+        "localPresence": {
+          "characters": 180,
+          "bytes": 180,
+          "estimatedTokens": 60
+        },
+        "playerTurnSequence": {
+          "characters": 80,
+          "bytes": 154,
+          "estimatedTokens": 27
+        },
+        "playerAction": {
+          "characters": 39,
+          "bytes": 113,
+          "estimatedTokens": 13
+        },
+        "clock": {
+          "characters": 20,
+          "bytes": 21,
+          "estimatedTokens": 7
+        },
+        "existingActorPresence": {
+          "characters": 4,
+          "bytes": 4,
+          "estimatedTokens": 2
+        },
+        "targetActorIds": {
+          "characters": 2,
+          "bytes": 2,
+          "estimatedTokens": 1
+        }
+      },
+      "repeatedStrings": {
+        "distinctRepeatedStrings": 4,
+        "repeatedCharacters": 138,
+        "largest": [
+          {
+            "characters": 37,
+            "sections": [
+              "playerAction",
+              "playerTurnSequence"
+            ],
+            "preview": "我把双手规规矩矩地放在桌边，认真看着赫敏，安静等她继续讲解，不碰任何物品。"
+          },
+          {
+            "characters": 27,
+            "sections": [
+              "narrativeSegments",
+              "actors"
+            ],
+            "preview": "canon_hermione_jean_granger"
+          },
+          {
+            "characters": 26,
+            "sections": [
+              "room",
+              "actors"
+            ],
+            "preview": "gryffindor_girls_dormitory"
+          },
+          {
+            "characters": 24,
+            "sections": [
+              "narrativeSegments",
+              "actors",
+              "localPresence"
+            ],
+            "preview": "canon_harry_james_potter"
+          }
+        ]
+      }
+    }
+  }
+}

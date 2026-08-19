@@ -3,6 +3,10 @@ import { defineConfig } from '@playwright/test';
 const isCalendarGate =
     process.env.HPMUD_CALENDAR_E2E ===
     '1';
+const baseURL =
+    process.env
+        .HOGWARTS_E2E_BASE_URL ||
+    'http://127.0.0.1:8000';
 
 export default defineConfig({
     testMatch: isCalendarGate
@@ -10,7 +14,7 @@ export default defineConfig({
         : '*.e2e.js',
     outputDir: 'test-results/playwright',
     use: {
-        baseURL: 'http://127.0.0.1:8000',
+        baseURL,
         video: 'only-on-failure',
         screenshot: 'only-on-failure',
         ...(isCalendarGate

@@ -93,6 +93,7 @@ function actorRuntimeFixture(
             'hogwarts',
         roomId:
             'gryffindor_common_room',
+        locationKnown: true,
         present: true,
         lifeStatus:
             'alive',
@@ -535,7 +536,7 @@ test('Task 1 Memory Ref and Actor Memory Index never project text copies', () =>
 test('Task 1 versions initialize new worlds and are exported by the facade', () => {
     assert.equal(
         actorContextVersion,
-        1,
+        2,
     );
     assert.equal(
         memoryReferenceVersion,
@@ -600,7 +601,7 @@ test('Task 1 versions initialize new worlds and are exported by the facade', () 
                     .actorDossierProjectionVersion,
         },
         {
-            actorContextVersion: 1,
+            actorContextVersion: 2,
             memoryReferenceVersion: 3,
             actorDossierProjectionVersion: 1,
         },

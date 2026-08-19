@@ -9,11 +9,6 @@ import {
 } from './actor-creation-proposal.js';
 
 import {
-    DURABLE_ACQUISITION_PATTERN,
-    IMPORTANT_ITEM_PATTERN,
-} from './inventory.js';
-
-import {
     findLocalRoomPath,
 } from './pathfinding.js';
 
@@ -78,18 +73,6 @@ function compactNarrativeEventText(
 function deriveNarrativePublicEvent(
     payload,
 ) {
-    const supplied = String(
-        payload?.publicEventEn || '',
-    ).trim();
-    if (
-        supplied &&
-        !/player completes|player acts|characters respond/iu
-            .test(supplied)
-    ) {
-        return compactNarrativeEventText(
-            supplied,
-        );
-    }
     const progression = String(
         payload?.signals
             ?.sceneProgression
@@ -272,7 +255,7 @@ export function foldNarrativeTurnProposals(
                     actorUpdates,
                     actorId,
                     {
-                        currentActivityEn:
+                        _movementActivityEn:
                             proposal
                                 .currentActivityEn,
                         mapId:
@@ -449,6 +432,7 @@ function sanitizeNarrativeActorUpdates(
         'id',
         'present',
         'currentActivityEn',
+        '_movementActivityEn',
         'mapId',
         'roomId',
         'firstImpressionOfPlayerEn',
@@ -494,29 +478,14 @@ function sanitizeNarrativeActorUpdates(
                 update.id,
             );
         }
-        if (
-            update.currentActivityEn !=
-                null
-        ) {
-            update.currentActivityEn =
-                String(
-                    update
-                        .currentActivityEn ||
-                    '',
-                ).trim();
-            if (
-                !update
-                    .currentActivityEn
-            ) {
-                delete update
-                    .currentActivityEn;
-            }
-        }
         const actor =
             knownActors.get(update.id);
         if (
             update.mapId ||
-            update.roomId
+            update.roomId ||
+            update
+                ._movementActivityEn !==
+                undefined
         ) {
             const currentMapId =
                 actor?.mapId ||
@@ -542,6 +511,8 @@ function sanitizeNarrativeActorUpdates(
             if (!validRoute) {
                 delete update.mapId;
                 delete update.roomId;
+                delete update
+                    ._movementActivityEn;
                 appendSettlementWarning(
                     warnings,
                     'invalid_actor_move_proposal',
@@ -550,6 +521,30 @@ function sanitizeNarrativeActorUpdates(
             } else {
                 update.mapId =
                     targetMapId;
+                update
+                    .currentActivityEn =
+                    update
+                        ._movementActivityEn;
+                delete update
+                    ._movementActivityEn;
+            }
+        }
+        if (
+            update.currentActivityEn !=
+                null
+        ) {
+            update.currentActivityEn =
+                String(
+                    update
+                        .currentActivityEn ||
+                    '',
+                ).trim();
+            if (
+                !update
+                    .currentActivityEn
+            ) {
+                delete update
+                    .currentActivityEn;
             }
         }
         if (
@@ -781,24 +776,6 @@ function sanitizeNarrativeItemsAndClues(
         }
         return true;
     });
-    if (
-        IMPORTANT_ITEM_PATTERN.test(
-            narrative,
-        ) &&
-        DURABLE_ACQUISITION_PATTERN
-            .test(narrative) &&
-        !payload.itemUpdates.some(
-            update =>
-                update.action ===
-                    'acquire',
-        )
-    ) {
-        appendSettlementWarning(
-            warnings,
-            'possible_untracked_item',
-            'The narrative may contain an important item acquisition without a valid item proposal.',
-        );
-    }
     const activeArc = (
         worldState.storyArcs ||
         []
@@ -926,11 +903,6 @@ export function finalizeNarrativeTurnPerformance(
         deriveNarrativePublicEvent(
             payload,
         );
-    payload.eventEnded =
-        typeof signals.eventEnded ===
-            'boolean'
-            ? signals.eventEnded
-            : false;
     payload.pacingBeatRealized =
         typeof signals
             .pacingBeatRealized ===
@@ -974,10 +946,6 @@ export function finalizeNarrativeTurnPerformance(
                         proposedProgression
                             .summaryEn,
                     ),
-                completedRequestedStep:
-                    proposedProgression
-                        .completedRequestedStep ===
-                    true,
             }
             : {
                 type:
@@ -990,8 +958,6 @@ export function finalizeNarrativeTurnPerformance(
                 summaryEn:
                     payload
                         .publicEventEn,
-                completedRequestedStep:
-                    false,
             };
     payload.settlementWarnings = [
         ...new Map(
@@ -1005,19 +971,6 @@ export function finalizeNarrativeTurnPerformance(
             ]),
         ).values(),
     ].slice(-24);
-    if (
-        momentumDirective
-            ?.explicitProgressionRequest &&
-        !payload.sceneProgression
-            .completedRequestedStep
-    ) {
-        appendSettlementWarning(
-            payload
-                .settlementWarnings,
-            'unconfirmed_requested_progression',
-            'The narrative was accepted without a structured completion signal.',
-        );
-    }
     delete payload.stateProposals;
     delete payload.signals;
     return payload;

@@ -1265,7 +1265,7 @@ test(
 );
 
 test(
-    'model task catalog accounts for 20 tasks with 16 active and four explicit removals',
+    'model task catalog accounts for 23 tasks while server-only dynamic tasks stay out of save runtime',
     () => {
         assert.deepEqual(
             validateModelTaskCatalog(),
@@ -1276,7 +1276,7 @@ test(
         );
         assert.equal(
             MODEL_TASK_CATALOG.length,
-            20,
+            23,
         );
         assert.equal(
             MODEL_TASK_CATALOG
@@ -1284,7 +1284,7 @@ test(
                     task.status ===
                     'active')
                 .length,
-            16,
+            19,
         );
         assert.deepEqual(
             MODEL_TASK_CATALOG
@@ -1307,7 +1307,28 @@ test(
             Object.keys(
                 runtime.byTaskId,
             ).length,
-            16,
+            17,
+        );
+        assert.equal(
+            Object.hasOwn(
+                runtime.byTaskId,
+                'local_event_boundary_observer',
+            ),
+            true,
+        );
+        assert.equal(
+            Object.hasOwn(
+                runtime.byTaskId,
+                'local_dynamic_identity_observer',
+            ),
+            false,
+        );
+        assert.equal(
+            Object.hasOwn(
+                runtime.byTaskId,
+                'local_dynamic_turn_observer',
+            ),
+            false,
         );
         for (const retiredTaskId of [
             'daily_director',
@@ -1464,9 +1485,6 @@ test(
                 firstImpressionOfPlayerEn:
                     'A conspicuously eager classmate.',
             }],
-            signals: {
-                eventEnded: false,
-            },
         };
         assert.deepEqual(
             validateLowScenePerformanceOutputContract(
@@ -1506,15 +1524,12 @@ test(
         const requiredSignals = {
             ...valid,
             signals: {
-                eventEnded: false,
                 pacingBeatRealized: true,
                 sceneProgression: {
                     type:
                         'new_information',
                     summaryEn:
                         'Hermione identifies the next practical step.',
-                    completedRequestedStep:
-                        true,
                 },
             },
         };
@@ -1625,10 +1640,6 @@ test(
                         textEn:
                             'Lavender nods back.',
                     }],
-                    signals: {
-                        eventEnded:
-                            false,
-                    },
                 },
                 {
                     actors: [],

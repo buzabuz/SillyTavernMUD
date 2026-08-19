@@ -123,12 +123,6 @@ const DAILY_SCHEDULE_TAGS =
         'date',
         'meeting',
     ]);
-const CHINESE_COMMITMENT_PATTERN =
-    /(?:^|[\s，。！？；])我(?:答应|承诺|保证)(?:你|他|她|他们|大家)?[^。！？\n]{0,120}(?:今天|明天|后天|周[一二三四五六日天]|星期[一二三四五六日天]|周末|下周|见面|碰面|约会|训练|练习|上课|考试|会合)/u;
-const ENGLISH_COMMITMENT_PATTERN =
-    /\bi\s+(?:promise|agree|commit|swear)\b[^\n.!?]{0,120}\b(?:today|tomorrow|tonight|weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday|meet|date|practice|train|class|exam|appointment)\b/iu;
-const ENGLISH_FUTURE_MEETING_PATTERN =
-    /\bi(?:'ll| will)\s+(?:meet|see|join|attend|practice|train|study)\b[^\n.!?]{0,100}\b(?:today|tomorrow|tonight|weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week)\b/iu;
 
 function isRecord(value) {
     return Boolean(
@@ -174,27 +168,30 @@ function isSuccessfulPlanningResult(
     );
 }
 
-export function detectExplicitCalendarCommitment(
+export function resolveCalendarCommitmentEvidence(
+    calendarCommitment,
     playerAction,
 ) {
-    const normalized =
+    const normalizedAction =
         normalizedText(
             playerAction,
         );
+    const evidenceText =
+        normalizedText(
+            calendarCommitment
+                ?.evidenceText,
+        );
     if (
-        !normalized ||
-        (
-            !CHINESE_COMMITMENT_PATTERN
-                .test(normalized) &&
-            !ENGLISH_COMMITMENT_PATTERN
-                .test(normalized) &&
-            !ENGLISH_FUTURE_MEETING_PATTERN
-                .test(normalized)
+        calendarCommitment
+            ?.requested !== true ||
+        !evidenceText ||
+        !normalizedAction.includes(
+            evidenceText,
         )
     ) {
         return '';
     }
-    return normalized.slice(
+    return evidenceText.slice(
         0,
         240,
     );
@@ -205,6 +202,7 @@ export function evaluateMediumCalendarTriggers(
     {
         highPlanningResult = null,
         playerAction = '',
+        calendarCommitment = null,
         force = false,
     } = {},
 ) {
@@ -267,7 +265,8 @@ export function evaluateMediumCalendarTriggers(
         );
     }
     const explicitCommitment =
-        detectExplicitCalendarCommitment(
+        resolveCalendarCommitmentEvidence(
+            calendarCommitment,
             playerAction,
         );
     if (explicitCommitment) {

@@ -27,9 +27,6 @@ import {
     validateSceneTransitionPackage,
 } from '../public/scripts/extensions/hogwarts-mud/domain/scene-transition.js';
 import {
-    createPendingEventBoundary,
-} from '../public/scripts/extensions/hogwarts-mud/domain/turn-reducer.js';
-import {
     normalizeAppraisal,
 } from '../public/scripts/extensions/hogwarts-mud/domain/memory-synapse-schema.js';
 import {
@@ -1124,40 +1121,6 @@ test('scene close clears a consumed boundary but carries a pending boundary into
         consumed
             .pendingEventBoundary,
         null,
-    );
-});
-
-test('turn boundary IDs include stable epoch and revision provenance', () => {
-    const boundary =
-        createPendingEventBoundary(
-            {
-                timelineEpoch:
-                    'epoch_a',
-                stateRevision: 7,
-                clock:
-                    '1991-09-03 · 17:00',
-                scene: {
-                    id: 'scene_b',
-                },
-            },
-            {
-                publicEventEn:
-                    'The lesson ends.',
-            },
-            30,
-            true,
-        );
-    assert.equal(
-        boundary.boundaryId,
-        boundary.id,
-    );
-    assert.equal(
-        boundary.timelineEpoch,
-        'epoch_a',
-    );
-    assert.equal(
-        boundary.stateRevision,
-        7,
     );
 });
 

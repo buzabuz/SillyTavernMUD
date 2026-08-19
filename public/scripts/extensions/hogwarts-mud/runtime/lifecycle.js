@@ -80,23 +80,23 @@ export function createLifecycleRuntime(ports) {
         if (!state) return false;
         const originalState =
             state;
+        const actorContextMigration =
+            migrateActorContextState(
+                structuredClone(
+                    originalState,
+                ),
+            );
+        state =
+            actorContextMigration.state;
         const lifecycleCutover =
             migrateTimelineAppraisalState(
                 structuredClone(
-                    originalState,
+                    state,
                 ),
                 getContext().chat,
             );
         state =
             lifecycleCutover.state;
-        const actorContextMigration =
-            migrateActorContextState(
-                structuredClone(
-                    state,
-                ),
-            );
-        state =
-            actorContextMigration.state;
         const interiorMountMigration =
             migrateInteriorMountAuthority(
                 state,
@@ -731,29 +731,11 @@ export function createLifecycleRuntime(ports) {
             }
             changed = true;
         }
-        if (state.sceneTransition?.status === 'failed' &&
-        !state.sceneTransition.destinationHint) {
-            const match = String(state.sceneTransition.error || '').match(
-                /地图\s+([a-z0-9_.-]+)[\s\S]*?房间\s+([a-z0-9_.-]+)/i,
-            );
-            if (match) {
-                state.sceneTransition.destinationHint =
-                `前往${getRoomName(state, match[1], match[2])}`;
-                state.sceneTransition.expectedDestination = {
-                    mapId: match[1],
-                    roomId: match[2],
-                };
-                changed = true;
-            }
-        }
         if (state.scene) {
             if (
                 state.scene.id ===
                 'settling_in_gryffindor_dormitory' &&
-            /Gryffindor Common Room|格兰芬多公共休息室/iu
-                .test(
-                    `${state.scene.nameEn || ''} ${state.scene.name || ''}`,
-                )
+            false
             ) {
                 state.scene.nameEn =
                 'Gryffindor Girls\' Dormitory — Settling In';

@@ -162,8 +162,11 @@ export function migrateActorPresentationState(
         };
     }
     if (
-        worldState.actorContextVersion ===
-        1
+        Number(
+            worldState
+                .actorContextVersion ||
+            0,
+        ) >= 1
     ) {
         return {
             state: worldState,

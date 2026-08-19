@@ -28,14 +28,6 @@ export const ITEM_CUSTODY_VALUES = Object.freeze([
     'consumed',
     'lost',
 ]);
-export const IMPORTANT_ITEM_PATTERN =
-    /(?:\b(?:wand|key|letter|journal|diary|map|permit|token|ring|ribbon|glasses|spectacles|amulet|artifact|heirloom|keepsake|clue|autograph|signed parchment)\b|魔杖|钥匙|信件|日记|地图|许可证|信物|戒指|丝带|眼镜|护符|魔法物品|传家宝|纪念品|线索|签名|签名羊皮纸)/i;
-export const ORDINARY_TRANSIENT_ITEM_PATTERN =
-    /(?:\b(?:food|meal|snack|sweet|toffee|pasty|tart|drink|wrapper|receipt)\b|食物|饭|零食|糖果|太妃糖|馅饼|饮料|包装|收据)/i;
-export const DURABLE_ACQUISITION_PATTERN =
-    /(?:\b(?:belongs? to|became .{0,24}(?:property|possession)|bought|purchased|received|accepted|acquired|was given|was handed|purchase (?:is|was) complete|fitting (?:is|was) resolved|has chosen)\b|归.+所有|买下|购买完成|得到|收下|交给|正式获得|认主|选择了)/i;
-export const PLAYER_KEEP_ITEM_PATTERN =
-    /(?:保留|收好|带上|随身|装进|放进(?:包|口袋)|拿走|留着|keep|save|carry|take (?:it|this|the)|put (?:it|this|the) (?:away|in)|hold on to)/i;
 
 function inferItemImportance(
     item = {},
@@ -45,15 +37,12 @@ function inferItemImportance(
     )) {
         return item.importance;
     }
-    const text = [
-        item.id,
-        item.labelEn,
-        item.detailEn,
-    ].filter(Boolean).join(' ');
-    if (IMPORTANT_ITEM_PATTERN.test(text)) {
-        return 'key';
-    }
-    return 'ordinary';
+    return (
+        item.storyRoles ||
+        []
+    ).length
+        ? 'important'
+        : 'ordinary';
 }
 
 export function inferItemKind(
@@ -355,6 +344,8 @@ export function projectObservedInventoryUpdates(
                 observed.operation ||
                     observed.action,
                 evidence,
+                observed
+                    .evidenceItemText,
             )
         ) {
             continue;
@@ -382,55 +373,9 @@ export function projectObservedInventoryUpdates(
             continue;
         }
         if (!existing) {
-            const candidateText = [
-                observed.labelEn,
-                observed.appearanceEn,
-                observed.detailEn,
-            ]
-                .filter(Boolean)
-                .join(' ');
             const candidateType =
                 observed.type ||
-                inferItemKind(
-                    observed,
-                );
-            const evidenceType =
-                inferItemKind(
-                    evidence,
-                );
-            const normalizedEvidence =
-                evidence
-                    .normalize('NFKC')
-                    .toLocaleLowerCase();
-            const labelMentioned =
-                [
-                    observed.labelEn,
-                ]
-                    .map(value =>
-                        String(
-                            value ||
-                            '',
-                        )
-                            .normalize(
-                                'NFKC',
-                            )
-                            .toLocaleLowerCase()
-                            .trim())
-                    .filter(value =>
-                        value.length >= 2)
-                    .some(value =>
-                        normalizedEvidence
-                            .includes(
-                                value,
-                            ));
-            const typedMention =
-                candidateType !==
-                    'other' &&
-                candidateType ===
-                    evidenceType;
-            const explicitlyKept =
-                PLAYER_KEEP_ITEM_PATTERN
-                    .test(evidence);
+                'other';
             const explicitTransfer =
                 [
                     'gift',
@@ -446,22 +391,12 @@ export function projectObservedInventoryUpdates(
                     observed.storyRoles ||
                     []
                 ).length > 0 ||
-                IMPORTANT_ITEM_PATTERN
-                    .test(candidateText) ||
-                explicitlyKept ||
                 explicitTransfer;
             if (
                 !meaningful ||
-                !(
-                    labelMentioned ||
-                    typedMention
-                ) ||
                 (
-                    ORDINARY_TRANSIENT_ITEM_PATTERN
-                        .test(
-                            candidateText,
-                        ) &&
-                    !explicitlyKept &&
+                    candidateType ===
+                        'consumable' &&
                     !explicitTransfer &&
                     !(
                         observed
@@ -473,21 +408,43 @@ export function projectObservedInventoryUpdates(
                 continue;
             }
         }
+        const ownerId =
+            observed.ownerId ||
+            existingItem?.ownerId ||
+            'player';
+        const holderId =
+            observed.holderId ||
+            existingItem?.holderId ||
+            ownerId;
+        const targetHolderId =
+            observed.targetHolderId ||
+            '';
+        if (
+            !validHolderIds.has(
+                ownerId,
+            ) ||
+            !validHolderIds.has(
+                holderId,
+            ) ||
+            (
+                targetHolderId &&
+                !validHolderIds.has(
+                    targetHolderId,
+                )
+            ) ||
+            (
+                !existing &&
+                (
+                    !observed.ownerId ||
+                    !observed.holderId
+                )
+            )
+        ) {
+            continue;
+        }
         seenIds.add(
             observed.id,
         );
-        const ownerId =
-            validHolderIds.has(
-                observed.ownerId,
-            )
-                ? observed.ownerId
-                : 'player';
-        const holderId =
-            validHolderIds.has(
-                observed.holderId,
-            )
-                ? observed.holderId
-                : ownerId;
         projected.push({
             id:
                 observed.id,
@@ -496,9 +453,7 @@ export function projectObservedInventoryUpdates(
                 observed.action,
             type:
                 observed.type ||
-                inferItemKind(
-                    observed,
-                ),
+                'other',
             labelEn:
                 String(
                     observed.labelEn ||
@@ -514,13 +469,7 @@ export function projectObservedInventoryUpdates(
             ownerId,
             holderId,
             targetHolderId:
-                validHolderIds.has(
-                    observed
-                        .targetHolderId,
-                )
-                    ? observed
-                        .targetHolderId
-                    : '',
+                targetHolderId,
             transferMode:
                 observed
                     .transferMode ||
@@ -549,6 +498,15 @@ export function projectObservedInventoryUpdates(
                     .sourceKind,
             evidenceText:
                 evidence,
+            evidenceItemText:
+                String(
+                    observed
+                        .evidenceItemText ||
+                    '',
+                ).trim(),
+            physicalForm:
+                observed.physicalForm ||
+                '',
             confidence:
                 Number(
                     observed
@@ -562,7 +520,6 @@ export function projectObservedInventoryUpdates(
 
 export function migrateObservedInventoryState(
     worldState,
-    chat = [],
 ) {
     if (
         Number(
@@ -581,125 +538,6 @@ export function migrateObservedInventoryState(
         structuredClone(
             worldState,
         );
-    const recentMessages =
-        (
-            Array.isArray(chat)
-                ? chat
-                : []
-        ).slice(-12);
-    const playerText =
-        recentMessages
-            .filter(message =>
-                message?.is_user)
-            .map(message =>
-                String(
-                    message.mes ||
-                    '',
-                ))
-            .join('\n');
-    const narrativeText =
-        recentMessages
-            .flatMap(message =>
-                (
-                    message?.extra
-                        ?.hogwartsMud
-                        ?.turnTransaction
-                        ?.segments ||
-                    []
-                ).map(segment =>
-                    String(
-                        segment.textEn ||
-                        '',
-                    )))
-            .join('\n');
-    const claimsAutograph =
-        /(?:拿起.{0,16}签名|拿到.{0,16}签名|带着.{0,16}签名|收下.{0,16}签名|\b(?:took|picked up|kept|carried|received).{0,32}\bautograph\b)/iu
-            .test(playerText);
-    const confirmsAutograph =
-        /(?:\b(?:signed parchment|autograph|crooked H)\b|签名羊皮纸|签下.{0,12}H|签名)/iu
-            .test(narrativeText);
-    const existingAutograph =
-        (
-            next.items ||
-            []
-        ).some(item =>
-            /(?:autograph|signed_parchment|签名)/iu
-                .test(
-                    `${item.id || ''} ${item.labelEn || ''}`,
-                ));
-    if (
-        claimsAutograph &&
-        confirmsAutograph &&
-        !existingAutograph
-    ) {
-        const harry =
-            (
-                next.actorLibrary ||
-                []
-            ).find(actor =>
-                actor.id ===
-                    'canon_harry_james_potter');
-        next.items = [
-            ...(
-                next.items ||
-                []
-            ),
-            normalizeInventoryItem(
-                {
-                    id:
-                        'harry_signed_parchment',
-                    labelEn:
-                        'Harry Potter Autograph',
-                    detailEn:
-                        'Lavender Brown\'s Sorting notes parchment bearing Harry Potter\'s crooked H autograph.',
-                    kind: 'other',
-                    importance:
-                        'important',
-                    custody:
-                        'carried',
-                    ownerId:
-                        'player',
-                    source:
-                        'local_semantic_migration',
-                    acquiredClock:
-                        next.clock,
-                    updatedClock:
-                        next.clock,
-                    actorId:
-                        harry?.id ||
-                        'canon_harry_james_potter',
-                },
-                (
-                    next.items ||
-                    []
-                ).length,
-                {
-                    mapId:
-                        next.map
-                            ?.activeMapId,
-                    roomId:
-                        next.map
-                            ?.currentLocalNodeId,
-                    clock:
-                        next.clock,
-                },
-            ),
-        ];
-        if (next.scene) {
-            next.scene.itemStates =
-                createSceneItemStates(
-                    next.items,
-                    {
-                        mapId:
-                            next.map
-                                ?.activeMapId,
-                        roomId:
-                            next.map
-                                ?.currentLocalNodeId,
-                    },
-                );
-        }
-    }
     next.observedInventoryVersion =
         OBSERVED_INVENTORY_VERSION;
     return {
@@ -836,45 +674,6 @@ export function migrateEntityState(
                 defaults,
             ),
     );
-    const recentTransactions = (chat || [])
-        .slice(-24)
-        .map(message =>
-            message?.extra?.hogwartsMud
-                ?.turnTransaction)
-        .filter(Boolean);
-    const recentText = JSON.stringify(
-        recentTransactions,
-    );
-    const hasOwnedWand =
-        next.items.some(item =>
-            /(?:wand|魔杖)/i.test(
-                `${item.id} ${item.labelEn}`,
-            ) &&
-            !['consumed', 'lost'].includes(
-                item.custody,
-            ));
-    if (
-        !hasOwnedWand &&
-        /(?:holly wand|冬青.{0,8}魔杖)/i
-            .test(recentText) &&
-        /(?:belongs? to Tina|wand fitting is resolved|has chosen Tina|seven Galleons|归蒂娜所有|选择了蒂娜)/i
-            .test(recentText)
-    ) {
-        next.items.push(
-            normalizeInventoryItem({
-                id: 'holly_phoenix_wand',
-                labelEn:
-                    'Holly Wand',
-                detailEn:
-                    'Twelve and a quarter inches, phoenix feather core; chosen Tina at Ollivanders.',
-                importance: 'key',
-                custody: 'carried',
-                ownerId: 'player',
-                source:
-                    'legacy_turn_recovery',
-            }, next.items.length, defaults),
-        );
-    }
     next.actors = (next.actors || [])
         .map(normalizeActorLifeState);
     next.actorLibrary =

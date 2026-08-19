@@ -147,15 +147,14 @@ export function reconcileCanonActorDisplayNames(
 
 export function resolveTemporaryActorRevealedName(
     actor,
-    segments = [],
+    _segments = [],
 ) {
-    const idTokens = String(
+    const firstIdToken = String(
         actor?.id || '',
     )
         .split('_')
-        .filter(Boolean);
-    const firstIdToken =
-        idTokens[0] || '';
+        .filter(Boolean)[0] ||
+        '';
     if (
         !firstIdToken ||
         /^(?:temp|temporary|unnamed|unknown|student|boy|girl|man|woman|witch|wizard|gryffindor|slytherin|hufflepuff|ravenclaw)$/i
@@ -172,56 +171,14 @@ export function resolveTemporaryActorRevealedName(
                 ).trim(),
         };
     }
-    const dialogue = (
-        segments || []
-    ).find(segment =>
-        segment?.type ===
-            'dialogue' &&
-        segment.actorId ===
-            actor.id);
-    const english = String(
-        dialogue?.textEn || '',
-    ).trim();
-    const englishMatch =
-        english.match(
-            /^(?:(?:i am|i'm|call me|name's)\s+)?([A-Z][A-Za-z'’-]{1,39})(?=[.!?,\s]|$)/u,
-        );
-    const candidateEn =
-        String(
-            englishMatch?.[1] || '',
-        ).trim();
-    if (
-        !candidateEn ||
-        candidateEn
-            .toLocaleLowerCase() !==
-            firstIdToken
-                .toLocaleLowerCase()
-    ) {
-        return {
-            nameEn:
-                String(
-                    actor?.nameEn || '',
-                ).trim(),
-            name:
-                String(
-                    actor?.name || '',
-                ).trim(),
-        };
-    }
-    const chinese = String(
-        dialogue?.textZh || '',
-    ).trim();
-    const chineseMatch =
-        chinese.match(
-            /^(?:我叫|我是|叫我)?\s*([\p{Script=Han}·]{1,12})(?=[。！？，、\s]|$)/u,
-        );
     return {
-        nameEn: candidateEn,
+        nameEn:
+            String(
+                actor?.nameEn || '',
+            ).trim(),
         name:
             String(
-                chineseMatch?.[1] ||
-                actor?.name ||
-                '',
+                actor?.name || '',
             ).trim(),
     };
 }

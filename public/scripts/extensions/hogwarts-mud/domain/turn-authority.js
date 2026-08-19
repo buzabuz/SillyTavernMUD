@@ -1,14 +1,9 @@
 // Extracted from the helpers compatibility facade for Task 4.
 
 import {
-    DURABLE_ACQUISITION_PATTERN,
-    IMPORTANT_ITEM_PATTERN,
-    inferItemKind,
     ITEM_CUSTODY_VALUES,
     ITEM_IMPORTANCE_VALUES,
     normalizeInventoryItem,
-    ORDINARY_TRANSIENT_ITEM_PATTERN,
-    PLAYER_KEEP_ITEM_PATTERN,
 } from './inventory.js';
 import {
     applyItemOperations,
@@ -126,61 +121,30 @@ export function validateItemUpdates(
                     `新物品 ${update.id || '?'} 的 custody 无效。`,
                 );
             }
-            const itemText = [
-                update.labelEn,
-                update.detailEn,
-            ].filter(Boolean).join(' ');
             if (
                 update.importance ===
                     'ordinary' &&
-                ORDINARY_TRANSIENT_ITEM_PATTERN
-                    .test(itemText) &&
-                !PLAYER_KEEP_ITEM_PATTERN.test(
-                    playerAction,
-                )
+                update.type ===
+                    'consumable' &&
+                ![
+                    'gift',
+                    'loan',
+                    'theft',
+                    'return',
+                ].includes(
+                    update.transferMode,
+                ) &&
+                !(
+                    update.storyRoles ||
+                    []
+                ).length
             ) {
                 errors.push(
-                    `普通消耗品 ${update.id || '?'} 只有在玩家明确要求保留或携带时才能进入物品栏。`,
+                    `普通消耗品 ${update.id || '?'} 缺少结构化转交或故事角色，不能进入物品栏。`,
                 );
             }
         }
     });
-
-    const acquiredImportant =
-        IMPORTANT_ITEM_PATTERN.test(
-            narrativeText,
-        ) &&
-        DURABLE_ACQUISITION_PATTERN.test(
-            narrativeText,
-        );
-    if (
-        requireNarrativeAcquisition &&
-        acquiredImportant
-    ) {
-        const kind =
-            inferItemKind(narrativeText);
-        const alreadyTracked =
-            [...existingItems.values()].some(item =>
-                item.kind === kind &&
-                !['consumed', 'lost'].includes(
-                    item.custody,
-                ));
-        const submitted =
-            itemUpdates.some(update =>
-                normalizeItemOperation(
-                    update.operation ||
-                    update.action,
-                ) === 'acquire' &&
-                inferItemKind(update) === kind &&
-                ['key', 'important'].includes(
-                    update.importance,
-                ));
-        if (!alreadyTracked && !submitted) {
-            errors.push(
-                `本回合已明确获得重要物品（${kind}），必须提交 acquire itemUpdate。`,
-            );
-        }
-    }
     return errors;
 }
 

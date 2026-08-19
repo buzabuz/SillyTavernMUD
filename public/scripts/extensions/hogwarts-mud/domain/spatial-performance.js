@@ -6,18 +6,6 @@ import {
 } from './actor-memory.js';
 
 import {
-    getLocalMapDefinition,
-} from './map-access.js';
-
-import {
-    findLocalRoomPath,
-} from './pathfinding.js';
-
-import {
-    inferActorRoomId,
-} from './spatial-foundation.js';
-
-import {
     buildSpatialContext,
 } from './spatial-reconciliation.js';
 
@@ -195,32 +183,7 @@ export function normalizeScenePerformanceActorLocations(
                     delete update
                         .firstImpressionOfPlayer;
                 }
-                const mapId = update.mapId || actor?.mapId ||
-                worldState.map?.activeMapId;
-                const actorRoomId = actor?.roomId ||
-                worldState.map?.currentLocalNodeId;
-                const fallbackRoomId =
-                update.roomId || actorRoomId;
-                const inferredRoomId = inferActorRoomId(
-                    update,
-                    getLocalMapDefinition(mapId, worldState.map),
-                    fallbackRoomId,
-                );
-                if (!inferredRoomId ||
-                inferredRoomId === update.roomId ||
-                !findLocalRoomPath(
-                    mapId,
-                    actorRoomId,
-                    inferredRoomId,
-                    worldState.map,
-                )) {
-                    return update;
-                }
-                return {
-                    ...update,
-                    mapId,
-                    roomId: inferredRoomId,
-                };
+                return update;
             });
     }
     if (

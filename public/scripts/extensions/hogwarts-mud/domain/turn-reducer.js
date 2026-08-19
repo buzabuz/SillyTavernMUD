@@ -57,49 +57,6 @@ import {
     validateTurnTransaction,
 } from './turn-validation.js';
 
-export function createPendingEventBoundary(
-    worldState,
-    transaction,
-    committedTurn,
-    hasUnreviewedMemory,
-) {
-    const boundaryId =
-        `${
-            worldState.scene?.id ||
-            'scene'
-        }:event:${committedTurn}`;
-    return {
-        id: boundaryId,
-        boundaryId,
-        timelineEpoch:
-            String(
-                worldState
-                    .timelineEpoch ||
-                '',
-            ),
-        stateRevision:
-            Math.max(
-                0,
-                Number(
-                    worldState
-                        .stateRevision,
-                ) || 0,
-            ),
-        status: 'pending',
-        sceneId:
-            worldState.scene?.id ||
-            '',
-        turn: committedTurn,
-        clock: worldState.clock,
-        publicEventEn:
-            transaction.publicEventEn,
-        hasUnreviewedMemory,
-        intentRefreshed: false,
-        intentRefreshStatus:
-            'pending',
-    };
-}
-
 export function applyTurnTransaction(
     worldState,
     transaction,
@@ -280,6 +237,13 @@ export function applyTurnTransaction(
     for (const actor of next.actors) {
         const update =
             actorUpdates.get(actor.id);
+        const locationKnown =
+            update?.locationKnown ??
+            actor.locationKnown ??
+            Boolean(
+                actor.mapId &&
+                actor.roomId,
+            );
         updateActorRuntimeV1(
             next,
             actor.id,
@@ -291,15 +255,20 @@ export function applyTurnTransaction(
                         : update?.present ??
                             actor.present,
                 mapId:
-                    update?.mapId ||
-                    actor.mapId ||
-                    next.map
-                        ?.activeMapId,
+                    locationKnown
+                        ? update?.mapId ||
+                            actor.mapId ||
+                            next.map
+                                ?.activeMapId
+                        : '',
                 roomId:
-                    update?.roomId ||
-                    actor.roomId ||
-                    next.map
-                        ?.currentLocalNodeId,
+                    locationKnown
+                        ? update?.roomId ||
+                            actor.roomId ||
+                            next.map
+                                ?.currentLocalNodeId
+                        : '',
+                locationKnown,
                 currentActivityEn:
                     update
                         ?.currentActivityEn ??
@@ -444,42 +413,6 @@ export function applyTurnTransaction(
             ...(next.scene.timelineEntries || []),
             timelineEntry,
         ];
-    }
-    const lastReviewedTurn =
-        Number(
-            next.memoryDirector
-                ?.lastReviewedTurn ||
-            0,
-        );
-    const hasUnreviewedMemory =
-        committedTurn >
-            lastReviewedTurn &&
-        Boolean(
-            transaction
-                .eventKnowledge
-                ?.eventId,
-        );
-    if (
-        transaction.eventEnded ===
-            true
-    ) {
-        next.memoryDirector = {
-            ...(next.memoryDirector ||
-                {}),
-            status: 'idle',
-            error: '',
-            triggerMode:
-                'event_boundary',
-            pendingEventBoundary:
-                createPendingEventBoundary(
-                    next,
-                    transaction,
-                    committedTurn,
-                    hasUnreviewedMemory,
-                ),
-        };
-        delete next.memoryDirector
-            .reviewAfterTurns;
     }
     next.turn = {
         count: committedTurn,

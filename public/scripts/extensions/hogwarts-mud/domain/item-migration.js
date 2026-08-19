@@ -9,88 +9,6 @@ import {
     normalizeItem,
 } from './item-schema.js';
 
-function inferStoryRoles(
-    item,
-) {
-    const roles =
-        new Set(
-            item.storyRoles ||
-            [],
-        );
-    const text = [
-        item.id,
-        item.labelEn,
-        item.label,
-        item.appearanceEn,
-        item.appearance,
-    ]
-        .filter(Boolean)
-        .join(' ');
-    if (
-        item.type === 'wand' ||
-        item.type ===
-            'eyewear'
-    ) {
-        roles.add(
-            'signature',
-        );
-    }
-    if (
-        /(?:autograph|signed|gift|hand-me-down|签名|赠|传给)/iu
-            .test(text)
-    ) {
-        roles.add('social');
-        roles.add('keepsake');
-    }
-    if (
-        /(?:letter|permit|clue|map|通知书|信件|许可证|线索|地图)/iu
-            .test(text)
-    ) {
-        roles.add('clue');
-    }
-    if (
-        /(?:acceptance|promise|pledge|admission|录取|承诺|约定)/iu
-            .test(text)
-    ) {
-        roles.add('promise');
-    }
-    return [...roles];
-}
-
-function inferLegacyTransferMode(
-    item,
-) {
-    const text = [
-        item.id,
-        item.labelEn,
-        item.label,
-        item.appearanceEn,
-        item.appearance,
-    ]
-        .filter(Boolean)
-        .join(' ');
-    if (
-        /(?:snatched|stolen|偷|抢走)/iu
-            .test(text)
-    ) {
-        return 'theft';
-    }
-    if (
-        /(?:borrowed|lent|loan|借)/iu
-            .test(text)
-    ) {
-        return 'loan';
-    }
-    if (
-        /(?:gift|given|赠|送给)/iu
-            .test(text)
-    ) {
-        return 'gift';
-    }
-    return item.transferMode ||
-        'none';
-}
-
 function migrateItems(
     worldState,
 ) {
@@ -123,14 +41,6 @@ function migrateItems(
             return normalizeItem(
                 {
                     ...normalized,
-                    storyRoles:
-                        inferStoryRoles(
-                            normalized,
-                        ),
-                    transferMode:
-                        inferLegacyTransferMode(
-                            normalized,
-                        ),
                     sourceEventId:
                         String(
                             normalized

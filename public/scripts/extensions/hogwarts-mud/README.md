@@ -160,11 +160,11 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 
 时间权威校验区分“回合内相对叙事”和“外部时间事实”。`ten minutes ago`、`five minutes later` 等短语只要不超过本回合已授权的 `elapsedMinutes` 就可以使用；超出回合跨度的相对时间、外部倒计时、绝对钟点、日期、营业时间和交通班次仍需来自玩家输入或权威状态，否则拒绝提交。低档 Prompt、Schema、validator 与本地校验使用同一口径。
 
-低档使用 narrative-first V2 协议：唯一必填输出是有序 `segments`。人物进出、活动、移动、物品和社交变化只在实际发生时通过白名单内的稀疏 `stateProposals` 提议；`eventEnded`、节奏完成和程序进度属于可选 `signals`。响应随后进入不调用模型的 `Turn Settlement Graph`，依次接受正文、折叠 proposal、校验权威状态并生成事务。Schema、fold 和 validator 白名单必须一致；解析、Schema、权威、provenance、settlement 或 validation 失败直接返回原错误，不发起第二次模型请求。
+低档使用 narrative-first V2 协议：唯一必填输出是有序 `segments`。人物进出、活动、移动、物品和社交变化只在实际发生时通过白名单内的稀疏 `stateProposals` 提议；节奏完成和程序进度属于可选 `signals`，低档不再判断 Event 结束。响应随后进入不调用模型的 `Turn Settlement Graph`，依次接受正文、折叠 proposal、校验权威状态并生成事务。Schema、fold 和 validator 白名单必须一致；解析、Schema、权威、provenance、settlement 或 validation 失败直接返回原错误，不发起第二次模型请求。
 
 生成期间 story 只显示原子 loading card，完整事务提交后才展示正文。新 assistant 消息只在首次提交时定位到消息顶部；翻译和普通重绘不抢滚动。首次加载已有 scene 时固定保留顶部位置，不能把几十像素的空容器误判为“用户在底部”后滚到完整历史末尾。
 
-已接受正文在提交前会再经过同一 Ollama 侧车的后置观察。观察器只读取玩家原文与英文权威分段，不允许中文翻译参与状态提取；它结合当前人物 ID 和地图房间，以 JSON Schema 稀疏输出 `materialEvents`、事件边界和人物活动/离场建议。统一物质 Schema 分为 `scene_change` 与 `appearance_change`：场景变化覆盖摆放、移动、移除、调整、破坏、修复、弄脏和清理；外貌变化覆盖服装、饰品、发型、可见状态及恢复、拿起和放下手持物。完整字段定义仍集中在 `material-schema.js`。
+已接受正文在提交前会再经过同一 Ollama 侧车的后置观察。观察器只读取玩家原文与英文权威分段，不允许中文翻译参与状态提取；它结合当前人物 ID 和地图房间，以 JSON Schema 稀疏输出 `materialEvents`、人物活动/离场、感知和时间声明，不判断 Event 结束。统一物质 Schema 分为 `scene_change` 与 `appearance_change`：场景变化覆盖摆放、移动、移除、调整、破坏、修复、弄脏和清理；外貌变化覆盖服装、饰品、发型、可见状态及恢复、拿起和放下手持物。完整字段定义仍集中在 `material-schema.js`。
 
 #### 人物占位、事件见证与写入所有权
 
@@ -211,7 +211,7 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 
 群像回合的输出预算随活跃实名人数增长，而不是沿用单人回合的固定上限。4 人以上开始扩容；6 人、15 分钟的默认目标为约 420–860 英文词、6–20 个分段。额外篇幅不能用于逐人点名反应：至少 40% 服务主要互动和具体流程推进，除玩家直接影响外最多单独刻画 2 名次要实名，其余人物通过同步背景动作维持存在感。事件摘要由结算图优先采用合法旧字段，否则从已接受 segments 确定性生成。
 
-当玩家已经到达 `nextSceneIntent` 的权威房间时，入场、排队、开门、唱引子、宣布“即将开始”都只算准备态；15 分钟回合应在正文中完成至少一个真实程序单元后再停下。有边界的流程阶段完成时，低档可以提交 `signals.eventEnded:true` 让中档刷新下一阶段方向；缺失该可选信号默认继续当前事件，不作废正文。
+当玩家已经到达 `nextSceneIntent` 的权威房间时，入场、排队、开门、唱引子、宣布“即将开始”都只算准备态；15 分钟回合应在正文中完成至少一个真实程序单元后再停下。Event 的叙事呼吸口不在即时回合判断，而由每 10 个 committed turns 的后台 1.7B 窗口审查决定。
 
 场景转场时，中档将 `actorStates.present:true` 视为下一幕的活跃实名卡司，而不是对物理空间里所有人的点名清单。拥挤公共场景默认只保留 2–4 名有直接剧情职责的实名角色、最多 2 名连续性锚点；规则层把最近三幕卡司、连续出场次数、复用惩罚和最低换血数提供给中档，优先让高曝光且当前无任务的人退出镜头。该建议不作为本地硬拦截。`actorStates` 永远不直接投影成公开正文，也不要求低档在开场逐个点名；低档只选择当前镜头真正需要的 2–3 名人物表演。退出活跃卡司的人仍保存在人物库，可用 `present:false + mapId/roomId` 更新后台位置并在后续自然回归。
 
@@ -259,7 +259,7 @@ Actor Context V1 把稳定人物、运行态、主观解释与记忆层级分开
 
 这些 proposal 字段不是 State 字段，也不属于 Scene 正文事务的失败边界。任一建议不合法时只删除对应 proposal，保留同一份 segments、公开事件、人物活动、在场集合、移动、判定和流程推进，也不会因此发起修复调用。
 
-低档可以在局部事件、话题、冲突、差事或实际任务明确告一段落时提交 `signals.eventEnded:true`；它不代表封存场景，也不能因为一次回复或 15 分钟结束就触发。信号缺失默认事件继续，不影响正文提交。每个合格事件边界都会调用一次中档 `Event Boundary Director`，替换已经完成或陈旧的 `nextSceneIntent` 文案；规则层继续锁定原 `mapId / roomId / tier`，因此这次规划不会自动切场。只有该边界还包含尚未整理的共同记忆，并且距离上次中档整理至少 10 回合时，才在同一次调用中追加记忆与社交图整理；冷却期内不做记忆整理，也不会在第 10 回合自动补做旧边界。只有已有近期记忆，或带明确长期影响说明的 `notable` 候选可以生成“近期大事”；多条鸡毛蒜皮不会因为重复就自动升级。中档负责晋升近期/核心记忆、遗忘冗余记录和收束短印象。整理失败时保留低档结果，不会让玩家回合失败。章节封存继续由转场导演直接执行章节级关系与记忆结算，并清除未消费的小事件边界。
+Event 是长互动的叙事呼吸口。当前回合的 Low 和 post 侧车都不判断它；turns `10/20/30/...` 提交后，后台 `qwen3:1.7b` 只审查对应的最近 10 个 committed turn transactions。`ended=true` 才写既有 `memoryDirector.pendingEventBoundary` 并继续既有 Memory/Social 下游；`not-ended`、证据无效、stale 或调用失败均不写 Event，也不 retry，下一次机会是下一个 checkpoint。Event 边界不关闭 Scene、不完成 Calendar、不创建 EventKnowledge，也不移动 NPC；个人明确离场仍由即时 post Actor/Presence 独立结算。
 
 人物档案继续按“最深刻的 / 近期大事 / 日常小事”展示，但显示内容由 MemoryRef 回源 Event/Appraisal 后生成。前端不读取人物档案中的旧记忆或印象字段。
 
@@ -267,7 +267,7 @@ Actor Context V1 把稳定人物、运行态、主观解释与记忆层级分开
 
 社交导演不是多 Agent 系统。客户端继续使用一个中档 Connection Profile 完成一次结构化抽取，服务端使用 `@langchain/langgraph` 的单一 `StateGraph` 依次执行证据收集、来源校验和关系派生。它与共同记忆整理合并为同一次中档调用，不会为了人物关系再调用第二个模型。
 
-- 触发沿用“`eventEnded` + 最小 10 回合冷却”；章节封存复用同一次转场导演输出。旧档当前场景只执行一次版本化回填。
+- 触发改为每 10 个 committed turns 的后台 Event checkpoint；章节封存仍复用转场导演输出。旧档中的 `eventEnded` 只读保留，不再新增。
 - NPC 公开介绍的家庭、出身、教育、职业、身份和经历保存为带 `speakerId`、`witnessedBy`、`sourceMessageIds` 和场景来源的 `claimed` 声明，不直接升级成全知事实。
 - 玩家↔NPC 与 NPC↔NPC 都使用有向关系证据。服务端只接受已知人物或 `player` 端点、当前证据白名单中的消息 ID，以及真实在场见证者；单条非法建议会被丢弃，不阻断其他合法声明或关系。
 - `socialGraph.version=2` 把模型输出视为带来源的增量提案；最终关系值只由 LangGraph Reducer 在本地确定性提交。
@@ -907,5 +907,19 @@ HOGWARTS_ACCEPTANCE_GENERATE_BUDGET=1 \
 npx playwright test hogwarts-mud-single-model.e2e.js \
   --workers=1 --retries=0
 ```
+
+Phase 2 G3 的最终普通回合计时在同一可丢弃 harness 上额外启用真实 local
+pre/post；Appraisal、Social 和 Translation 仍由浏览器门禁阻断：
+
+```bash
+HOGWARTS_REAL_MODEL_ACCEPTANCE=1 \
+HOGWARTS_ACCEPTANCE_REAL_LOCAL=1 \
+HOGWARTS_ACCEPTANCE_GENERATE_BUDGET=1 \
+npx playwright test hogwarts-mud-single-model.e2e.js \
+  --workers=1 --retries=0
+```
+
+证据必须同时包含 `narrative_visible.elapsedMs` 和
+`state_settled.elapsedMs`，并证明前者不晚于后者。
 
 `hogwarts-mud-single-model.e2e.js` 在 Task 8 实现前不得用临时脚本替代。正式 harness 必须断言生成尝试数、代理放行数和上游确认数均为 1；第二次尝试在到达上游前返回 429；玩家/助手消息各增加一条，`turn.count +1`、状态回到 `idle`，segments 与 transaction 合法；刷新后新增调用为 0，最后清理可丢弃存档。

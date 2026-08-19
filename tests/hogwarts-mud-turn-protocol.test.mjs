@@ -101,12 +101,52 @@ test('behavioral environment deterministically turns clock and weather into acti
             .join(' '),
         /exposed to/iu,
     );
+
+    state.map.customLocalMaps = [{
+        id:
+            'display_name_trap',
+        nodes: [{
+            id:
+                'sunny_garden',
+            nameEn:
+                'Sunny Garden',
+            kind:
+                'room',
+            tags: [],
+        }],
+    }];
+    state.map.activeMapId =
+        'display_name_trap';
+    state.map.currentLocalNodeId =
+        'sunny_garden';
+    state.scene.mapId =
+        'display_name_trap';
+    state.scene.roomId =
+        'sunny_garden';
+    assert.equal(
+        buildBehavioralEnvironment(
+            state,
+        ).exposure,
+        'indoor',
+    );
+
+    state.map.customLocalMaps[0]
+        .nodes[0].kind =
+        'garden';
+    assert.equal(
+        buildBehavioralEnvironment(
+            state,
+        ).exposure,
+        'outdoor',
+    );
 });
 
 test('narrative-first turn settlement accepts segments without the metadata customs form', async () => {
     const state =
         createCurrentPlayingState();
     const payload = {
+        publicEventEn:
+            'The player completes the stated action and the characters respond.',
         segments: [
             {
                 type: 'narration',
@@ -143,7 +183,10 @@ test('narrative-first turn settlement accepts segments without the metadata cust
         /McGonagall folds the reply slip/iu,
     );
     assert.equal(
-        settled.eventEnded,
+        Object.hasOwn(
+            settled,
+            'eventEnded',
+        ),
         false,
     );
     assert.equal(
@@ -255,12 +298,8 @@ test('narrative-first settlement folds sparse exits and drops invalid proposals 
                 update.id ===
                     'tina_mother');
     assert.equal(
-        mother?.mapId,
-        'zhang_home',
-    );
-    assert.equal(
-        mother?.roomId,
-        'kitchen',
+        mother,
+        undefined,
     );
     assert.ok(
         settled.settlementWarnings
@@ -286,9 +325,6 @@ test('local narrative-first reducer matches the LangGraph settlement output', as
                 textEn:
                     'The kitchen clock ticks while the discussion continues.',
             }],
-            signals: {
-                eventEnded: true,
-            },
         },
         worldState: state,
         playerAction:
@@ -318,8 +354,11 @@ test('local narrative-first reducer matches the LangGraph settlement output', as
         local,
     );
     assert.equal(
-        graph.eventEnded,
-        true,
+        Object.hasOwn(
+            graph,
+            'eventEnded',
+        ),
+        false,
     );
 });
 
