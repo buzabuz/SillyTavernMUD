@@ -1,6 +1,11 @@
 // Extracted from the helpers compatibility facade for Task 4.
 
 import {
+    DEFAULT_POST_TURN_SEMANTIC_PROVIDER,
+    normalizePostTurnSemanticProvider,
+} from './post-turn-semantic-provider.js';
+
+import {
     LOCAL_MAP_SCHEMA_VERSION,
 } from '../map-pack.js';
 
@@ -362,7 +367,13 @@ function openingRelationshipEdge(
     };
 }
 
-export function createInitialWorldState(character, modelSlots, campaign = createDefaultCampaign()) {
+export function createInitialWorldState(
+    character,
+    modelSlots,
+    campaign = createDefaultCampaign(),
+    postTurnSemanticProvider =
+    DEFAULT_POST_TURN_SEMANTIC_PROVIDER,
+) {
     const normalizedCampaign = normalizeCampaign(campaign);
     const characterSource =
         structuredClone(character);
@@ -402,6 +413,10 @@ export function createInitialWorldState(character, modelSlots, campaign = create
             normalizedCharacter
                 .version,
         modelSlots: structuredClone(modelSlots),
+        postTurnSemanticProvider:
+            normalizePostTurnSemanticProvider(
+                postTurnSemanticProvider,
+            ),
         map: {
             baseVersion: PRESET_WORLD_MAP.version,
             localMapVersion: LOCAL_MAP_SCHEMA_VERSION,

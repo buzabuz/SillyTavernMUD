@@ -628,6 +628,30 @@ const UI_TEXT = Object.freeze({
         en: 'Do not override Regex Preset',
         zh: '不覆盖 Regex Preset',
     },
+    'ui.setup.post_semantic.title': {
+        en: 'Post-turn semantic proposal',
+        zh: '回合后语义提案',
+    },
+    'ui.setup.post_semantic.low': {
+        en: 'Low Connection Profile',
+        zh: '低档 Connection Profile',
+    },
+    'ui.setup.post_semantic.local': {
+        en: 'Local',
+        zh: '本地模型',
+    },
+    'ui.setup.post_semantic.low_detail': {
+        en: 'Uses the Low Connection Profile',
+        zh: '使用低档 Connection Profile',
+    },
+    'ui.setup.post_semantic.low_missing': {
+        en: 'Choose a Low Connection Profile before using it for post-turn semantics.',
+        zh: '请先选择低档 Connection Profile，再用于回合后语义提案。',
+    },
+    'ui.setup.post_semantic.local_detail': {
+        en: 'Uses the local Ollama post-turn model.',
+        zh: '使用本地 Ollama 回合后模型。',
+    },
     'ui.setup.output_headroom': {
         en: 'Output safety headroom',
         zh: '输出安全余量',
@@ -804,6 +828,9 @@ const TEXT_BINDINGS = Object.freeze([
     ['#hpmud_refresh_profiles', 'ui.setup.refresh'],
     ['#hpmud_edit_profile', 'ui.setup.edit_profile'],
     ['#hpmud_create_profile', 'ui.setup.create_profile'],
+    ['.hpmud-post-semantic-provider label > span', 'ui.setup.post_semantic.title'],
+    ['[data-hpmud-post-semantic-provider] option[value="low"]', 'ui.setup.post_semantic.low', 'direct'],
+    ['[data-hpmud-post-semantic-provider] option[value="local"]', 'ui.setup.post_semantic.local', 'direct'],
     ['article[data-slot="low"] > div > small', 'ui.setup.role.low.kicker'],
     ['article[data-slot="low"] > div > h2', 'ui.setup.role.low.title'],
     ['article[data-slot="low"] > div > p', 'ui.setup.role.low.detail'],
