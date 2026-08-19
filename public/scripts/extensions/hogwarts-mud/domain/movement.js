@@ -5,6 +5,12 @@ import {
     normalizeInventoryItem,
     synchronizeHeldItemLocations,
 } from './inventory.js';
+import {
+    findCanonCharacter,
+} from '../canon-characters.js';
+import {
+    getCanonLocalizationZhCn,
+} from '../canon-localization.zh-cn.js';
 
 import {
     getLocalMapDefinition,
@@ -25,8 +31,6 @@ import {
 
 import {
     EXPLICIT_MOVEMENT_DIRECTIVE_PATTERN,
-    GUIDED_MOVEMENT_ACTION_PATTERN,
-    MOVEMENT_ACTION_PATTERN,
     normalizeSpatialText,
     SPATIAL_STATE_VERSION,
 } from './spatial-foundation.js';
@@ -39,9 +43,6 @@ function getExplicitMovementCompanionIds(
     const movementText = String(action || '')
         .split(/[\n。！？!?]+/)
         .filter(clause =>
-            MOVEMENT_ACTION_PATTERN.test(clause) ||
-            GUIDED_MOVEMENT_ACTION_PATTERN
-                .test(clause) ||
             Boolean(
                 findSceneDestination(
                     clause,
@@ -136,14 +137,6 @@ function getExplicitMovementCompanionIds(
         .map(actor => actor.id);
 }
 
-export function isGuidedMovementAction(
-    playerAction,
-) {
-    const action = String(playerAction || '');
-    return GUIDED_MOVEMENT_ACTION_PATTERN
-        .test(action);
-}
-
 export function parseExplicitMovementDirective(
     playerAction,
 ) {
@@ -204,9 +197,294 @@ export function removeExplicitMovementDirective(
         .trim();
 }
 
+function isFollowMovementDirective(
+    directive,
+) {
+    const destinationText =
+        String(
+            directive?.destinationText ||
+            '',
+        )
+            .normalize('NFKC')
+            .trim();
+    return /^(?:(?:跟随|跟着|跟)\s*.+|follow\s+.+|go\s+with\s+.+)$/iu
+        .test(
+            destinationText,
+        );
+}
+
+function boundedText(
+    value,
+    maximumLength = 500,
+) {
+    return String(value || '')
+        .normalize('NFC')
+        .trim()
+        .slice(0, maximumLength);
+}
+
+function getCommittedSceneTurns(
+    chat,
+) {
+    return (
+        Array.isArray(chat)
+            ? chat
+            : []
+    )
+        .map((message, messageId) => ({
+            message,
+            messageId,
+            mud:
+                message?.extra
+                    ?.hogwartsMud,
+        }))
+        .filter(entry =>
+            entry.message?.is_user !==
+                true &&
+            entry.mud?.role ===
+                'scene_turn' &&
+            entry.mud
+                .turnTransaction);
+}
+
+export function buildFollowMovementContext(
+    worldState,
+    playerAction,
+    chat = [],
+) {
+    const directive =
+        parseExplicitMovementDirective(
+            playerAction,
+        );
+    if (
+        !directive ||
+        !isFollowMovementDirective(
+            directive,
+        ) ||
+        findSceneDestination(
+            directive.destinationText,
+            worldState,
+        )
+    ) {
+        return null;
+    }
+    const mapId =
+        String(
+            worldState.map
+                ?.activeMapId ||
+            '',
+        );
+    const currentRoomId =
+        String(
+            worldState.map
+                ?.currentLocalNodeId ||
+            '',
+        );
+    const currentActorIds =
+        new Set([
+            ...(
+                worldState
+                    .activeInteractionActorIds ||
+                []
+            ),
+            ...(
+                worldState
+                    .localPresence
+                    ?.occupantActorIds ||
+                []
+            ),
+        ]);
+    const committedTurns =
+        getCommittedSceneTurns(
+            chat,
+        );
+    const previousTurn =
+        committedTurns.at(-1);
+    const previousActorUpdates =
+        previousTurn
+            ?.mud
+            ?.turnTransaction
+            ?.actorUpdates ||
+        [];
+    const previousPresentIds =
+        new Set(
+            previousTurn
+                ?.mud
+                ?.turnTransaction
+                ?.actorPresence
+                ?.presentActorIdsAfterTurn ||
+            [],
+        );
+    const priorDepartureIds =
+        new Set(
+            previousActorUpdates
+                .filter(update =>
+                    update?.id &&
+                    (
+                        update.present ===
+                            false ||
+                        (
+                            update.roomId &&
+                            update.roomId !==
+                                currentRoomId
+                        ) ||
+                        !previousPresentIds
+                            .has(
+                                update.id,
+                            )
+                    ))
+                .map(update =>
+                    update.id),
+        );
+    const profiles =
+        new Map(
+            (
+                worldState.actorLibrary ||
+                []
+            ).map(profile => [
+                profile.id,
+                profile,
+            ]),
+        );
+    const eligibleIds =
+        new Set([
+            ...currentActorIds,
+            ...priorDepartureIds,
+        ]);
+    const eligibleGuideCandidates =
+        (
+            worldState.actors ||
+            []
+        )
+            .filter(actor =>
+                eligibleIds.has(
+                    actor.id,
+                ))
+            .slice(0, 16)
+            .map(actor => {
+                const profile =
+                    profiles.get(
+                        actor.id,
+                    ) ||
+                    {};
+                const canon =
+                    findCanonCharacter(
+                        profile
+                            .canonCatalogId ||
+                        actor.id,
+                    ) ||
+                    findCanonCharacter(
+                        profile.nameEn ||
+                        actor.nameEn,
+                    );
+                const localization =
+                    getCanonLocalizationZhCn(
+                        canon?.id ||
+                        profile
+                            .canonCatalogId ||
+                        actor.id,
+                    );
+                const locationKnown =
+                    actor.locationKnown !==
+                        false &&
+                    Boolean(
+                        actor.mapId &&
+                        actor.roomId,
+                    );
+                return {
+                    id:
+                        actor.id,
+                    nameEn:
+                        boundedText(
+                            profile.nameEn ||
+                            actor.nameEn ||
+                            actor.id,
+                            160,
+                        ),
+                    aliases:
+                        [
+                            ...new Set(
+                                [
+                                    ...(
+                                        profile.aliases ||
+                                        []
+                                    ),
+                                    localization
+                                        ?.nameZh,
+                                    ...(
+                                        localization
+                                            ?.aliases ||
+                                        []
+                                    ),
+                                ]
+                                    .map(alias =>
+                                        boundedText(
+                                            alias,
+                                            120,
+                                        ))
+                                    .filter(Boolean),
+                            ),
+                        ].slice(0, 4),
+                    eligibility:
+                        currentActorIds
+                            .has(actor.id)
+                            ? 'current'
+                            : 'prior_departure',
+                    locationKnown,
+                    mapId:
+                        locationKnown
+                            ? actor.mapId
+                            : '',
+                    roomId:
+                        locationKnown
+                            ? actor.roomId
+                            : '',
+                };
+            });
+    const recentGuideEvidence =
+        committedTurns
+            .slice(-2)
+            .map(entry => ({
+                sourceRef:
+                    `message:${entry.messageId}:publicEventEn`,
+                textEn:
+                    boundedText(
+                        entry.mud
+                            ?.turnTransaction
+                            ?.publicEventEn,
+                    ),
+            }))
+            .filter(entry =>
+                entry.textEn);
+    return {
+        trigger: {
+            raw:
+                boundedText(
+                    directive.raw,
+                    300,
+                ),
+            destinationText:
+                boundedText(
+                    directive
+                        .destinationText,
+                    200,
+                ),
+            start:
+                directive.start,
+            end:
+                directive.end,
+        },
+        mapId,
+        currentRoomId,
+        eligibleGuideCandidates,
+        recentGuideEvidence,
+    };
+}
+
 export function inspectPlayerMovementIntent(
     worldState,
     playerAction,
+    options = {},
 ) {
     const action = String(playerAction || '');
     const directive =
@@ -220,14 +498,19 @@ export function inspectPlayerMovementIntent(
             worldState,
         );
     const guided =
-        isGuidedMovementAction(action);
+        options.guided === true ||
+        Boolean(
+            options
+                .guidedDestination,
+        ) ||
+        Boolean(
+            options
+                .guidedByActorId,
+        );
     const candidate = Boolean(
         directive ||
         destination ||
-        guided ||
-        MOVEMENT_ACTION_PATTERN.test(
-            action,
-        ),
+        guided,
     );
     return {
         explicit: Boolean(directive),
@@ -241,6 +524,436 @@ export function inspectPlayerMovementIntent(
     };
 }
 
+function movementFailure(
+    worldState,
+    reason,
+    details = {},
+) {
+    const mapId =
+        String(
+            worldState.map
+                ?.activeMapId ||
+            '',
+        );
+    const roomId =
+        String(
+            worldState.map
+                ?.currentLocalNodeId ||
+            '',
+        );
+    return {
+        state:
+            worldState,
+        movement: {
+            attempted: true,
+            moved: false,
+            fromMapId:
+                mapId,
+            fromRoomId:
+                roomId,
+            confirmed: true,
+            confirmationSource:
+                'player_marker',
+            reason,
+            ...details,
+        },
+    };
+}
+
+function findMovementEvidence(
+    context,
+    sourceRef,
+    evidenceText,
+    room,
+) {
+    const ref =
+        String(
+            sourceRef ||
+            '',
+        );
+    const evidence =
+        String(
+            evidenceText ||
+            '',
+        );
+    if (
+        !ref ||
+        !evidence
+    ) {
+        return false;
+    }
+    const sourceMatches = (
+        context
+            ?.recentGuideEvidence ||
+        []
+    ).some(entry =>
+        entry.sourceRef ===
+            ref &&
+        entry.textEn
+            .includes(evidence));
+    if (!sourceMatches) {
+        return false;
+    }
+    const normalizedEvidence =
+        evidence
+            .normalize('NFKC')
+            .toLocaleLowerCase();
+    return [
+        room?.id,
+        room?.nameEn,
+        ...(room?.aliases || []),
+    ]
+        .map(label =>
+            String(label || '')
+                .normalize('NFKC')
+                .toLocaleLowerCase()
+                .trim())
+        .filter(label =>
+            label.length >= 2)
+        .some(label =>
+            normalizedEvidence
+                .includes(label));
+}
+
+function intentEvidenceNamesGuide(
+    evidenceText,
+    guide,
+) {
+    const normalizedEvidence =
+        String(
+            evidenceText ||
+            '',
+        )
+            .normalize('NFKC')
+            .toLocaleLowerCase();
+    return [
+        guide?.nameEn,
+        ...(guide?.aliases || []),
+    ]
+        .map(label =>
+            String(label || '')
+                .normalize('NFKC')
+                .toLocaleLowerCase()
+                .trim())
+        .filter(label =>
+            label.length >= 2)
+        .some(label =>
+            normalizedEvidence
+                .includes(label));
+}
+
+export function settleFollowMovementIntent(
+    worldState,
+    playerAction,
+    movementContext,
+    movementIntent,
+    diagnostics = {},
+) {
+    if (!movementContext) {
+        return {
+            state:
+                worldState,
+            movement: null,
+        };
+    }
+    if (
+        diagnostics?.fallback ===
+        true
+    ) {
+        return movementFailure(
+            worldState,
+            'movement_semantic_unavailable',
+            {
+                guided: true,
+            },
+        );
+    }
+    if (
+        diagnostics
+            ?.movementIntentRejected ===
+        true
+    ) {
+        return movementFailure(
+            worldState,
+            'movement_schema_invalid',
+            {
+                guided: true,
+            },
+        );
+    }
+    if (
+        movementIntent
+            ?.requested !==
+        true
+    ) {
+        return movementFailure(
+            worldState,
+            'destination_unknown',
+            {
+                guided: true,
+            },
+        );
+    }
+    const intentEvidenceText =
+        String(
+            movementIntent
+                .intentEvidenceText ||
+            '',
+        );
+    if (
+        !intentEvidenceText ||
+        !String(
+            playerAction ||
+            '',
+        ).includes(
+            intentEvidenceText,
+        )
+    ) {
+        return movementFailure(
+            worldState,
+            'guide_evidence_invalid',
+            {
+                guided: true,
+            },
+        );
+    }
+    const guide =
+        (
+            movementContext
+                .eligibleGuideCandidates ||
+            []
+        ).find(candidate =>
+            candidate.id ===
+                movementIntent
+                    .guideActorId);
+    if (!guide) {
+        return movementFailure(
+            worldState,
+            'guide_not_eligible',
+            {
+                guided: true,
+            },
+        );
+    }
+    const namedGuides =
+        (
+            movementContext
+                .eligibleGuideCandidates ||
+            []
+        ).filter(candidate =>
+            intentEvidenceNamesGuide(
+                intentEvidenceText,
+                candidate,
+            ));
+    if (
+        namedGuides.length !== 1 ||
+        namedGuides[0].id !==
+            guide.id
+    ) {
+        return movementFailure(
+            worldState,
+            'guide_evidence_invalid',
+            {
+                guided: true,
+                guidedByActorId:
+                    guide.id,
+            },
+        );
+    }
+    const currentRoomId =
+        movementContext
+            .currentRoomId;
+    const authoritativeGuideRoomId =
+        guide.locationKnown &&
+        guide.mapId ===
+            movementContext.mapId &&
+        guide.roomId !==
+            currentRoomId
+            ? guide.roomId
+            : '';
+    const proposedRoomId =
+        String(
+            movementIntent
+                .destinationRoomId ||
+            '',
+        );
+    if (
+        authoritativeGuideRoomId &&
+        proposedRoomId &&
+        proposedRoomId !==
+            authoritativeGuideRoomId
+    ) {
+        return movementFailure(
+            worldState,
+            'destination_conflict',
+            {
+                guided: true,
+                guidedByActorId:
+                    guide.id,
+            },
+        );
+    }
+    const destinationRoomId =
+        authoritativeGuideRoomId ||
+        proposedRoomId;
+    if (!destinationRoomId) {
+        return movementFailure(
+            worldState,
+            'destination_unknown',
+            {
+                guided: true,
+                guidedByActorId:
+                    guide.id,
+            },
+        );
+    }
+    const room =
+        getMapRooms(
+            getLocalMapDefinition(
+                movementContext.mapId,
+                worldState.map,
+            ),
+            worldState.map,
+        ).find(candidate =>
+            candidate.id ===
+                destinationRoomId);
+    if (!room) {
+        return movementFailure(
+            worldState,
+            'destination_invalid',
+            {
+                guided: true,
+                guidedByActorId:
+                    guide.id,
+            },
+        );
+    }
+    if (
+        !authoritativeGuideRoomId &&
+        !findMovementEvidence(
+            movementContext,
+            movementIntent
+                .destinationEvidenceSourceRef,
+            movementIntent
+                .destinationEvidenceText,
+            room,
+        )
+    ) {
+        return movementFailure(
+            worldState,
+            'guide_evidence_invalid',
+            {
+                guided: true,
+                guidedByActorId:
+                    guide.id,
+            },
+        );
+    }
+    const settled =
+        applyPlayerMovement(
+        worldState,
+        playerAction,
+        {
+            guided: true,
+            guidedByActorId:
+                guide.id,
+            guidedDestination: {
+                mapId:
+                    movementContext
+                        .mapId,
+                roomId:
+                    room.id,
+                roomNameEn:
+                    room.nameEn ||
+                    room.id,
+                levelId:
+                    room.levelId,
+            },
+            companionIds: [
+                guide.id,
+            ],
+        },
+    );
+    if (
+        settled.movement?.moved !==
+        true
+    ) {
+        return settled;
+    }
+    const next =
+        structuredClone(
+            settled.state,
+        );
+    next.actors =
+        (
+            next.actors ||
+            []
+        ).map(actor =>
+            actor.id ===
+                guide.id &&
+            actor.mapId ===
+                settled.movement
+                    .toMapId &&
+            actor.roomId ===
+                settled.movement
+                    .toRoomId
+                ? {
+                    ...actor,
+                    present: true,
+                }
+                : actor);
+    next.activeInteractionActorIds =
+        [...new Set([
+            ...(
+                next
+                    .activeInteractionActorIds ||
+                []
+            ),
+            guide.id,
+        ])];
+    next.localPresence = {
+        ...(next.localPresence || {}),
+        mapId:
+            settled.movement
+                .toMapId,
+        roomId:
+            settled.movement
+                .toRoomId,
+        occupantActorIds:
+            [...new Set([
+                ...(
+                    next.localPresence
+                        ?.occupantActorIds ||
+                    []
+                ),
+                guide.id,
+            ])],
+        updatedTurn:
+            Number(
+                next.turn?.count ||
+                0,
+            ),
+        source:
+            'player_follow_movement',
+    };
+    return {
+        state: next,
+        movement: {
+            ...settled.movement,
+            companionIds:
+                [...new Set([
+                    ...(
+                        settled
+                            .movement
+                            .companionIds ||
+                        []
+                    ),
+                    guide.id,
+                ])],
+        },
+    };
+}
+
 export function applyPlayerMovement(
     worldState,
     playerAction,
@@ -251,6 +964,7 @@ export function applyPlayerMovement(
         inspectPlayerMovementIntent(
             worldState,
             action,
+            options,
         );
     const confirmedDestination =
         options.confirmedDestination
@@ -389,11 +1103,35 @@ export function applyPlayerMovement(
     }
     const mapId = String(worldState.map?.activeMapId || '');
     const fromRoomId = String(worldState.map?.currentLocalNodeId || '');
+    const structuredCompanionIds =
+        Array.isArray(
+            options.companionIds,
+        )
+            ? new Set(
+                options
+                    .companionIds
+                    .map(id =>
+                        String(id || ''))
+                    .filter(Boolean),
+            )
+            : null;
     let companionIds =
-        getExplicitMovementCompanionIds(
-            worldState,
-            action,
-        );
+        structuredCompanionIds
+            ? (
+                worldState.actors ||
+                []
+            )
+                .filter(actor =>
+                    actor.present !==
+                        false &&
+                    structuredCompanionIds
+                        .has(actor.id))
+                .map(actor =>
+                    actor.id)
+            : getExplicitMovementCompanionIds(
+                worldState,
+                action,
+            );
     const sourceMap = getLocalMapDefinition(
         mapId,
         worldState.map,
@@ -683,14 +1421,8 @@ export function applyPlayerMovement(
                 ].includes(
                     item.state,
                 ) &&
-            (
                 item.id ===
-                    'acceptance_letter' ||
-                /(?:acceptance|school letter|train ticket|录取通知|车票)/i
-                    .test(
-                        `${item.labelEn || ''} ${item.label || ''}`,
-                    )
-            );
+                    'acceptance_letter';
             },
         );
     if (
@@ -700,11 +1432,7 @@ export function applyPlayerMovement(
         ].includes(
             'hogwarts_express',
         ) &&
-        (
-            hasSchoolTravelAuthority ||
-            /(?:霍格沃茨特快|霍格沃茨列车|开学列车|hogwarts express|train to hogwarts)/i
-                .test(action)
-        )
+        hasSchoolTravelAuthority
     ) {
         allowedConditions.push(
             'valid_school_travel',
@@ -741,11 +1469,14 @@ export function applyPlayerMovement(
             },
         };
     }
-    companionIds = getExplicitMovementCompanionIds(
-        worldState,
-        action,
-        path.roomIds,
-    );
+    if (!structuredCompanionIds) {
+        companionIds =
+            getExplicitMovementCompanionIds(
+                worldState,
+                action,
+                path.roomIds,
+            );
+    }
     if (options.guidedByActorId) {
         const guide = (worldState.actors || [])
             .find(actor =>

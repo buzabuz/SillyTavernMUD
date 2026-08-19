@@ -29,11 +29,6 @@ const LEGACY_PRESENTATION_BODY_KEYS =
         'currentForm',
     ]);
 
-const INJURY_PATTERN =
-    /(?:\b(?:injur|wound|bruise|cut|burn|fracture|sprain|bleed)\w*\b|受伤|伤口|伤势|擦伤|割伤|烧伤|骨折|扭伤|淤青|流血)/iu;
-const SCAR_PATTERN =
-    /(?:\bscar(?:red|s)?\b|疤痕|伤疤)/iu;
-
 function compactText(
     value,
     maximumLength = 500,
@@ -196,10 +191,9 @@ function buildLegacyIdentity(
             actor.houseId,
         );
     const isStudent =
-        /\bstudent\b/iu.test(
-            compactText(
-                actor.roleEn,
-                240,
+        Number.isInteger(
+            Number(
+                actor.entryYear,
             ),
         );
     const entryYear =
@@ -406,22 +400,6 @@ function identityForActor(
     );
 }
 
-function conditionText(
-    condition,
-) {
-    return compactText(
-        typeof condition ===
-            'string'
-            ? condition
-            : condition
-                ?.description ??
-                condition?.value ??
-                condition
-                    ?.resultText,
-        500,
-    );
-}
-
 function conditionKind(
     condition,
 ) {
@@ -440,18 +418,27 @@ function conditionKind(
     ).toLocaleLowerCase();
 }
 
+function conditionText(
+    condition,
+) {
+    return compactText(
+        typeof condition ===
+            'string'
+            ? condition
+            : condition
+                ?.description ??
+                condition?.value ??
+                condition
+                    ?.resultText,
+        500,
+    );
+}
+
 function isScarCondition(
     condition,
 ) {
-    return (
-        conditionKind(condition) ===
-            'scar' ||
-        SCAR_PATTERN.test(
-            conditionText(
-                condition,
-            ),
-        )
-    );
+    return conditionKind(condition) ===
+        'scar';
 }
 
 function isInjuryCondition(
@@ -464,11 +451,6 @@ function isInjuryCondition(
             'body_injury',
         ].includes(
             conditionKind(
-                condition,
-            ),
-        ) ||
-        INJURY_PATTERN.test(
-            conditionText(
                 condition,
             ),
         )

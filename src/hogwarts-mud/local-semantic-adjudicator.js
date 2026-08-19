@@ -14,8 +14,38 @@ import {
     createModelLanguageMismatch,
     isEnglishAuthorityText,
 } from '../../public/scripts/extensions/hogwarts-mud/domain/model-language-adoption.js';
+import {
+    parseExactDurationMinutes,
+} from '../../public/scripts/extensions/hogwarts-mud/domain/turn-time.js';
 import { getConfigValue } from '../util.js';
-import { IDENTITY_OBSERVATION_JSON_SCHEMA, IDENTITY_OBSERVATION_RESULT_SCHEMA, IDENTITY_OBSERVATION_SYSTEM_RULES } from './identity-observation-contract.js';
+import {
+    PRE_TURN_EVIDENCE_ROUTE_JSON_SCHEMA,
+    PRE_TURN_EVIDENCE_ROUTE_SCHEMA,
+    validatePreTurnCalendarCommitment,
+} from './pre-turn-route-contract.js';
+import {
+    constrainPreTurnMovementJsonSchema,
+    movementIntentJsonSchema,
+    movementIntentSchema,
+    validatePreTurnMovementIntent,
+} from './pre-turn-movement-contract.js';
+import {
+    createPreTurnSystemPrompt,
+} from './pre-turn-system-prompt.js';
+import { settlePreTurnCheck } from './pre-turn-check-contract.js';
+import {
+    POST_TURN_SYSTEM,
+} from './post-turn-system-prompt.js';
+import {
+    postTurnJsonSchema,
+    postTurnResultSchema,
+} from './post-turn-transport-contract.js';
+
+export {
+    validatePreTurnCalendarCommitment,
+    validatePreTurnMovementIntent,
+    settlePreTurnCheck,
+};
 
 const SCHEMA_VERSION = 1;
 const DEFAULT_API_URL =
@@ -24,6 +54,8 @@ const DEFAULT_MODEL = 'qwen3:1.7b';
 const DEFAULT_KEEP_ALIVE = '60s';
 const DEFAULT_CONTEXT_SIZE = 4096;
 const DEFAULT_TIMEOUT_MS = 120_000;
+export const POST_TURN_CONTEXT_SIZE =
+    4_096;
 const MODULE_ROOT =
     path.dirname(
         fileURLToPath(
@@ -37,22 +69,10 @@ const PROJECT_ROOT =
         '..',
     );
 
-const TEMPORAL_MODES = [
+const TEMPORAL_KINDS = [
     'instantaneous',
-    'brief',
     'ordinary',
-    'extended',
     'explicit_duration',
-    'travel',
-    'sleep',
-    'event_boundary',
-];
-const TEMPORAL_BASES = [
-    'estimated',
-    'explicit',
-    'route',
-    'schedule',
-    'fallback',
 ];
 const CHECK_RULE_IDS = [
     'none',
@@ -64,81 +84,6 @@ const CHECK_RULE_IDS = [
     'charisma',
     'magic',
     'forced_general',
-];
-const MATERIAL_EVENT_TYPES = [
-    'object_placed',
-    'object_moved',
-    'object_removed',
-    'scene_adjusted',
-    'scene_damaged',
-    'scene_repaired',
-    'scene_soiled',
-    'scene_cleaned',
-    'outfit_changed',
-    'accessory_changed',
-    'hairstyle_changed',
-    'appearance_changed',
-    'appearance_cleared',
-    'object_held',
-    'object_released',
-];
-const MATERIAL_OPERATIONS = [
-    'set',
-    'add',
-    'move',
-    'remove',
-    'damage',
-    'repair',
-    'soil',
-    'clean',
-];
-const MATERIAL_PERSISTENCE = [
-    'transient',
-    'until_scene_end',
-    'until_changed',
-];
-const MATERIAL_SLOTS = [
-    'head',
-    'hair',
-    'face',
-    'neck',
-    'torso_inner',
-    'torso_outer',
-    'hands',
-    'waist',
-    'legs',
-    'feet',
-    'accessory',
-    'unspecified',
-];
-const INVENTORY_ACTIONS = [
-    'acquire', 'carry', 'place', 'equip', 'unequip', 'give',
-    'lend', 'consume', 'damage', 'clean', 'lose', 'destroy',
-];
-const INVENTORY_TYPES = [
-    'wand',
-    'eyewear',
-    'clothing',
-    'accessory',
-    'document',
-    'container',
-    'money',
-    'key',
-    'book',
-    'tool',
-    'consumable',
-    'keepsake',
-    'clue',
-    'other',
-];
-const INVENTORY_TRANSFER_MODES = [
-    'none', 'gift', 'loan', 'theft', 'return',
-];
-const INVENTORY_STORY_ROLES = [
-    'signature', 'social', 'clue', 'promise', 'keepsake',
-];
-const INVENTORY_VISIBILITY = [
-    'public', 'owner_known', 'hidden',
 ];
 const VISUAL_SCOPES = [
     'none',
@@ -170,6 +115,24 @@ const PERCEPTION_CONCEALMENT = [
     'attempted',
     'successful',
 ];
+const TEMPORAL_CLAIM_KINDS = [
+    'absolute_clock',
+    'relative_duration',
+    'named_time',
+    'schedule',
+    'calendar_date',
+];
+const TEMPORAL_CLAIM_RELATIONS = [
+    'none',
+    'before',
+    'after',
+    'until',
+    'till',
+    'later',
+    'earlier',
+    'ago',
+    'past',
+];
 
 const confidenceSchema =
     z.number().min(0).max(1);
@@ -179,18 +142,9 @@ const preTurnResultSchema =
         schemaVersion:
             z.literal(SCHEMA_VERSION),
         temporal: z.object({
-            mode:
-                z.enum(TEMPORAL_MODES),
-            elapsedMinutes:
-                z.number()
-                    .int()
-                    .min(0)
-                    .max(10_080),
-            basis:
-                z.enum(TEMPORAL_BASES),
+            kind:
+                z.enum(TEMPORAL_KINDS),
             evidenceText:
-                z.string().max(500),
-            reasonEn:
                 z.string().max(500),
             confidence:
                 confidenceSchema,
@@ -201,112 +155,21 @@ const preTurnResultSchema =
                 z.enum(CHECK_RULE_IDS),
             targetActorId:
                 z.string().max(96),
+            rollMode:
+                z.enum([
+                    'normal',
+                    'advantage',
+                    'disadvantage',
+                ]),
             reasonEn:
                 z.string().max(500),
             confidence:
                 confidenceSchema,
         }).strict(),
-    }).strict();
-
-const materialEventSchema =
-    z.object({
-        type:
-            z.enum(MATERIAL_EVENT_TYPES),
-        actorId:
-            z.string().max(96),
-        objectTextEn:
-            z.string().max(300),
-        sourceTextEn:
-            z.string().max(300),
-        targetTextEn:
-            z.string().max(300),
-        valueTextEn:
-            z.string().max(300),
-        previousValueTextEn:
-            z.string().max(300),
-        resultTextEn:
-            z.string().max(500),
-        quantity:
-            z.number()
-                .int()
-                .min(1)
-                .max(1_000)
-                .nullable(),
-        operation:
-            z.enum(MATERIAL_OPERATIONS),
-        slot:
-            z.enum(MATERIAL_SLOTS),
-        hand:
-            z.enum([
-                'left',
-                'right',
-                'both',
-                'unspecified',
-            ]),
-        persistence:
-            z.enum(
-                MATERIAL_PERSISTENCE,
-            ),
-        sourceKind:
-            z.enum([
-                'player',
-                'narrative',
-            ]),
-        evidenceText:
-            z.string().max(500),
-        confidence:
-            confidenceSchema,
-    }).strict();
-
-const inventoryUpdateSchema =
-    z.object({
-        id:
-            z.string().max(80),
-        operation:
-            z.enum(
-                INVENTORY_ACTIONS,
-            ),
-        type:
-            z.enum(
-                INVENTORY_TYPES,
-            ),
-        labelEn:
-            z.string().max(200),
-        appearanceEn:
-            z.string().max(600),
-        ownerId:
-            z.string().max(96),
-        holderId:
-            z.string().max(96),
-        targetHolderId:
-            z.string().max(96),
-        transferMode:
-            z.enum(
-                INVENTORY_TRANSFER_MODES,
-            ),
-        storyRoles:
-            z.array(
-                z.enum(
-                    INVENTORY_STORY_ROLES,
-                ),
-            ).max(5),
-        visibility:
-            z.enum(
-                INVENTORY_VISIBILITY,
-            ),
-        isEquipped:
-            z.boolean(),
-        held:
-            z.boolean(),
-        sourceKind:
-            z.enum([
-                'player',
-                'narrative',
-            ]),
-        evidenceText:
-            z.string().max(500),
-        confidence:
-            confidenceSchema,
+        calendarCommitment:
+            PRE_TURN_EVIDENCE_ROUTE_SCHEMA,
+        movementIntent:
+            movementIntentSchema,
     }).strict();
 
 const perceptionSchema =
@@ -338,55 +201,33 @@ const perceptionSchema =
             ),
     }).strict();
 
-const postTurnResultSchema =
+const temporalClaimSchema =
     z.object({
-        schemaVersion:
-            z.literal(SCHEMA_VERSION),
-        materialEvents:
-            z.array(
-                materialEventSchema,
-            ).max(16),
-        eventBoundary: z.object({
-            ended: z.boolean(),
-            reasonEn:
-                z.string().max(500),
-            evidenceText:
-                z.string().max(500),
-            confidence:
-                confidenceSchema,
-        }).strict(),
-        actorUpdates: z.array(
-            z.object({
-                actorId:
-                    z.string().max(96),
-                currentActivityEn:
-                    z.string().max(500),
-                presence:
-                    z.enum([
-                        'unchanged',
-                        'present',
-                        'absent',
-                    ]),
-                roomId:
-                    z.string().max(96),
-                evidenceText:
-                    z.string().max(500),
-                confidence:
-                    confidenceSchema,
-            }).strict(),
-        ).max(16),
-        identityObservations:
-            z.array(IDENTITY_OBSERVATION_RESULT_SCHEMA).max(16),
-        perception:
-            perceptionSchema,
+        kind:
+            z.enum(
+                TEMPORAL_CLAIM_KINDS,
+            ),
+        evidenceText:
+            z.string()
+                .min(1)
+                .max(500),
+        confidence:
+            confidenceSchema,
     }).strict();
-
-const inventoryTurnResultSchema =
-    z.object({
-        inventoryUpdates:
-            z.array(
-                inventoryUpdateSchema,
-            ).max(8),
+const settledTemporalClaimSchema =
+    temporalClaimSchema.extend({
+        clock:
+            z.string()
+                .max(5),
+        durationMinutes:
+            z.number()
+                .int()
+                .min(0)
+                .max(10_080),
+        relation:
+            z.enum(
+                TEMPORAL_CLAIM_RELATIONS,
+            ),
     }).strict();
 
 export const translationResultSchema =
@@ -426,6 +267,8 @@ const preTurnJsonSchema = {
         'schemaVersion',
         'temporal',
         'check',
+        'calendarCommitment',
+        'movementIntent',
     ],
     properties: {
         schemaVersion: {
@@ -436,31 +279,16 @@ const preTurnJsonSchema = {
             type: 'object',
             additionalProperties: false,
             required: [
-                'mode',
-                'elapsedMinutes',
-                'basis',
+                'kind',
                 'evidenceText',
-                'reasonEn',
                 'confidence',
             ],
             properties: {
-                mode: {
+                kind: {
                     type: 'string',
-                    enum: TEMPORAL_MODES,
-                },
-                elapsedMinutes: {
-                    type: 'integer',
-                    minimum: 0,
-                    maximum: 10_080,
-                },
-                basis: {
-                    type: 'string',
-                    enum: TEMPORAL_BASES,
+                    enum: TEMPORAL_KINDS,
                 },
                 evidenceText: {
-                    type: 'string',
-                },
-                reasonEn: {
                     type: 'string',
                 },
                 confidence: {
@@ -477,6 +305,7 @@ const preTurnJsonSchema = {
                 'required',
                 'ruleId',
                 'targetActorId',
+                'rollMode',
                 'reasonEn',
                 'confidence',
             ],
@@ -491,6 +320,14 @@ const preTurnJsonSchema = {
                 targetActorId: {
                     type: 'string',
                 },
+                rollMode: {
+                    type: 'string',
+                    enum: [
+                        'normal',
+                        'advantage',
+                        'disadvantage',
+                    ],
+                },
                 reasonEn: {
                     type: 'string',
                 },
@@ -501,388 +338,10 @@ const preTurnJsonSchema = {
                 },
             },
         },
-    },
-};
-
-const materialEventJsonSchema = {
-    type: 'object',
-    additionalProperties: false,
-    required: [
-        'type',
-        'actorId',
-        'objectTextEn',
-        'sourceTextEn',
-        'targetTextEn',
-        'valueTextEn',
-        'previousValueTextEn',
-        'resultTextEn',
-        'quantity',
-        'operation',
-        'slot',
-        'hand',
-        'persistence',
-        'sourceKind',
-        'evidenceText',
-        'confidence',
-    ],
-    properties: {
-        type: {
-            type: 'string',
-            enum: MATERIAL_EVENT_TYPES,
-        },
-        actorId: {
-            type: 'string',
-        },
-        objectTextEn: {
-            type: 'string',
-        },
-        sourceTextEn: {
-            type: 'string',
-        },
-        targetTextEn: {
-            type: 'string',
-        },
-        valueTextEn: {
-            type: 'string',
-        },
-        previousValueTextEn: {
-            type: 'string',
-        },
-        resultTextEn: {
-            type: 'string',
-        },
-        quantity: {
-            anyOf: [
-                {
-                    type: 'integer',
-                    minimum: 1,
-                    maximum: 1_000,
-                },
-                {
-                    type: 'null',
-                },
-            ],
-        },
-        operation: {
-            type: 'string',
-            enum: MATERIAL_OPERATIONS,
-        },
-        slot: {
-            type: 'string',
-            enum: MATERIAL_SLOTS,
-        },
-        hand: {
-            type: 'string',
-            enum: [
-                'left',
-                'right',
-                'both',
-                'unspecified',
-            ],
-        },
-        persistence: {
-            type: 'string',
-            enum: MATERIAL_PERSISTENCE,
-        },
-        sourceKind: {
-            type: 'string',
-            enum: [
-                'player',
-                'narrative',
-            ],
-        },
-        evidenceText: {
-            type: 'string',
-            maxLength: 500,
-        },
-        confidence: {
-            type: 'number',
-            minimum: 0,
-            maximum: 1,
-        },
-    },
-};
-
-const inventoryUpdateJsonSchema = {
-    type: 'object',
-    additionalProperties: false,
-    required: [
-        'id',
-        'operation',
-        'type',
-        'labelEn',
-        'appearanceEn',
-        'ownerId',
-        'holderId',
-        'targetHolderId',
-        'transferMode',
-        'storyRoles',
-        'visibility',
-        'isEquipped',
-        'held',
-        'sourceKind',
-        'evidenceText',
-        'confidence',
-    ],
-    properties: {
-        id: {
-            type: 'string',
-        },
-        operation: {
-            type: 'string',
-            enum:
-                INVENTORY_ACTIONS,
-        },
-        type: {
-            type: 'string',
-            enum:
-                INVENTORY_TYPES,
-        },
-        labelEn: {
-            type: 'string',
-            maxLength: 200,
-        },
-        appearanceEn: {
-            type: 'string',
-            maxLength: 600,
-        },
-        ownerId: {
-            type: 'string',
-            maxLength: 96,
-        },
-        holderId: {
-            type: 'string',
-            maxLength: 96,
-        },
-        targetHolderId: {
-            type: 'string',
-            maxLength: 96,
-        },
-        transferMode: {
-            type: 'string',
-            enum:
-                INVENTORY_TRANSFER_MODES,
-        },
-        storyRoles: {
-            type: 'array',
-            maxItems: 5,
-            items: {
-                type: 'string',
-                enum:
-                    INVENTORY_STORY_ROLES,
-            },
-        },
-        visibility: {
-            type: 'string',
-            enum:
-                INVENTORY_VISIBILITY,
-        },
-        isEquipped: {
-            type: 'boolean',
-        },
-        held: {
-            type: 'boolean',
-        },
-        sourceKind: {
-            type: 'string',
-            enum: [
-                'player',
-                'narrative',
-            ],
-        },
-        evidenceText: {
-            type: 'string',
-            maxLength: 500,
-        },
-        confidence: {
-            type: 'number',
-            minimum: 0,
-            maximum: 1,
-        },
-    },
-};
-
-const perceptionJsonSchema = {
-    type: 'object',
-    additionalProperties: false,
-    required: [
-        'version',
-        'visualScope',
-        'audibleScope',
-        'salience',
-        'attribution',
-        'concealment',
-        'directParticipantActorIds',
-        'evidenceText',
-        'confidence',
-        'source',
-    ],
-    properties: {
-        version: {
-            type: 'integer',
-            const: 1,
-        },
-        visualScope: {
-            type: 'string',
-            enum: VISUAL_SCOPES,
-        },
-        audibleScope: {
-            type: 'string',
-            enum: AUDIBLE_SCOPES,
-        },
-        salience: {
-            type: 'string',
-            enum:
-                PERCEPTION_SALIENCE,
-        },
-        attribution: {
-            type: 'string',
-            enum:
-                PERCEPTION_ATTRIBUTION,
-        },
-        concealment: {
-            type: 'string',
-            enum:
-                PERCEPTION_CONCEALMENT,
-        },
-        directParticipantActorIds: {
-            type: 'array',
-            maxItems: 16,
-            items: {
-                type: 'string',
-            },
-        },
-        evidenceText: {
-            type: 'string',
-            minLength: 1,
-            maxLength: 500,
-        },
-        confidence: {
-            type: 'number',
-            minimum: 0,
-            maximum: 1,
-        },
-        source: {
-            type: 'string',
-            const:
-                'post_turn_observer',
-        },
-    },
-};
-
-const postTurnJsonSchema = {
-    type: 'object',
-    additionalProperties: false,
-    required: [
-        'schemaVersion',
-        'materialEvents',
-        'eventBoundary',
-        'actorUpdates',
-        'identityObservations',
-        'perception',
-    ],
-    properties: {
-        schemaVersion: {
-            type: 'integer',
-            const: SCHEMA_VERSION,
-        },
-        materialEvents: {
-            type: 'array',
-            maxItems: 16,
-            items:
-                materialEventJsonSchema,
-        },
-        eventBoundary: {
-            type: 'object',
-            additionalProperties: false,
-            required: [
-                'ended',
-                'reasonEn',
-                'evidenceText',
-                'confidence',
-            ],
-            properties: {
-                ended: {
-                    type: 'boolean',
-                },
-                reasonEn: {
-                    type: 'string',
-                    maxLength: 500,
-                },
-                evidenceText: {
-                    type: 'string',
-                    maxLength: 500,
-                },
-                confidence: {
-                    type: 'number',
-                    minimum: 0,
-                    maximum: 1,
-                },
-            },
-        },
-        actorUpdates: {
-            type: 'array',
-            maxItems: 16,
-            items: {
-                type: 'object',
-                additionalProperties: false,
-                required: [
-                    'actorId',
-                    'currentActivityEn',
-                    'presence',
-                    'roomId',
-                    'evidenceText',
-                    'confidence',
-                ],
-                properties: {
-                    actorId: {
-                        type: 'string',
-                    },
-                    currentActivityEn: {
-                        type: 'string',
-                        maxLength: 500,
-                    },
-                    presence: {
-                        type: 'string',
-                        enum: [
-                            'unchanged',
-                            'present',
-                            'absent',
-                        ],
-                    },
-                    roomId: {
-                        type: 'string',
-                    },
-                    evidenceText: {
-                        type: 'string',
-                        maxLength: 500,
-                    },
-                    confidence: {
-                        type: 'number',
-                        minimum: 0,
-                        maximum: 1,
-                    },
-                },
-            },
-        },
-        identityObservations: { type: 'array', maxItems: 16, items: IDENTITY_OBSERVATION_JSON_SCHEMA },
-        perception: perceptionJsonSchema,
-    },
-};
-
-const inventoryTurnJsonSchema = {
-    type: 'object',
-    additionalProperties: false,
-    required: [
-        'inventoryUpdates',
-    ],
-    properties: {
-        inventoryUpdates: {
-            type: 'array',
-            maxItems: 8,
-            items:
-                inventoryUpdateJsonSchema,
-        },
+        calendarCommitment:
+            PRE_TURN_EVIDENCE_ROUTE_JSON_SCHEMA,
+        movementIntent:
+            movementIntentJsonSchema,
     },
 };
 
@@ -1041,9 +500,10 @@ export function adoptLocalPostTurnLanguage(
                 'valueTextEn',
                 'previousValueTextEn',
                 'resultTextEn',
+                'evidenceText',
             ],
             taskId:
-                'local_post_turn_observer',
+                'post_turn_semantic_proposal',
             recordId:
                 String(
                     event?.id ||
@@ -1061,9 +521,10 @@ export function adoptLocalPostTurnLanguage(
             source: update,
             fields: [
                 'currentActivityEn',
+                'evidenceText',
             ],
             taskId:
-                'local_post_turn_observer',
+                'post_turn_semantic_proposal',
             recordId:
                 String(
                     update?.actorId ||
@@ -1073,58 +534,11 @@ export function adoptLocalPostTurnLanguage(
                 `actorUpdates[${index}]`,
             diagnostics,
         }));
-    const identityObservations = (
-        result?.identityObservations ||
-        []
-    ).filter((observation, index) =>
-        !rejectNonEnglishRecord({
-            source: observation,
-            fields: [
-                'injuryType',
-                'description',
-            ],
-            taskId:
-                'local_post_turn_observer',
-            recordId:
-                String(
-                    observation
-                        ?.actorId ||
-                    index,
-                ),
-            fieldPrefix:
-                `identityObservations[${index}]`,
-            diagnostics,
-        }));
-    const eventBoundary = {
-        ...(result?.eventBoundary ||
-            {}),
-    };
-    if (
-        String(
-            eventBoundary.reasonEn ||
-            '',
-        ).trim() &&
-        !isEnglishAuthorityText(
-            eventBoundary.reasonEn,
-        )
-    ) {
-        diagnostics.push(
-            createModelLanguageMismatch({
-                taskId:
-                    'local_post_turn_observer',
-                fieldPath:
-                    'eventBoundary.reasonEn',
-            }),
-        );
-        eventBoundary.reasonEn = '';
-    }
     return {
         result: {
             ...result,
             materialEvents,
-            eventBoundary,
             actorUpdates,
-            identityObservations,
         },
         diagnostics,
     };
@@ -1488,6 +902,7 @@ export async function callStructuredModel({
     unload = false,
     modelOverride = '',
     contextSizeOverride = 0,
+    exactContextSize = 0,
 }) {
     const taskDefinition =
         getModelTaskDefinition(
@@ -1569,15 +984,14 @@ export async function callStructuredModel({
                                     .keepAlive,
                         options: {
                             temperature: 0,
-                            num_ctx:
-                                Math.max(
-                                    settings
-                                        .contextSize,
-                                    Number(
-                                        contextSizeOverride ||
-                                        0,
-                                    ),
+                            num_ctx: exactContextSize || Math.max(
+                                settings
+                                    .contextSize,
+                                Number(
+                                    contextSizeOverride ||
+                                    0,
                                 ),
+                            ),
                             seed: 42,
                         },
                     }),
@@ -1653,167 +1067,6 @@ export async function callStructuredModel({
     } finally {
         clearTimeout(timeout);
     }
-}
-
-const PRE_TURN_SYSTEM = `You are a deterministic semantic adjudicator for a persistent text RPG. Classify only what the player actually attempts in this turn.
-
-playerTurnSequence is authoritative:
-- action entries are enacted now.
-- direct_speech and broadcast_speech entries are spoken words, not actions.
-- A future plan, question, hypothetical, recollection, or quoted word such as "class", "wait", "sleep", or "travel" must not consume that future duration.
-
-Temporal rules:
-- elapsedMinutes is a count of MINUTES. Eight hours is 480 minutes; two hours is 120 minutes.
-- Every non-magical ordinary or uncertain action consumes at least 15 minutes.
-- instantaneous and values below 15 are reserved for an explicitly cast instantaneous spell.
-- Brief conversation, ordinary object handling, sitting down, pushing someone, or one immediate social exchange consumes 15 minutes.
-- "Continue class" without explicitly finishing or waiting through the class is exactly a representative 15-minute turn, not a whole class.
-- Use an event or schedule boundary only when the player explicitly completes, waits through, sleeps through, or skips to that boundary.
-- When movementResolution.moved is true, respect its route minutes.
-- basis route is legal only when movementResolution.moved is true. basis explicit is legal only when the enacted action contains an explicit duration.
-- Never expand time merely because the request contains many questions or the eventual prose may be long.
-
-Check rules:
-- A check is required only for a meaningful uncertain attempted action with consequences.
-- Ordinary conversation, asking questions, attending class, waiting, sleeping, handing over an object, sitting down, or deterministic movement requires no check.
-- Physical force, stealth, theft, persuasion, deception, investigation under uncertainty, or spellcasting may require a check.
-- Actively trying to read, identify, copy, or understand a visible spell under uncertainty (blurred writing, distance, concealment, unfamiliar technique, interruption, or time pressure) requires one perception or intellect check. Merely hearing that a spell exists does not.
-- forcedCheck is a boolean input. When it is false, never use forced_general.
-- Select one supplied ruleId and one supplied present actor ID only. Use none when no check is required.
-- forcedCheck=true always requires forced_general when no more specific rule applies.
-- targetActorId must be empty when there is no check.
-
-Calibration examples:
-1. action "*挤在哈利旁边坐下，把纸笔塞给他*" plus speech "你等下一起上课吗？" => elapsedMinutes 15, mode ordinary, basis estimated, check.required false, ruleId none.
-2. action "*继续和同学们一起上课*" => elapsedMinutes 15, mode ordinary, basis estimated, no check.
-3. action "*一直上完这节课，再收拾书包离开*" => mode event_boundary, use the plausible remaining class duration in minutes, no check.
-4. action "*坐在这里等了两个小时*" => elapsedMinutes 120, mode explicit_duration, basis explicit, no check.
-5. action "*睡了八个小时，第二天早上醒来*" => elapsedMinutes 480, mode sleep, basis explicit, no check.
-6. action "*用力把面前的男孩推倒*" => elapsedMinutes 15, check.required true, ruleId physical_force.
-7. direct speech "我要推理一下你为什么不肯签名" => elapsedMinutes 15, check.required false. The word 推理 is quoted speech, not an enacted investigation.
-8. action "*眯着眼睛辨认黑板上模糊的咒语*" => elapsedMinutes 15, check.required true, ruleId perception.`;
-
-const POST_TURN_SYSTEM = `You are a sparse observer of an already-written RPG turn. Extract only explicit observable changes from playerAction and narrativeSegments.
-
-Material rules:
-- Return only physical changes that should persist beyond the sentence: placement, movement, removal, damage, repair, dirt, cleaning, outfit, accessory, hairstyle, visible condition, or held object.
-- Do not treat incidental food, ordinary gestures, metaphors, comparisons, schedules, or unchanged surroundings as material events.
-- Actor walking between rooms is an actor update, never a material event.
-- Changing clothes uses outfit_changed. Do not encode clothing as scene_adjusted.
-- evidenceText must be an exact substring of the selected player or narrative source.
-- evidenceText must be one concise sentence or clause no longer than 500 characters. Never copy the full narrative.
-- Use only supplied actor IDs. Empty actorId is allowed only for scene changes with no identifiable actor.
-- Never use permanent persistence.
-- Leave irrelevant fields as empty strings. Do not invent previous values, hands, quantities, source objects, or targets.
-
-Event boundary rules:
-- ended is true only when the bounded interaction or procedure visibly closes, such as the focal actor leaving, the task completing, or the parties disengaging.
-- A focal actor walking out of the current interaction sets ended true.
-- Completing one ordinary physical action, changing clothes, placing an item, or finishing a sentence does not by itself end the surrounding event.
-- evidenceText must be an exact substring of one narrativeSegments[].textEn value. Use an empty string when ended is false.
-- Boundary evidence must be one concise sentence no longer than 500 characters.
-
-Actor rules:
-- Return only actors whose observable current activity, presence, or room changed.
-- Use only supplied actor and room IDs.
-- An absent actor cannot enter merely because their name or belonging is mentioned.
-- Mark absent only when the actor visibly leaves the current interaction.
-- Prior currentActivityEn and existingActorUpdates describe old state. They are context, never evidence.
-- evidenceText must be an exact substring of a narrative segment, not a field name such as currentActivityEn or playerAction.
-- Actor evidence must be one concise sentence no longer than 500 characters.
-- Keep actor updates sparse and evidence-based.
-
-${IDENTITY_OBSERVATION_SYSTEM_RULES}
-Perception rules:
-- Return exactly one primary event perception for the enacted turn. Describe how the completed result could be perceived, not merely what the player intended.
-- visualScope is none, target, nearby, room, or area. audibleScope is none, target, nearby, room, or adjacent.
-- directParticipantActorIds contains only supplied actor IDs directly affected by or deliberately exchanging the event. Do not return witnesses, observers, cohorts, room occupants, or invented IDs.
-- A failed covert action that causes a visible or audible public result keeps concealment attempted and uses the scope of the actual result.
-- A genuinely successful concealed action uses concealment successful. Whispers and passed notes normally use target scope unless the narrative explicitly exposes them.
-- evidenceText must be one exact non-empty substring of playerAction or a narrative segment and no longer than 500 characters.
-- Never output witnessActorIds, witnessCohortIds, witnessBasis, or any final witness list.
-- attribution is clear only when the observable result clearly identifies its actor. Ambiguous or unknown attribution still records the event itself.
-- source must be post_turn_observer.
-
-Calibration examples:
-1. Narrative "Harry turned and walked through the great doors into the Entrance Hall, leaving the breakfast table behind." => no material event; eventBoundary ended true; one Harry actor update with presence absent, roomId entrance_hall, and that exact sentence as evidence.
-2. Player "Tina把二十八只玩具熊排列在床头，然后换上条纹睡衣。" => object_placed for the bears and outfit_changed for striped pyjamas. No updates for unrelated actors.
-3. Pure dialogue with no physical or presence change => empty materialEvents, actorUpdates, and identityObservations; perception still describes that primary exchange.
-4. A failed secret spell sends Ron into the rafters in front of class => visualScope room, audibleScope room, concealment attempted, Ron as a direct participant.
-5. A note quietly passed to Harry without discovery => visualScope target, audibleScope none, concealment successful, Harry as a direct participant.`;
-
-const INVENTORY_TURN_SYSTEM = `You are a conservative Item V2 proposal observer for an already-written RPG turn. Extract only durable story items whose ownership, holder, location, social meaning, clue/promise value, signature identity, or future state can matter.
-
-Rules:
-- playerAction and narrativeText are the only evidence sources. inventory is context, never evidence.
-- A pair such as 【物品操作:carry｜携带】 followed by 【物品:stable_item_id｜label】 is authoritative player intent and object selection. Reuse that exact inventory ID; never substitute a similarly named Item.
-- The structured pair does not prove success. Emit the requested operation only when narrativeText observably completes or changes the Item state. For give/lend, the natural action or narrative must identify the recipient.
-- A malformed, orphaned, hidden, or unknown-ID directive must not produce an inventory update.
-- Return an empty array unless an exact source clause establishes acquire, carry, place, equip, unequip, give, lend, consume, damage, clean, lose, or destroy.
-- A signed autograph, personal letter, key, wand, map, named keepsake, clue-bearing document, promise token, socially meaningful gift, or signature accessory may become a new candidate.
-- Ignore food, drinks, wrappers, cutlery, generic quills, generic books, classroom supplies, routine shop stock, ordinary uniforms, generic clothing and everyday objects unless the player deliberately marks one for retention, the completed event gives it social/plot significance, or the object is visibly given, lent, borrowed, returned, or stolen.
-- Ordinary identity-appropriate objects remain implicit and receive no ID, quantity or history.
-- A completed gift, loan, return, or theft crosses the implicit-item boundary even for an ordinary quill, book, classroom supply, or everyday object. Emit a proposal so owner and holder can remain distinct. For a new borrowed object, use operation acquire, preserve the lender as ownerId, set the borrower as holderId, and use transferMode loan.
-- New candidates use operation acquire and a stable descriptive snake_case ID. They are only proposals; the player decides whether to record them.
-- Existing possessions must reuse a supplied inventory ID.
-- Every proposal requires an accurate English labelEn and objective appearanceEn. Do not output translated display fields.
-- ownerId is the social/legal owner. holderId is the current holder. A gift changes both; a loan or theft changes holderId but preserves ownerId.
-- targetHolderId is required only for give/lend. Use empty string otherwise.
-- storyRoles may include signature, social, clue, promise, keepsake. Use an empty array when none apply.
-- visibility is public for visibly known objects, owner_known for ordinary NPC signature belongings, and hidden only when the player has not observed the object.
-- held is true only when the item is physically in hand at turn end. isEquipped is true only when worn.
-- sourceKind player selects playerAction; sourceKind narrative selects narrativeText.
-- evidenceText must be one exact source substring no longer than 500 characters. Never paraphrase, cite inventory, or invent a sentence.
-- Do not infer ownership from proximity. If another actor takes the item away and the player does not retain it, return no acquisition.
-
-Example: playerAction "Tina拿起哈利签过名的羊皮纸并带着它去上课" => acquire one document candidate owned and held by player, storyRoles social and keepsake, using that exact clause as evidence.`;
-
-const INVENTORY_CANDIDATE_ITEM_PATTERN =
-    /(?:\b(?:autograph|signed (?:parchment|note|paper|book)|letter|key|wand|map|journal|diary|ring|ribbon|glasses|spectacles|amulet|artifact|heirloom|keepsake|permit|token|quill|pen|textbook)\b|签名|签过名|亲笔签名|信件|钥匙|魔杖|地图|日记|戒指|丝带|眼镜|护符|魔法物品|传家宝|纪念品|许可证|信物|羽毛笔|钢笔|课本)/iu;
-const INVENTORY_CANDIDATE_POSSESSION_PATTERN =
-    /(?:\b(?:acquire|equip|unequip|take|takes|took|pick(?:ed)? up|receive[ds]?|accept(?:ed)?|claim(?:ed)?|keep|kept|carry|carried|hold(?:ing)?|held|clamped on|wear|wore|remove[ds]?|give|gave|lend|lent|borrow|place[ds]?|put|consume[ds]?|break|broke|damage[ds]?|clean[eds]?|wash(?:ed)?|lose|lost|destroy(?:ed)?)\b|获得|携带|拿起|拿到|拿走|收下|收到|接过|认领|保留|留着|带着|握着|攥着|手里|随身|装进|放下|放置|穿戴|穿上|戴上|脱下|摘下|赠送|送给|借出|借给|借来|消耗|吃掉|喝掉|损坏|打坏|清洗|洗净|丢失|弄丢|销毁|摧毁|放进口袋|放进包)/iu;
-
-function shouldObserveInventory(
-    input,
-) {
-    const source = [
-        input?.playerAction,
-        input?.narrativeText,
-    ]
-        .filter(Boolean)
-        .join('\n');
-    const normalizedSource =
-        source.normalize('NFKC')
-            .toLocaleLowerCase();
-    const inventory =
-        Array.isArray(input?.inventory)
-            ? input.inventory
-            : [];
-    const mentionsTrackedItem =
-        inventory
-            .flatMap(item => [
-                item?.labelEn,
-                item?.label,
-                item?.appearanceEn,
-            ])
-            .map(value =>
-                String(value || '')
-                    .normalize('NFKC')
-                    .toLocaleLowerCase()
-                    .trim())
-            .filter(value =>
-                value.length >= 2)
-            .some(value =>
-                normalizedSource.includes(
-                    value,
-                ));
-    return (
-        INVENTORY_CANDIDATE_ITEM_PATTERN
-            .test(source) ||
-        mentionsTrackedItem
-    ) &&
-        INVENTORY_CANDIDATE_POSSESSION_PATTERN
-            .test(source);
 }
 
 export const TRANSLATION_SYSTEM = `你是哈利·波特文字 RPG 的专业英译简中翻译器。英文是权威原文，中文只用于显示。
@@ -2202,6 +1455,173 @@ export function translateText(
     });
 }
 
+export function createPreTurnModelRequest(
+    input,
+) {
+    const jsonSchema =
+        constrainPreTurnMovementJsonSchema(
+            preTurnJsonSchema,
+            input,
+        );
+    return {
+        taskId:
+            'local_pre_turn_adjudicator',
+        system:
+            createPreTurnSystemPrompt(
+                input,
+            ),
+        input,
+        jsonSchema:
+            jsonSchema,
+        resultSchema:
+            preTurnResultSchema,
+    };
+}
+
+export function settlePreTurnTemporal(
+    temporal,
+    input = {},
+) {
+    const ordinary = {
+        mode: 'ordinary',
+        elapsedMinutes: 15,
+        basis: 'estimated',
+        evidenceText: '',
+        reasonEn:
+            'Deterministic ordinary-turn policy settled fifteen minutes.',
+        confidence:
+            Number(
+                temporal
+                    ?.confidence ||
+                0,
+            ),
+    };
+    if (
+        input.movementResolution
+            ?.moved ===
+        true
+    ) {
+        return {
+            valid: true,
+            value: {
+                mode: 'travel',
+                elapsedMinutes:
+                    Math.max(
+                        15,
+                        Number(
+                            input
+                                .movementResolution
+                                .minutes ||
+                            0,
+                        ) ||
+                        15,
+                    ),
+                basis: 'route',
+                evidenceText: '',
+                reasonEn:
+                    'Deterministic route authority settled the travel duration.',
+                confidence: 1,
+            },
+            error: '',
+        };
+    }
+    if (
+        temporal?.kind ===
+        'instantaneous'
+    ) {
+        return {
+            valid: true,
+            value: {
+                mode:
+                    'instantaneous',
+                elapsedMinutes: 1,
+                basis: 'estimated',
+                evidenceText:
+                    String(
+                        temporal
+                            .evidenceText ||
+                        '',
+                    ),
+                reasonEn:
+                    'The model identified an enacted instantaneous spell; deterministic policy settled one minute.',
+                confidence:
+                    temporal
+                        .confidence,
+            },
+            error: '',
+        };
+    }
+    if (
+        temporal?.kind !==
+        'explicit_duration'
+    ) {
+        return {
+            valid: true,
+            value: ordinary,
+            error: '',
+        };
+    }
+    const evidenceText =
+        String(
+            temporal.evidenceText ||
+            '',
+        ).trim();
+    const enacted =
+        (
+            input.playerTurnSequence ||
+            []
+        ).some(entry =>
+            entry?.type ===
+                'action' &&
+            String(
+                entry.text ??
+                entry.textEn ??
+                '',
+            ).includes(
+                evidenceText,
+            ));
+    if (
+        !evidenceText ||
+        !enacted
+    ) {
+        return {
+            valid: false,
+            value: ordinary,
+            error:
+                'Explicit duration evidence is not grounded in one enacted action entry.',
+        };
+    }
+    const parsed =
+        parseExactDurationMinutes(
+            evidenceText,
+        );
+    if (!parsed.valid) {
+        return {
+            valid: false,
+            value: ordinary,
+            error:
+                `Explicit duration grammar rejected the evidence: ${parsed.error}.`,
+        };
+    }
+    return {
+        valid: true,
+        value: {
+            mode:
+                'explicit_duration',
+            elapsedMinutes:
+                parsed.minutes,
+            basis: 'explicit',
+            evidenceText,
+            reasonEn:
+                'Deterministic exact-duration grammar converted the enacted evidence to minutes.',
+            confidence:
+                temporal
+                    .confidence,
+        },
+        error: '',
+    };
+}
+
 export function adjudicateTurn(
     input,
     {
@@ -2211,20 +1631,50 @@ export function adjudicateTurn(
     return enqueueLocalSemanticOperation(async () => {
         const modeled =
             await callStructuredModel({
-                taskId:
-                'local_pre_turn_adjudicator',
-                system:
-                PRE_TURN_SYSTEM,
-                input,
-                jsonSchema:
-                preTurnJsonSchema,
-                resultSchema:
-                preTurnResultSchema,
+                ...createPreTurnModelRequest(
+                    input,
+                ),
                 modelOverride: model,
             });
+        const calendarCommitmentValidation =
+            validatePreTurnCalendarCommitment(
+                modeled.result
+                    .calendarCommitment,
+                input,
+            );
+        const movementIntentValidation =
+            validatePreTurnMovementIntent(
+                modeled.result
+                    .movementIntent,
+                input,
+            );
+        const temporalSettlement =
+            settlePreTurnTemporal(
+                modeled.result
+                    .temporal,
+                input,
+            );
+        const checkSettlement =
+            settlePreTurnCheck(
+                modeled.result.check,
+            );
         const adopted =
             adoptLocalPreTurnLanguage(
-                modeled.result,
+                {
+                    ...modeled.result,
+                    calendarCommitment:
+                        calendarCommitmentValidation
+                            .value,
+                    movementIntent:
+                        movementIntentValidation
+                            .value,
+                    check:
+                        checkSettlement
+                            .value,
+                    temporal:
+                        temporalSettlement
+                            .value,
+                },
             );
         return {
             ...modeled,
@@ -2236,6 +1686,27 @@ export function adjudicateTurn(
                 languageMismatchCount:
                     adopted.diagnostics
                         .length,
+                calendarCommitmentRejected:
+                    !calendarCommitmentValidation
+                        .valid,
+                calendarCommitmentError:
+                    calendarCommitmentValidation
+                        .error,
+                movementIntentRejected:
+                    !movementIntentValidation
+                        .valid,
+                movementIntentError:
+                    movementIntentValidation
+                        .error,
+                temporalRejected:
+                    !temporalSettlement
+                        .valid,
+                temporalError:
+                    temporalSettlement
+                        .error,
+                checkNormalized:
+                    checkSettlement
+                        .normalized,
             },
         };
     });
@@ -2323,201 +1794,277 @@ export function validateObservedPerception(
     };
 }
 
+function isExactClockClaim(
+    value,
+) {
+    const source =
+        String(value || '');
+    const parts =
+        source.split(':');
+    if (
+        parts.length !== 2 ||
+        parts[0].length !== 2 ||
+        parts[1].length !== 2 ||
+        ![
+            ...parts[0],
+            ...parts[1],
+        ].every(character =>
+            character >= '0' &&
+            character <= '9')
+    ) {
+        return false;
+    }
+    const hour =
+        Number(parts[0]);
+    const minute =
+        Number(parts[1]);
+    return hour >= 0 &&
+        hour <= 23 &&
+        minute >= 0 &&
+        minute <= 59;
+}
+
+export function validateObservedTemporalClaims(
+    temporalClaims,
+    input = {},
+) {
+    const parsed =
+        z.array(
+            settledTemporalClaimSchema,
+        ).max(16)
+            .safeParse(
+                temporalClaims,
+            );
+    if (!parsed.success) {
+        return {
+            values: [],
+            errors: [
+                'Temporal claims do not match the post-turn schema.',
+            ],
+        };
+    }
+    const narrativeTexts = (
+        Array.isArray(
+            input.narrativeSegments,
+        )
+            ? input
+                .narrativeSegments
+            : []
+    ).map(segment =>
+        String(
+            segment?.textEn ||
+            '',
+        ));
+    const values = [];
+    const errors = [];
+    parsed.data.forEach(
+        (
+            claim,
+            index,
+        ) => {
+            if (
+                !narrativeTexts
+                    .some(text =>
+                        text.includes(
+                            claim
+                                .evidenceText,
+                        ))
+            ) {
+                errors.push(
+                    `temporalClaims[${index}] evidenceText is not grounded in a narrative segment.`,
+                );
+                return;
+            }
+            if (
+                claim.kind ===
+                    'absolute_clock'
+            ) {
+                if (
+                    !isExactClockClaim(
+                        claim.clock,
+                    ) ||
+                    claim.durationMinutes !==
+                        0 ||
+                    claim.relation !==
+                        'none'
+                ) {
+                    errors.push(
+                        `temporalClaims[${index}] has an invalid absolute-clock normalization.`,
+                    );
+                    return;
+                }
+            } else if (
+                claim.kind ===
+                    'relative_duration'
+            ) {
+                if (
+                    claim.clock ||
+                    claim.durationMinutes <=
+                        0 ||
+                    claim.relation ===
+                        'none'
+                ) {
+                    errors.push(
+                        `temporalClaims[${index}] has an invalid relative-duration normalization.`,
+                    );
+                    return;
+                }
+            } else if (
+                claim.clock ||
+                claim.durationMinutes !==
+                    0 ||
+                claim.relation !==
+                    'none'
+            ) {
+                errors.push(
+                    `temporalClaims[${index}] has fields that do not belong to ${claim.kind}.`,
+                );
+                return;
+            }
+            values.push(claim);
+        },
+    );
+    return {
+        values,
+        errors,
+    };
+}
+
+export function createPostTurnModelRequest(
+    input,
+) {
+    return {
+        taskId:
+            'post_turn_semantic_proposal',
+        system:
+            POST_TURN_SYSTEM,
+        input,
+        jsonSchema:
+            postTurnJsonSchema,
+        resultSchema:
+            postTurnResultSchema,
+        unload: true,
+        exactContextSize:
+            POST_TURN_CONTEXT_SIZE,
+    };
+}
+
+export function parsePostTurnModelResult(
+    rawResult,
+) {
+    if (
+        rawResult &&
+        typeof rawResult ===
+            'object' &&
+        !Array.isArray(
+            rawResult,
+        )
+    ) {
+        return postTurnResultSchema.parse(
+            rawResult,
+        );
+    }
+    if (
+        typeof rawResult !==
+            'string' ||
+        !rawResult.trim()
+    ) {
+        throw new TypeError(
+            'Post-turn model result must be one JSON object.',
+        );
+    }
+    return postTurnResultSchema.parse(
+        JSON.parse(
+            rawResult,
+        ),
+    );
+}
+
+export function settlePostTurnModelResult(
+    input,
+    rawResult,
+    diagnostics = {},
+) {
+    const coreInput =
+        input || {};
+    const parsed =
+        parsePostTurnModelResult(
+            rawResult,
+        );
+    const coreAdoption =
+        adoptLocalPostTurnLanguage(
+            parsed,
+        );
+    const perceptionValidation =
+        validateObservedPerception(
+            coreAdoption.result
+                .perception,
+            coreInput,
+        );
+    const temporalClaimsValidation =
+        validateObservedTemporalClaims(
+            coreAdoption.result
+                .temporalClaims,
+            coreInput,
+        );
+    return {
+        result: {
+            ...coreAdoption.result,
+            perception:
+                perceptionValidation.valid
+                    ? perceptionValidation
+                        .value
+                    : null,
+            temporalClaims:
+                temporalClaimsValidation
+                    .values,
+        },
+        diagnostics: {
+            ...diagnostics,
+            languageMismatches:
+                coreAdoption
+                    .diagnostics,
+            languageMismatchCount:
+                coreAdoption
+                    .diagnostics
+                    .length,
+            perceptionRejected:
+                !perceptionValidation
+                    .valid,
+            perceptionError:
+                perceptionValidation
+                    .error,
+            temporalClaimsRejected:
+                temporalClaimsValidation
+                    .errors.length,
+            temporalClaimErrors:
+                temporalClaimsValidation
+                    .errors,
+        },
+    };
+}
+
 export function observeTurn(
     input,
     {
         model = '',
-        inventoryModel = '',
     } = {},
 ) {
     return enqueueLocalSemanticOperation(async () => {
-        const narrativeText =
-            (
-                input
-                    ?.narrativeSegments ||
-                []
-            )
-                .map(segment =>
-                    String(
-                        segment
-                            ?.textEn ||
-                        '',
-                    ))
-                .filter(Boolean)
-                .join('\n');
-        const normalizedInput = {
-            ...(input || {}),
-            narrativeText,
-        };
-        const inventory =
-            normalizedInput.inventory ||
-            [];
-        const coreInput = {
-            ...normalizedInput,
-        };
-        delete coreInput.inventory;
-        delete coreInput.narrativeText;
+        const coreInput =
+            input || {};
         const coreModel =
             await callStructuredModel({
-                taskId:
-                    'local_post_turn_observer',
-                system:
-                    POST_TURN_SYSTEM,
-                input:
+                ...createPostTurnModelRequest(
                     coreInput,
-                jsonSchema:
-                    postTurnJsonSchema,
-                resultSchema:
-                    postTurnResultSchema,
-                unload: true,
+                ),
                 modelOverride: model,
             });
-        const coreAdoption =
-            adoptLocalPostTurnLanguage(
-                coreModel.result,
-            );
-        const core = {
-            ...coreModel,
-            result:
-                coreAdoption.result,
-            diagnostics: {
-                ...coreModel.diagnostics,
-                languageMismatches:
-                    coreAdoption
-                        .diagnostics,
-                languageMismatchCount:
-                    coreAdoption
-                        .diagnostics
-                        .length,
-            },
-        };
-        const perceptionValidation =
-            validateObservedPerception(
-                core.result
-                    .perception,
-                coreInput,
-            );
-        core.result.perception =
-            perceptionValidation.valid
-                ? perceptionValidation
-                    .value
-                : null;
-        let inventoryUpdates = [];
-        let inventoryDiagnostics =
-            null;
-        if (
-            shouldObserveInventory(
-                normalizedInput,
-            )
-        ) {
-            try {
-                const settings =
-                    getSettings();
-                const inventoryResult =
-                    await callStructuredModel({
-                        taskId:
-                            'local_inventory_observer',
-                        system:
-                            INVENTORY_TURN_SYSTEM,
-                        input: {
-                            playerAction:
-                                String(
-                                    normalizedInput
-                                        ?.playerAction ||
-                                    '',
-                                ),
-                            narrativeText:
-                                narrativeText,
-                            inventory,
-                        },
-                        jsonSchema:
-                            inventoryTurnJsonSchema,
-                        resultSchema:
-                            inventoryTurnResultSchema,
-                        unload: true,
-                        modelOverride:
-                            inventoryModel ||
-                            settings
-                                .inventoryModel,
-                    });
-                const inventoryAdoption =
-                    adoptLocalInventoryLanguage(
-                        inventoryResult
-                            .result,
-                    );
-                inventoryUpdates =
-                    inventoryAdoption
-                        .result
-                        .inventoryUpdates;
-                inventoryDiagnostics =
-                    {
-                        ...inventoryResult
-                            .diagnostics,
-                        languageMismatches:
-                            inventoryAdoption
-                                .diagnostics,
-                        languageMismatchCount:
-                            inventoryAdoption
-                                .diagnostics
-                                .length,
-                    };
-            } catch (error) {
-                console.warn(
-                    '[Hogwarts MUD] Local inventory observation unavailable; omitting optional item updates',
-                    error,
-                );
-            }
-        }
-        return {
-            result: {
-                ...core.result,
-                inventoryUpdates,
-            },
-            diagnostics: {
-                ...core.diagnostics,
-                perceptionRejected:
-                    !perceptionValidation
-                        .valid,
-                perceptionError:
-                    perceptionValidation
-                        .error,
-                inventoryModel:
-                    inventoryDiagnostics
-                        ?.model ||
-                    '',
-                inventoryDuration:
-                    inventoryDiagnostics
-                        ?.totalDuration ||
-                    0,
-                inventoryTaskId:
-                    inventoryDiagnostics
-                        ?.taskId ||
-                    '',
-                languageMismatches: [
-                    ...(
-                        core.diagnostics
-                            .languageMismatches ||
-                        []
-                    ),
-                    ...(
-                        inventoryDiagnostics
-                            ?.languageMismatches ||
-                        []
-                    ),
-                ],
-                languageMismatchCount:
-                    Number(
-                        core.diagnostics
-                            .languageMismatchCount ||
-                        0,
-                    ) +
-                    Number(
-                        inventoryDiagnostics
-                            ?.languageMismatchCount ||
-                        0,
-                    ),
-            },
-        };
+        return settlePostTurnModelResult(
+            coreInput,
+            coreModel.result,
+            coreModel.diagnostics,
+        );
     });
 }
 

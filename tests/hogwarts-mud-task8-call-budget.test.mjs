@@ -10,6 +10,13 @@ import {
     migrateActorContextV1,
 } from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js';
 import {
+    buildFollowMovementContext,
+    settleFollowMovementIntent,
+} from '../public/scripts/extensions/hogwarts-mud/domain/movement.js';
+import {
+    createMovementOutcome,
+} from '../public/scripts/extensions/hogwarts-mud/domain/movement-outcome.js';
+import {
     createModelAdapter,
 } from '../public/scripts/extensions/hogwarts-mud/adapters/model.js';
 import {
@@ -619,7 +626,6 @@ test('event-boundary schema consolidation uses one existing medium call', async 
 });
 
 function createBoundaryTurnHarness({
-    eventBoundary = true,
     appraisalFailure = false,
     staleAppraisal = false,
     activationSchemaIds = [],
@@ -782,6 +788,7 @@ function createBoundaryTurnHarness({
                         ],
                     },
                 }),
+            buildFollowMovementContext,
             buildLocalSemanticRoomContext:
                 () => ({
                     rooms: [],
@@ -819,6 +826,7 @@ function createBoundaryTurnHarness({
                 () => ({
                     ragLimit: 1,
                 }),
+            createMovementOutcome,
             createSceneMomentumDirective:
                 () => ({
                     required: true,
@@ -841,20 +849,7 @@ function createBoundaryTurnHarness({
             assertWorldFoundationReady:
                 () => true,
             ensureSocialDirectorForAction:
-                async () => {
-                    if (!eventBoundary) {
-                        return null;
-                    }
-                    modelCalls.medium++;
-                    recorder
-                        .recordTurnDiagnostic(
-                            'model_call',
-                            {
-                                tier:
-                                    'medium',
-                            },
-                        );
-                },
+                async () => null,
             ensurePacingDirectorAssessment:
                 async () => {},
             ensureSocialDirectorCatchup:
@@ -892,8 +887,6 @@ function createBoundaryTurnHarness({
                 }),
             getWorldDate:
                 () => '1991-09-04',
-            isObservedEventBoundary:
-                () => eventBoundary,
             jobRegistry: {
                 sceneTransitionActive:
                     false,
@@ -1005,7 +998,7 @@ function createBoundaryTurnHarness({
                     },
                     diagnostics: {},
                 }),
-            requestLocalTurnObservation:
+            requestPostTurnSemanticObservation:
                 async () => ({
                     observation: {
                         diagnostics: {},
@@ -1257,6 +1250,7 @@ function createBoundaryTurnHarness({
                 async () => null,
             setLiveSceneStreamPhase:
                 () => {},
+            settleFollowMovementIntent,
             syncLocalKnowledge:
                 async () => {},
             updateNativeMessageBlock:
@@ -1282,9 +1276,7 @@ function createBoundaryTurnHarness({
 
 test('ordinary successful turn keeps high and medium at zero while preserving one low call', async () => {
     const harness =
-        createBoundaryTurnHarness({
-            eventBoundary: false,
-        });
+        createBoundaryTurnHarness();
     await harness.workflow
         .runStructuredTurn(
             harness.playerAction,
@@ -1407,7 +1399,6 @@ test('ordinary successful turn keeps high and medium at zero while preserving on
 test('Knowledge infrastructure failure stops the turn before its only Low request', async () => {
     const harness =
         createBoundaryTurnHarness({
-            eventBoundary: false,
             retrievalFailure: true,
         });
     await assert.rejects(
@@ -1437,7 +1428,6 @@ test('[defect-probing] production turn commits activation Schema provenance into
         'schema_hermione_player_patience';
     const harness =
         createBoundaryTurnHarness({
-            eventBoundary: false,
             activationSchemaIds: [
                 schemaId,
             ],
@@ -1464,40 +1454,9 @@ test('[defect-probing] production turn commits activation Schema provenance into
     );
 });
 
-test('[defect-probing] event-boundary medium call remains in the committed turn diagnostics', async () => {
-    const harness =
-        createBoundaryTurnHarness();
-    await harness.workflow
-        .runStructuredTurn(
-            harness.playerAction,
-        );
-
-    assert.deepEqual(
-        harness.modelCalls,
-        {
-            high: 0,
-            medium: 1,
-            low: 1,
-        },
-    );
-    assert.deepEqual(
-        harness.context.chat[1]
-            .extra.hogwartsMud
-            .turnDiagnostics
-            .callCounts,
-        {
-            high: 0,
-            medium: 1,
-            low: 1,
-            local: 1,
-        },
-    );
-});
-
 test('[defect-probing] local Appraisal failure falls back without blocking the committed turn', async () => {
     const harness =
         createBoundaryTurnHarness({
-            eventBoundary: false,
             appraisalFailure: true,
         });
     await harness.workflow
@@ -1551,7 +1510,6 @@ test('[defect-probing] local Appraisal failure falls back without blocking the c
 test('[defect-probing] stale post-turn Appraisal work cannot overwrite a newer revision', async () => {
     const harness =
         createBoundaryTurnHarness({
-            eventBoundary: false,
             staleAppraisal: true,
         });
     await assert.rejects(
@@ -1691,6 +1649,7 @@ function createTransitionHarness() {
                 present: true,
                 mapId: 'castle',
                 roomId: 'library',
+                locationKnown: true,
                 lifeStatus: 'alive',
                 lifeStatusPermanent:
                     false,

@@ -36,7 +36,9 @@ function getPlayerRoom(state) {
 }
 
 function isAtPlayerRoom(actor, playerRoom) {
-    return (!actor?.mapId ||
+    return actor?.locationKnown !==
+        false &&
+        (!actor?.mapId ||
         actor.mapId === playerRoom.mapId) &&
         (!actor?.roomId ||
             actor.roomId === playerRoom.roomId);

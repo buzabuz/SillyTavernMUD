@@ -7,6 +7,7 @@ export function createJobRegistry() {
             null,
         pacing: null,
         memory: null,
+        eventBoundary: null,
         sceneTransition: null,
         calendarMoment: null,
         calendarMomentPhase:

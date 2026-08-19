@@ -1,13 +1,6 @@
 // Extracted from the helpers compatibility facade for Task 4.
 
 import {
-    EXTENDED_ACTION_PATTERN,
-    INVESTIGATION_ACTION_PATTERN,
-    MAGIC_ACTION_PATTERN,
-    MOVEMENT_ACTION_PATTERN,
-} from './spatial-foundation.js';
-
-import {
     advanceWorldClock,
     WORLD_CLOCK_PATTERN,
 } from './time-environment.js';
@@ -27,8 +20,351 @@ export function getDeterministicTimePolicy() {
     };
 }
 
-export function estimateTurnMinutes(playerAction, timePolicy = {}) {
-    const action = String(playerAction || '');
+const ENGLISH_NUMBER_VALUES =
+    Object.freeze({
+        zero: 0,
+        one: 1,
+        two: 2,
+        three: 3,
+        four: 4,
+        five: 5,
+        six: 6,
+        seven: 7,
+        eight: 8,
+        nine: 9,
+        ten: 10,
+        eleven: 11,
+        twelve: 12,
+        thirteen: 13,
+        fourteen: 14,
+        fifteen: 15,
+        sixteen: 16,
+        seventeen: 17,
+        eighteen: 18,
+        nineteen: 19,
+        twenty: 20,
+        thirty: 30,
+        forty: 40,
+        fifty: 50,
+        sixty: 60,
+        seventy: 70,
+        eighty: 80,
+        ninety: 90,
+    });
+const ENGLISH_NUMBER_TOKEN =
+    '(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)';
+const ENGLISH_NUMBER_EXPRESSION =
+    `${ENGLISH_NUMBER_TOKEN}(?:[\\s-]+(?:and[\\s-]+)?${ENGLISH_NUMBER_TOKEN})*`;
+const CHINESE_NUMBER_EXPRESSION =
+    '[零〇一二两三四五六七八九十百千万]+';
+const DURATION_NUMBER_EXPRESSION =
+    `(?:\\d+|${CHINESE_NUMBER_EXPRESSION}|${ENGLISH_NUMBER_EXPRESSION})`;
+const DURATION_COMPONENT_PATTERN =
+    new RegExp(
+        `(${DURATION_NUMBER_EXPRESSION})\\s*(?:个\\s*)?(分钟|小时|天|日|minutes?|hours?|days?)`,
+        'giu',
+    );
+const DURATION_UNIT_PATTERN =
+    /(?:分钟|小时|天|日|minutes?|hours?|days?)/iu;
+const DURATION_SECONDS_PATTERN =
+    /(?:秒|seconds?)/iu;
+const DURATION_VAGUE_PATTERN =
+    /(?:\b(?:about|around|approximately|roughly|nearly|almost|more than|less than)\b|大约|约莫|左右|差不多|将近|超过|不到)/iu;
+const DURATION_FRACTION_PATTERN =
+    /(?:\d+[.,]\d+|\b(?:half|quarter)\b|半)/iu;
+const DURATION_NEGATIVE_PATTERN =
+    /(?:-\s*\d+\s*(?:分钟|小时|天|日|minutes?|hours?|days?))/iu;
+const NON_ENGLISH_DURATION_NUMBER_EXPRESSION =
+    `(?:\\d+|${CHINESE_NUMBER_EXPRESSION})`;
+const DURATION_RANGE_PATTERN =
+    new RegExp(
+        `(?:${DURATION_NUMBER_EXPRESSION}\\s*(?:–|—|to|至|到)\\s*${DURATION_NUMBER_EXPRESSION}|${NON_ENGLISH_DURATION_NUMBER_EXPRESSION}\\s*-\\s*${NON_ENGLISH_DURATION_NUMBER_EXPRESSION})\\s*(?:个\\s*)?(?:分钟|小时|天|日|minutes?|hours?|days?)`,
+        'iu',
+    );
+
+function parseEnglishInteger(
+    value,
+) {
+    const tokens =
+        String(value || '')
+            .toLocaleLowerCase()
+            .replaceAll('-', ' ')
+            .split(/\s+/u)
+            .filter(Boolean);
+    let total = 0;
+    let current = 0;
+    for (const token of tokens) {
+        if (token === 'and') {
+            continue;
+        }
+        if (
+            Object.hasOwn(
+                ENGLISH_NUMBER_VALUES,
+                token,
+            )
+        ) {
+            current +=
+                ENGLISH_NUMBER_VALUES[
+                    token
+                ];
+            continue;
+        }
+        if (token === 'hundred') {
+            current =
+                Math.max(
+                    1,
+                    current,
+                ) * 100;
+            continue;
+        }
+        if (token === 'thousand') {
+            total +=
+                Math.max(
+                    1,
+                    current,
+                ) * 1_000;
+            current = 0;
+            continue;
+        }
+        return null;
+    }
+    return total + current;
+}
+
+function parseChineseInteger(
+    value,
+) {
+    const source =
+        String(value || '');
+    const digits = {
+        零: 0,
+        〇: 0,
+        一: 1,
+        二: 2,
+        两: 2,
+        三: 3,
+        四: 4,
+        五: 5,
+        六: 6,
+        七: 7,
+        八: 8,
+        九: 9,
+    };
+    if (
+        [...source].every(character =>
+            Object.hasOwn(
+                digits,
+                character,
+            ))
+    ) {
+        return Number(
+            [...source]
+                .map(character =>
+                    digits[
+                        character
+                    ])
+                .join(''),
+        );
+    }
+    const units = {
+        十: 10,
+        百: 100,
+        千: 1_000,
+    };
+    let total = 0;
+    let section = 0;
+    let number = 0;
+    for (const character of source) {
+        if (
+            Object.hasOwn(
+                digits,
+                character,
+            )
+        ) {
+            number =
+                digits[character];
+            continue;
+        }
+        if (
+            Object.hasOwn(
+                units,
+                character,
+            )
+        ) {
+            section +=
+                Math.max(
+                    1,
+                    number,
+                ) *
+                units[character];
+            number = 0;
+            continue;
+        }
+        if (character === '万') {
+            total +=
+                (
+                    section +
+                    number
+                ) * 10_000;
+            section = 0;
+            number = 0;
+            continue;
+        }
+        return null;
+    }
+    return total +
+        section +
+        number;
+}
+
+function parseDurationInteger(
+    value,
+) {
+    const source =
+        String(value || '')
+            .trim();
+    if (/^\d+$/u.test(source)) {
+        return Number(source);
+    }
+    if (
+        new RegExp(
+            `^${CHINESE_NUMBER_EXPRESSION}$`,
+            'u',
+        ).test(source)
+    ) {
+        return parseChineseInteger(
+            source,
+        );
+    }
+    return parseEnglishInteger(
+        source,
+    );
+}
+
+export function parseExactDurationMinutes(
+    value,
+) {
+    const source =
+        String(value || '')
+            .normalize('NFKC')
+            .trim();
+    const fail =
+        error => ({
+            valid: false,
+            minutes: null,
+            error,
+        });
+    if (!source) {
+        return fail(
+            'duration_missing',
+        );
+    }
+    if (
+        DURATION_SECONDS_PATTERN
+            .test(source)
+    ) {
+        return fail(
+            'seconds_unsupported',
+        );
+    }
+    if (
+        DURATION_VAGUE_PATTERN
+            .test(source)
+    ) {
+        return fail(
+            'vague_duration',
+        );
+    }
+    if (
+        DURATION_FRACTION_PATTERN
+            .test(source)
+    ) {
+        return fail(
+            'fractional_duration',
+        );
+    }
+    if (
+        DURATION_NEGATIVE_PATTERN
+            .test(source) ||
+        DURATION_RANGE_PATTERN
+            .test(source)
+    ) {
+        return fail(
+            'range_or_negative_duration',
+        );
+    }
+    const components = [
+        ...source.matchAll(
+            DURATION_COMPONENT_PATTERN,
+        ),
+    ];
+    if (!components.length) {
+        return fail(
+            DURATION_UNIT_PATTERN
+                .test(source)
+                ? 'duration_number_unsupported'
+                : 'duration_not_found',
+        );
+    }
+    let minutes = 0;
+    for (const match of components) {
+        const amount =
+            parseDurationInteger(
+                match[1],
+            );
+        if (
+            !Number.isSafeInteger(
+                amount,
+            ) ||
+            amount <= 0
+        ) {
+            return fail(
+                'duration_number_invalid',
+            );
+        }
+        const unit =
+            String(
+                match[2] ||
+                '',
+            ).toLocaleLowerCase();
+        const multiplier =
+            unit === '天' ||
+            unit === '日' ||
+            unit.startsWith('day')
+                ? 1_440
+                : unit === '小时' ||
+                    unit.startsWith(
+                        'hour',
+                    )
+                    ? 60
+                    : 1;
+        minutes +=
+            amount *
+            multiplier;
+    }
+    if (
+        !Number.isSafeInteger(
+            minutes,
+        ) ||
+        minutes < 1
+    ) {
+        return fail(
+            'duration_total_invalid',
+        );
+    }
+    if (minutes > 10_080) {
+        return fail(
+            'duration_over_seven_days',
+        );
+    }
+    return {
+        valid: true,
+        minutes,
+        error: '',
+    };
+}
+
+export function estimateTurnMinutes(_playerAction, timePolicy = {}) {
     const policy = {
         defaultMinutes: Math.max(15, Number(timePolicy.defaultMinutes) || 15),
         movementMinutes: Math.max(15, Number(timePolicy.movementMinutes) || 15),
@@ -36,18 +372,6 @@ export function estimateTurnMinutes(playerAction, timePolicy = {}) {
         extendedActionMinutes: Math.max(15, Number(timePolicy.extendedActionMinutes) || 60),
         instantaneousMagicMinutes: Math.max(0, Number(timePolicy.instantaneousMagicMinutes) || 1),
     };
-    if (MAGIC_ACTION_PATTERN.test(action)) {
-        return policy.instantaneousMagicMinutes;
-    }
-    if (EXTENDED_ACTION_PATTERN.test(action)) {
-        return policy.extendedActionMinutes;
-    }
-    if (INVESTIGATION_ACTION_PATTERN.test(action)) {
-        return policy.investigationMinutes;
-    }
-    if (MOVEMENT_ACTION_PATTERN.test(action)) {
-        return policy.movementMinutes;
-    }
     return policy.defaultMinutes;
 }
 
@@ -174,46 +498,6 @@ export function resolveTurnElapsedMinutes(
         overflowBlocks * 15;
 }
 
-const PRECISE_TEMPORAL_CLAIM_PATTERNS = [
-    /\b(?:since|at|by|before|after|until|till)\s+(?:noon|midnight|dawn|dusk|sunrise|sunset|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi,
-    /\b(?:shop|store|bank|pub|office|business|premises|doors?)\s+(?:clos(?:e|es|ed|ing)|opens?|opening)\s+(?:at|in|within|by|before|after)\b/gi,
-    /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+o['’]?clock\b/gi,
-    /\b(?:breakfast|lunch|dinner|supper|tea)\s+(?:at|by)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d{1,2})\b/gi,
-    /\b(?:train|express|coach|bus|ferry|boat|ship|flight|service)\s+(?:departs?|leaves?|arrives?|boards?|starts?)\s+(?:at\s+)?(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d{1,2}(?::[0-5]\d)?|noon|midnight)\b/gi,
-    /\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|twenty-first|twenty-second|twenty-third|twenty-fourth|twenty-fifth|twenty-sixth|twenty-seventh|twenty-eighth|twenty-ninth|thirtieth|thirty-first|\d{1,2}(?:st|nd|rd|th)?)\s+of\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/gi,
-    /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+(?:the\s+)?(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|twenty-first|twenty-second|twenty-third|twenty-fourth|twenty-fifth|twenty-sixth|twenty-seventh|twenty-eighth|twenty-ninth|thirtieth|thirty-first|\d{1,2}(?:st|nd|rd|th)?)\b/gi,
-];
-
-const RELATIVE_TEMPORAL_CLAIM_PATTERN =
-    /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|\d+)\s+(minutes?|hours?)\s+(before|after|until|till|later|earlier|ago|past)\b/gi;
-
-const TEMPORAL_NUMBER_WORDS = Object.freeze({
-    one: 1,
-    two: 2,
-    three: 3,
-    four: 4,
-    five: 5,
-    six: 6,
-    seven: 7,
-    eight: 8,
-    nine: 9,
-    ten: 10,
-    eleven: 11,
-    twelve: 12,
-    thirteen: 13,
-    fourteen: 14,
-    fifteen: 15,
-    sixteen: 16,
-    seventeen: 17,
-    eighteen: 18,
-    nineteen: 19,
-    twenty: 20,
-    thirty: 30,
-    forty: 40,
-    fifty: 50,
-    sixty: 60,
-});
-
 const TURN_INTERNAL_RELATIVE_DIRECTIONS =
     new Set([
         'after',
@@ -223,11 +507,42 @@ const TURN_INTERNAL_RELATIVE_DIRECTIONS =
         'past',
     ]);
 
+function isExactClockClaim(
+    value,
+) {
+    const source =
+        String(value || '');
+    const parts =
+        source.split(':');
+    if (
+        parts.length !== 2 ||
+        parts[0].length !== 2 ||
+        parts[1].length !== 2 ||
+        ![
+            ...parts[0],
+            ...parts[1],
+        ].every(character =>
+            character >= '0' &&
+            character <= '9')
+    ) {
+        return false;
+    }
+    const hour =
+        Number(parts[0]);
+    const minute =
+        Number(parts[1]);
+    return hour >= 0 &&
+        hour <= 23 &&
+        minute >= 0 &&
+        minute <= 59;
+}
+
 export function validateSceneTemporalConsistency(
-    payload,
+    temporalClaims,
     worldState,
     budget,
     allowedSourceText = '',
+    narrativeSourceTexts = [],
 ) {
     const startMatch = WORLD_CLOCK_PATTERN.exec(
         String(worldState?.clock || ''),
@@ -248,106 +563,172 @@ export function validateSceneTemporalConsistency(
             ? [`${endMatch[4]}:${endMatch[5]}`]
             : []),
     ]);
-    const corpus = [
-        payload?.publicEventEn,
-        payload?.sceneProgression?.summaryEn,
-        ...(payload?.segments || []).map(
-            segment => segment?.textEn,
-        ),
-        ...(payload?.actorUpdates || []).flatMap(
-            update => [
-                update?.currentActivityEn,
-                update?.impressionOfPlayerEn,
-                update?.memoryUpdate?.summaryEn,
-            ],
-        ),
-    ].filter(Boolean).join(' ');
-    const source = String(allowedSourceText || '')
-        .toLocaleLowerCase();
-    const unsupported = new Set();
-    for (const claim of corpus.match(
-        /\b(?:[01]\d|2[0-3]):[0-5]\d\b/g,
-    ) || []) {
-        if (!allowedClockValues.has(claim) &&
-            !source.includes(claim.toLocaleLowerCase())) {
-            unsupported.add(claim);
-        }
-    }
-    for (
-        const match of corpus.matchAll(
-            RELATIVE_TEMPORAL_CLAIM_PATTERN,
+    const source =
+        String(allowedSourceText || '')
+            .toLocaleLowerCase();
+    const narrativeTexts = (
+        Array.isArray(
+            narrativeSourceTexts,
         )
-    ) {
-        const claim =
-            String(match[0] || '')
-                .trim();
-        if (
-            !claim ||
-            source.includes(
-                claim.toLocaleLowerCase(),
-            )
-        ) {
-            continue;
-        }
-        const amountText =
-            String(match[1] || '')
-                .toLocaleLowerCase();
-        const amount =
-            /^\d+$/.test(amountText)
-                ? Number(amountText)
-                : TEMPORAL_NUMBER_WORDS[
-                    amountText
-                ] || 0;
-        const durationMinutes =
-            amount *
-            (
-                /^hours?$/i.test(
-                    String(
-                        match[2] ||
-                        '',
-                    ),
-                )
-                    ? 60
-                    : 1
-            );
-        const direction =
-            String(match[3] || '')
-                .toLocaleLowerCase();
-        const withinAuthorizedTurn =
-            TURN_INTERNAL_RELATIVE_DIRECTIONS
-                .has(direction) &&
-            durationMinutes > 0 &&
-            durationMinutes <=
-                Math.max(
-                    0,
-                    Number(
-                        budget
-                            ?.elapsedMinutes ||
-                        0,
+            ? narrativeSourceTexts
+            : []
+    ).map(value =>
+        String(
+            value?.textEn ??
+            value ??
+            '',
+        ));
+    const claims =
+        Array.isArray(
+            temporalClaims,
+        )
+            ? temporalClaims
+            : [];
+    const acceptedClaims = [];
+    const rejectedClaims = [];
+    const elapsedMinutes =
+        Math.max(
+            0,
+            Number(
+                budget
+                    ?.elapsedMinutes ||
+                0,
+            ),
+        );
+    claims.forEach(
+        (
+            claim,
+            index,
+        ) => {
+            const evidenceText =
+                String(
+                    claim
+                        ?.evidenceText ||
+                    '',
+                ).trim();
+            const sourceAuthorized =
+                Boolean(
+                    evidenceText &&
+                    source.includes(
+                        evidenceText
+                            .toLocaleLowerCase(),
                     ),
                 );
-        if (!withinAuthorizedTurn) {
-            unsupported.add(claim);
-        }
-    }
-    PRECISE_TEMPORAL_CLAIM_PATTERNS.forEach(pattern => {
-        for (const match of corpus.matchAll(pattern)) {
-            const claim = String(match[0] || '').trim();
-            if (claim &&
-                !source.includes(
-                    claim.toLocaleLowerCase(),
-                )) {
-                unsupported.add(claim);
+            const evidenceGrounded =
+                Boolean(
+                    evidenceText &&
+                    narrativeTexts
+                        .some(text =>
+                            text.includes(
+                                evidenceText,
+                            )),
+                );
+            let reason = '';
+            if (!evidenceGrounded) {
+                reason =
+                    'evidence_not_in_narrative';
+            } else if (
+                claim.kind ===
+                    'absolute_clock'
+            ) {
+                if (
+                    !isExactClockClaim(
+                        claim.clock,
+                    )
+                ) {
+                    reason =
+                        'invalid_clock_shape';
+                } else if (
+                    !sourceAuthorized &&
+                    !allowedClockValues
+                        .has(
+                            claim.clock,
+                        )
+                ) {
+                    reason =
+                        'clock_outside_turn';
+                }
+            } else if (
+                claim.kind ===
+                    'relative_duration'
+            ) {
+                const durationMinutes =
+                    Number(
+                        claim
+                            .durationMinutes,
+                    );
+                if (
+                    !sourceAuthorized &&
+                    (
+                        !TURN_INTERNAL_RELATIVE_DIRECTIONS
+                            .has(
+                                claim
+                                    .relation,
+                            ) ||
+                        !Number.isInteger(
+                            durationMinutes,
+                        ) ||
+                        durationMinutes <=
+                            0 ||
+                        durationMinutes >
+                            elapsedMinutes
+                    )
+                ) {
+                    reason =
+                        'relative_duration_outside_turn';
+                }
+            } else if (
+                ![
+                    'named_time',
+                    'schedule',
+                    'calendar_date',
+                ].includes(
+                    claim?.kind,
+                )
+            ) {
+                reason =
+                    'unknown_claim_kind';
+            } else if (
+                !sourceAuthorized
+            ) {
+                reason =
+                    'external_time_not_authorized';
             }
-        }
-    });
-    if (!unsupported.size) {
-        return { valid: true, errors: [] };
+            if (reason) {
+                rejectedClaims.push({
+                    index,
+                    evidenceText,
+                    kind:
+                        String(
+                            claim
+                                ?.kind ||
+                            '',
+                        ),
+                    reason,
+                });
+            } else {
+                acceptedClaims.push(
+                    structuredClone(
+                        claim,
+                    ),
+                );
+            }
+        },
+    );
+    if (!rejectedClaims.length) {
+        return {
+            valid: true,
+            errors: [],
+            acceptedClaims,
+            rejectedClaims,
+        };
     }
     return {
         valid: false,
         errors: [
-            `现场表演违反系统时间权威（${worldState.clock} 至不早于 ${minimumEndClock}）：不得编造精确时刻、营业时间、外部倒计时或超出本回合跨度的相对时间：${[...unsupported].join('、')}`,
+            `现场表演包含未获时间权威支持的结构化 claim（${worldState.clock} 至不早于 ${minimumEndClock}）：${rejectedClaims.map(claim => `${claim.evidenceText || '?'}[${claim.reason}]`).join('、')}`,
         ],
+        acceptedClaims,
+        rejectedClaims,
     };
 }

@@ -13,6 +13,7 @@ import {
     migrateLanguageAuthorityV1,
 } from '../public/scripts/extensions/hogwarts-mud/domain/language-authority-migration.js';
 import {
+    migrateActorContextV1,
     validateActorContextStateV1,
 } from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js';
 import {
@@ -422,7 +423,9 @@ test(
         const migration =
             migrateLanguageAuthorityV1({
                 worldState:
-                    source.state,
+                    migrateActorContextV1(
+                        source.state,
+                    ).state,
                 chat:
                     source.chat,
             });

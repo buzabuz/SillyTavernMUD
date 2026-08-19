@@ -328,8 +328,8 @@ export function createModelEventScheduler({
             .modelTaskActionId;
         const usesWorldLedger =
             prepared.definition
-                .ledgerScope !==
-            'ephemeral_display';
+                .ledgerScope ===
+            'world';
         if (usesWorldLedger) {
             try {
                 recordModelTaskAttempt(
@@ -431,8 +431,8 @@ export function createModelEventScheduler({
         };
         const usesWorldLedger =
             prepared.definition
-                .ledgerScope !==
-            'ephemeral_display';
+                .ledgerScope ===
+            'world';
         if (usesWorldLedger) {
             try {
                 recordModelTaskAttempt(

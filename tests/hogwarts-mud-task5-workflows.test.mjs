@@ -31,6 +31,13 @@ import {
     synchronizeHeldItemLocations,
 } from '../public/scripts/extensions/hogwarts-mud/domain/inventory.js';
 import {
+    buildFollowMovementContext,
+    settleFollowMovementIntent,
+} from '../public/scripts/extensions/hogwarts-mud/domain/movement.js';
+import {
+    createMovementOutcome,
+} from '../public/scripts/extensions/hogwarts-mud/domain/movement-outcome.js';
+import {
     normalizeSpellProposal,
     resolveSpellCandidate,
 } from '../public/scripts/extensions/hogwarts-mud/domain/spell-proposals.js';
@@ -412,6 +419,7 @@ function createTurnHarness({
         }),
         attachTurnDiagnostics,
         ...diagnostics,
+        buildFollowMovementContext,
         buildLocalSemanticRoomContext: () => ({
             rooms: [],
         }),
@@ -440,6 +448,7 @@ function createTurnHarness({
         createContextBudgetPlan: () => ({
             ragLimit: 1,
         }),
+        createMovementOutcome,
         createSceneMomentumDirective: () => ({
             required: true,
         }),
@@ -482,7 +491,6 @@ function createTurnHarness({
             translationEnabled: false,
         }),
         getWorldDate: () => '1991-09-01',
-        isObservedEventBoundary: () => false,
         jobRegistry,
         localizeTurnTransaction: async transaction =>
             transaction,
@@ -517,7 +525,7 @@ function createTurnHarness({
             },
             diagnostics: {},
         }),
-        requestLocalTurnObservation: async () => ({
+        requestPostTurnSemanticObservation: async () => ({
             observation: {
                 diagnostics: {},
             },
@@ -551,6 +559,7 @@ function createTurnHarness({
         }),
         retrieveLocalKnowledge: async () => [],
         setLiveSceneStreamPhase: () => {},
+        settleFollowMovementIntent,
         syncLocalKnowledge: async () => {},
         updateNativeMessageBlock: () => {},
         validateTurnTransaction: () => ({
@@ -657,6 +666,19 @@ test('initial scene performer prompt forbids replaying player speech as output d
     assert.match(
         systemPrompt,
         /authoritativeSceneSpells is binding spell identity/u,
+    );
+    const concreteStepRule =
+        'When the player explicitly requests an immediate concrete step, complete it in this response when legal; do not stop at preparation.';
+    assert.equal(
+        systemPrompt
+            .split(concreteStepRule)
+            .length -
+            1,
+        1,
+    );
+    assert.doesNotMatch(
+        systemPrompt,
+        /explicitProgressionRequest|completedRequestedStep/u,
     );
 });
 
@@ -2145,6 +2167,43 @@ test('failed-turn retry appends one assistant response without duplicating playe
             .some(event =>
                 event.stage ===
                     'workflow_input'),
+    );
+    const milestones =
+        harness.context.chat[1]
+            .extra
+            .hogwartsMud
+            .turnDiagnostics
+            .events;
+    const narrativeVisible =
+        milestones.find(event =>
+            event.stage ===
+                'narrative_visible');
+    const stateSettled =
+        milestones.find(event =>
+            event.stage ===
+                'state_settled');
+    assert.ok(
+        narrativeVisible,
+    );
+    assert.ok(
+        stateSettled,
+    );
+    assert.equal(
+        narrativeVisible.data.surface,
+        'live_scene_stream',
+    );
+    assert.equal(
+        stateSettled.data.scope,
+        'immediate_turn_reducers',
+    );
+    assert.equal(
+        milestones.indexOf(
+            narrativeVisible,
+        ) <
+            milestones.indexOf(
+                stateSettled,
+            ),
+        true,
     );
 });
 

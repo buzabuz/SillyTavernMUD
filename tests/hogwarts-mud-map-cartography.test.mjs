@@ -548,7 +548,7 @@ test('World Map expansion skips non-English nodes without blocking an independen
     );
 });
 
-test('legacy Gryffindor dormitory scenes repair the parent room and request a persistent interior', () => {
+test('legacy dormitory prose cannot move State while a structured room still requests its interior', () => {
     const state = {
         phase: 'playing',
         clock:
@@ -620,33 +620,55 @@ test('legacy Gryffindor dormitory scenes repair the parent room and request a pe
             lastMovement: null,
         },
     };
-    const repaired =
+    const proseOnly =
         reconcileSpatialState(
             state,
         );
     assert.equal(
-        repaired.changed,
+        proseOnly.changed,
         true,
     );
     assert.equal(
-        repaired.state.map
+        proseOnly.state.map
             .currentLocalNodeId,
-        'gryffindor_girls_dormitory',
+        'gryffindor_common_room',
     );
     assert.equal(
-        repaired.state.scene.roomId,
-        'gryffindor_girls_dormitory',
+        proseOnly.state.scene.roomId,
+        'gryffindor_common_room',
     );
     assert.equal(
-        repaired.state.actors[0]
+        proseOnly.state.actors[0]
             .roomId,
-        'gryffindor_girls_dormitory',
+        'gryffindor_common_room',
     );
     assert.equal(
-        repaired.locationRepair
-            .source,
-        'gryffindor_dormitory_scene_migration',
+        proseOnly.locationRepair,
+        null,
     );
+
+    const structuredState =
+        structuredClone(state);
+    structuredState.map
+        .currentLocalNodeId =
+        'gryffindor_girls_dormitory';
+    structuredState.scene.roomId =
+        'gryffindor_girls_dormitory';
+    structuredState.scene
+        .nextSceneIntent.roomId =
+        'gryffindor_girls_dormitory';
+    structuredState.spatial
+        .player.roomId =
+        'gryffindor_girls_dormitory';
+    structuredState.actors[0]
+        .roomId =
+        'gryffindor_girls_dormitory';
+    structuredState.location =
+        'Gryffindor Girls Dormitory';
+    const repaired =
+        reconcileSpatialState(
+            structuredState,
+        );
     const request =
         getInteriorMapRequest(
             repaired.state,

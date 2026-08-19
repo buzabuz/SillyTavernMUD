@@ -8,18 +8,6 @@ export const ACTOR_MOVEMENT_HISTORY_VERSION = 2;
 
 export const OPENING_ID_PATTERN = /^[a-z][a-z0-9_]{1,63}$/;
 
-export const MAGIC_ACTION_PATTERN =
-    /(?:施法|念咒|施放咒语|使用魔法|发动魔法|幻影移形|\bcast(?:s|ing)?\s+(?:a\s+)?spell\b|\buse(?:s|d|ing)?\s+magic\b|\bapparat(?:e|es|ed|ing)\b)/iu;
-
-export const INVESTIGATION_ACTION_PATTERN = /(?:调查|搜索|检查|观察|阅读|研究|翻找|询问|investigat|search|inspect|study|read)/i;
-
-export const EXTENDED_ACTION_PATTERN = /(?:训练|练习|上课|制作|熬制|等待|睡觉|休息|train|practice|class|brew|wait|sleep|rest)/i;
-
-export const MOVEMENT_ACTION_PATTERN = /(?:前往|去往|进入|来到|返回|抵达|走进|走到|走向|走去|赶往|跑到|跑进|跑去|冲进|冲向|冲到|冲去|穿过|跨过|出去|上楼|下楼|绕着.+跑|往.{1,40}(?:走|跑|冲|去)|go to|enter|head to|return to|travel|walk to|run to|run into|rush to|go through)/i;
-
-export const GUIDED_MOVEMENT_ACTION_PATTERN =
-    /(?:带路|领路|领着|引路|跟着|跟随|带我(?:们)?去|下一个(?:购物)?(?:点|地点)|跟(?:着|随)?[\p{L}\p{N}_·.'’ -]{1,30}(?:走|去|前往|进入|穿过)|被.{0,24}(?:拉|带|领)(?:着)?.{0,12}(?:去|到|进|穿过)|lead (?:me|us|the way)|follow|next (?:stop|shop|place)|(?:pull|take|guide|lead) (?:me|us) (?:to|through))/iu;
-
 export const EXPLICIT_MOVEMENT_DIRECTIVE_PATTERN =
     /(?:→|->)\s*(?:【\s*([^】\n]+?)\s*】|([^\n。！？!?]+))/u;
 

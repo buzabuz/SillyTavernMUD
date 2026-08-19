@@ -895,11 +895,10 @@ test('migration preserves state while moving body facts out of current presentat
             .birth.date,
         '1980-10-01',
     );
-    assert.equal(
+    assert.deepEqual(
         ivy.identity
-            .education[0]
-            .entryYear,
-        1992,
+            .education,
+        [],
     );
     assert.equal(
         ivy.identity

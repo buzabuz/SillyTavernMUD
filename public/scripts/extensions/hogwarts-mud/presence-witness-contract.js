@@ -1240,16 +1240,6 @@ export function createDeterministicPerceptionFallback(
         narrativeText,
         playerAction,
     ].filter(Boolean);
-    const combined =
-        sourceTexts.join('\n');
-    const privatePattern =
-        /(?:\bwhisper(?:ed|s|ing)?\b|\bpassed? (?:a )?(?:note|paper)\b|\bnote\b|\bsecretly\b|\bquietly\b|耳语|低声|悄声|纸条|传纸|偷偷|悄悄)/iu;
-    const publicPattern =
-        /(?:\b(?:shout|yell|scream|explosion|explode|blast|crash|alarm|announce|levitat|injur|damage|fire)\w*\b|\bsuccessfully demonstrat(?:e|ed|es|ing)\b|\b(?:a|one|\d+) points? to (?:gryffindor|slytherin|ravenclaw|hufflepuff)\b|\b(?:very promising start|well done|excellent work)\b|喊|大叫|尖叫|爆炸|轰鸣|撞击|宣布|公告|悬浮|受伤|伤害|起火|成功示范|(?:格兰芬多|斯莱特林|拉文克劳|赫奇帕奇).{0,12}加[一二三四五六七八九十\d]+分|表现很好|做得好)/iu;
-    const notePattern =
-        /(?:\b(?:note|paper)\b|纸条|传纸)/iu;
-    const whisperPattern =
-        /(?:\bwhisper\w*\b|耳语|低声|悄声)/iu;
     const sequence =
         Array.isArray(
             playerTurnSequence,
@@ -1267,69 +1257,14 @@ export function createDeterministicPerceptionFallback(
     const hasSpell =
         Array.isArray(spellCasts) &&
         spellCasts.length > 0;
-    const attemptedConcealment =
-        privatePattern.test(
-            String(playerAction),
-        );
-    const successfulCheck =
-        [
-            'success_with_cost',
-            'success',
-            'critical_success',
-        ].includes(
-            checkResolution?.outcome,
-        );
-    const failedCheck =
-        [
-            'critical_failure',
-            'failure',
-        ].includes(
-            checkResolution?.outcome,
-        );
-    const isNote =
-        notePattern.test(combined);
-    const isWhisper =
-        whisperPattern.test(combined);
     const explicitPublicResult =
-        hasBroadcast ||
-        publicPattern.test(
-            String(
-                narrativeText ||
-                '',
-            ),
-        ) ||
-        /(?:\beveryone heard\b|\bthe whole room\b|全班|所有人都听)/iu
-            .test(
-                String(
-                    narrativeText ||
-                    '',
-                ),
-            );
-    const privateSuccess =
-        attemptedConcealment &&
-        !failedCheck &&
-        !explicitPublicResult &&
-        (
-            successfulCheck ||
-            isNote ||
-            isWhisper
-        );
+        hasBroadcast;
     const publicResult =
         explicitPublicResult ||
-        hasSpell ||
-        publicPattern.test(combined);
+        hasSpell;
     let visualScope = 'nearby';
     let audibleScope = 'nearby';
-    if (privateSuccess) {
-        visualScope = isWhisper &&
-            !isNote
-            ? 'none'
-            : 'target';
-        audibleScope = isNote &&
-            !isWhisper
-            ? 'none'
-            : 'target';
-    } else if (
+    if (
         hasBroadcast ||
         publicResult
     ) {
@@ -1355,9 +1290,7 @@ export function createDeterministicPerceptionFallback(
     const evidenceText =
         findFallbackEvidence(
             sourceTexts,
-            publicResult
-                ? publicPattern
-                : privatePattern,
+            null,
         );
     return normalizePerception({
         version:
@@ -1365,14 +1298,10 @@ export function createDeterministicPerceptionFallback(
         visualScope,
         audibleScope,
         salience: publicResult
-            ? hasSpell ||
-                /(?:explosion|blast|爆炸|轰鸣)/iu
-                    .test(combined)
+            ? hasSpell
                 ? 'major'
                 : 'notable'
-            : privateSuccess
-                ? 'subtle'
-                : 'normal',
+            : 'normal',
         attribution:
             participants.length ||
             hasSpell ||
@@ -1381,11 +1310,7 @@ export function createDeterministicPerceptionFallback(
                 ? 'clear'
                 : 'unknown',
         concealment:
-            attemptedConcealment
-                ? privateSuccess
-                    ? 'successful'
-                    : 'attempted'
-                : 'none',
+            'none',
         directParticipantActorIds:
             participants,
         evidenceText,

@@ -12,12 +12,82 @@ import {
 import {
     createTurnPerformanceBudget,
     estimateTurnMinutes,
+    parseExactDurationMinutes,
 } from '../public/scripts/extensions/hogwarts-mud/domain/turn-time.js';
 import {
     createCurrentPlayingState,
 } from './hogwarts-mud-test-fixtures.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+
+test('exact written durations use finite deterministic minute arithmetic', () => {
+    const accepted = new Map([
+        [
+            '两小时三十分钟',
+            150,
+        ],
+        [
+            'two hours and thirty minutes',
+            150,
+        ],
+        [
+            '16个小时',
+            960,
+        ],
+        [
+            'one hundred and twenty minutes',
+            120,
+        ],
+        [
+            'I remain here for sixty-seven minutes.',
+            67,
+        ],
+        [
+            '7 days',
+            10_080,
+        ],
+    ]);
+    for (const [
+        source,
+        minutes,
+    ] of accepted) {
+        assert.deepEqual(
+            parseExactDurationMinutes(
+                source,
+            ),
+            {
+                valid: true,
+                minutes,
+                error: '',
+            },
+            source,
+        );
+    }
+    for (const source of [
+        '大约两小时',
+        '1.5 hours',
+        '2-3 hours',
+        'two to three hours',
+        '30 seconds',
+        '8 days',
+        'half an hour',
+    ]) {
+        const result =
+            parseExactDurationMinutes(
+                source,
+            );
+        assert.equal(
+            result.valid,
+            false,
+            source,
+        );
+        assert.equal(
+            result.minutes,
+            null,
+            source,
+        );
+    }
+});
 
 function createCurrentCalendarEntry(
     id,
@@ -220,7 +290,7 @@ test('ordinary turns settle active and fully crossed Calendar intervals after ad
     );
 });
 
-test('daily time policy advances ordinary turns locally without a per-turn director decision', () => {
+test('time fallback is prose-free when pre-turn adjudication is unavailable', () => {
     const policy = {
         defaultMinutes: 15,
         movementMinutes: 20,
@@ -246,28 +316,28 @@ test('daily time policy advances ordinary turns locally without a per-turn direc
             '我前往厨房。',
             policy,
         ),
-        20,
+        15,
     );
     assert.equal(
         estimateTurnMinutes(
             '我仔细检查照片。',
             policy,
         ),
-        35,
+        15,
     );
     assert.equal(
         estimateTurnMinutes(
             '我练习魔药一整个下午。',
             policy,
         ),
-        90,
+        15,
     );
     assert.equal(
         estimateTurnMinutes(
             '我举起魔杖施法。',
             policy,
         ),
-        2,
+        15,
     );
 },
 );
@@ -285,16 +355,34 @@ test('turn performance budgets scale prose to the locally decided duration', () 
         minimumWords: 240,
         maximumWords: 560,
     });
-    assert.deepEqual(createTurnPerformanceBudget('我练习魔药一整个下午。', policy), {
-        elapsedMinutes: 90,
-        minimumWords: 540,
-        maximumWords: 860,
-    });
-    assert.deepEqual(createTurnPerformanceBudget('我举起魔杖施法。', policy), {
-        elapsedMinutes: 2,
-        minimumWords: 60,
-        maximumWords: 380,
-    });
+    assert.deepEqual(
+        createTurnPerformanceBudget(
+            '我练习魔药一整个下午。',
+            policy,
+            {
+                adjudicatedMinutes: 90,
+            },
+        ),
+        {
+            elapsedMinutes: 90,
+            minimumWords: 540,
+            maximumWords: 860,
+        },
+    );
+    assert.deepEqual(
+        createTurnPerformanceBudget(
+            '我举起魔杖施法。',
+            policy,
+            {
+                adjudicatedMinutes: 2,
+            },
+        ),
+        {
+            elapsedMinutes: 2,
+            minimumWords: 60,
+            maximumWords: 380,
+        },
+    );
     assert.deepEqual(
         createTurnPerformanceBudget(
             '你等下一起上课吗？',
@@ -338,6 +426,7 @@ test('turn performance budgets scale prose to the locally decided duration', () 
             policy,
             {
                 activeNamedActorCount: 6,
+                adjudicatedMinutes: 2,
             },
         ),
         {

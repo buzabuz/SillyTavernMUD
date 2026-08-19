@@ -46,6 +46,7 @@ Registry version: 1
 | `spell_reducer` | `reducer` |
 | `identity_reducer` | `reducer` |
 | `migration_writers` | `legacy_state_writer` |
+| `event_boundary_reducer` | `reducer` |
 
 ## Registered Semantic Owners
 
@@ -53,7 +54,10 @@ Registry version: 1
 | --- | --- | --- | --- |
 | `dynamic_4b_inventory` | `local_semantic_model` | Item significance, operation, custody, type, story role and physical form. | Item references, transition legality, holder/location, existence invariant and Item Reducer. |
 | `local_pre_turn_1_7b` | `local_semantic_model` | Check need/mode, movement intent, elapsed-time intent and Calendar commitment. | Check arithmetic, route/access, clock legality, Calendar validation and owning Reducers. |
-| `local_post_core_1_7b` | `local_semantic_model` | Departure, presence, location, event boundaries, perception and general narrative facts. | Actor, room, Event, perception evidence and ID guards plus owning Reducers. |
+| `local_post_core_1_7b` | `local_semantic_model` | Existing Material events, Inventory route, Actor activity/departure/presence/location, perception and narrative temporal claims. | Material, Actor/room/presence, witness/ACL and temporal evidence guards; Item route delegates to VCON-014. |
+| `post_turn_semantic_provider` | `local_semantic_model` | The configured Low Connection Profile or explicit Local model interprets the existing five VCON-013 families once. | Shared descriptor, server Zod settlement, language/evidence/ID/temporal/perception guards and existing owning Reducers. |
+| `gliner2_base_zero_shot_research` | `local_semantic_model` | Research-only zero-shot proposals for the existing Material, Inventory route, Actor/Presence, perception and temporal-claim families. | Detached benchmark scoring through existing guards; no Reducer commit or State writer. |
+| `background_event_1_7b` | `local_semantic_model` | One bounded Event breathing-boundary proposal over exactly ten committed turns. | Checkpoint cadence, committed evidence, stale-result and sole Event-boundary Reducer guards. |
 | `local_appraisal_1_7b` | `local_semantic_model` | System-role identity, relationship, impression, Actor, Social and Appraisal categories. | Actor, Social and Appraisal schemas, evidence checks and owning Reducers. |
 | `deterministic_migration_no_model` | `deterministic_guard` | Explicit structured legacy values or an approved conservative default; no prose interpretation. | Owning one-time atomic migration. |
 | `dynamic_4b_spell` | `local_semantic_model` | Spell observation, teaching, learning, experiment and custom proposal meaning. | Catalog identity, check result, XP, rank, duplicate and Spell Reducer rules. |
@@ -79,21 +83,120 @@ Registry version: 1
 | `VCON-009` | `scene_opening`<br>Player-visible Scene opening | `legacy_registered` | scene_opening | `prompt_literal_duplicated` | model_task:scene_opening | embedding_candidate_retrieval | `scene_opening_message_writer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=opening_message_not_committed | 0 unrouted / 1 routed / serial / 1 loaded |
 | `VCON-010` | `social_director`<br>Social Director transient proposal and V3 settlement | `legacy_registered` | social_director | `transport_json_schema_with_transient_refs` | model_task:social_director<br>local_appraisal_1_7b | embedding_candidate_retrieval | `social_v3_reducer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=proposal_state_unchanged_and_lifecycle_status_written_by_VCON_024 | 0 unrouted / 1 routed / serial / 1 loaded |
 | `VCON-011` | `map_expansion`<br>World Map expansion proposal | `legacy_registered` | map_expansion | `prompt_literal_duplicated` | model_task:map_expansion | none | `map_reducer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=map_unchanged | 0 unrouted / 1 routed / serial / 1 loaded |
-| `VCON-012` | `local_pre_turn`<br>Local pre-turn semantic proposal | `legacy_registered` | local_pre_turn_adjudicator | `json_schema_plus_zod_duplicated` | local_pre_turn_1_7b | none | `turn_precondition_settlement` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=affected_precondition_omitted_or_turn_stopped | 0 unrouted / 1 routed / serial / 1 loaded |
-| `VCON-013` | `local_post_turn`<br>Local post-turn event, presence and perception proposal | `legacy_registered` | local_post_turn_observer | `json_schema_plus_zod_duplicated` | local_post_core_1_7b<br>dynamic_4b_identity | none | `turn_post_observation_settlement` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=affected_observation_not_written | 0 unrouted / 1 routed / serial / 1 loaded |
-| `VCON-014` | `local_inventory`<br>Local Inventory proposal | `legacy_registered` | local_inventory_observer | `json_schema_plus_zod_duplicated` | dynamic_4b_inventory | none | `item_reducer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=invalid_item_operations_not_written | 0 unrouted / 1 routed / serial / 1 loaded |
+| `VCON-012` | `local_pre_turn`<br>Local pre-turn movement, time, check and Calendar commitment proposal | `legacy_registered` | local_pre_turn_adjudicator | `json_schema_plus_zod_duplicated` | local_pre_turn_1_7b | none | `turn_precondition_settlement` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=tagged movement becomes deterministic failed outcome; unrelated precondition omitted or turn stopped | 0 unrouted / 1 routed / serial / 1 loaded |
+| `VCON-013` | `post_turn_semantic_proposal`<br>Selected Low/Local post-turn Material, Item route, Actor/presence, perception and temporal-claim proposal | `implemented_acceptance_pending` | post_turn_semantic_proposal | `shared_executable_descriptor` | post_turn_semantic_provider | none | `turn_post_observation_settlement` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=no proposal, perception, derived EventKnowledge or dynamic 4B substitute while paid narrative remains | 0 unrouted / 1 routed / serial / 1 loaded |
+| `VCON-014` | `local_inventory`<br>Post-core routed, stable-ID-guarded dynamic 4B Inventory proposal | `compliant` | local_inventory_observer<br>local_dynamic_turn_observer | `shared_executable_descriptor` | dynamic_4b_inventory | none | `item_reducer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=invalid_item_operations_not_written | 0 unrouted / 1 routed / serial shared 4B / 1 loaded |
 | `VCON-015` | `local_appraisal`<br>Local Appraisal proposal | `legacy_registered` | local_appraisal_proposer | `json_schema_plus_zod_duplicated` | local_appraisal_1_7b<br>deterministic_error_code_registry | none | `memory_synapse_reducer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=invalid_appraisal_not_written | 0 unrouted / 1 routed / serial / 1 loaded |
 | `VCON-016` | `local_translation`<br>Local display translation | `legacy_registered` | local_translation | `json_schema_plus_zod_duplicated` | local_translation_4b | none | `translation_table_writer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=world_state_unchanged_translation_error_record_only | 0 unrouted / 1 routed / serial / 1 loaded |
-| `VCON-017` | `knowledge_candidate_retrieval`<br>Knowledge candidate retrieval and canonical hydration | `legacy_registered` | none | `deterministic_retrieval_contract` | none | embedding_candidate_retrieval | `none` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=no_state_write_and_paid_request_stops_when_required_retrieval_fails | 0 unrouted / 0 routed / deterministic_and_embedding_backend / 0 loaded |
+| `VCON-017` | `knowledge_candidate_retrieval`<br>Knowledge bounded direct candidate retrieval and canonical hydration | `legacy_registered` | none | `deterministic_retrieval_contract` | none | embedding_candidate_retrieval | `none` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=no_state_write_and_paid_request_stops_when_required_retrieval_fails | 0 unrouted / 0 routed / deterministic_and_embedding_backend / 0 loaded |
 | `VCON-018` | `phase2_dynamic_inventory`<br>Planned dynamic 4B Inventory section | `planned_unapproved` | none | `benchmark_executable_descriptor` | dynamic_4b_inventory | none | `item_reducer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=inventory_proposal_not_written | 0 unrouted / 1 routed / serial_shared_dynamic_4b_call / 1 loaded |
 | `VCON-019` | `phase2_dynamic_spell`<br>Planned dynamic 4B Spell section | `planned_unapproved` | none | `benchmark_executable_descriptor` | dynamic_4b_spell | none | `spell_reducer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=spell_proposal_not_written | 0 unrouted / 1 routed / serial_shared_dynamic_4b_call / 1 loaded |
-| `VCON-020` | `phase2_dynamic_identity`<br>Planned dynamic 4B Identity section | `planned_unapproved` | none | `benchmark_executable_descriptor` | dynamic_4b_identity | none | `identity_reducer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=identity_observation_not_written | 0 unrouted / 1 routed / serial_shared_dynamic_4b_call / 1 loaded |
+| `VCON-020` | `phase2_dynamic_identity`<br>Structured Check-targeted direct-injury proposal | `compliant` | local_dynamic_identity_observer<br>local_dynamic_turn_observer | `shared_executable_descriptor` | dynamic_4b_identity | none | `identity_reducer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=identity_observation_not_written | 0 unrouted / 1 routed / serial_shared_dynamic_4b_call / 1 loaded |
 | `VCON-021` | `calendar_medium_horizon_settlement`<br>Medium Calendar horizon settlement | `legacy_registered` | none | `deterministic_runtime_contract` | none | none | `calendar_medium_horizon_workflow` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=calendar_horizon_unchanged | 0 unrouted / 0 routed / deterministic / 0 loaded |
 | `VCON-022` | `interior_map_generation_status`<br>Interior Map generation lifecycle status | `legacy_registered` | none | `deterministic_runtime_contract` | deterministic_process_health_protocol | none | `interior_map_generation_workflow` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=failed_status_and_bounded_error_are_written | 0 unrouted / 0 routed / deterministic / 0 loaded |
 | `VCON-023` | `pacing_workflow_status`<br>Pacing workflow lifecycle status | `legacy_registered` | none | `deterministic_runtime_contract` | deterministic_process_health_protocol | none | `pacing_failure_workflow` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=failed_status_error_and_reassessment_metadata_are_written | 0 unrouted / 0 routed / deterministic / 0 loaded |
 | `VCON-024` | `social_memory_workflow_status`<br>Social and Memory Director lifecycle status | `legacy_registered` | none | `deterministic_runtime_contract` | deterministic_process_health_protocol | none | `social_memory_workflow` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=failed_or_pending_lifecycle_status_and_bounded_error_are_written | 0 unrouted / 0 routed / deterministic / 0 loaded |
 | `VCON-025` | `deterministic_migration`<br>Prose-free deterministic migration settlement | `legacy_registered` | none | `explicit_or_conservative_migration` | deterministic_migration_no_model | none | `migration_writers` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=atomic_migration_not_committed | 0 unrouted / 0 routed / deterministic / 0 loaded |
 | `VCON-026` | `sensitive_field_registry`<br>Explicit sensitive field ownership | `legacy_registered` | none | `explicit_sensitive_field_registry_target` | deterministic_sensitive_field_registry | none | `none` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=sensitive_payload_omitted_or_rejected | 0 unrouted / 0 routed / deterministic / 0 loaded |
+| `VCON-027` | `background_event_boundary`<br>Asynchronous ten-turn Event breathing-boundary proposal | `implemented_acceptance_pending` | local_event_boundary_observer | `shared_executable_descriptor` | background_event_1_7b | none | `event_boundary_reducer` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=event boundary unchanged and checkpoint attempt recorded | 0 off-checkpoint / 1 checkpoint / serial background / 1 loaded |
+| `VCON-028` | `post_gliner2_zero_shot_research`<br>Research-only off-the-shelf GLiNER2 comparison; attempts 1/2 reject for no positive-family/mixed improvement and lower Inventory/Actor recall; exact negative-safe metrics unaccepted and user stopped recalculation | `planned_unapproved` | none | `benchmark_executable_descriptor` | gliner2_base_zero_shot_research | none | `none` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=benchmark case failed and no State write | 0 unrouted / 1 benchmark case / serial / 1 loaded |
+| `VCON-029` | `post_gliner2_temporal_schema_ablation_research`<br>Research-only combined versus temporalClaims-only GLiNER2 diagnostic | `planned_unapproved` | none | `benchmark_executable_descriptor` | gliner2_base_zero_shot_research | none | `none` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=diagnostic case failed and no State write | 0 unrouted / 2 benchmark forwards / serial in one model residency / 1 loaded |
+| `VCON-030` | `post_qwen_temporal_gliner_raw_hint_research`<br>Research-only temporal Qwen comparison with non-authoritative raw GLiNER2 hints; completed diagnostic net worse (`4/10 -> 2/10`) | `planned_unapproved` | none | `benchmark_executable_descriptor` | local_post_core_1_7b<br>gliner2_base_zero_shot_research | none | `none` | retry=forbidden; provider fallback=forbidden; semantic regex=forbidden; failure=diagnostic branch failed and no State write | 0 unrouted / 3 benchmark calls / serial / 1 loaded |
+
+## Revision 12 Prompt Tuning Result
+
+Production-effect evidence found positive-recall debt in the existing
+`VCON-012` and `VCON-013` semantic owners:
+
+| Contract | Current evidence | Planned change | Unchanged boundary |
+| --- | --- | --- | --- |
+| `VCON-012` | pre-turn one-shot `4/6`; explicit Calendar commitment and historical progression positives were missed | retain Calendar tuning; Revision 18 removes the non-State progression classifier and adds one static paid narrative rule | Calendar/Check/time/movement settlement and one-call policy |
+| `VCON-013` | active holdout: Inventory positive `0/5`; Actor positive `2/3`, negative `0/3`; temporal positive `0/1`; zero parse failures | tune the exact existing Material/Item-route/Actor/perception/temporal contract; immediate Event remains absent | Schema fields, evidence/ID/ACL guards, owning domain Reducers and one-call policy |
+
+Revision 12 was approved and executed, but Prompt-only tuning failed its
+unseen per-family acceptance threshold. Pre ended at `18/24` on the final
+holdout; the best post candidate ended at `17/24` on development with
+Actor/Event positive recall `0/3` each. Experimental Prompts were rolled back,
+so no semantic owner, State writer, retry, fallback, Regex or model call
+changed in production. Evidence is recorded under the active PRD acceptance
+directory.
+
+Revision 14 changes the `VCON-013` settlement boundary without adding a model
+task or State writer: a structured individual NPC departure uses its own exact
+Actor/evidence/room/path guards and no longer requires or implies
+`eventBoundary.ended`. Event completion and the existing
+`pendingEventBoundary` cadence remain independent.
+
+Revision 16 removes paid `signals.eventEnded` and post `eventBoundary` from
+immediate contracts. `VCON-027` becomes the only Event-boundary semantic
+authority: one nonblocking qwen3:1.7b request at turns 10/20/30/... over exactly
+ten committed turns. `VCON-012` retains enactment/evidence semantics but
+deterministic code owns duration grammar and arithmetic. `VCON-013` owns
+immediate departure with explicit `locationKnown` settlement and no Event
+field.
+
+Revision 17 extends `VCON-012` only for an unresolved explicit follow-NPC tag:
+the existing pre call may select one supplied guide ID, existing room ID and
+exact evidence. Deterministic movement settlement owns
+`moved/already_there/failed`, path/access, minutes and the committed
+`movementOutcome`. `VCON-007` consumes that protected result and preserves all
+paid segments while ensuring the required failure/already-there fact is
+visible. No model call, 4B route, retry or semantic Regex fallback is added.
+
+Revision 18 removes the non-State pre `progression` classifier and assigns
+immediate concrete-step narration to one static paid System Prompt rule.
+The pre builder also omits full follow-NPC instructions when
+`movementContext=null`; the complete supplied-ID/evidence supplement is added
+only for unresolved follow tags. This changes no call count, output field set,
+guard, Reducer or State writer.
+
+Fresh `qwen3:1.7b` evidence still misses valid Chinese Calendar commitments
+when the date/time precedes the first-person commitment clause. This remains
+an explicit `VCON-012` blocker. No semantic Regex, 4B fallback, retry or
+relaxed acceptance threshold is approved.
+
+Revision 19 moves that Calendar miss to stable future task
+`HVG-P2-03R-CALENDAR-TODO` without calling it passed. The current pre
+movement/time/progression-subtraction candidate is accepted for production.
+
+Revision 19 also reopens `VCON-013` as the only active implementation task.
+The contract preserves the live `materialEvents -> materialEventLog` path,
+routes existing Item meaning to `VCON-014`, and retains existing Actor,
+perception and temporal-claim authorities. Named no-change Actor narration
+must write nothing. No Event field, model call, retry, fallback, State field
+or new Material/Item/Actor meaning is added.
+
+The first Revision 19 post round did not promote a candidate. Focused mandatory
+assessments reached Item `2/2`, Actor `6/6`, Material `5/6` and temporal `4/4`,
+but merging those domains into one qwen3:1.7b request reintroduced Item,
+Material, temporal and injury/quotation false positives. All experimental
+Prompt/Schema candidates were withdrawn; the safe one-request production
+contract remains active and HTD-014 stays open.
+
+Revision 20 is research-only until a later implementation approval. It may
+compose one post Schema from bounded candidate groups, but candidate code owns
+recall only:
+
+```text
+allowed recall:
+stable IDs, structured paid proposals/directives, segment roles/types,
+finite temporal shapes, exact names/aliases, existing room/map IDs
+
+forbidden candidate authority:
+truth, enactment, quotation/hypothesis/negation, injury interpretation,
+Item/Material change, Actor activity/departure, temporal assertion
+```
+
+The one post 1B remains semantic owner; existing domain guards/Reducers remain
+State authority. Candidate miss fails acceptance. Prior matrices are
+non-scoring diagnostics and cannot establish Revision 20 quality.
+
+Fresh Revision 20 development rejected every branch. A/B reached complete
+Inventory/Actor/temporal candidate recall but `0/13` Material candidate
+recall. C made Material always-on and produced `26/48` parse/transport
+failures. D requires a new paid candidate output and was not tested with
+oracle data. No branch entered blind or production; the safe VCON-013 contract
+remains active.
 
 ## New Domain Gate
 

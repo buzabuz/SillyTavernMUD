@@ -21,6 +21,7 @@ import {
 import {
     sanitizeActorKnowledgeEn,
 } from './actor-memory.js';
+import { isActorContextV1LocationUpgradeSource, upgradeActorContextV1Location } from './actor-context-v2-migration.js';
 
 const MEMORY_TIERS = Object.freeze([
     'core',
@@ -438,16 +439,6 @@ function eventIdsFromState(state) {
     return ids;
 }
 
-function isDirectorGoal(value) {
-    const normalized =
-        text(value).toLocaleLowerCase();
-    return (
-        !normalized ||
-        /(?:scene|beat|director|canon|committed public)/u
-            .test(normalized)
-    );
-}
-
 export function projectActorCoreV1(
     actorId,
     profile,
@@ -465,11 +456,6 @@ export function projectActorCoreV1(
         getCanonicalPerformanceCore(
             actorId,
         ) || {};
-    const legacyMotive =
-        firstText(
-            profile?.privateGoalEn,
-            runtime?.privateGoalEn,
-        );
     const speechStyleEn =
         firstText(
             existingCore.speechStyleEn,
@@ -598,11 +584,6 @@ export function projectActorCoreV1(
                 textList(
                     existingCore.motivesEn ||
                         [],
-                    isDirectorGoal(
-                        legacyMotive,
-                    )
-                        ? []
-                        : [legacyMotive],
                     canonicalCore.motivesEn ||
                         [],
                 ),
@@ -664,18 +645,7 @@ export function projectActorRuntimeV1(
 ) {
     const source =
         runtime || profile;
-    const legacyGoal =
-        [
-            runtime?.currentGoalEn,
-            runtime?.privateGoalEn,
-            profile?.currentGoalEn,
-            profile?.privateGoalEn,
-        ]
-            .map(text)
-            .find(goal =>
-                goal &&
-                !isDirectorGoal(goal)) ||
-        '';
+    const legacyGoal = '';
     const lifeStatus =
         duplicateString(
             profile,
@@ -696,6 +666,22 @@ export function projectActorRuntimeV1(
                 runtime?.roomId,
                 profile?.roomId,
                 profile?.homeRoomId,
+            ),
+        locationKnown:
+            runtime
+                ?.locationKnown !==
+                false &&
+            Boolean(
+                firstText(
+                    runtime?.mapId,
+                    profile?.mapId,
+                    profile?.homeMapId,
+                ) &&
+                firstText(
+                    runtime?.roomId,
+                    profile?.roomId,
+                    profile?.homeRoomId,
+                ),
             ),
         present:
             ![
@@ -1713,6 +1699,50 @@ export function migrateActorContextV1(
                     0,
                 removedCurrentImpressionRefCount:
                     0,
+            },
+        };
+    }
+    if (
+        isActorContextV1LocationUpgradeSource(
+            source,
+            actorDossierProjectionVersion,
+        )
+    ) {
+        const next =
+            upgradeActorContextV1Location(
+                source,
+                actorContextVersion,
+            );
+        if (
+            next.memoryReferenceVersion !==
+                memoryReferenceVersion ||
+            next.actorMemoryIndex
+                ?.version !==
+                memoryReferenceVersion
+        ) {
+            return migrateActorContextV1(
+                next,
+            );
+        }
+        const validation =
+            validateActorContextStateV1(next);
+        if (!validation.valid) {
+            throw new TypeError(
+                validation.errors.join(' '),
+            );
+        }
+        return {
+            state: next,
+            changed: true,
+            stats: {
+                actorCoreCount: next.actorLibrary.length,
+                actorRuntimeCount: next.actors.length,
+                memoryRefCount: countMemoryRefs(next.actorMemoryIndex),
+                migratedAppraisalCount: 0,
+                removedLegacyFieldCount: 0,
+                removedCurrentImpressionAppraisalCount: 0,
+                removedCurrentImpressionRefCount: 0,
+                locationKnownAddedCount: next.actors.length,
             },
         };
     }

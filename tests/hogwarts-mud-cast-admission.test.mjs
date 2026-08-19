@@ -47,7 +47,7 @@ import {
     normalizeCurrentActorFixtureInPlace,
 } from './hogwarts-mud-test-fixtures.mjs';
 
-test('temporary actor display names reconcile from revealed bilingual dialogue', () => {
+test('temporary actor display names do not migrate from dialogue prose', () => {
     const actor = {
         id: 'phillip_meadows',
         nameEn:
@@ -73,8 +73,10 @@ test('temporary actor display names reconcile from revealed bilingual dialogue',
             segments,
         ),
         {
-            nameEn: 'Phillip',
-            name: '菲利普',
+            nameEn:
+                'Tall dark-haired Gryffindor boy',
+            name:
+                'Tall dark-haired Gryffindor boy',
         },
     );
     const migrated =
@@ -93,7 +95,7 @@ test('temporary actor display names reconcile from revealed bilingual dialogue',
     assert.equal(
         migrated.state
             .actors[0].nameEn,
-        'Phillip',
+        'Tall dark-haired Gryffindor boy',
     );
 });
 

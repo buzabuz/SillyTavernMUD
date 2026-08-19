@@ -7,23 +7,26 @@ import {
 } from '../domain/model-language-adoption.js';
 import {
     getDeterministicTimePolicy,
+    validateSceneTemporalConsistency,
 } from '../domain/turn-time.js';
+import {
+    guardPreTurnEvidenceRoutes,
+} from '../domain/pre-turn-route-guards.js';
+import {
+    buildDynamicInventoryContext,
+} from '../domain/inventory-observation-context.js';
+import {
+    createDynamicObservationAdapter,
+} from './dynamic-observation.js';
 
 export function createLocalSemanticAdapter(ports) {
     const {
         buildLocalMapModel,
         buildStructuredPlayerTurnSequence,
-        createDeterministicPerceptionFallback,
+        fetchImpl = null,
         findLocalRoomPath,
         getRequestHeaders,
         projectObservedInventoryUpdates,
-        reconcileObservedPerceptionWithFallback =
-        (
-            observed,
-            fallback,
-        ) =>
-            observed ||
-            fallback,
         runLocalModelTask =
         async (
             _taskId,
@@ -32,14 +35,23 @@ export function createLocalSemanticAdapter(ports) {
             invoke(),
         validatePerceptionContract,
     } = ports;
-    const OBSERVED_ACTOR_DEPARTURE_PATTERN =
-        /(?:\b(?:left|departed|exited|walked (?:out|away|through|into)|went (?:out|away|into)|moved into|crossed into)\b|离开|走出|退场|走进|进入了)/iu;
-    const INJURY_INSPECTION_PATTERN =
-        /(?:\b(?:inspect|check|examine|look(?:ed|ing)? (?:for|at)).{0,80}\b(?:injur|wound|bruise|burn|damage|hurt)\w*\b|(?:仔细观察|检查).{0,40}(?:伤痕|伤势|受伤|伤口))/iu;
-    const NO_VISIBLE_INJURY_PATTERN =
-        /(?:\b(?:no|without|nonexistent)\s+(?:visible\s+)?(?:spell\s+)?(?:injur|wound|bruise|burn|damage)\w*\b|\b(?:perfectly|visibly)\s+un(?:injured|hurt|harmed)\b|没有(?:发现|看到|观察到)?(?:明显|可见)?(?:伤痕|伤势|伤口|损伤)|未(?:发现|看到|观察到)(?:明显|可见)?(?:伤痕|伤势|伤口|损伤))/iu;
-    const VISIBLE_INJURY_PATTERN =
-        /(?:\b(?:injur|wound|bruise|cut|burn|fracture|sprain|bleed|swollen|gash)\w*\b|受伤|伤口|伤势|擦伤|割伤|烧伤|骨折|扭伤|淤青|流血|肿胀)/iu;
+    const fetchRequest =
+        (...args) =>
+            (
+                fetchImpl ||
+                fetch
+            )(
+                ...args,
+            );
+    const {
+        requestDynamicIdentityObservation,
+        requestDynamicInventoryObservation,
+        requestDynamicTurnObservation,
+    } = createDynamicObservationAdapter({
+        fetchRequest,
+        getRequestHeaders,
+        runLocalModelTask,
+    });
 
     function rejectNonEnglishObservation(
         observation,
@@ -264,10 +276,25 @@ export function createLocalSemanticAdapter(ports) {
                         ? 'forced_general'
                         : 'none',
                     targetActorId: '',
+                    rollMode: 'normal',
                     reasonEn:
                     forceCheck
                         ? 'The player explicitly requested a check.'
                         : 'Automatic checks are skipped while the local semantic adjudicator is unavailable.',
+                    confidence: 0,
+                },
+                calendarCommitment: {
+                    requested: false,
+                    evidenceText: '',
+                    confidence: 0,
+                },
+                movementIntent: {
+                    requested: false,
+                    guideActorId: '',
+                    destinationRoomId: '',
+                    intentEvidenceText: '',
+                    destinationEvidenceSourceRef: '',
+                    destinationEvidenceText: '',
                     confidence: 0,
                 },
             },
@@ -287,13 +314,14 @@ export function createLocalSemanticAdapter(ports) {
         addressing,
         movementResolution,
         forceCheck,
+        movementContext = null,
     ) {
         try {
             const response =
             await runLocalModelTask(
                 'local_pre_turn_adjudicator',
                 () =>
-                    fetch(
+                    fetchRequest(
                         '/api/hogwarts-mud/local/adjudicate',
                         {
                             method: 'POST',
@@ -302,6 +330,11 @@ export function createLocalSemanticAdapter(ports) {
                             body:
                                 JSON.stringify({
                                     input: {
+                                        playerAction:
+                                    String(
+                                        playerAction ||
+                                        '',
+                                    ),
                                         playerTurnSequence:
                                     buildStructuredPlayerTurnSequence(
                                         playerAction,
@@ -344,6 +377,7 @@ export function createLocalSemanticAdapter(ports) {
                                         movementResolution:
                                     movementResolution ||
                                     null,
+                                        movementContext,
                                         timePolicy:
                                     getDeterministicTimePolicy(),
                                     },
@@ -391,6 +425,17 @@ export function createLocalSemanticAdapter(ports) {
                 temporal.elapsedMinutes =
                 15;
             }
+            const guardedAdjudication =
+                guardPreTurnEvidenceRoutes(
+                    adjudication,
+                    playerAction,
+                );
+            adjudication.result =
+                guardedAdjudication
+                    .result;
+            adjudication.diagnostics =
+                guardedAdjudication
+                    .diagnostics;
             for (
                 const [
                     fieldPath,
@@ -480,304 +525,6 @@ export function createLocalSemanticAdapter(ports) {
             start +
             evidence.length,
         };
-    }
-
-    function findNarrationEvidence(
-        segments,
-        evidenceText,
-    ) {
-        const evidence =
-            String(
-                evidenceText || '',
-            ).trim();
-        if (!evidence) return null;
-        for (const segment of (
-            segments || []
-        )) {
-            if (
-                segment?.type !==
-                    'narration'
-            ) {
-                continue;
-            }
-            const match =
-                findObservationEvidence(
-                    segment.textEn,
-                    evidence,
-                );
-            if (match) {
-                return {
-                    ...match,
-                    segment,
-                };
-            }
-        }
-        return null;
-    }
-
-    function actorObservationIsGrounded(
-        actor,
-        evidenceText,
-        targetActorIds,
-    ) {
-        if (
-            (
-                targetActorIds ||
-                []
-            ).includes(
-                actor.id,
-            )
-        ) {
-            return true;
-        }
-        const normalizedEvidence =
-            String(
-                evidenceText || '',
-            ).toLocaleLowerCase();
-        return [
-            actor.name,
-            actor.nameEn,
-            ...(actor.aliases ||
-                []),
-        ]
-            .filter(Boolean)
-            .some(name =>
-                normalizedEvidence
-                    .includes(
-                        String(name)
-                            .toLocaleLowerCase(),
-                    ));
-    }
-
-    function findNegativeInjuryEvidence(
-        narrativeSegments,
-    ) {
-        for (const segment of (
-            narrativeSegments ||
-            []
-        )) {
-            if (
-                segment?.type !==
-                    'narration'
-            ) {
-                continue;
-            }
-            const sentences =
-                String(
-                    segment.textEn ||
-                    '',
-                ).match(
-                    /[^.!?\n]+(?:[.!?]+|$)/gu,
-                ) || [];
-            const sentence =
-                sentences.find(value =>
-                    NO_VISIBLE_INJURY_PATTERN
-                        .test(value));
-            if (sentence) {
-                return sentence.trim();
-            }
-        }
-        return '';
-    }
-
-    function projectObservedIdentityObservations(
-        observation,
-        state,
-        playerAction,
-        narrativeSegments,
-        targetActorIds,
-    ) {
-        const actorById =
-            new Map(
-                (
-                    state.actors ||
-                    []
-                ).map(actor => [
-                    actor.id,
-                    actor,
-                ]),
-            );
-        const localOccupantIds =
-            new Set(
-                state.localPresence
-                    ?.occupantActorIds ||
-                [],
-            );
-        const accepted = (
-            observation?.result
-                ?.identityObservations ||
-            []
-        )
-            .map((source, index) => {
-                if (
-                    rejectNonEnglishObservation(
-                        observation,
-                        source,
-                        [
-                            'injuryType',
-                            'description',
-                        ],
-                        {
-                            taskId:
-                                'local_post_turn_observer',
-                            fieldPrefix:
-                                `identityObservations[${index}]`,
-                            recordId:
-                                String(
-                                    source
-                                        ?.actorId ||
-                                    index,
-                                ),
-                        },
-                    )
-                ) {
-                    return null;
-                }
-                const actor =
-                    actorById.get(
-                        source.actorId,
-                    );
-                const evidence =
-                    findNarrationEvidence(
-                        narrativeSegments,
-                        source
-                            .evidenceText,
-                    );
-                const status =
-                    String(
-                        source.status ||
-                        '',
-                    );
-                const statusGrounded =
-                    status ===
-                        'no_visible_injury'
-                        ? NO_VISIBLE_INJURY_PATTERN
-                            .test(
-                                evidence
-                                    ?.text ||
-                                '',
-                            )
-                        : status ===
-                            'visible_injury'
-                            ? VISIBLE_INJURY_PATTERN
-                                .test(
-                                    evidence
-                                        ?.text ||
-                                    '',
-                                )
-                            : false;
-                if (
-                    !actor ||
-                    (
-                        actor.present ===
-                            false &&
-                        !localOccupantIds
-                            .has(
-                                actor.id,
-                            )
-                    ) ||
-                    Number(
-                        source.confidence ||
-                        0,
-                    ) < 0.7 ||
-                    !evidence ||
-                    !statusGrounded ||
-                    !actorObservationIsGrounded(
-                        actor,
-                        evidence.text,
-                        targetActorIds,
-                    )
-                ) {
-                    return null;
-                }
-                return {
-                    version: 1,
-                    actorId:
-                        actor.id,
-                    kind:
-                        'injury_assessment',
-                    status,
-                    injuryType:
-                        status ===
-                            'visible_injury'
-                            ? String(
-                                source
-                                    .injuryType ||
-                                'unknown',
-                            )
-                            : '',
-                    description:
-                        status ===
-                            'visible_injury'
-                            ? String(
-                                source
-                                    .description ||
-                                '',
-                            ).trim()
-                            : '',
-                    evidenceText:
-                        evidence.text,
-                    confidence:
-                        Number(
-                            source
-                                .confidence,
-                        ),
-                };
-            })
-            .filter(observation =>
-                observation &&
-                (
-                    observation.status !==
-                        'visible_injury' ||
-                    observation.description
-                ));
-        if (
-            accepted.length ||
-            !INJURY_INSPECTION_PATTERN
-                .test(
-                    String(
-                        playerAction ||
-                        '',
-                    ))
-        ) {
-            return accepted;
-        }
-        const uniqueTargetActorIds = [
-            ...new Set(
-                (
-                    targetActorIds ||
-                    []
-                ).filter(actorId =>
-                    actorById.has(
-                        actorId,
-                    )),
-            ),
-        ];
-        const evidence =
-            findNegativeInjuryEvidence(
-                narrativeSegments,
-            );
-        if (
-            uniqueTargetActorIds
-                .length !== 1 ||
-            !evidence
-        ) {
-            return accepted;
-        }
-        return [{
-            version: 1,
-            actorId:
-                uniqueTargetActorIds[0],
-            kind:
-                'injury_assessment',
-            status:
-                'no_visible_injury',
-            injuryType: '',
-            description: '',
-            evidenceText:
-                evidence,
-            confidence: 0.95,
-        }];
     }
 
     function resolveObservedMaterialActorId(
@@ -884,7 +631,7 @@ export function createLocalSemanticAdapter(ports) {
                     ],
                     {
                         taskId:
-                            'local_post_turn_observer',
+                            'post_turn_semantic_proposal',
                         fieldPrefix:
                             `materialEvents[${index}]`,
                         recordId:
@@ -989,11 +736,23 @@ export function createLocalSemanticAdapter(ports) {
         observed,
         actor,
         roomContext,
+        state,
     ) {
+        const profile =
+            (
+                state.actorLibrary ||
+                []
+            ).find(candidate =>
+                candidate.id ===
+                    actor.id) ||
+            {};
         const profileNames = [
+            actor.id,
             actor.name,
             actor.nameEn,
             ...(actor.aliases || []),
+            profile.nameEn,
+            ...(profile.aliases || []),
         ]
             .filter(Boolean)
             .map(name =>
@@ -1074,13 +833,6 @@ export function createLocalSemanticAdapter(ports) {
         buildLocalSemanticRoomContext(
             state,
         );
-        const boundary =
-        result.eventBoundary;
-        const boundaryEvidence =
-        findObservationEvidence(
-            narrativeText,
-            boundary?.evidenceText,
-        );
         const recovered =
         [];
         for (
@@ -1157,8 +909,6 @@ export function createLocalSemanticAdapter(ports) {
                 currentActivityEn:
                 evidence.text,
                 presence:
-                boundary?.ended &&
-                boundaryEvidence &&
                 targetRoom.id !==
                     roomContext
                         .currentRoomId
@@ -1196,34 +946,6 @@ export function createLocalSemanticAdapter(ports) {
         }
         result.actorUpdates =
         [...byActor.values()];
-    }
-
-    function isObservedEventBoundary(
-        observation,
-        narrativeText,
-    ) {
-        const boundary =
-        observation?.result
-            ?.eventBoundary;
-        if (
-            !boundary?.ended ||
-        Number(
-            boundary.confidence ||
-            0,
-        ) < 0.55
-        ) {
-            return false;
-        }
-        const evidence =
-        findObservationEvidence(
-            narrativeText,
-            boundary.evidenceText,
-        );
-        if (!evidence) {
-            return false;
-        }
-        return /(?:\bleft\b|\bwalked (?:out|away|through)\b|\bdeparted\b|\bwas gone\b|\bfinished\b|\bcompleted\b|\bended\b|\bclosed\b|离开|走出|完成|结束|告一段落)/iu
-            .test(evidence.text);
     }
 
     function applyObservedActorUpdates(
@@ -1306,7 +1028,7 @@ export function createLocalSemanticAdapter(ports) {
                     ],
                     {
                         taskId:
-                            'local_post_turn_observer',
+                            'post_turn_semantic_proposal',
                         fieldPrefix:
                             `actorUpdates[${observed.actorId || 'unknown'}]`,
                         recordId:
@@ -1331,6 +1053,7 @@ export function createLocalSemanticAdapter(ports) {
                     observed,
                     actor,
                     roomContext,
+                    state,
                 )
                 : null;
             if (
@@ -1349,14 +1072,30 @@ export function createLocalSemanticAdapter(ports) {
             ) {
                 continue;
             }
+            const observedRoomId =
+                String(
+                    observed.roomId ||
+                    '',
+                );
+            const unknownDeparture =
+                observed.presence ===
+                    'absent' &&
+                !observedRoomId;
+            if (
+                observedRoomId &&
+                !roomIds.has(
+                    observedRoomId,
+                )
+            ) {
+                continue;
+            }
             const requestedRoomId =
-            roomIds.has(
-                observed.roomId,
-            )
-                ? observed.roomId
-                : actor.roomId ||
-                    roomContext
-                        .currentRoomId;
+                unknownDeparture
+                    ? ''
+                    : observedRoomId ||
+                        actor.roomId ||
+                        roomContext
+                            .currentRoomId;
             const fromRoomId =
             actor.roomId ||
             roomContext
@@ -1376,6 +1115,7 @@ export function createLocalSemanticAdapter(ports) {
                 .replace(/_/gu, ' ')
                 .toLocaleLowerCase();
             const hasTargetRoomEvidence =
+            unknownDeparture ||
             requestedRoomId ===
                 fromRoomId ||
             [
@@ -1391,9 +1131,11 @@ export function createLocalSemanticAdapter(ports) {
                     normalizedEvidence
                         .includes(value));
             const targetRoomId =
-            hasTargetRoomEvidence
-                ? requestedRoomId
-                : fromRoomId;
+            unknownDeparture
+                ? ''
+                : hasTargetRoomEvidence
+                    ? requestedRoomId
+                    : fromRoomId;
             if (
                 targetRoomId !==
                 fromRoomId &&
@@ -1421,45 +1163,23 @@ export function createLocalSemanticAdapter(ports) {
                 observed
                     .currentActivityEn,
                 mapId:
-                actor.mapId ||
-                roomContext.mapId,
+                unknownDeparture
+                    ? ''
+                    : actor.mapId ||
+                        roomContext.mapId,
                 roomId:
                 targetRoomId,
+                locationKnown:
+                    !unknownDeparture,
             };
-            const boundary =
-            observation?.result
-                ?.eventBoundary;
-            const boundaryEnded =
-            Boolean(
-                boundary?.ended &&
-                Number(
-                    boundary
-                        .confidence ||
-                    0,
-                ) >= 0.55 &&
-                findObservationEvidence(
-                    narrativeText,
-                    boundary
-                        .evidenceText,
-                ),
-            );
             const leftInteraction =
-            boundaryEnded &&
+            unknownDeparture ||
             targetRoomId !==
                 roomContext
                     .currentRoomId;
-            const departureGrounded =
-            OBSERVED_ACTOR_DEPARTURE_PATTERN
-                .test(
-                    observedEvidence
-                        .text,
-                );
             if (
-                (
-                    observed.presence ===
-                    'absent' &&
-                    departureGrounded
-                ) ||
+                observed.presence ===
+                    'absent' ||
             leftInteraction
             ) {
                 nextUpdate.present =
@@ -1490,7 +1210,7 @@ export function createLocalSemanticAdapter(ports) {
         };
     }
 
-    async function requestLocalTurnObservation(
+    async function requestPostTurnSemanticObservation(
         state,
         playerAction,
         transaction,
@@ -1535,6 +1255,10 @@ export function createLocalSemanticAdapter(ports) {
             roomId:
                 actor.roomId,
         }));
+        const inventory =
+            buildDynamicInventoryContext(
+                state,
+            );
         const playerTurnSequence =
         buildStructuredPlayerTurnSequence(
             playerAction,
@@ -1550,153 +1274,80 @@ export function createLocalSemanticAdapter(ports) {
                 ?.target
                 ?.actorId,
         ].filter(Boolean);
-        const createFallbackPerception =
-        () =>
-            createDeterministicPerceptionFallback({
-                playerAction,
-                narrativeText,
-                narrativeSegments,
-                playerTurnSequence,
-                spellCasts:
-                    transaction
-                        .spellCasts ||
-                    [],
-                checkResolution:
-                    transaction
-                        .checkResolution,
-                targetActorIds,
-                actors:
-                    state.actors ||
-                    [],
-                knownActorIds: (
-                    state.actorLibrary ||
-                    []
-                ).map(actor =>
-                    actor.id),
-            });
+        const input = {
+            clock:
+                state.clock,
+            elapsedMinutes:
+                transaction.elapsedMinutes,
+            playerAction:
+                String(
+                    playerAction ||
+                    '',
+                ),
+            playerTurnSequence,
+            targetActorIds,
+            narrativeSegments,
+            room:
+                buildLocalSemanticRoomContext(
+                    state,
+                ),
+            actors,
+            localPresence:
+                state.localPresence ||
+                null,
+            existingActorPresence:
+                transaction.actorPresence ||
+                null,
+        };
+        const provider = 'local';
         try {
             const response =
-            await runLocalModelTask(
-                'local_post_turn_observer',
-                () =>
-                    fetch(
-                        '/api/hogwarts-mud/local/observe',
-                        {
-                            method: 'POST',
-                            headers:
-                                getRequestHeaders(),
-                            body:
-                                JSON.stringify({
-                                    input: {
-                                        clock:
-                                    state.clock,
-                                        playerAction:
-                                    String(
-                                        playerAction ||
-                                        '',
-                                    ),
-                                        playerTurnSequence,
-                                        targetActorIds,
-                                        narrativeSegments,
-                                        room:
-                                    buildLocalSemanticRoomContext(
-                                        state,
-                                    ),
-                                        actors,
-                                        localPresence:
-                                    state
-                                        .localPresence ||
-                                    null,
-                                        inventory:
-                                    (
-                                        state.items ||
-                                        []
-                                    ).map(
-                                        item => ({
-                                            id:
-                                                item.id,
-                                            labelEn:
-                                                item
-                                                    .labelEn ||
-                                                '',
-                                            label:
-                                                item
-                                                    .label ||
-                                                item
-                                                    .labelEn ||
-                                                '',
-                                            appearanceEn:
-                                                item
-                                                    .appearanceEn ||
-                                                item
-                                                    .detailEn ||
-                                                '',
-                                            type:
-                                                item
-                                                    .type ||
-                                                item
-                                                    .kind ||
-                                                'other',
-                                            ownerId:
-                                                item
-                                                    .ownerId ||
-                                                'player',
-                                            holderId:
-                                                item
-                                                    .holderId ||
-                                                (
-                                                    [
-                                                        'carried',
-                                                        'equipped',
-                                                    ].includes(
-                                                        item
-                                                            .custody,
-                                                    )
-                                                        ? item
-                                                            .ownerId ||
-                                                            'player'
-                                                        : ''
-                                                ),
-                                            state:
-                                                item
-                                                    .state ||
-                                                item
-                                                    .status ||
-                                                'intact',
-                                            isEquipped:
-                                                item
-                                                    .isEquipped ===
-                                                    true ||
-                                                item
-                                                    .custody ===
-                                                    'equipped',
-                                        }),
-                                    ),
-                                        existingActorPresence:
-                                    transaction
-                                        .actorPresence ||
-                                    null,
-                                    },
-                                }),
-                        },
-                    ),
-                {
-                    eventType:
-                        'turn.post_commit',
-                    emittedBy:
-                        'turn.local_observation',
-                },
-            );
+                await runLocalModelTask(
+                    'post_turn_semantic_proposal',
+                    () =>
+                        fetchRequest(
+                            '/api/hogwarts-mud/local/observe',
+                            {
+                                method: 'POST',
+                                headers:
+                                    getRequestHeaders(),
+                                body:
+                                    JSON.stringify({
+                                        input,
+                                    }),
+                            },
+                        ),
+                    {
+                        eventType:
+                            'turn.post_commit',
+                        emittedBy:
+                            'turn.local_observation',
+                    },
+                );
             if (!response.ok) {
                 throw new Error(
                     (
                         await response.text()
                     ).slice(0, 1_000) ||
-                `HTTP ${response.status}`,
+                    `HTTP ${response.status}`,
                 );
             }
             const observation =
-            await response.json();
+                await response.json();
+            const temporalValidation =
+            validateSceneTemporalConsistency(
+                observation
+                    ?.result
+                    ?.temporalClaims,
+                state,
+                {
+                    elapsedMinutes:
+                        transaction
+                            .elapsedMinutes,
+                },
+                playerAction,
+                narrativeSegments,
+            );
             const perceptionValidation =
             validatePerceptionContract(
                 observation
@@ -1734,74 +1385,106 @@ export function createLocalSemanticAdapter(ports) {
                 ?.result
                 ?.perception
                 ?.concealment ===
-                    'successful' &&
-            /(?:\b(?:secretly|stealth|sneak|hide|conceal)\w*\b|偷偷|悄悄|隐蔽|隐藏)/iu
-                .test(playerAction);
-            const fallbackPerception =
-            createFallbackPerception();
+                    'successful';
+            const sourceRejected =
+                Boolean(
+                    observation
+                        ?.diagnostics
+                        ?.perceptionRejected,
+                ) ||
+                Number(
+                    observation
+                        ?.diagnostics
+                        ?.temporalClaimsRejected ||
+                    0,
+                ) > 0 ||
+                !perceptionValidation.valid ||
+                rejectedFailedConcealment ||
+                !temporalValidation.valid;
+            if (sourceRejected) {
+                throw new Error(
+                    'Post-turn semantic proposal was rejected by a deterministic guard.',
+                );
+            }
             const perception =
-            perceptionValidation.valid &&
-            !rejectedFailedConcealment
-                ? reconcileObservedPerceptionWithFallback(
-                    perceptionValidation
-                        .value,
-                    fallbackPerception,
-                )
-                : fallbackPerception;
+                perceptionValidation.value;
             observation.result ??= {};
             observation.result
                 .perception =
             perception;
-            if (
-                perception?.source ===
-                'deterministic_fallback'
-            ) {
-                observation
-                    .diagnostics ??= {};
-                observation
-                    .diagnostics
-                    .perceptionFallback =
-                true;
-            }
+            observation.result
+                .temporalClaims =
+            temporalValidation
+                .acceptedClaims;
+            observation.diagnostics ??= {};
+            observation.diagnostics
+                .temporalClaims = {
+                    valid:
+                    temporalValidation
+                        .valid,
+                    accepted:
+                    temporalValidation
+                        .acceptedClaims
+                        .length,
+                    rejected:
+                    temporalValidation
+                        .rejectedClaims
+                        .length,
+                    errors:
+                    temporalValidation
+                        .errors,
+                    rejectedClaims:
+                    temporalValidation
+                        .rejectedClaims,
+                };
+            observation.diagnostics.provider =
+                provider;
             recoverObservedActorMovements(
                 observation,
                 state,
                 narrativeText,
             );
-            const identityObservations =
-                projectObservedIdentityObservations(
-                    observation,
-                    state,
+            const dynamicObservation =
+                await requestDynamicTurnObservation(
                     playerAction,
                     narrativeSegments,
-                    targetActorIds,
-                );
-            const observedInventoryUpdates =
-                (
+                    actors,
+                    inventory,
+                    transaction
+                        .checkResolution,
                     observation
                         ?.result
-                        ?.inventoryUpdates ||
-                    []
-                ).filter((update, index) =>
-                    !rejectNonEnglishObservation(
-                        observation,
-                        update,
-                        [
-                            'labelEn',
-                            'appearanceEn',
-                        ],
-                        {
-                            taskId:
+                        ?.inventoryObservationRequired,
+                );
+            observation.diagnostics ??= {};
+            observation.diagnostics
+                .inventory =
+                dynamicObservation
+                    .diagnostics
+                    .inventory;
+            const observedInventoryUpdates =
+                dynamicObservation
+                    .inventoryUpdates
+                    .filter((update, index) =>
+                        !rejectNonEnglishObservation(
+                            observation,
+                            update,
+                            [
+                                'labelEn',
+                                'appearanceEn',
+                            ],
+                            {
+                                taskId:
                                 'local_inventory_observer',
-                            fieldPrefix:
+                                fieldPrefix:
                                 `inventoryUpdates[${index}]`,
-                            recordId:
+                                recordId:
                                 String(
                                     update?.id ||
                                     index,
                                 ),
-                        },
-                    ));
+                            },
+                        ));
             return {
                 observation,
                 narrativeText,
@@ -1819,13 +1502,28 @@ export function createLocalSemanticAdapter(ports) {
                     playerAction,
                     narrativeText,
                 ),
-                identityObservations,
+                identityObservations:
+                    dynamicObservation
+                        .identityObservations,
+                identityDiagnostics:
+                    dynamicObservation
+                        .diagnostics,
+                inventoryDiagnostics:
+                    dynamicObservation
+                        .diagnostics,
+                temporalClaims:
+                    temporalValidation
+                        .acceptedClaims,
+                temporalDiagnostics:
+                    observation
+                        .diagnostics
+                        .temporalClaims,
                 perception,
                 targetActorIds,
             };
         } catch (error) {
             console.warn(
-                '[Hogwarts MUD] Local semantic observation failed; committing narrative without optional observations',
+                '[Hogwarts MUD] Post-turn semantic provider failed; committing narrative without observations',
                 error,
             );
             return {
@@ -1834,25 +1532,18 @@ export function createLocalSemanticAdapter(ports) {
                         schemaVersion: 1,
                         materialEvents:
                         [],
-                        inventoryUpdates:
-                        [],
-                        eventBoundary: {
-                            ended: false,
-                            reasonEn:
-                            'Narrative-first fallback omits uncertain event boundaries.',
-                            evidenceText:
-                            '',
-                            confidence: 0,
-                        },
+                        inventoryObservationRequired:
+                        false,
                         actorUpdates:
                         [],
-                        identityObservations:
+                        temporalClaims:
                         [],
                         perception:
-                        createFallbackPerception(),
+                        null,
                     },
                     diagnostics: {
-                        fallback: true,
+                        provider,
+                        providerFailure: true,
                         error:
                         String(
                             error?.message ||
@@ -1868,8 +1559,28 @@ export function createLocalSemanticAdapter(ports) {
                 itemUpdates: [],
                 identityObservations:
                 [],
+                identityDiagnostics: {
+                    routed: false,
+                    modelCalls: 0,
+                },
+                inventoryDiagnostics: {
+                    routed: false,
+                    modelCalls: 0,
+                },
+                temporalClaims: [],
+                temporalDiagnostics: {
+                    valid: false,
+                    accepted: 0,
+                    rejected: 0,
+                    errors: [
+                        'Post-turn semantic provider unavailable; temporal claims omitted.',
+                    ],
+                    rejectedClaims: [],
+                    provider,
+                    providerFailure: true,
+                },
                 perception:
-                createFallbackPerception(),
+                null,
                 targetActorIds,
             };
         }
@@ -2104,12 +1815,13 @@ export function createLocalSemanticAdapter(ports) {
         findObservationEvidence,
         resolveObservedMaterialActorId,
         projectObservedMaterialEvents,
-        projectObservedIdentityObservations,
+        requestDynamicIdentityObservation,
+        requestDynamicInventoryObservation,
+        requestDynamicTurnObservation,
         findActorObservationEvidence,
         recoverObservedActorMovements,
-        isObservedEventBoundary,
         applyObservedActorUpdates,
-        requestLocalTurnObservation,
+        requestPostTurnSemanticObservation,
         requestLocalTurnAppraisals,
     };
 }

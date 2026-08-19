@@ -65,7 +65,6 @@ const ACTION_CHECK_RULES = Object.freeze([
         skill: 'athletics',
         opposed: true,
         dcAdjustment: 0,
-        pattern: /(?:推(?!理|测|断)(?:开|倒|到|搡)?|撞(?:开|倒)?|殴打|打(?:他|她|人|向|了|一拳|一下)|踢|抓住|按住|拽|拖|扯|抢|掰|砸|攻击|扑向|绊倒|shove|push|hit|kick|grab|tackle|restrain|trip)/i,
     },
     {
         id: 'agility',
@@ -76,7 +75,6 @@ const ACTION_CHECK_RULES = Object.freeze([
         skill: 'acrobatics',
         opposed: false,
         dcAdjustment: 1,
-        pattern: /(?:躲|闪避|翻越|跳过|跳上|攀|爬|潜行|溜过去|扒窃|偷走|撬锁|追赶|逃脱|dodge|evade|climb|jump|sneak|steal|pickpocket|lockpick|chase|escape)/i,
     },
     {
         id: 'perception',
@@ -87,7 +85,6 @@ const ACTION_CHECK_RULES = Object.freeze([
         skill: 'investigation',
         opposed: false,
         dcAdjustment: 0,
-        pattern: /(?:调查|搜索|搜查|仔细检查|仔细观察|偷听|寻找|翻找|辨认|察觉|investigat|search|inspect closely|eavesdrop|notice|spot|track)/i,
     },
     {
         id: 'intellect',
@@ -98,7 +95,6 @@ const ACTION_CHECK_RULES = Object.freeze([
         skill: 'lore',
         opposed: false,
         dcAdjustment: 1,
-        pattern: /(?:回忆|推理|解读|破译|计算|研究|分析|认出|recall|deduce|decode|calculate|research|analyse|analyze|identify)/i,
     },
     {
         id: 'willpower',
@@ -109,7 +105,6 @@ const ACTION_CHECK_RULES = Object.freeze([
         skill: 'discipline',
         opposed: false,
         dcAdjustment: 1,
-        pattern: /(?:抵抗|忍住|集中精神|保持专注|克服恐惧|保持镇定|resist|endure|concentrate|focus|overcome fear|stay calm)/i,
     },
     {
         id: 'charisma',
@@ -120,7 +115,6 @@ const ACTION_CHECK_RULES = Object.freeze([
         skill: 'influence',
         opposed: true,
         dcAdjustment: 0,
-        pattern: /(?:说服|欺骗|撒谎|威胁|恐吓|套话|交涉|谈判|魅惑|取悦|persuade|deceive|lie to|threaten|intimidate|negotiate|charm|bluff)/i,
     },
     {
         id: 'magic',
@@ -131,7 +125,6 @@ const ACTION_CHECK_RULES = Object.freeze([
         skill: 'spellcasting',
         opposed: false,
         dcAdjustment: 2,
-        pattern: /(?:施法|念咒|举起魔杖|挥动魔杖|释放咒语|cast(?:ing)? a spell|raise(?:d)? (?:my|the) wand|wave(?:d)? (?:my|the) wand)/i,
     },
 ]);
 
@@ -140,10 +133,6 @@ const CHECK_DIFFICULTY_DC = Object.freeze({
     standard: 12,
     harsh: 14,
 });
-
-const CHECK_ADVANTAGE_PATTERN = /(?:借助|利用.+(?:工具|道具)|有人协助|出其不意|充分准备|with help|using .+ tool|prepared|by surprise)/i;
-
-const CHECK_DISADVANTAGE_PATTERN = /(?:重伤|精疲力尽|惊慌|恐惧得|被束缚|injured|exhausted|panicked|restrained)/i;
 
 function secureRandomInt(maximum) {
     const range = Math.max(1, Number(maximum) || 1);
@@ -189,26 +178,7 @@ function findCheckTargetActor(
     checkRule = null,
 ) {
     const baseQuery = normalizeCheckText(playerAction);
-    const aliases = [];
-    if (/(?:男孩|男生|小男孩|小孩)/.test(baseQuery)) {
-        aliases.push('boy child first year student');
-    }
-    if (/(?:女孩|女生|小女孩)/.test(baseQuery)) {
-        aliases.push('girl child first year student');
-    }
-    if (/(?:教授|老师)/.test(baseQuery)) {
-        aliases.push('professor teacher');
-    }
-    if (/(?:店主|老板)/.test(baseQuery)) {
-        aliases.push('shopkeeper owner bartender');
-    }
-    if (/(?:路人|行人)/.test(baseQuery)) {
-        aliases.push('passerby shopper stranger');
-    }
-    if (/(?:爸爸|父亲)/.test(baseQuery)) {
-        aliases.push('father guardian');
-    }
-    const query = `${baseQuery} ${aliases.join(' ')}`;
+    const query = baseQuery;
     const spatialActors = new Map(
         buildSpatialContext(worldState).actors
             .map(actor => [actor.id, actor]),
@@ -273,26 +243,7 @@ function deriveNpcCheckModifier(actor, profile, attribute) {
     if (Number.isFinite(explicit)) {
         return Math.max(-5, Math.min(5, explicit));
     }
-    const role = normalizeCheckText([
-        actor?.roleEn,
-        actor?.role,
-        profile?.roleEn,
-        profile?.role,
-        profile?.publicDescriptionEn,
-    ].filter(Boolean).join(' '));
-    let modifier = 0;
-    if (/(?:headmistress|professor|auror|master|champion|校长|教授|傲罗|大师)/i.test(role)) {
-        modifier = 3;
-    } else if (/(?:teacher|guard|officer|adult|shopkeeper|bartender|老师|守卫|成年|店主)/i.test(role)) {
-        modifier = 1;
-    } else if (/(?:first year|first-year|student|child|boy|girl|一年级|学生|孩子|男孩|女孩)/i.test(role)) {
-        modifier = 0;
-    }
-    if (attribute === 'physique' &&
-        /(?:small|frail|stooped|瘦小|虚弱|驼背)/i.test(role)) {
-        modifier -= 1;
-    }
-    return Math.max(-5, Math.min(5, modifier));
+    return 0;
 }
 
 function rollD20(mode, randomInt) {
@@ -392,9 +343,7 @@ export function detectActionCheck(
                         knownSpell,
                     ),
             }
-            : ACTION_CHECK_RULES.find(item =>
-                item.pattern.test(action),
-            );
+            : null;
     if (!rule && !forced) {
         return null;
     }
@@ -413,12 +362,6 @@ export function detectActionCheck(
         action,
         selected,
     );
-    if (selected.id === 'physical_force' &&
-        !target &&
-        !forced &&
-        !/(?:用力|强行|撞开|砸开|破坏|沉重|锁住|卡住|force|break|stuck|heavy)/i.test(action)) {
-        return null;
-    }
     return {
         ...selected,
         forced:
@@ -604,14 +547,23 @@ export function resolveActionCheck(
                 : null;
     } else {
         detected =
-            detectActionCheck(
-                worldState,
-                playerAction,
-                {
-                    forced,
-                    spellCast,
-                },
-            );
+            forced
+                ? {
+                    id: 'forced_general',
+                    label: '主动判定',
+                    labelEn:
+                        'Player-requested check',
+                    attribute:
+                        'perception',
+                    targetAttribute:
+                        'agility',
+                    skill: 'general',
+                    opposed: false,
+                    dcAdjustment: 0,
+                    forced: true,
+                    target: null,
+                }
+                : null;
     }
     if (!detected) {
         return null;
@@ -641,22 +593,16 @@ export function resolveActionCheck(
             ),
     );
     const equipmentModifier = itemUsed ? 1 : 0;
-    const hasAdvantage =
-        CHECK_ADVANTAGE_PATTERN.test(playerAction);
-    const statusText = normalizeCheckText(
-        (worldState.status || [])
-            .map(item => `${item.label} ${item.detail}`)
-            .join(' '),
-    );
-    const hasDisadvantage =
-        CHECK_DISADVANTAGE_PATTERN.test(
-            `${playerAction} ${statusText}`,
-        );
-    const rollMode = hasAdvantage === hasDisadvantage
-        ? 'normal'
-        : hasAdvantage
-            ? 'advantage'
-            : 'disadvantage';
+    const rollMode =
+        [
+            'normal',
+            'advantage',
+            'disadvantage',
+        ].includes(
+            semanticCheck?.rollMode,
+        )
+            ? semanticCheck.rollMode
+            : 'normal';
     const playerRoll = rollD20(rollMode, randomInt);
     const modifierTotal = attributeModifier +
         skillModifier +

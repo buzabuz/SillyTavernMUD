@@ -90,6 +90,7 @@ fails the full gate.
 | SETTINGS-004 | Profile and connection status prose | operation state | `ui/settings-profile-controller.js`, `ui/bindings.js` | `STATIC` | static locale keys | Raw backend error remains **FAIL** |
 | SETTINGS-005 | Context budget summary | numeric plan + mode codes | `ui/settings-profile-controller.js::syncContextPolicyUi` | `STATIC/ALLOW` | static labels + numeric technical values | Verify `RAG` and mode labels are explicitly allowed/configuration-only |
 | SETTINGS-006 | Editable English world-system Prompt | `settings.worldPrompt` technical source | `panel.html`, `ui/settings-profile-controller.js` | `ALLOW` | exact user-editable technical Prompt source in Settings | Explicitly accepted by user; preserve as-is |
+| SETTINGS-007 | Post semantic provider selector and Low Profile detail | `postTurnSemanticProvider` plus `modelSlots.low.profileId` → Connection Profile name/model | `panel.html`, `ui/settings-profile-controller.js` | `STATIC/ALLOW` | `low/local` uses static locale labels; Profile/model are exact configuration-only technical identifiers | Revision 25 implemented; browser acceptance pending |
 
 ## Game Header, People, Story And Composer
 
@@ -153,6 +154,7 @@ fails the full gate.
 | MSG-013 | Non-segmented assistant body | assistant `message.mes` | `ui/message-renderer.js::renderMessage` | `PATCH` | `message/<messageId>/mes` | Awaiting browser acceptance |
 | MSG-014 | Hidden English original | canonical source text | `ui/message-renderer.js` | `ALLOW` | hidden by default; appears only after explicit English-source action | Must not be visible in normal zh-CN state |
 | MSG-015 | Per-segment pending/error status | localization status | `ui/message-renderer.js` | `STATIC` | status locale key | Must be absent after idle |
+| MSG-016 | Rejected/partially accepted paid narrative response segment | response ledger display projection | planned `ui/model-response-evidence.js` story projection | `NO` | target `model_response_segment/<responseId>:<index>/textEn` through TranslationTable | Revision 4 draft; implementation not approved |
 | ITEM-PROP-001 | Item candidate label | `itemCandidates[].item.labelEn` | `ui/message-renderer.js`, `ui/item-components.js` | `PATCH` | `item/<id>/labelEn` | Unverified |
 | ITEM-PROP-002 | Item candidate appearance | `itemCandidates[].item.appearanceEn` | same | `PATCH` | `item/<id>/appearanceEn` | Unverified |
 | ITEM-PROP-003 | Item candidate owner/holder/location prose | candidate Item projection | `domain/item-projection.js` | `PATCH` | Canon/Actor display resolver + exact room display resolver | Awaiting browser acceptance |
@@ -162,6 +164,9 @@ fails the full gate.
 | SPELL-PROP-003 | Spell candidate evidence | `candidate.evidenceText` | `ui/spell-components.js` | `RAW` | exact evidence | Must be classified and visibly separated |
 | GEN-001 | Generation/loading titles, details and steps | runtime phase enums | Story/Message renderers | `STATIC` | static locale keys | Route present |
 | GEN-002 | Generation/runtime raw failure | error object message | Story/Message renderers | `STATIC` | localized generic failure; raw details console-only | Source route present |
+| GEN-003 | Paid response panel task/status row | response ledger metadata | planned `ui/model-response-evidence.js` | `NO` | target static task/status/terminal-stage locale keys | Revision 4 draft; implementation not approved |
+| GEN-004 | Partial/unsaved paid response status and save recovery actions | response ledger/session receipt state | planned `ui/model-response-evidence.js` | `NO` | target static status and command locale keys; no model retry | Revision 4 draft; implementation not approved |
+| GEN-005 | Explicit original paid model response source panel | exact response ledger content | planned `ui/model-response-evidence.js` | `NO` | target `STATIC/ALLOW`; raw content hidden until explicit source action | Revision 4 draft; implementation not approved |
 
 ## Calendar
 

@@ -269,13 +269,13 @@ test('Item physicalForm normalization and validation enforce material existence 
         inferDestroyedPhysicalForm(
             'the smoking ruin of the quill vanished entirely',
         ),
-        'absent',
+        '',
     );
     assert.equal(
         inferDestroyedPhysicalForm(
             'the quill shattered and its pieces were gathered',
         ),
-        'remains',
+        '',
     );
 
     const consumed =
@@ -952,6 +952,8 @@ test('high-risk Item operations require evidence for both the Item and state cha
         operation: 'lose',
         sourceKind: 'narrative',
         evidenceText,
+        evidenceItemText:
+            'signed parchment',
         confidence: 0.99,
     });
 
@@ -960,6 +962,7 @@ test('high-risk Item operations require evidence for both the Item and state cha
             autograph,
             'lose',
             catEvidence,
+            'signed parchment',
         ),
         false,
     );
@@ -1068,6 +1071,10 @@ test('destroyed Item remains are grounded and narrative proposals fold once', ()
                             quill.holderId,
                         evidenceText:
                             evidence,
+                        evidenceItemText:
+                            'quill',
+                        physicalForm:
+                            'absent',
                     },
                 }],
             },
@@ -1094,6 +1101,7 @@ test('destroyed Item remains are grounded and narrative proposals fold once', ()
             quill,
             'destroy',
             evidence,
+            'quill',
         ),
         true,
     );
@@ -1101,7 +1109,8 @@ test('destroyed Item remains are grounded and narrative proposals fold once', ()
         isItemOperationEvidenceGrounded(
             quill,
             'destroy',
-            'The quill vanished from the desk.',
+            'The desk vanished from the room.',
+            'quill',
         ),
         false,
     );
@@ -1159,6 +1168,10 @@ test('[defect-probing] vanished quill becomes absent, clears placement and repla
             operation: 'destroy',
             evidenceText:
                 'the smoking ruin of the quill vanished entirely',
+            evidenceItemText:
+                'quill',
+            physicalForm:
+                'absent',
         });
     const destroyed =
         applyItemOperations(
@@ -1217,6 +1230,10 @@ test('[defect-probing] vanished quill becomes absent, clears placement and repla
                     id: quill.id,
                     operation:
                         'destroy',
+                    evidenceItemText:
+                        'quill',
+                    physicalForm:
+                        'absent',
                 }),
             ],
         );
@@ -1287,6 +1304,10 @@ test('[defect-probing] gathered quill remains can be carried and placed but not 
                         'destroy',
                     evidenceText:
                         'The quill shattered and its pieces were gathered.',
+                    evidenceItemText:
+                        'quill',
+                    physicalForm:
+                        'remains',
                 }),
             ],
         );
@@ -1453,12 +1474,26 @@ test('a completed loan promotes an ordinary quill to a player-confirmed candidat
             .item.holderId,
         'player',
     );
+    assert.deepEqual(
+        projectObservedInventoryUpdates(
+            [{
+                ...projected[0],
+                ownerId:
+                    'Harry Potter',
+            }],
+            state,
+            '',
+            evidence,
+        ),
+        [],
+        'display names cannot be coerced into stable Item ownership',
+    );
 });
 
 test('inventory observer prompt treats completed transfers as an implicit-item boundary', async () => {
     const source = await readFile(
         new URL(
-            '../src/hogwarts-mud/local-semantic-adjudicator.js',
+            '../src/hogwarts-mud/inventory-observation-contract.js',
             import.meta.url,
         ),
         'utf8',
@@ -1469,7 +1504,7 @@ test('inventory observer prompt treats completed transfers as an implicit-item b
     );
     assert.match(
         source,
-        /quill\|pen\|textbook/u,
+        /generic quills, generic books, classroom supplies/u,
     );
 });
 
@@ -1596,6 +1631,8 @@ test('[defect-probing] migration distinguishes absent evidence from remains and 
                         'player',
                     evidenceText:
                         'The smoking ruin vanished entirely.',
+                    physicalForm:
+                        'absent',
                 },
                 {
                     id:

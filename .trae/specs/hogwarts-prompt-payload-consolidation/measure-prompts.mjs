@@ -26,6 +26,9 @@ import {
     migrateInteriorMountAuthority,
 } from '../../../public/scripts/extensions/hogwarts-mud/domain/interior-mount.js';
 import {
+    migrateActorContextV1,
+} from '../../../public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js';
+import {
     migrateLanguageAuthorityV1,
 } from '../../../public/scripts/extensions/hogwarts-mud/domain/language-authority-migration.js';
 import {
@@ -36,6 +39,9 @@ import {
 import {
     synchronizeHeldItemLocations,
 } from '../../../public/scripts/extensions/hogwarts-mud/domain/inventory.js';
+import {
+    buildFollowMovementContext,
+} from '../../../public/scripts/extensions/hogwarts-mud/domain/movement.js';
 import {
     SOCIAL_GRAPH_EXTRACTOR_VERSION,
 } from '../../../public/scripts/extensions/hogwarts-mud/domain/social-schema.js';
@@ -78,6 +84,31 @@ import {
     IDENTITY_OBSERVATION_JSON_SCHEMA,
     IDENTITY_OBSERVATION_SYSTEM_RULES,
 } from '../../../src/hogwarts-mud/identity-observation-contract.js';
+import {
+    createDynamicIdentityModelRequest,
+} from '../../../src/hogwarts-mud/dynamic-identity-observer.js';
+import {
+    createDynamicInventoryModelRequest,
+} from '../../../src/hogwarts-mud/inventory-observation-contract.js';
+import {
+    createDynamicTurnModelRequest,
+} from '../../../src/hogwarts-mud/dynamic-turn-observer.js';
+import {
+    PRE_TURN_EVIDENCE_ROUTE_JSON_SCHEMA,
+} from '../../../src/hogwarts-mud/pre-turn-route-contract.js';
+import {
+    movementIntentJsonSchema,
+} from '../../../src/hogwarts-mud/pre-turn-movement-contract.js';
+import {
+    PRE_TURN_SYSTEM,
+    createPreTurnSystemPrompt,
+} from '../../../src/hogwarts-mud/pre-turn-system-prompt.js';
+import {
+    POST_TURN_SYSTEM,
+} from '../../../src/hogwarts-mud/post-turn-system-prompt.js';
+import {
+    postTurnJsonSchema,
+} from '../../../src/hogwarts-mud/post-turn-transport-contract.js';
 
 const TINA_FILE = path.resolve(
     process.env
@@ -1431,13 +1462,19 @@ async function main() {
         structuredClone(
             rows.slice(1),
         );
-    const migration =
-        domain.migrateTimelineAppraisalLifecycleV4(
+    const actorContextMigration =
+        migrateActorContextV1(
             structuredClone(
                 rows[0]
                     .chat_metadata
                     .hogwartsMud,
             ),
+            sourceChat,
+        );
+    const migration =
+        domain.migrateTimelineAppraisalLifecycleV4(
+            actorContextMigration
+                .state,
             sourceChat,
         );
     const languageMigration =
@@ -1999,6 +2036,7 @@ Continue from this exact state. actorCards contain the only shared NPC performan
                     true,
             }));
     const preTurnInput = {
+        playerAction,
         playerTurnSequence,
         forcedCheck: false,
         clock:
@@ -2030,6 +2068,25 @@ Continue from this exact state. actorCards contain the only shared NPC performan
         timePolicy:
             getDeterministicTimePolicy(),
     };
+    const followPlayerAction =
+        '→【跟随赫敏】\n我立即跟着赫敏离开。';
+    const followPreTurnInput = {
+        ...preTurnInput,
+        playerAction:
+            followPlayerAction,
+        playerTurnSequence: [{
+            type: 'action',
+            lineIndex: 0,
+            text:
+                followPlayerAction,
+        }],
+        movementContext:
+            buildFollowMovementContext(
+                state,
+                followPlayerAction,
+                chat,
+            ),
+    };
     const postTurnInput = {
         clock:
             state.clock,
@@ -2048,9 +2105,48 @@ Continue from this exact state. actorCards contain the only shared NPC performan
     };
     const inventoryInput = {
         playerAction,
-        narrativeText,
+        narrativeSegments:
+            postTurnInput
+                .narrativeSegments,
         inventory,
     };
+    const inventoryRequest =
+        createDynamicInventoryModelRequest(
+            inventoryInput,
+        );
+    const dynamicIdentityActors =
+        semanticActors
+            .slice(0, 1)
+            .map(actor => ({
+                id: actor.id,
+                nameEn:
+                    actor.nameEn ||
+                    actor.id,
+            }));
+    const dynamicIdentityInput = {
+        narrativeSegments:
+            postTurnInput
+                .narrativeSegments,
+        actors:
+            dynamicIdentityActors,
+        identityTargetActorIds:
+            dynamicIdentityActors
+                .map(actor =>
+                    actor.id),
+        inspectionTargetActorIds:
+            [],
+    };
+    const identityRequest =
+        createDynamicIdentityModelRequest(
+            dynamicIdentityInput,
+        );
+    const dynamicTurnRequest =
+        createDynamicTurnModelRequest({
+            identity:
+                dynamicIdentityInput,
+            inventory:
+                inventoryInput,
+        });
     const event =
         (state.eventKnowledge || [])
             .at(-1);
@@ -2153,16 +2249,15 @@ Continue from this exact state. actorCards contain the only shared NPC performan
             [
                 'PRE_TURN_SYSTEM',
                 'preTurnJsonSchema',
-                'POST_TURN_SYSTEM',
-                'postTurnJsonSchema',
-                'INVENTORY_TURN_SYSTEM',
-                'inventoryTurnJsonSchema',
                 'TRANSLATION_BATCH_SYSTEM',
                 'translationBatchJsonSchema',
             ],
             {
                 IDENTITY_OBSERVATION_JSON_SCHEMA,
                 IDENTITY_OBSERVATION_SYSTEM_RULES,
+                movementIntentJsonSchema,
+                PRE_TURN_SYSTEM,
+                PRE_TURN_EVIDENCE_ROUTE_JSON_SCHEMA,
             },
         );
     const appraisalSource =
@@ -2184,8 +2279,9 @@ Continue from this exact state. actorCards contain the only shared NPC performan
         preTurn:
             localPromptMetric({
                 system:
-                    localConstants
-                        .PRE_TURN_SYSTEM,
+                    createPreTurnSystemPrompt(
+                        preTurnInput,
+                    ),
                 input:
                     preTurnInput,
                 jsonSchema:
@@ -2200,16 +2296,34 @@ Continue from this exact state. actorCards contain the only shared NPC performan
                 audience:
                     'local semantic model',
             }),
+        preTurnFollow:
+            localPromptMetric({
+                system:
+                    createPreTurnSystemPrompt(
+                        followPreTurnInput,
+                    ),
+                input:
+                    followPreTurnInput,
+                jsonSchema:
+                    localConstants
+                        .preTurnJsonSchema,
+                contextTokens:
+                    4_096,
+                endpointInputLimit:
+                    100_000,
+                source:
+                    'local-semantic-adjudicator.js::adjudicateTurn follow movement',
+                audience:
+                    'local semantic model',
+            }),
         postTurn:
             localPromptMetric({
                 system:
-                    localConstants
-                        .POST_TURN_SYSTEM,
+                    POST_TURN_SYSTEM,
                 input:
                     postTurnInput,
                 jsonSchema:
-                    localConstants
-                        .postTurnJsonSchema,
+                    postTurnJsonSchema,
                 contextTokens:
                     4_096,
                 endpointInputLimit:
@@ -2222,13 +2336,14 @@ Continue from this exact state. actorCards contain the only shared NPC performan
         inventory:
             localPromptMetric({
                 system:
-                    localConstants
-                        .INVENTORY_TURN_SYSTEM,
+                    inventoryRequest
+                        .system,
                 input:
-                    inventoryInput,
+                    inventoryRequest
+                        .input,
                 jsonSchema:
-                    localConstants
-                        .inventoryTurnJsonSchema,
+                    inventoryRequest
+                        .jsonSchema,
                 contextTokens:
                     4_096,
                 endpointInputLimit:
@@ -2237,6 +2352,46 @@ Continue from this exact state. actorCards contain the only shared NPC performan
                     'local-semantic-adjudicator.js::observeTurn inventory',
                 audience:
                     'local inventory model',
+            }),
+        dynamicIdentity:
+            localPromptMetric({
+                system:
+                    identityRequest
+                        .system,
+                input:
+                    identityRequest
+                        .input,
+                jsonSchema:
+                    identityRequest
+                        .jsonSchema,
+                contextTokens:
+                    2_048,
+                endpointInputLimit:
+                    50_000,
+                source:
+                    'dynamic-identity-observer.js::observeDynamicIdentity',
+                audience:
+                    'local dynamic model',
+            }),
+        dynamicTurn:
+            localPromptMetric({
+                system:
+                    dynamicTurnRequest
+                        .system,
+                input:
+                    dynamicTurnRequest
+                        .input,
+                jsonSchema:
+                    dynamicTurnRequest
+                        .jsonSchema,
+                contextTokens:
+                    4_096,
+                endpointInputLimit:
+                    150_000,
+                source:
+                    'dynamic-turn-observer.js::observeDynamicTurn',
+                audience:
+                    'local dynamic model',
             }),
         appraisal:
             localPromptMetric({
@@ -2466,31 +2621,47 @@ Continue from this exact state. actorCards contain the only shared NPC performan
             'local_pre_turn_adjudicator',
             'local_pre_turn_adjudicator',
             'runtime',
-            localConstants
-                .PRE_TURN_SYSTEM,
+            createPreTurnSystemPrompt(
+                preTurnInput,
+            ),
             preTurnInput,
             localConstants
                 .preTurnJsonSchema,
         ),
         localRequest(
-            'local_post_turn_observer',
-            'local_post_turn_observer',
+            'post_turn_semantic_proposal',
+            'post_turn_semantic_proposal',
             'runtime',
-            localConstants
-                .POST_TURN_SYSTEM,
+            POST_TURN_SYSTEM,
             postTurnInput,
-            localConstants
-                .postTurnJsonSchema,
+            postTurnJsonSchema,
         ),
         localRequest(
             'local_inventory_observer',
             'local_inventory_observer',
             'runtime',
-            localConstants
-                .INVENTORY_TURN_SYSTEM,
-            inventoryInput,
-            localConstants
-                .inventoryTurnJsonSchema,
+            inventoryRequest.system,
+            inventoryRequest.input,
+            inventoryRequest
+                .jsonSchema,
+        ),
+        localRequest(
+            'local_dynamic_identity_observer',
+            'local_dynamic_identity_observer',
+            'runtime',
+            identityRequest.system,
+            identityRequest.input,
+            identityRequest
+                .jsonSchema,
+        ),
+        localRequest(
+            'local_dynamic_turn_observer',
+            'local_dynamic_turn_observer',
+            'runtime',
+            dynamicTurnRequest.system,
+            dynamicTurnRequest.input,
+            dynamicTurnRequest
+                .jsonSchema,
         ),
         localRequest(
             'local_appraisal_proposer',
@@ -2599,6 +2770,53 @@ Continue from this exact state. actorCards contain the only shared NPC performan
         prompts,
         localPrompts,
     };
+    if (
+        process.env
+            .HOGWARTS_PROMPT_MEASURE_SCOPE ===
+        'validator-revision-17'
+    ) {
+        assert.equal(
+            report.archive.unchanged,
+            true,
+            'Scoped build-only audit modified the Tina archive.',
+        );
+        process.stdout.write(
+            `${JSON.stringify({
+                version:
+                    report.version,
+                generatedAt:
+                    report.generatedAt,
+                scope:
+                    'validator-revision-17',
+                archive:
+                    report.archive,
+                modelSlots:
+                    report.modelSlots,
+                contextPlans:
+                    report.contextPlans,
+                representativeInput:
+                    report
+                        .representativeInput,
+                prompts: {
+                    scenePerformance:
+                        report.prompts
+                            .scenePerformance,
+                },
+                localPrompts: {
+                    preTurn:
+                        report.localPrompts
+                            .preTurn,
+                    preTurnFollow:
+                        report.localPrompts
+                            .preTurnFollow,
+                    postTurn:
+                        report.localPrompts
+                            .postTurn,
+                },
+            }, null, 2)}\n`,
+        );
+        return;
+    }
     const roleTargets = {
         'opening.world': 14_358,
         pacing: 65_000,
@@ -2665,6 +2883,12 @@ Continue from this exact state. actorCards contain the only shared NPC performan
         },
         inventory: {
             characters: 9_000,
+        },
+        dynamicIdentity: {
+            characters: 6_000,
+        },
+        dynamicTurn: {
+            characters: 20_000,
         },
         appraisal: {
             characters: 3_500,

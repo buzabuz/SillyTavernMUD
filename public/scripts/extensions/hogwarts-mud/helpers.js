@@ -114,7 +114,7 @@ export {
 } from './domain/material-state.js';
 
 export {
-    applyPlayerMovement, inspectPlayerMovementIntent, isGuidedMovementAction, parseExplicitMovementDirective,
+    applyPlayerMovement, inspectPlayerMovementIntent, parseExplicitMovementDirective,
     removeExplicitMovementDirective, resolvePlayerMovement,
 } from './domain/movement.js';
 
@@ -141,7 +141,7 @@ export {
 
 export {
     applyEventBoundaryNextSceneIntent, createFallbackNextSceneIntent, findSceneDestination, getSceneDestinationAuthority,
-    resolveSceneTransitionDestination, validateEventBoundaryNextSceneIntent, validateNextSceneIntent, validateSceneDestinationGrounding,
+    validateEventBoundaryNextSceneIntent, validateNextSceneIntent, validateSceneDestinationGrounding,
 } from './domain/scene-destination.js';
 
 export {
@@ -212,7 +212,7 @@ export {
 } from './domain/turn-protocol.js';
 
 export {
-    applyTurnTransaction, createPendingEventBoundary,
+    applyTurnTransaction,
 } from './domain/turn-reducer.js';
 
 export {

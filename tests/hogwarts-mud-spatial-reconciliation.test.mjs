@@ -145,7 +145,7 @@ test('Gringotts shorthand moves player and explicit companions without archiving
     );
 });
 
-test('spatial v2 repairs the legacy generic steps false match', () => {
+test('spatial migration does not infer an actor room from activity prose', () => {
     const state = createCurrentPlayingState();
     state.map.activeMapId = 'diagon_alley';
     state.map.currentLocalNodeId =
@@ -172,7 +172,7 @@ test('spatial v2 repairs the legacy generic steps false match', () => {
     assert.equal(reconciled.changed, true);
     assert.equal(
         reconciled.state.actors[0].roomId,
-        'madam_malkins',
+        'gringotts_steps',
     );
     assert.equal(
         reconciled.state.spatial.version,
@@ -280,7 +280,7 @@ test('spatial migration retries a recorded unresolved local movement once', () =
     );
 });
 
-test('spatial v3 advances legacy Gringotts shorthand from the steps to the lobby', () => {
+test('spatial migration does not move the player from legacy shorthand prose', () => {
     const state = createCurrentPlayingState();
     state.map.activeMapId = 'diagon_alley';
     state.map.currentLocalNodeId =
@@ -340,20 +340,20 @@ test('spatial v3 advances legacy Gringotts shorthand from the steps to the lobby
         '我拉着我爸和 Eddie Cooper 一起走向古灵阁。',
     );
 
-    assert.equal(migrated.movement.moved, true);
+    assert.equal(migrated.movement, null);
     assert.equal(
         migrated.state.map.currentLocalNodeId,
-        'gringotts_lobby',
+        'gringotts_steps',
     );
     assert.equal(
         migrated.state.actors.find(actor =>
             actor.id === 'alex_zhang').roomId,
-        'gringotts_lobby',
+        'gringotts_steps',
     );
     assert.equal(
         migrated.state.actors.find(actor =>
             actor.id === 'eddie_cooper').roomId,
-        'gringotts_lobby',
+        'gringotts_steps',
     );
     assert.equal(
         migrated.state.actors.find(actor =>
@@ -364,26 +364,9 @@ test('spatial v3 advances legacy Gringotts shorthand from the steps to the lobby
         migrated.state.spatial.version,
         7,
     );
-    assert.deepEqual(
-        migrated.movement.path,
-        [
-            'madam_malkins',
-            'diagon_south',
-            'gringotts_steps',
-            'gringotts_lobby',
-        ],
-    );
-    assert.deepEqual(
-        new Set(migrated.movement.companionIds),
-        new Set([
-            'alex_zhang',
-            'eddie_cooper',
-            'minerva_mcgonagall',
-        ]),
-    );
 });
 
-test('observable actor activity corrects stale low-tier room ids', () => {
+test('actor activity prose cannot override structured low-tier room ids', () => {
     const state = createCurrentPlayingState();
     state.map.activeMapId = 'diagon_alley';
     state.map.currentLocalNodeId = 'madam_malkins';
@@ -461,10 +444,10 @@ test('observable actor activity corrects stale low-tier room ids', () => {
             update.roomId,
         ]),
         [
-            ['alex_zhang', 'brick_archway'],
-            ['minerva_mcgonagall', 'brick_archway'],
-            ['eddie_cooper', 'madam_malkins'],
-            ['diagon_passerby_doris', 'diagon_south'],
+            ['alex_zhang', 'leaky_cauldron'],
+            ['minerva_mcgonagall', 'leaky_cauldron'],
+            ['eddie_cooper', 'leaky_cauldron'],
+            ['diagon_passerby_doris', 'leaky_cauldron'],
         ],
     );
     assert.equal(
@@ -493,7 +476,7 @@ test('generic school-year ordinals do not move actors onto stair landings', () =
     );
 });
 
-test('train actor tracking prefers an explicit corridor over a generic compartment mention', () => {
+test('structured train rooms beat activity prose during turn and migration settlement', () => {
     const state =
         createCurrentPlayingState();
     const trainMap = {
@@ -575,6 +558,8 @@ test('train actor tracking prefers an explicit corridor over a generic compartme
         normalizeScenePerformanceActorLocations({
             actorUpdates: [{
                 ...state.actors[0],
+                roomId:
+                    'rear_corridor',
             }],
         }, state);
     assert.equal(
@@ -587,7 +572,7 @@ test('train actor tracking prefers an explicit corridor over a generic compartme
     assert.equal(
         migrated.state.actors[0]
             .roomId,
-        'rear_corridor',
+        'compartment_a_rear',
     );
     assert.equal(
         migrated.state.spatial.version,
@@ -600,9 +585,13 @@ test('spatial migration restores actor rooms without inferring player movement f
     delete state.spatial;
     delete state.actors[0].mapId;
     delete state.actors[0].roomId;
+    delete state.actors[0]
+        .locationKnown;
     state.actors[0].currentActivityEn = 'Signing a form at the kitchen table.';
     delete state.actors[1].mapId;
     delete state.actors[1].roomId;
+    delete state.actors[1]
+        .locationKnown;
     state.actors[1].currentActivityEn = 'Watching from the living area.';
 
     const migrated = reconcileSpatialState(

@@ -144,12 +144,14 @@ export function createTurnWorkflow(ports) {
             retainedEventIdsByActorId:
                 {},
         }),
+        buildFollowMovementContext,
         buildLocalSemanticRoomContext,
         buildSceneTransaction,
         clearLiveSceneStream,
         composeSceneSegments,
         consumePacingBeat,
         createContextBudgetPlan,
+        createMovementOutcome,
         createSceneMomentumDirective,
         createTurnPerformanceBudget,
         createTurnRetryCheckpoint,
@@ -174,7 +176,6 @@ export function createTurnWorkflow(ports) {
         getLocalMapDefinition,
         getMudState,
         getInspectorMapScope,
-        isObservedEventBoundary,
         jobRegistry,
         normalizeEventKnowledge,
         parseItemOperationDirectives,
@@ -202,15 +203,22 @@ export function createTurnWorkflow(ports) {
                 fallback: false,
             },
         }),
-        requestLocalTurnObservation,
+        requestPostTurnSemanticObservation,
         recordTurnDiagnostic =
         () => {},
+        runMediumCalendarDirectorSafely =
+        async () => ({
+            status: 'skipped',
+        }),
+        scheduleBackgroundEventBoundary =
+        () => null,
         resolveActionCheck,
         resolveEventWitnesses,
         resolvePlayerAddressing,
         resolveRoleSlots,
         retrieveLocalKnowledge,
         setLiveSceneStreamPhase,
+        settleFollowMovementIntent,
         syncLocalKnowledge,
         updateNativeMessageBlock,
         validateTurnTransaction,
@@ -318,14 +326,18 @@ export function createTurnWorkflow(ports) {
         await context.saveMetadata();
     }
 
-    function buildSceneMessage(transaction, state, existingMessage = null) {
+    function buildNarrativeMessage(
+        segments,
+        state,
+        existingMessage = null,
+    ) {
         const renderableActors = [
             ...(state.actorLibrary || []),
             ...(state.actors || []),
         ];
         const messageText =
             composeSceneSegments(
-                transaction.segments,
+                segments,
                 renderableActors,
                 'en',
             );
@@ -345,11 +357,30 @@ export function createTurnWorkflow(ports) {
             languageVersion: 1,
             role: 'scene_turn',
             sceneId: state.scene?.id,
-            segments: transaction.segments,
-            turnTransaction: transaction,
+            segments,
         };
         delete message.extra
+            .hogwartsMud
+            .turnTransaction;
+        delete message.extra
             .display_text;
+        return message;
+    }
+
+    function buildSceneMessage(
+        transaction,
+        state,
+        existingMessage = null,
+    ) {
+        const message =
+            buildNarrativeMessage(
+                transaction.segments,
+                state,
+                existingMessage,
+            );
+        message.extra.hogwartsMud
+            .turnTransaction =
+        transaction;
         return message;
     }
 
@@ -373,6 +404,8 @@ export function createTurnWorkflow(ports) {
 
         const job = (async () => {
             jobRegistry.turnActive = true;
+            const turnStartedAt =
+                Date.now();
             let state = getMudState();
             const modelTaskActionId = [
                 'turn',
@@ -400,6 +433,16 @@ export function createTurnWorkflow(ports) {
             let playerMessage = null;
             let spellCasts = [];
             let addressing = null;
+            let narrativeMessageId =
+                assistantMessageId;
+            let narrativeMessage =
+                assistantMessageId ===
+                    null
+                    ? null
+                    : context.chat[
+                        assistantMessageId
+                    ] ||
+                    null;
             let narrativePlayerAction =
                 playerAction;
             let itemDirectiveResult = {
@@ -562,18 +605,23 @@ export function createTurnWorkflow(ports) {
                         },
                     )
                     : null;
-                const movementResult = applyPlayerMovement(
+                const movementBaseState =
+                    state;
+                const movementContext =
+                    buildFollowMovementContext(
+                        state,
+                        narrativePlayerAction,
+                        context.chat,
+                    );
+                let movementResult = applyPlayerMovement(
                     state,
                     narrativePlayerAction,
                 );
-                const movementResolution = movementResult.movement;
-                if (movementResolution) {
-                    if (playerMessage?.extra?.hogwartsMud) {
-                        playerMessage.extra.hogwartsMud.movement =
-                        movementResolution;
-                        await context.saveChat();
-                    }
-                }
+                let movementResolution =
+                    movementContext
+                        ? null
+                        : movementResult
+                            .movement;
                 if (movementResolution?.moved) {
                     const presenceReconciliation =
                     reconcileVisibleActorPresenceState(
@@ -659,7 +707,106 @@ export function createTurnWorkflow(ports) {
                     addressing,
                     movementResolution,
                     forceCheckRequested,
+                    movementContext,
                 );
+                if (movementContext) {
+                    movementResult =
+                        settleFollowMovementIntent(
+                            state,
+                            narrativePlayerAction,
+                            movementContext,
+                            localAdjudication
+                                .result
+                                .movementIntent,
+                            localAdjudication
+                                .diagnostics,
+                        );
+                    movementResolution =
+                        movementResult
+                            .movement;
+                    if (
+                        movementResolution
+                            ?.moved
+                    ) {
+                        const presenceReconciliation =
+                            reconcileVisibleActorPresenceState(
+                                movementResult
+                                    .state,
+                            );
+                        context.chatMetadata
+                            .hogwartsMud =
+                            presenceReconciliation
+                                .state;
+                        state =
+                            getMudState();
+                        await context
+                            .saveMetadata();
+                        applySystemPrompt();
+                        renderAll();
+                    }
+                }
+                movementResolution =
+                    createMovementOutcome(
+                        movementBaseState,
+                        movementResolution,
+                        {
+                            mode:
+                                movementContext
+                                    ? 'follow_actor'
+                                    : 'direct_room',
+                            evidenceSourceRef:
+                                localAdjudication
+                                    .result
+                                    .movementIntent
+                                    ?.destinationEvidenceSourceRef ||
+                                '',
+                            evidenceText:
+                                localAdjudication
+                                    .result
+                                    .movementIntent
+                                    ?.intentEvidenceText ||
+                                '',
+                        },
+                    );
+                if (movementResolution) {
+                    localAdjudication
+                        .result
+                        .temporal = {
+                        mode:
+                            movementResolution
+                                .moved
+                                ? 'travel'
+                                : 'ordinary',
+                        elapsedMinutes:
+                            movementResolution
+                                .minutes,
+                        basis:
+                            movementResolution
+                                .moved
+                                ? 'route'
+                                : 'fallback',
+                        evidenceText: '',
+                        reasonEn:
+                            movementResolution
+                                .moved
+                                ? 'Deterministic route authority settled the player movement.'
+                                : 'The tagged movement attempt did not change the player room.',
+                        confidence: 1,
+                    };
+                    if (
+                        playerMessage?.extra
+                            ?.hogwartsMud
+                    ) {
+                        playerMessage.extra
+                            .hogwartsMud
+                            .movementPreflight =
+                            structuredClone(
+                                movementResolution,
+                            );
+                        await context
+                            .saveChat();
+                    }
+                }
                 if (
                     !existingAdjudication &&
                 playerMessage?.extra
@@ -810,7 +957,6 @@ export function createTurnWorkflow(ports) {
                 const momentumDirective =
                 createSceneMomentumDirective(
                     state,
-                    narrativePlayerAction,
                     budget,
                 );
                 recordTurnDiagnostic(
@@ -847,9 +993,51 @@ export function createTurnWorkflow(ports) {
                     mentionedKnownActors,
                     contextPlan,
                 );
+                narrativeMessage =
+                buildNarrativeMessage(
+                    performance.segments,
+                    state,
+                    narrativeMessage,
+                );
+                if (
+                    narrativeMessageId ===
+                    null
+                ) {
+                    context.chat.push(
+                        narrativeMessage,
+                    );
+                    narrativeMessageId =
+                    context.chat.length -
+                    1;
+                }
+                await context.saveChat();
+                updateNativeMessageBlock(
+                    narrativeMessageId,
+                    narrativeMessage,
+                );
+                renderAll();
                 setLiveSceneStreamPhase(
                     'translating',
                     performance.segments,
+                );
+                recordTurnDiagnostic(
+                    'narrative_visible',
+                    {
+                        elapsedMs:
+                            Math.max(
+                                0,
+                                Date.now() -
+                                    turnStartedAt,
+                            ),
+                        surface:
+                            'chat_message',
+                        segmentCount:
+                            performance.segments
+                                ?.length ||
+                            0,
+                        messageId:
+                            narrativeMessageId,
+                    },
                 );
                 let transaction = buildSceneTransaction(
                     performance,
@@ -858,6 +1046,7 @@ export function createTurnWorkflow(ports) {
                         ? state.pacingDirector.pendingBeat
                         : null,
                     checkResolution,
+                    movementResolution,
                 );
                 const spellReconciliation =
                 reconcileAuthoritativeSpellNarrative(
@@ -890,7 +1079,7 @@ export function createTurnWorkflow(ports) {
                     throw new Error(`合并后的回合事务无效：${validation.errors.join('；')}`);
                 }
                 const localObservation =
-                await requestLocalTurnObservation(
+                await requestPostTurnSemanticObservation(
                     state,
                     narrativePlayerAction,
                     transaction,
@@ -906,6 +1095,45 @@ export function createTurnWorkflow(ports) {
                 localObservation
                     .identityObservations ||
                 [];
+                recordTurnDiagnostic(
+                    'temporal_claim_validation',
+                    {
+                        ...(
+                            localObservation
+                                .temporalDiagnostics ||
+                            {
+                                valid: true,
+                                accepted: 0,
+                                rejected: 0,
+                            }
+                        ),
+                        persisted:
+                            false,
+                    },
+                );
+                if (
+                    Number(
+                        localObservation
+                            .temporalDiagnostics
+                            ?.rejected ||
+                        0,
+                    ) > 0
+                ) {
+                    transaction
+                        .settlementWarnings = [
+                        ...(
+                            transaction
+                                .settlementWarnings ||
+                            []
+                        ),
+                        {
+                            code:
+                                'temporal_claim_rejected',
+                            detail:
+                                'Narrative remains visible; unsupported temporal claims did not affect clock or Calendar State.',
+                        },
+                    ].slice(-24);
+                }
                 const itemSourceEventId =
                     `${
                         state.scene?.id ||
@@ -1029,13 +1257,6 @@ export function createTurnWorkflow(ports) {
                     {}
                     ),
                 };
-                transaction.eventEnded =
-                isObservedEventBoundary(
-                    localObservation
-                        .observation,
-                    localObservation
-                        .narrativeText,
-                );
                 applyObservedActorUpdates(
                     transaction,
                     localObservation
@@ -1148,9 +1369,7 @@ export function createTurnWorkflow(ports) {
                                     ]
                                     : []
                             ),
-                            assistantMessageId ??
-                            context.chat
-                                .length,
+                            narrativeMessageId,
                         ],
                         summaryEn:
                             transaction
@@ -1218,11 +1437,7 @@ export function createTurnWorkflow(ports) {
                 );
                 state = getMudState();
                 const timelineSourceMessageId =
-                    assistantMessageId ===
-                    null
-                        ? context.chat
-                            .length
-                        : assistantMessageId;
+                    narrativeMessageId;
                 let nextState = applyTurnTransaction(
                     state,
                     transaction,
@@ -1368,14 +1583,22 @@ export function createTurnWorkflow(ports) {
                 context.chatMetadata.hogwartsMud = nextState;
                 state = getMudState();
                 transaction.committedClock = state.clock;
-                const existingMessage = assistantMessageId === null
-                    ? null
-                    : context.chat[assistantMessageId];
-                const message = buildSceneMessage(transaction, state, existingMessage);
-                let messageId = assistantMessageId;
-                if (messageId === null) {
-                    context.chat.push(message);
-                    messageId = context.chat.length - 1;
+                const message =
+                buildSceneMessage(
+                    transaction,
+                    state,
+                    narrativeMessage,
+                );
+                const messageId =
+                    narrativeMessageId;
+                if (
+                    playerMessage?.extra
+                        ?.hogwartsMud
+                ) {
+                    delete playerMessage
+                        .extra
+                        .hogwartsMud
+                        .movementPreflight;
                 }
                 recordTurnDiagnostic(
                     'commit',
@@ -1470,7 +1693,68 @@ export function createTurnWorkflow(ports) {
                 applySystemPrompt();
                 updateNativeMessageBlock(messageId, message);
                 renderAll();
+                const calendarCommitment =
+                    localAdjudication
+                        .result
+                        .calendarCommitment;
+                if (
+                    calendarCommitment
+                        ?.requested ===
+                    true
+                ) {
+                    const calendarResult =
+                        await runMediumCalendarDirectorSafely({
+                            playerAction,
+                            calendarCommitment,
+                        });
+                    recordTurnDiagnostic(
+                        'calendar_commitment_settlement',
+                        {
+                            requested: true,
+                            status:
+                                String(
+                                    calendarResult
+                                        ?.status ||
+                                    'failed',
+                                ),
+                            stateWritten:
+                                calendarResult
+                                    ?.status ===
+                                'committed',
+                        },
+                    );
+                    state = getMudState();
+                }
                 await ensureSocialDirectorForAction();
+                await context.saveChat();
+                state = getMudState();
+                recordTurnDiagnostic(
+                    'state_settled',
+                    {
+                        elapsedMs:
+                            Math.max(
+                                0,
+                                Date.now() -
+                                    turnStartedAt,
+                            ),
+                        stateRevision:
+                            Number(
+                                state
+                                    .stateRevision ||
+                                0,
+                            ),
+                        turnCount:
+                            Number(
+                                state
+                                    .turn
+                                    ?.count ||
+                                0,
+                            ),
+                        scope:
+                            'persistent_turn_and_immediate_followups',
+                        messageId,
+                    },
+                );
                 const completedDiagnostics =
                     finalizeTurnDiagnostics(
                         'committed',
@@ -1487,6 +1771,7 @@ export function createTurnWorkflow(ports) {
                     completedDiagnostics,
                 );
                 await context.saveChat();
+                scheduleBackgroundEventBoundary();
             } catch (error) {
                 const errorText =
                     String(
@@ -1517,13 +1802,27 @@ export function createTurnWorkflow(ports) {
                         failedDiagnostics,
                     );
                 }
+                if (
+                    narrativeMessageId !==
+                    null &&
+                    narrativeMessage
+                ) {
+                    attachTurnDiagnostics(
+                        context.chat,
+                        narrativeMessage,
+                        failedDiagnostics,
+                    );
+                }
                 state = getMudState();
                 state.turn ??= {};
                 state.turn.status = 'failed';
                 state.turn.error =
                     errorText;
                 await context.saveMetadata();
-                if (playerMessage) {
+                if (
+                    playerMessage ||
+                    narrativeMessage
+                ) {
                     await context.saveChat();
                 }
                 renderAll();

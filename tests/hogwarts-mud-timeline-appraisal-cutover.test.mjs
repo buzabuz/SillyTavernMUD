@@ -36,11 +36,13 @@ async function loadTinaSave() {
         await tinaSavePromise;
     return {
         state:
-            structuredClone(
-                rows[0]
-                    .chat_metadata
-                    .hogwartsMud,
-            ),
+            migrateActorContextV1(
+                structuredClone(
+                    rows[0]
+                        .chat_metadata
+                        .hogwartsMud,
+                ),
+            ).state,
         chat:
             structuredClone(
                 rows.slice(1),
@@ -292,7 +294,7 @@ test('Revision 4 rejects a reintroduced world-change payload atomically', async 
     assert.deepEqual(state, before);
 });
 
-test('production lifecycle does not recommit the completed Revision 4 cutover', async () => {
+test('production lifecycle adds the Event task ledger once without recommitting Revision 4', async () => {
     const {
         state,
         chat,
@@ -310,7 +312,7 @@ test('production lifecycle does not recommit the completed Revision 4 cutover', 
             .ensureSceneLifecycleState(
                 state,
             ),
-        false,
+        true,
     );
     assert.equal(
         state.socialGraph
@@ -325,7 +327,15 @@ test('production lifecycle does not recommit the completed Revision 4 cutover', 
         ),
         false,
     );
-    assert.equal(saveCalls.length, 0);
+    assert.equal(
+        Object.hasOwn(
+            state.modelTaskRuntime
+                .byTaskId,
+            'local_event_boundary_observer',
+        ),
+        true,
+    );
+    assert.equal(saveCalls.length, 1);
     assert.equal(
         lifecycle
             .ensureSceneLifecycleState(
@@ -333,5 +343,5 @@ test('production lifecycle does not recommit the completed Revision 4 cutover', 
             ),
         false,
     );
-    assert.equal(saveCalls.length, 0);
+    assert.equal(saveCalls.length, 1);
 });

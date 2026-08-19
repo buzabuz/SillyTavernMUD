@@ -34,7 +34,7 @@ import {
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-test('entity migration backfills an owned wand without inventorying incidental food', () => {
+test('entity migration preserves structured Items without inferring a wand from prose', () => {
     const state =
         createCurrentPlayingState();
     delete state.entityStateVersion;
@@ -82,12 +82,18 @@ test('entity migration backfills an owned wand without inventorying incidental f
         migrated.state.entityStateVersion,
         2,
     );
-    assert.ok(
+    assert.equal(
         migrated.state.items.some(item =>
             item.id ===
                 'holly_phoenix_wand' &&
             item.custody === 'carried' &&
             item.importance === 'key'),
+        false,
+    );
+    assert.ok(
+        migrated.state.items.some(item =>
+            item.id ===
+                'admission_letter'),
     );
     assert.equal(
         migrated.state.items.some(item =>
@@ -224,20 +230,31 @@ test('local inventory observation admits only evidenced durable player possessio
                         'harry_potter_autograph',
                     action:
                         'acquire',
+                    type:
+                        'document',
                     labelEn:
                         'Harry Potter Autograph',
                     detailEn:
                         'Lavender\'s Sorting parchment bearing Harry Potter\'s crooked H autograph.',
                     importance:
                         'important',
+                    storyRoles: [
+                        'signature',
+                    ],
                     custody:
                         'carried',
                     ownerId:
+                        'player',
+                    holderId:
                         'player',
                     sourceKind:
                         'player',
                     evidenceText:
                         '*激动拿起签名，把哈利签过名的羊皮纸带在身上*',
+                    evidenceItemText:
+                        '签名',
+                    physicalForm:
+                        'whole',
                     confidence:
                         0.96,
                 },
@@ -246,6 +263,8 @@ test('local inventory observation admits only evidenced durable player possessio
                         'breakfast_toast',
                     action:
                         'acquire',
+                    type:
+                        'consumable',
                     labelEn:
                         'Toast',
                     detailEn:
@@ -255,6 +274,8 @@ test('local inventory observation admits only evidenced durable player possessio
                     custody:
                         'carried',
                     ownerId:
+                        'player',
+                    holderId:
                         'player',
                     sourceKind:
                         'player',
@@ -291,7 +312,9 @@ test('local inventory observation admits only evidenced durable player possessio
             targetHolderId: '',
             transferMode:
                 'none',
-            storyRoles: [],
+            storyRoles: [
+                'signature',
+            ],
             visibility:
                 'public',
             isEquipped: false,
@@ -300,12 +323,16 @@ test('local inventory observation admits only evidenced durable player possessio
                 'player',
             evidenceText:
                 playerAction,
+            evidenceItemText:
+                '签名',
+            physicalForm:
+                'whole',
             confidence: 0.96,
         },
     );
 });
 
-test('legacy signed autograph acquisition migrates into the authoritative inventory once', () => {
+test('legacy signed autograph prose cannot create an authoritative inventory Item', () => {
     const state =
         createCurrentPlayingState();
     state.items = [];
@@ -340,23 +367,9 @@ test('legacy signed autograph acquisition migrates into the authoritative invent
         migration.changed,
         true,
     );
-    const autograph =
-        migration.state.items
-            .find(item =>
-                item.id ===
-                    'harry_signed_parchment');
-    assert.ok(autograph);
-    assert.equal(
-        autograph.importance,
-        'important',
-    );
-    assert.equal(
-        autograph.custody,
-        'carried',
-    );
-    assert.equal(
-        autograph.ownerId,
-        'player',
+    assert.deepEqual(
+        migration.state.items,
+        [],
     );
     assert.equal(
         migrateObservedInventoryState(
@@ -882,7 +895,6 @@ test('material events persist presentation and only project effects for the curr
                 elapsedMinutes: 15,
                 publicEventEn:
                     'Tina arranges her bed and changes for sleep.',
-                eventEnded: false,
                 segments: [{
                     type:
                         'narration',

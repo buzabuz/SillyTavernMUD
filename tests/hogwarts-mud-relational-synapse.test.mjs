@@ -390,7 +390,7 @@ function createObserverRecords(
     ];
 }
 
-test('Planner bounds causal subqueries and preserves retrieval constraints', async () => {
+test('deterministic Planner uses one bounded raw-query retrieval without keyword intent routing', async () => {
     const plan =
         createDeterministicRetrievalPlan({
             query:
@@ -422,19 +422,18 @@ test('Planner bounds causal subqueries and preserves retrieval constraints', asy
 
     assert.equal(
         plan.subqueries.length,
-        4,
+        1,
     );
     assert.deepEqual(
         plan.subqueries.map(
             subquery =>
                 subquery.intent,
         ),
-        [
-            'direct',
-            'cause',
-            'consequence',
-            'participant',
-        ],
+        ['direct'],
+    );
+    assert.equal(
+        plan.subqueries[0].query,
+        plan.query,
     );
     assert.deepEqual(
         plan.constraints
@@ -463,6 +462,33 @@ test('Planner bounds causal subqueries and preserves retrieval constraints', asy
                     CLOCK,
         ),
     );
+
+    for (const query of [
+        'Who was involved?',
+        'What pattern keeps repeating?',
+        '为什么会导致这个结果？',
+    ]) {
+        const candidatePlan =
+            createDeterministicRetrievalPlan({
+                query,
+                timelineEpoch:
+                    TIMELINE_EPOCH,
+                stateRevision:
+                    STATE_REVISION,
+            });
+        assert.deepEqual(
+            candidatePlan.subqueries.map(
+                subquery =>
+                    subquery.intent,
+            ),
+            ['direct'],
+        );
+        assert.equal(
+            candidatePlan.subqueries[0]
+                .query,
+            query,
+        );
+    }
 
     const localPlan =
         await createKnowledgeRetrievalPlan(
@@ -544,12 +570,7 @@ test('Planner falls back deterministically when the local Planner fails', async 
             subquery =>
                 subquery.intent,
         ),
-        [
-            'direct',
-            'cause',
-            'consequence',
-            'participant',
-        ],
+        ['direct'],
     );
 });
 

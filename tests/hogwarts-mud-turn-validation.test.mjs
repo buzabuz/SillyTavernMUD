@@ -13,12 +13,239 @@ import {
     validateTurnTransaction,
 } from '../public/scripts/extensions/hogwarts-mud/domain/turn-validation.js';
 import {
+    guardPreTurnEvidenceRoutes,
+} from '../public/scripts/extensions/hogwarts-mud/domain/pre-turn-route-guards.js';
+import {
+    POST_TURN_CONTEXT_SIZE,
+    createPostTurnModelRequest,
+    createPreTurnModelRequest,
+    validatePreTurnCalendarCommitment,
+} from '../src/hogwarts-mud/local-semantic-adjudicator.js';
+import {
     createCurrentActorProposal,
     createCurrentPlayingState,
     normalizeCurrentActorFixtureInPlace,
 } from './hogwarts-mud-test-fixtures.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+
+test('pre-turn Calendar commitment requires exact structured player evidence', () => {
+    const input = {
+        playerAction:
+            '我答应你周末和你约会。',
+    };
+    assert.deepEqual(
+        validatePreTurnCalendarCommitment(
+            {
+                requested: true,
+                evidenceText:
+                    '我答应你周末和你约会。',
+                confidence: 0.96,
+            },
+            input,
+        ),
+        {
+            valid: true,
+            value: {
+                requested: true,
+                evidenceText:
+                    '我答应你周末和你约会。',
+                confidence: 0.96,
+            },
+            error: '',
+        },
+    );
+    const rejected =
+        validatePreTurnCalendarCommitment(
+            {
+                requested: true,
+                evidenceText:
+                    'I promise to meet tomorrow.',
+                confidence: 0.96,
+            },
+            input,
+        );
+    assert.equal(
+        rejected.valid,
+        false,
+    );
+    assert.deepEqual(
+        rejected.value,
+        {
+            requested: false,
+            evidenceText: '',
+            confidence: 0,
+        },
+    );
+    assert.deepEqual(
+        validatePreTurnCalendarCommitment(
+            {
+                requested: false,
+                evidenceText: '',
+                confidence: 0.8,
+            },
+            {
+                playerAction:
+                    '也许以后可以约会。',
+            },
+        ).value,
+        {
+            requested: false,
+            evidenceText: '',
+            confidence: 0,
+        },
+    );
+});
+
+test('browser pre-turn route guard rejects ungrounded Calendar evidence', () => {
+    const guarded =
+        guardPreTurnEvidenceRoutes(
+            {
+                result: {
+                    calendarCommitment: {
+                        requested: true,
+                        evidenceText:
+                            'Meet tomorrow.',
+                        confidence: 0.9,
+                    },
+                },
+                diagnostics: {},
+            },
+            'Open the door.',
+        );
+    assert.deepEqual(
+        guarded.result
+            .calendarCommitment,
+        {
+            requested: false,
+            evidenceText: '',
+            confidence: 0,
+        },
+    );
+    assert.equal(
+        guarded.diagnostics
+            .calendarCommitmentRejected,
+        true,
+    );
+});
+
+test('local pre and post build-only requests expose the exact production contract', () => {
+    const preInput = {
+        playerAction: 'Wait.',
+    };
+    const postInput = {
+        narrativeSegments: [],
+    };
+    const pre =
+        createPreTurnModelRequest(
+            preInput,
+        );
+    const post =
+        createPostTurnModelRequest(
+            postInput,
+        );
+    assert.equal(
+        pre.input,
+        preInput,
+    );
+    assert.equal(
+        pre.exactContextSize,
+        undefined,
+    );
+    assert.equal(
+        post.input,
+        postInput,
+    );
+    assert.equal(
+        pre.jsonSchema.properties
+            .calendarCommitment.type,
+        'object',
+    );
+    assert.deepEqual(
+        Object.keys(
+            pre.jsonSchema.properties,
+        ),
+        [
+            'schemaVersion',
+            'calendarCommitment',
+            'temporal',
+            'check',
+            'movementIntent',
+        ],
+    );
+    assert.doesNotMatch(
+        pre.system,
+        /recentGuideEvidence/u,
+    );
+    const movementPre =
+        createPreTurnModelRequest({
+            ...preInput,
+            room: {
+                rooms: [],
+            },
+            movementContext: {
+                mapId: 'hogwarts',
+                currentRoomId:
+                    'charms_classroom',
+                eligibleGuideCandidates:
+                    [],
+                recentGuideEvidence: [],
+                trigger: {
+                    raw:
+                        '→【Follow Hermione】',
+                },
+            },
+        });
+    assert.deepEqual(
+        Object.keys(
+            movementPre
+                .jsonSchema
+                .properties,
+        ),
+        [
+            'schemaVersion',
+            'movementIntent',
+            'calendarCommitment',
+            'temporal',
+            'check',
+        ],
+    );
+    assert.match(
+        movementPre.system,
+        /recentGuideEvidence/u,
+    );
+    assert.equal(
+        Object.hasOwn(
+            pre.jsonSchema.properties,
+            'progression',
+        ),
+        false,
+    );
+    assert.equal(
+        post.jsonSchema.properties
+            .temporalClaims.type,
+        'array',
+    );
+    assert.equal(
+        Object.hasOwn(
+            post.jsonSchema.properties,
+            'eventBoundary',
+        ),
+        false,
+    );
+    assert.equal(
+        post.unload,
+        true,
+    );
+    assert.equal(
+        post.exactContextSize,
+        POST_TURN_CONTEXT_SIZE,
+    );
+    assert.equal(
+        POST_TURN_CONTEXT_SIZE,
+        4_096,
+    );
+});
 
 test('scene performance requires substantial narration for a fifteen-minute turn', () => {
     const words = (prefix, count) => Array.from(
@@ -27,7 +254,22 @@ test('scene performance requires substantial narration for a fifteen-minute turn
     ).join(' ');
     const state = {
         clock: '1991-07-24 · 11:15',
-        actors: [{ id: 'minerva_mcgonagall', present: true }],
+        map: {
+            activeMapId:
+                'hogwarts_castle',
+            currentLocalNodeId:
+                'kitchen',
+        },
+        actors: [{
+            id:
+                'minerva_mcgonagall',
+            mapId:
+                'hogwarts_castle',
+            roomId:
+                'kitchen',
+            locationKnown: true,
+            present: true,
+        }],
         actorLibrary: [{
             id: 'minerva_mcgonagall',
             nameEn:
@@ -50,7 +292,6 @@ test('scene performance requires substantial narration for a fifteen-minute turn
     };
     const validPayload = {
         publicEventEn: 'Tina lets McGonagall enter, attempts to trip her, and faces the professor across the kitchen table.',
-        eventEnded: false,
         actorPresence: {
             presentActorIdsAfterTurn: [
                 'minerva_mcgonagall',
@@ -395,7 +636,6 @@ test('scene performance requires substantial narration for a fifteen-minute turn
     };
     const pacingPayload = {
         publicEventEn: 'A delivery crashes into the doorway and interrupts the discussion.',
-        eventEnded: false,
         pacingBeatRealized: false,
         actorPresence: {
             presentActorIdsAfterTurn: [
@@ -432,7 +672,6 @@ test('scene performance requires substantial narration for a fifteen-minute turn
     );
     const momentum = {
         required: true,
-        explicitProgressionRequest: true,
     };
     const missingProgress = validateScenePerformance(
         pacingPayload,
@@ -447,24 +686,7 @@ test('scene performance requires substantial narration for a fifteen-minute turn
     );
     pacingPayload.sceneProgression = {
         type: 'access_change',
-        summaryEn: 'McGonagall prepares to open the brick wall.',
-        completedRequestedStep: true,
-    };
-    const stalledProgress = validateScenePerformance(
-        pacingPayload,
-        pacingState,
-        budget,
-        momentum,
-    );
-    assert.equal(stalledProgress.valid, false);
-    assert.match(
-        stalledProgress.errors.join('；'),
-        /准备阶段/,
-    );
-    pacingPayload.sceneProgression = {
-        type: 'access_change',
         summaryEn: 'McGonagall opens the brick wall and reveals the archway.',
-        completedRequestedStep: true,
     };
     assert.deepEqual(
         validateScenePerformance(
@@ -484,8 +706,6 @@ test('scene performance requires substantial narration for a fifteen-minute turn
             type: 'social_shift',
             summaryEn:
                 'Hermione catches Tina searching her books and takes them back.',
-            completedRequestedStep:
-                false,
         };
     assert.deepEqual(
         validateScenePerformance(
@@ -789,7 +1009,13 @@ test('scene performance requires substantial narration for a fifteen-minute turn
         }],
     }, state, budget);
     assert.equal(invalid.valid, false);
-    assert.ok(invalid.errors.some(error => error.includes('通用占位句')));
+    assert.equal(
+        invalid.errors.some(error =>
+            error.includes(
+                '摘要或一段可归纳的叙述',
+            )),
+        false,
+    );
     assert.equal(
         invalid.errors.some(error =>
             error.includes(
@@ -807,55 +1033,95 @@ test('scene time authority bounds relative narration and rejects invented schedu
     const budget = {
         elapsedMinutes: 15,
     };
-    const valid = {
-        publicEventEn:
-            'The group finishes at 14:50 and enters the shop.',
-        segments: [{
-            type: 'narration',
-            textEn:
-                'Later that afternoon, Ollivander\'s fingers closed after the wand jerked in Tina\'s grip.',
-        }],
-        actorUpdates: [],
-    };
-    assert.deepEqual(
+    const claim = overrides => ({
+        kind: 'relative_duration',
+        evidenceText: '',
+        clock: '',
+        durationMinutes: 0,
+        relation: 'none',
+        confidence: 0.95,
+        ...overrides,
+    });
+    const validClock =
         validateSceneTemporalConsistency(
-            valid,
+            [claim({
+                kind:
+                    'absolute_clock',
+                evidenceText:
+                    'at 14:50',
+                clock: '14:50',
+            })],
             state,
             budget,
-        ),
-        { valid: true, errors: [] },
+            '',
+            [
+                'The group finishes at 14:50 and enters the shop.',
+            ],
+        );
+    assert.equal(validClock.valid, true);
+    assert.equal(
+        validClock
+            .acceptedClaims
+            .length,
+        1,
     );
 
-    const boundedRelative = {
-        ...valid,
-        segments: [{
-            type: 'narration',
-            textEn:
+    const boundedRelative =
+        validateSceneTemporalConsistency(
+            [
+                claim({
+                    evidenceText:
+                        'Ten minutes ago',
+                    durationMinutes: 10,
+                    relation: 'ago',
+                }),
+                claim({
+                    evidenceText:
+                        'Five minutes later',
+                    durationMinutes: 5,
+                    relation: 'later',
+                }),
+            ],
+            state,
+            budget,
+            '',
+            [
                 'Ten minutes ago, Hermione left the armchair. Five minutes later, she reached the portrait hole.',
-        }],
-    };
-    assert.deepEqual(
-        validateSceneTemporalConsistency(
-            boundedRelative,
-            state,
-            budget,
-        ),
-        { valid: true, errors: [] },
+            ],
+        );
+    assert.equal(
+        boundedRelative.valid,
+        true,
+    );
+    assert.equal(
+        boundedRelative
+            .acceptedClaims
+            .length,
+        2,
     );
 
-    const overlongRelative =
-        structuredClone(valid);
-    overlongRelative
-        .segments[0]
-        .textEn = [
-            'Sixteen minutes later, Hermione reaches the door.',
-            'They have ten minutes before breakfast.',
-        ].join(' ');
     const overlongValidation =
         validateSceneTemporalConsistency(
-            overlongRelative,
+            [
+                claim({
+                    evidenceText:
+                        'Sixteen minutes later',
+                    durationMinutes: 16,
+                    relation: 'later',
+                }),
+                claim({
+                    evidenceText:
+                        'ten minutes before breakfast',
+                    durationMinutes: 10,
+                    relation: 'before',
+                }),
+            ],
             state,
             budget,
+            '',
+            [
+                'Sixteen minutes later, Hermione reaches the door. They have ten minutes before breakfast.',
+            ],
         );
     assert.equal(
         overlongValidation.valid,
@@ -872,8 +1138,7 @@ test('scene time authority bounds relative narration and rejects invented schedu
         /ten minutes before/,
     );
 
-    const invented = structuredClone(valid);
-    invented.segments[0].textEn = [
+    const inventedText = [
         'The filling has been hot since noon.',
         'They have twenty minutes before the shop closes.',
         'The room looks unchanged from two hours earlier.',
@@ -882,14 +1147,44 @@ test('scene time authority bounds relative narration and rejects invented schedu
     ].join(' ');
     const validation =
         validateSceneTemporalConsistency(
-            invented,
+            [
+                claim({
+                    kind: 'named_time',
+                    evidenceText:
+                        'since noon',
+                }),
+                claim({
+                    evidenceText:
+                        'twenty minutes before the shop closes',
+                    durationMinutes: 20,
+                    relation: 'before',
+                }),
+                claim({
+                    evidenceText:
+                        'two hours earlier',
+                    durationMinutes: 120,
+                    relation: 'earlier',
+                }),
+                claim({
+                    kind: 'schedule',
+                    evidenceText:
+                        'shop closes at four o’clock',
+                }),
+                claim({
+                    kind: 'named_time',
+                    evidenceText:
+                        'closes after dusk',
+                }),
+            ],
             state,
             budget,
+            '',
+            [inventedText],
         );
     assert.equal(validation.valid, false);
     assert.match(
         validation.errors.join('；'),
-        /系统时间权威/,
+        /时间权威/,
     );
     assert.match(
         validation.errors.join('；'),
@@ -901,7 +1196,7 @@ test('scene time authority bounds relative narration and rejects invented schedu
     );
     assert.match(
         validation.errors.join('；'),
-        /shop closes after/,
+        /closes after dusk/,
     );
     assert.match(
         validation.errors.join('；'),
@@ -912,21 +1207,27 @@ test('scene time authority bounds relative narration and rejects invented schedu
         /closes at/,
     );
 
-    const transportSchedule = {
-        ...valid,
-        segments: [{
-            type: 'dialogue',
-            actorId:
-                'minerva_mcgonagall',
-            textEn:
-                'On the first of September, the train departs at eleven.',
-        }],
-    };
+    const transportText =
+        'On the first of September, the train departs at eleven.';
+    const transportClaims = [
+        claim({
+            kind: 'calendar_date',
+            evidenceText:
+                'first of September',
+        }),
+        claim({
+            kind: 'schedule',
+            evidenceText:
+                'train departs at eleven',
+        }),
+    ];
     const transportValidation =
         validateSceneTemporalConsistency(
-            transportSchedule,
+            transportClaims,
             state,
             budget,
+            '',
+            [transportText],
         );
     assert.equal(
         transportValidation.valid,
@@ -942,30 +1243,56 @@ test('scene time authority bounds relative narration and rejects invented schedu
     );
     assert.deepEqual(
         validateSceneTemporalConsistency(
-            transportSchedule,
+            transportClaims,
             state,
             budget,
-            'On the first of September, the train departs at eleven.',
+            transportText,
+            [transportText],
         ),
-        { valid: true, errors: [] },
+        {
+            valid: true,
+            errors: [],
+            acceptedClaims:
+                transportClaims,
+            rejectedClaims: [],
+        },
     );
 
-    const userRequestedWait = {
-        ...valid,
-        segments: [{
-            type: 'narration',
-            textEn:
-                'Twenty minutes later, Tina stands up.',
-        }],
-    };
+    const requestedWaitClaim =
+        claim({
+            evidenceText:
+                'Twenty minutes later',
+            durationMinutes: 20,
+            relation: 'later',
+        });
     assert.deepEqual(
         validateSceneTemporalConsistency(
-            userRequestedWait,
+            [requestedWaitClaim],
             state,
             budget,
             'I wait here. Twenty minutes later, I stand up.',
+            [
+                'Twenty minutes later, Tina stands up.',
+            ],
         ),
-        { valid: true, errors: [] },
+        {
+            valid: true,
+            errors: [],
+            acceptedClaims: [
+                requestedWaitClaim,
+            ],
+            rejectedClaims: [],
+        },
+    );
+    assert.equal(
+        validateSceneTemporalConsistency(
+            [],
+            state,
+            budget,
+            '',
+            [inventedText],
+        ).valid,
+        true,
     );
 });
 
@@ -977,7 +1304,6 @@ test('low-tier actor movement is limited to reachable existing rooms', () => {
     const state = createCurrentPlayingState();
     const payload = roomId => ({
         publicEventEn: 'McGonagall crosses from the kitchen into the back garden while Tina circles the lawn.',
-        eventEnded: false,
         actorPresence: {
             presentActorIdsAfterTurn:
                 state.actors

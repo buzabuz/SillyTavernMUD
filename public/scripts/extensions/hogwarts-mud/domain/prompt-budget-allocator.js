@@ -147,7 +147,7 @@ const policies = Object.freeze({
             'actors',
         ],
     },
-    local_post_turn: {
+    post_turn_semantic: {
         maximumCharacters: 10_500,
         sectionPriority: [
             'system',
@@ -166,6 +166,38 @@ const policies = Object.freeze({
             'playerAction',
             'narrative',
             'inventory',
+        ],
+    },
+    local_dynamic_identity: {
+        maximumCharacters: 6_000,
+        sectionPriority: [
+            'system',
+            'schema',
+            'narrative',
+            'actors',
+            'route',
+        ],
+    },
+    local_dynamic_turn: {
+        maximumCharacters: 20_000,
+        sectionPriority: [
+            'system',
+            'schema',
+            'requestedTasks',
+            'playerAction',
+            'narrative',
+            'inventory',
+            'actors',
+            'route',
+        ],
+    },
+    local_event_boundary: {
+        maximumCharacters: 20_000,
+        sectionPriority: [
+            'system',
+            'schema',
+            'checkpoint',
+            'turns',
         ],
     },
     local_appraisal: {

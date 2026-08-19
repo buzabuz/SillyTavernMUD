@@ -14,6 +14,9 @@ import {
     createModelLanguageMismatch,
     partitionModelSegments,
 } from '../domain/model-language-adoption.js';
+import {
+    ensureMovementOutcomeFact,
+} from '../domain/movement-outcome.js';
 
 const LOW_TIER_NARRATIVE_AUTHORITY_PROMPT_CONTRACT =
     NARRATIVE_AUTHORITY_PROMPT_CONTRACT
@@ -450,7 +453,6 @@ export function validateLowScenePerformanceOutputContract(
         appendUnknownKeyErrors(
             payload.signals,
             new Set([
-                'eventEnded',
                 'pacingBeatRealized',
                 'sceneProgression',
             ]),
@@ -458,7 +460,6 @@ export function validateLowScenePerformanceOutputContract(
             errors,
         );
         for (const key of [
-            'eventEnded',
             'pacingBeatRealized',
         ]) {
             if (
@@ -483,7 +484,6 @@ export function validateLowScenePerformanceOutputContract(
                 new Set([
                     'type',
                     'summaryEn',
-                    'completedRequestedStep',
                 ]),
                 'signals.sceneProgression',
                 errors,
@@ -511,18 +511,6 @@ export function validateLowScenePerformanceOutputContract(
             ) {
                 errors.push(
                     'signals.sceneProgression.summaryEn 不能为空。',
-                );
-            }
-            if (
-                progression
-                    ?.completedRequestedStep !==
-                    undefined &&
-                typeof progression
-                    .completedRequestedStep !==
-                    'boolean'
-            ) {
-                errors.push(
-                    'signals.sceneProgression.completedRequestedStep 必须是布尔值。',
                 );
             }
         }
@@ -585,12 +573,8 @@ export function createTurnPerformanceWorkflow(ports) {
         validateScenePerformance,
     } = ports;
 
-    const EXPLICIT_PROGRESSION_PATTERN =
-    /(?:赶紧|立刻|现在|马上|开始|继续|带路|打开|开启|解锁|交给|给我|出发|跟上|跟着|进入|进去|走吧|走，|走。)|(?:open|unlock|start|continue|lead the way|let'?s go|go through|hand over)/i;
-
     function createSceneMomentumDirective(
         state,
-        playerAction,
         budget,
     ) {
         const nextIntent = state.scene?.nextSceneIntent || null;
@@ -606,10 +590,6 @@ export function createTurnPerformanceWorkflow(ports) {
         );
         return {
             required: Number(budget.elapsedMinutes) >= 15,
-            explicitProgressionRequest:
-            EXPLICIT_PROGRESSION_PATTERN.test(
-                String(playerAction || ''),
-            ),
             playerRoomMustRemain:
             state.map?.currentLocalNodeId || null,
             committedNextSceneIntent: nextIntent,
@@ -986,10 +966,11 @@ Strict boundaries from prohibitions:
 - Use only facts already observable in the scene or explicitly supplied in the scene-safe local records. Never disclose a locked clue or infer a private fact.
 - Never add speech, thoughts, intentions, or choices for the player beyond the supplied action.
 - NPCs have agency. They must pursue their committed goals, initiate practical steps, and act without waiting for the player to prompt every motion.
-- Do not stop immediately before a deterministic NPC action that the player already requested and whose prerequisites are satisfied. Opening an established door, demonstrating a known mechanism, handing over a prepared object, or beginning an agreed procedure is progression, not control of the player.
-- Never turn "McGonagall opens the wall" into "McGonagall raises her wand and is about to open the wall." Complete the NPC action, then stop at the new choice or consequence it creates.
+- When the player explicitly requests an immediate concrete step, complete it in this response when legal; do not stop at preparation.
 - Do not move the player to another authoritative room unless movementResolution already committed that move. NPCs may open access, move along valid routes, and expose what lies beyond while the player remains free to follow or refuse.
 - The rules layer has already settled player movement in spatialContext. Begin with the player at that committed room and never move them back.
+- If movementResolution.status is failed, explicitly state the attempted movement, its supplied reason, and movementResolution.remainingRoomId; never narrate arrival. If it is already_there, explicitly state that no travel occurred.
+- movementResolution.movementOutcomeFactEn is an authoritative visible fact. Include it exactly once when supplied; do not paraphrase, contradict, or omit it.
 - NPCs in another room may react only when spatialContext says they can see or hear the player. Do not teleport an NPC between rooms.
 - actor_move proposals may move an NPC only through existing connected rooms on the same map. Omit the proposal when no movement occurs.
 - If checkResolution is supplied, the local rules layer has already resolved the uncertain action. Depict its exact outcome and consequences; never reroll, change the modifier, soften a failure, or stop before the resolved outcome.
@@ -1008,10 +989,9 @@ Strict boundaries from prohibitions:
 - A promoted person must use a new stable snake_case ID not listed in reservedActorIds, appear visibly in segments, and receive one temporary_actor proposal. Use an observable descriptor as nameEn until the story reveals a real name. Do not invent secrets, private history, special powers, or a relationship.
 - A promoted actor's publicProfile.descriptionEn contains stable physical traits only. Exclude clothing, accessories, held items, nearby belongings, pose, activity, and location; runtime.currentActivityEn and the material observer own those dynamic details.
 - A 15-minute turn must materially advance at least one concrete axis: NPC initiative, access change, practical procedure, new bounded information, or social position. Furnishings, bystander reactions, and repeated explanations do not count by themselves.
-- When momentumDirective.required is true, signals.sceneProgression is required and must report the completed concrete change. If momentumDirective.explicitProgressionRequest is true, complete that requested procedural step in the prose.
+- When momentumDirective.required is true, signals.sceneProgression is required and must report the completed concrete change.
 - If momentumDirective.intentLocationReached is true, entry, lining up, opening doors, introductions, songs, announcements, and "about to begin" beats are setup rather than completed procedure units. Render at least momentumDirective.minimumCompletedProcedureUnits finished unit beyond setup before stopping.
 - When signals.sceneProgression is supplied, summaryEn must include every consequential public result from this response: tracked Item damage/destruction, teacher praise or House-point awards, public reprimands, and other room-visible outcomes. Do not reduce a multi-result public event to only its first action.
-- signals.eventEnded is optional and true only when a bounded interaction or procedure phase genuinely closes. Omit signals rather than filling them mechanically.
 - When pacingDirective is supplied, visibly realize it and set signals.pacingBeatRealized to true.
 
 ${NPC_IDENTITY_PROMPT_BOUNDARY}
@@ -1071,12 +1051,10 @@ Schema:
     }
   ],
   "signals":{
-    "eventEnded":false,
     "pacingBeatRealized":false,
     "sceneProgression":{
       "type":"npc_initiative|access_change|practical_step|new_information|social_shift",
-      "summaryEn":"completed change",
-      "completedRequestedStep":false
+      "summaryEn":"completed change"
     }
   }
 }
@@ -1322,6 +1300,11 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     adoptLowPerformanceLanguage(
                         parsedPayload,
                     );
+                parsedPayload =
+                    ensureMovementOutcomeFact(
+                        parsedPayload,
+                        movementResolution,
+                    );
                 const outputContract =
                     validateLowScenePerformanceOutputContract(
                         parsedPayload,
@@ -1437,6 +1420,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
         budget,
         pacingBeat = null,
         checkResolution = null,
+        movementOutcome = null,
     ) {
         return {
             protocolVersion:
@@ -1453,9 +1437,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
                 ? 'The local semantic adjudicator classifies the enacted action as instantaneous.'
                 : '',
             publicEventEn: performance.publicEventEn,
-            eventEnded:
-            performance.eventEnded ===
-            true,
             sceneProgression: structuredClone(
                 performance.sceneProgression,
             ),
@@ -1502,6 +1483,12 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     checkResolution,
                 ),
             } : {}),
+            ...(movementOutcome ? {
+                movementOutcome:
+                    structuredClone(
+                        movementOutcome,
+                    ),
+            } : {}),
             ...(pacingBeat ? {
                 pacingBeat: structuredClone(pacingBeat),
             } : {}),
@@ -1509,7 +1496,6 @@ ${CANON_WIT_TONE_CONTRACT}`,
     }
 
     return {
-        EXPLICIT_PROGRESSION_PATTERN,
         createSceneMomentumDirective,
         projectPacingDirectiveForPerformance,
         createScenePerformancePrompt,

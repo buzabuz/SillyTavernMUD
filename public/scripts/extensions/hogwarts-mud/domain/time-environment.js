@@ -72,6 +72,32 @@ const WEATHER_PATTERNS = Object.freeze([
         visibilityEn: 'Good',
     },
 ]);
+const OUTDOOR_ROOM_KINDS =
+    new Set([
+        'alley',
+        'boathouse',
+        'bridge',
+        'courtyard',
+        'dock',
+        'field',
+        'forest',
+        'forest_edge',
+        'garden',
+        'grave',
+        'graveyard',
+        'greenhouse',
+        'landmark',
+        'market',
+        'path',
+        'platform',
+        'road',
+        'shore',
+        'square',
+        'stadium',
+        'street',
+        'village',
+        'yard',
+    ]);
 
 function stableEnvironmentHash(value) {
     let hash = 2166136261;
@@ -168,17 +194,18 @@ export function buildBehavioralEnvironment(
         ).find(item =>
             item.id === roomId)
         : null;
-    const placeText = [
-        roomId,
-        room?.nameEn,
-        room?.kind,
-        ...(room?.tags || []),
-    ]
-        .filter(Boolean)
-        .join(' ');
+    const roomTags =
+        new Set(
+            room?.tags ||
+            [],
+        );
     const exposure =
-        /(?:garden|grounds|courtyard|street|alley|shore|platform|exterior|forest|lake|path|road|village|yard|jetty|bridge|outdoor)/iu
-            .test(placeText)
+        roomTags.has(
+            'outdoor',
+        ) ||
+        OUTDOOR_ROOM_KINDS.has(
+            room?.kind,
+        )
             ? 'outdoor'
             : 'indoor';
     const regionId =
@@ -412,21 +439,10 @@ export function reconcileTemporalState(
         };
     }
 
-    const normalizedOpening =
-        openingText.toLocaleLowerCase();
     const mapId =
         next.map?.activeMapId ||
         scene.mapId;
-    const isLegacySchoolDeparture =
-        Number(
-            next.timelineChronicleVersion ||
-            0,
-        ) < 1 &&
-        mapId === 'kings_cross' &&
-        /(?:first of september|1(?:st)? september|september (?:the )?first|september 1(?:st)?)/i
-            .test(normalizedOpening) &&
-        /(?:hogwarts express|platform(?: nine| 9)|barrier)/i
-            .test(normalizedOpening);
+    const isLegacySchoolDeparture = false;
     const clockMatch = WORLD_CLOCK_PATTERN.exec(
         String(next.clock || ''),
     );

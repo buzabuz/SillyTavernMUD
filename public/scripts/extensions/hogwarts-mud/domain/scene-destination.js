@@ -105,47 +105,6 @@ export function findSceneDestination(text, worldState) {
     return destination;
 }
 
-export function resolveSceneTransitionDestination(
-    worldState,
-    text,
-) {
-    const direct =
-        findSceneDestination(
-            text,
-            worldState,
-        );
-    if (direct) {
-        return direct;
-    }
-    const activeMapId = String(
-        worldState?.scene?.mapId ||
-        worldState?.map?.activeMapId ||
-        '',
-    );
-    const query = String(text || '')
-        .normalize('NFKC')
-        .toLocaleLowerCase();
-    const leavesExpress =
-        activeMapId.includes(
-            'hogwarts_express',
-        ) &&
-        /(?:到达|抵达|下车|arriv|reach|get off)/i
-            .test(query) &&
-        /(?:霍格沃茨|霍格莫德|hogwarts|hogsmeade)/i
-            .test(query);
-    if (!leavesExpress) {
-        return null;
-    }
-    return getSceneDestinationAuthority(
-        worldState,
-        {
-            mapId: 'hogsmeade',
-            roomId:
-                'hogsmeade_station',
-        },
-    );
-}
-
 export function findExplicitRoomReference(
     text,
     map,

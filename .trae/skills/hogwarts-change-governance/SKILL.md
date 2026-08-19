@@ -1,6 +1,6 @@
 ---
 name: "hogwarts-change-governance"
-description: "Requires business semantics, production reconnaissance, prompt budgets, single-attempt failure, blind simulation, and real-save verification. Invoke for any Hogwarts MUD change."
+description: "Requires fixed-PM business discovery, production reconnaissance, prompt budgets, single-attempt failure, blind simulation, and real-save verification. Invoke for any Hogwarts MUD change."
 ---
 
 # Hogwarts Change Governance
@@ -73,6 +73,15 @@ The permanent validation-responsibility authority is:
 The JSON file is registry authority. The Markdown file is its human-readable
 companion. Update both in the owning system change; do not create a central
 runtime validator or generic cross-domain test harness.
+
+The fixed PM business-discovery role is:
+
+```text
+.trae/skills/hogwarts-change-governance/PM_BUSINESS_DISCOVERY_AGENT.md
+```
+
+It is the stable launch and output contract for the one PM product-manager
+Agent assigned to every Hogwarts investigation.
 
 ## Documentation Routing And Maintenance
 
@@ -254,6 +263,151 @@ Detailed artifacts cannot substitute for a direct user-facing explanation.
 8. This report does not replace the governed PRD. If the plain-language report
    and PRD differ, approval is blocked until both are reconciled.
 
+### Registered Module: Immediate Turn Module
+
+The **即时回合模块** (Immediate Turn Module) is the registered umbrella module
+for every Hogwarts behavior that must settle, reject, or remain unchanged
+within the player’s current turn because the current narration or the next
+legal player action depends on it.
+
+Its business boundary is:
+
+```text
+player action
+-> deterministic preflight
+-> pre-turn interpretation
+-> paid narrative
+-> post-turn immediate proposals
+-> optional routed 4B
+-> deterministic guards
+-> sole domain Reducers
+```
+
+The module currently includes only the PM-confirmed immediate-turn concerns:
+
+- Turn transaction and paid narrative proposal isolation;
+- Checks;
+- Identity and life-state observations;
+- movement, Presence, current Scene/Calendar/time settlement;
+- Item, Presentation and Material changes;
+- Spell changes;
+- perception, witness and immediate Event settlement;
+- Map movement/room authority;
+- Knowledge retrieval and ACL filtering when needed by the current turn.
+
+It excludes Appraisal, Social, Memory consolidation, macro Pacing, world
+facts, clues, hidden Story Arcs, character creation/Opening, migration,
+Translation, and process/task operations. Those concerns require their own
+governed module or approved change; they may not be smuggled into an
+Immediate Turn model call, queue, prompt projection, validator or Reducer.
+
+For every future Identity field integration, including a field that appears
+stable or dormant:
+
+1. Treat it as an Immediate Turn Module change whenever current narration,
+   a current action, or the next legal action can observe or alter it.
+2. The fixed PM must start from the complete affected Identity Body field
+   matrix and every crossed Presentation/Material/Item boundary. An injury-only
+   port cannot establish full Identity coverage.
+3. The PRD must name the field’s baseline authority, event trigger, semantic
+   proposer if any, deterministic evidence/transition guard, sole Reducer,
+   normal/worst-case call budget, no-change result, and user-visible failure
+   result alongside all other Immediate Turn Module stages.
+4. A future field cannot add an independent per-turn model call or bypass the
+   registered `pre -> post -> optional 4B -> Reducers` budget without an
+   explicit PM-confirmed and user-approved module revision.
+
+This registration does not authorize a future Identity, Presentation, Item or
+lifecycle feature in the current change. A current Phase 2 may deliberately
+govern only its existing production fields and routes; deferred fields remain
+in their own approved TODO until a later module revision explicitly admits
+them.
+
+Before implementing any Immediate Turn Module change, update the affected
+`VCON-*` responsibility row and a domain-owned focused test. The test must
+prove the normal immediate workflow, rejection with no State write, no
+semantic Regex/Embedding fallback, one-attempt failure behavior, and the
+module-level call budget.
+
+### Gate 0: Fixed PM Business Discovery
+
+This gate runs before technical reconnaissance, PRD drafting, Spec drafting,
+task decomposition or implementation planning for every new or reopened
+Hogwarts requirement.
+
+1. Launch exactly one fixed PM Agent using
+   `PM_BUSINESS_DISCOVERY_AGENT.md`:
+   - canonical task name: `pm_business_discovery`;
+   - fresh context: `fork_turns=none`;
+   - read-only;
+   - no code, test, save, migration or artifact edits.
+2. The PM starts from the user's latest goal, durable product decisions,
+   complete living runtime fields, representative user workflows and business
+   authority. Existing Regex rows, tests, benchmarks, endpoints, modules,
+   tasks and defects are evidence only; none may define the product scope.
+3. The PM must classify the requested scope as either:
+   - a complete domain; or
+   - an explicitly named partial capability.
+   A partial capability cannot use a complete-domain name.
+4. The PM must produce a complete business matrix covering:
+   - every entity and authoritative field;
+   - adjacent domains crossed by the user's workflow;
+   - normal, failure and no-change workflows;
+   - current and target user-visible results;
+   - State written or unchanged;
+   - one business authority and conflict priority per fact;
+   - unresolved decisions requiring the user.
+5. Domain completeness is proven only when every field is classified as
+   `in_scope`, `unchanged`, `non_goal` or `unresolved`, and every field maps to
+   a user workflow or explicit non-goal. Regex counts, test counts, task counts
+   and internal metrics never prove completeness.
+6. Before deep technical research, present the PM's one-sentence outcome,
+   field/domain boundary and concrete Before/After scenarios to the user.
+   Obtain explicit business-scope confirmation. Do not ask the user to read a
+   technical PRD to discover the product scope.
+7. After scope confirmation, the main Agent may perform read-only production
+   reconnaissance constrained by the PM matrix. Send those findings back to
+   the same PM Agent using the required follow-up review prompt. The PM checks
+   for omitted fields, adjacent-domain gaps, duplicate authority and silent
+   technical scope reduction.
+8. Both PM verdicts must be `PASS` before drafting or revising the PRD, Spec,
+   implementation tasks or technical solution. `BLOCKED` means stop and obtain
+   a user decision.
+9. The same change keeps one active PM Agent and reuses it for follow-up work.
+   Do not launch parallel PM Agents or choose the most convenient conclusion.
+   If product goal, target user, entities, fields, workflows, failure semantics
+   or authority boundaries materially change, invalidate the prior verdict and
+   reopen discovery with that same PM. If it is unavailable, one replacement
+   PM must redo the complete discovery from authority; it cannot inherit
+   `PASS`.
+10. Do not create a sixth authoritative PM document. Put the confirmed
+    business matrix and scenarios directly into the PRD's `Problem`, `Before`,
+    `After`, `In Scope`, `Non-Goals` and `Acceptance Criteria`. Before PRD
+    creation, keep the PM result in the conversation; supporting evidence is
+    allowed only when the matrix cannot fit the governed PRD without loss.
+11. Independent acceptance must receive the user's original goal and the
+    confirmed PM business matrix in addition to the PRD. A self-consistent
+    narrow PRD cannot define its own completeness.
+
+Hard blockers:
+
+- no fixed PM Agent or either PM verdict is not `PASS`;
+- any entity, field, workflow, failure result or authority remains
+  unclassified;
+- capability name is broader than its field coverage;
+- a user workflow crosses an adjacent domain that was not included;
+- the proposed scope began from Regex, tests, benchmarks, defects, modules or
+  tasks rather than the product goal;
+- PM and main Agent disagree on business scope or semantics;
+- technical research changed the scope after the PM follow-up review;
+- the user has not confirmed the business scope.
+
+The Identity incident is the permanent negative example: three injury Regex
+rows and a passing injury benchmark never established complete Identity
+coverage. A complete Identity claim had to start from all Identity fields and
+the user workflows spanning Identity Body, Presentation/Material and
+Inventory/Item.
+
 ### Gate 1: Identify And Reuse The Change
 
 1. Search `.trae/specs/` for an existing directory that represents the same requirement.
@@ -265,7 +419,10 @@ Detailed artifacts cannot substitute for a direct user-facing explanation.
 
 ### Gate 2: Map The Existing Production System Before Designing
 
-Do not design from field names, schemas, tests, or a previous agent's summary. Before proposing a solution, trace the behavior through the real production path.
+Run this gate only after Gate 0 business-scope confirmation. Do not design
+from field names, schemas, tests, or a previous agent's summary. Before
+proposing a solution, trace the PM-confirmed business scope through the real
+production path.
 
 1. Before interpreting current code or save data, retrieve the relevant project memory/history, explicit user decisions, approved PRD, living runtime contract and prior incident evidence. Current State, archived prose, model output and repair scripts may be wrong; they are evidence, not automatic product authority.
 2. Write the semantic invariant before designing: define each concept, orthogonal fields, allowed combinations, forbidden transitions, evidence priority and sole writer. Do not collapse two fields merely because their names sound related.

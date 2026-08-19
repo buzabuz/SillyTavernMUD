@@ -459,7 +459,7 @@ test('narration consistency accepts current authoritative item, actor, scene, cl
     );
 });
 
-test('[defect-probing] turn validation rejects direct current Item, Actor, Scene, clock and Spell contradictions', () => {
+test('turn validation does not treat narrative prose as State authority', () => {
     const validation =
         validateTurnTransaction(
             createTurn(
@@ -467,13 +467,17 @@ test('[defect-probing] turn validation rejects direct current Item, Actor, Scene
             ),
             createConsistencyState(),
         );
-    assert.match(
+    assert.equal(
+        validation.valid,
+        true,
+    );
+    assert.doesNotMatch(
         validation.errors.join('\n'),
         /正文权威冲突/u,
     );
 });
 
-test('[defect-probing] Performer rejects absent Item claims made in dialogue', () => {
+test('Performer keeps paid dialogue when it contains an unsupported Item claim', () => {
     const validation =
         validateScenePerformance(
             createTurn(
@@ -494,15 +498,15 @@ test('[defect-probing] Performer rejects absent Item claims made in dialogue', (
 
     assert.equal(
         validation.valid,
-        false,
+        true,
     );
-    assert.match(
+    assert.doesNotMatch(
         errors,
         /\[item:vanished_quill\/physicalForm\]/u,
     );
 });
 
-test('Performer checks Actor presence, room and life claims across narration and dialogue', () => {
+test('Performer leaves Actor State authority to structured post-turn proposals', () => {
     const state =
         createConsistencyState();
     state.actors.find(actor =>
@@ -531,21 +535,17 @@ test('Performer checks Actor presence, room and life claims across narration and
     const errors =
         validation.errors.join('\n');
 
-    assert.match(
-        errors,
-        /\[actor:canon_hermione_granger\/presence\]/u,
+    assert.equal(
+        validation.valid,
+        true,
     );
-    assert.match(
+    assert.doesNotMatch(
         errors,
-        /\[actor:canon_hermione_granger\/room\]/u,
-    );
-    assert.match(
-        errors,
-        /\[actor:canon_harry_james_potter\/life\]/u,
+        /\[actor:.*\/(?:presence|room|life)\]/u,
     );
 });
 
-test('Performer checks Scene destination, clock and Spell identity claims in dialogue', () => {
+test('Performer keeps paid dialogue while Scene and Spell State remain structured', () => {
     const validation =
         validateScenePerformance(
             createTurn(
@@ -564,17 +564,13 @@ test('Performer checks Scene destination, clock and Spell identity claims in dia
     const errors =
         validation.errors.join('\n');
 
-    assert.match(
-        errors,
-        /\[scene:destination\]/u,
+    assert.equal(
+        validation.valid,
+        true,
     );
-    assert.match(
+    assert.doesNotMatch(
         errors,
-        /\[scene:clock\]/u,
-    );
-    assert.match(
-        errors,
-        /\[spell:.*\/identity\]/u,
+        /\[(?:scene|spell):/u,
     );
 });
 
@@ -815,7 +811,7 @@ test('an attributed clause does not hide a later direct current conflict', () =>
     );
 });
 
-test('[defect-probing] Performer limits a belief exception to its dialogue clause', () => {
+test('Performer does not parse belief clauses as Item State authority', () => {
     const validation =
         validateScenePerformance(
             createTurn(
@@ -834,9 +830,9 @@ test('[defect-probing] Performer limits a belief exception to its dialogue claus
 
     assert.equal(
         validation.valid,
-        false,
+        true,
     );
-    assert.match(
+    assert.doesNotMatch(
         validation.errors.join('\n'),
         /\[item:vanished_quill\/physicalForm\]/u,
     );

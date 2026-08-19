@@ -22,6 +22,22 @@ import {
     StaleKnowledgeRevisionError,
 } from '../hogwarts-mud/knowledge-vector-backend.js';
 import {
+    DynamicIdentityInputError,
+    observeDynamicIdentity,
+} from '../hogwarts-mud/dynamic-identity-observer.js';
+import {
+    observeDynamicInventory,
+} from '../hogwarts-mud/dynamic-inventory-observer.js';
+import {
+    observeDynamicTurn,
+} from '../hogwarts-mud/dynamic-turn-observer.js';
+import {
+    observeEventBoundary,
+} from '../hogwarts-mud/event-boundary-observer.js';
+import {
+    DynamicInventoryInputError,
+} from '../hogwarts-mud/inventory-observation-contract.js';
+import {
     adjudicateTurn,
     getLocalSemanticStatus,
     observeTurn,
@@ -1312,6 +1328,45 @@ router.post('/local/adjudicate', async (request, response) => {
     }
 });
 
+router.post('/local/event-boundary/observe', async (request, response) => {
+    try {
+        const input =
+            request.body?.input;
+        if (
+            !input ||
+            typeof input !== 'object' ||
+            Array.isArray(input) ||
+            !Array.isArray(
+                input.turns,
+            ) ||
+            input.turns.length !==
+                10 ||
+            JSON.stringify(input)
+                .length > 150_000
+        ) {
+            return response
+                .sendStatus(400);
+        }
+        return response.json(
+            await observeEventBoundary(
+                input,
+            ),
+        );
+    } catch (error) {
+        console.warn(
+            '[Hogwarts MUD] Background Event boundary observation unavailable',
+            error,
+        );
+        return response.status(503).json({
+            error:
+                String(
+                    error?.message ||
+                    error,
+                ).slice(0, 1_000),
+        });
+    }
+});
+
 router.post('/local/translate', async (request, response) => {
     try {
         const text =
@@ -1362,6 +1417,143 @@ router.post('/local/translate', async (request, response) => {
     } catch (error) {
         console.warn(
             '[Hogwarts MUD] Local translation unavailable',
+            error,
+        );
+        return response.status(503).json({
+            error:
+                String(
+                    error?.message ||
+                    error,
+                ).slice(0, 1_000),
+        });
+    }
+});
+
+router.post('/local/identity/observe', async (request, response) => {
+    try {
+        const input =
+            request.body?.input;
+        if (
+            !input ||
+            typeof input !== 'object' ||
+            Array.isArray(input) ||
+            JSON.stringify(input)
+                .length > 50_000
+        ) {
+            return response
+                .sendStatus(400);
+        }
+        return response.json(
+            await observeDynamicIdentity(
+                input,
+            ),
+        );
+    } catch (error) {
+        if (
+            error instanceof
+                DynamicIdentityInputError
+        ) {
+            return response.status(400).json({
+                error:
+                    String(
+                        error.message,
+                    ).slice(0, 1_000),
+            });
+        }
+        console.warn(
+            '[Hogwarts MUD] Dynamic Identity observation unavailable',
+            error,
+        );
+        return response.status(503).json({
+            error:
+                String(
+                    error?.message ||
+                    error,
+                ).slice(0, 1_000),
+        });
+    }
+});
+
+router.post('/local/inventory/observe', async (request, response) => {
+    try {
+        const input =
+            request.body?.input;
+        if (
+            !input ||
+            typeof input !== 'object' ||
+            Array.isArray(input) ||
+            JSON.stringify(input)
+                .length > 100_000
+        ) {
+            return response
+                .sendStatus(400);
+        }
+        return response.json(
+            await observeDynamicInventory(
+                input,
+            ),
+        );
+    } catch (error) {
+        if (
+            error instanceof
+                DynamicInventoryInputError
+        ) {
+            return response.status(400).json({
+                error:
+                    String(
+                        error.message,
+                    ).slice(0, 1_000),
+            });
+        }
+        console.warn(
+            '[Hogwarts MUD] Dynamic Inventory observation unavailable',
+            error,
+        );
+        return response.status(503).json({
+            error:
+                String(
+                    error?.message ||
+                    error,
+                ).slice(0, 1_000),
+        });
+    }
+});
+
+router.post('/local/dynamic/observe', async (request, response) => {
+    try {
+        const input =
+            request.body?.input;
+        if (
+            !input ||
+            typeof input !== 'object' ||
+            Array.isArray(input) ||
+            JSON.stringify(input)
+                .length > 150_000
+        ) {
+            return response
+                .sendStatus(400);
+        }
+        return response.json(
+            await observeDynamicTurn(
+                input,
+            ),
+        );
+    } catch (error) {
+        if (
+            error instanceof
+                DynamicIdentityInputError ||
+            error instanceof
+                DynamicInventoryInputError
+        ) {
+            return response.status(400).json({
+                error:
+                    String(
+                        error.message,
+                    ).slice(0, 1_000),
+            });
+        }
+        console.warn(
+            '[Hogwarts MUD] Shared dynamic Turn observation unavailable',
             error,
         );
         return response.status(503).json({

@@ -27,7 +27,6 @@ import {
 import {
     ACTOR_MOVEMENT_HISTORY_VERSION,
     getMapExits,
-    inferActorRoomId,
     normalizeSpatialText,
     SPATIAL_STATE_VERSION,
 } from './spatial-foundation.js';
@@ -153,122 +152,29 @@ export function reconcileSpatialState(
             changed = true;
         }
     }
-    const dormitoryRoom =
-        rooms.find(room =>
-            room.id ===
-                'gryffindor_girls_dormitory');
-    const sceneDormitoryText = [
-        next.scene?.id,
-        next.scene?.nameEn,
-        next.scene?.summaryEn,
-        sceneOpeningText,
-    ].filter(Boolean).join(' ');
-    const shouldRepairGryffindorDormitory =
-        previousSpatialVersion < 6 &&
-        mapId === 'hogwarts_castle' &&
-        previousPlayerRoomId ===
-            'gryffindor_common_room' &&
-        dormitoryRoom &&
-        /(?:gryffindor[_\s-]*(?:girls?[_\s-]*)?dormitory|gryffindor.{0,160}(?:girls?|female).{0,80}dormitory|girls?.{0,160}dormitory|女生.{0,80}(?:宿舍|卧室)|宿舍里有|爬.{0,80}楼梯.{0,80}宿舍)/iu
-            .test(
-                sceneDormitoryText,
-            );
-    if (
-        shouldRepairGryffindorDormitory
-    ) {
-        next.map.currentLocalNodeId =
-            dormitoryRoom.id;
-        next.map.currentLevelId =
-            dormitoryRoom.levelId;
-        next.map.discoveredLocalNodeIds =
-            [...new Set([
-                ...(
-                    next.map
-                        .discoveredLocalNodeIds ||
-                    []
-                ),
-                `${mapId}:${dormitoryRoom.id}`,
-            ])];
-        if (next.scene) {
-            next.scene.mapId = mapId;
-            next.scene.roomId =
-                dormitoryRoom.id;
-            if (
-                next.scene
-                    .nextSceneIntent
-                    ?.mapId ===
-                    mapId &&
-                next.scene
-                    .nextSceneIntent
-                    ?.roomId ===
-                    previousPlayerRoomId
-            ) {
-                next.scene.nextSceneIntent = {
-                    ...next.scene
-                        .nextSceneIntent,
-                    roomId:
-                        dormitoryRoom.id,
-                };
-            }
-        }
-        next.actors = (
-            next.actors || []
-        ).map(actor =>
-            actor.present !== false &&
-            (actor.mapId || mapId) ===
-                mapId &&
-            (
-                actor.roomId ||
-                previousPlayerRoomId
-            ) === previousPlayerRoomId
-                ? {
-                    ...actor,
-                    mapId,
-                    roomId:
-                        dormitoryRoom.id,
-                }
-                : actor);
-        next.items =
-            synchronizeHeldItemLocations(
-                next.items,
-                {
-                    playerMapId:
-                        mapId,
-                    playerRoomId:
-                        dormitoryRoom.id,
-                    actors:
-                        next.actors,
-                    clock:
-                        next.clock,
-                },
-            );
-        if (next.scene) {
-            next.scene.itemStates =
-                createSceneItemStates(
-                    next.items,
-                    {
-                        mapId,
-                        roomId:
-                            dormitoryRoom.id,
-                    },
-                );
-        }
-        locationRepair = {
-            fromMapId: mapId,
-            fromRoomId:
-                previousPlayerRoomId,
-            toMapId: mapId,
-            toRoomId:
-                dormitoryRoom.id,
-            source:
-                'gryffindor_dormitory_scene_migration',
-        };
-        changed = true;
-    }
     const fallbackRoomId = roomIds.has(next.map?.currentLocalNodeId)
         ? next.map.currentLocalNodeId
         : rooms[0]?.id || '';
     next.actors = (next.actors || []).map(actor => {
+        if (
+            actor.locationKnown ===
+            false
+        ) {
+            if (
+                actor.mapId ||
+                actor.roomId ||
+                actor.present ===
+                    true
+            ) {
+                changed = true;
+            }
+            return {
+                ...actor,
+                mapId: '',
+                roomId: '',
+                present: false,
+            };
+        }
         const actorMapId = getLocalMapDefinition(actor.mapId, next.map)
             ? actor.mapId
             : mapId;
@@ -276,44 +182,9 @@ export function reconcileSpatialState(
         const actorRooms = new Set(
             getMapRooms(actorMap, next.map).map(room => room.id),
         );
-        let roomId = actorRooms.has(actor.roomId)
+        const roomId = actorRooms.has(actor.roomId)
             ? actor.roomId
-            : inferActorRoomId(actor, actorMap, fallbackRoomId);
-        const activityRoomId =
-            inferActorRoomId(
-                actor,
-                actorMap,
-                roomId,
-            );
-        if (
-            previousSpatialVersion <
-                SPATIAL_STATE_VERSION &&
-            activityRoomId &&
-            activityRoomId !== roomId &&
-            findLocalRoomPath(
-                actorMapId,
-                roomId,
-                activityRoomId,
-                next.map,
-            )
-        ) {
-            roomId = activityRoomId;
-        }
-        const activity = String(
-            actor.currentActivityEn ||
-            actor.currentActivity ||
-            '',
-        );
-        if (
-            previousSpatialVersion <
-                SPATIAL_STATE_VERSION &&
-            actorMapId === mapId &&
-            actor.roomId === 'gringotts_steps' &&
-            /^\s*steps from\b/i.test(activity) &&
-            !/(?:gringotts|古灵阁)/i.test(activity)
-        ) {
-            roomId = fallbackRoomId;
-        }
+            : fallbackRoomId;
         if (actor.mapId !== actorMapId || actor.roomId !== roomId) {
             changed = true;
         }
@@ -324,89 +195,7 @@ export function reconcileSpatialState(
         };
     });
     let movement = null;
-    const shouldUpgradeGringottsLandmark =
-        previousSpatialVersion < 3 &&
-        next.map?.currentLocalNodeId ===
-            'gringotts_steps' &&
-        /(?:古灵阁|gringotts)/i.test(
-            recentPlayerAction,
-        ) &&
-        !/(?:古灵阁台阶|gringotts steps)/i.test(
-            recentPlayerAction,
-        );
-    if (shouldUpgradeGringottsLandmark) {
-        const previousMovement =
-            structuredClone(
-                next.spatial?.lastMovement,
-            );
-        const result = applyPlayerMovement(
-            next,
-            recentPlayerAction,
-            { confirmed: true },
-        );
-        next = result.state;
-        movement = result.movement;
-        if (
-            movement?.moved &&
-            previousMovement?.moved
-        ) {
-            const previousCompanions = new Set(
-                previousMovement.companionIds || [],
-            );
-            next.actors = (next.actors || [])
-                .map(actor =>
-                    previousCompanions.has(actor.id) &&
-                    actor.mapId === movement.toMapId &&
-                    actor.roomId ===
-                        movement.fromRoomId
-                        ? {
-                            ...actor,
-                            roomId:
-                                movement.toRoomId,
-                        }
-                        : actor);
-            const previousPath =
-                previousMovement.path || [];
-            const upgradedMovement = {
-                ...movement,
-                fromMapId:
-                    previousMovement.fromMapId ||
-                    movement.fromMapId,
-                fromRoomId:
-                    previousMovement.fromRoomId ||
-                    movement.fromRoomId,
-                fromRoomName:
-                    previousMovement.fromRoomName ||
-                    movement.fromRoomName,
-                companionIds: [...new Set([
-                    ...(previousMovement
-                        .companionIds || []),
-                    ...(movement.companionIds || []),
-                ])],
-                path: [
-                    ...previousPath,
-                    ...(movement.path || []).slice(
-                        previousPath.at(-1) ===
-                            movement.path?.[0]
-                            ? 1
-                            : 0,
-                    ),
-                ],
-                minutes:
-                    Number(
-                        previousMovement.minutes || 0,
-                    ) +
-                    Number(movement.minutes || 0),
-                committedAt:
-                    previousMovement.committedAt ||
-                    movement.committedAt,
-            };
-            next.spatial.lastMovement =
-                upgradedMovement;
-            movement = upgradedMovement;
-        }
-        changed ||= Boolean(movement?.moved);
-    } else if (
+    if (
         (
             !worldState.spatial?.version ||
             (

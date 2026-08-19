@@ -9,7 +9,6 @@ import {
     ITEM_PROPOSAL_VERSION,
     ITEM_STATE_VALUES,
     ITEM_TRANSFER_MODE_VALUES,
-    inferDestroyedPhysicalForm,
     isItemOperationEvidenceGrounded,
     normalizeCurrentPresentation,
     normalizeItem,
@@ -329,6 +328,13 @@ export function normalizeItemProposal(
                 .evidenceText,
             800,
         );
+    const evidenceItemText =
+        compactText(
+            source.evidenceItemText ||
+            itemSource
+                .evidenceItemText,
+            300,
+        );
     const key =
         operation === 'acquire'
             ? `item-candidate:${id}`
@@ -372,6 +378,7 @@ export function normalizeItemProposal(
             ),
         ],
         evidenceText,
+        evidenceItemText,
         transferMode:
             ITEM_TRANSFER_MODE_VALUES
                 .includes(
@@ -425,9 +432,7 @@ export function normalizeItemProposal(
                         .physicalForm
                 : operation ===
                     'destroy'
-                    ? inferDestroyedPhysicalForm(
-                        evidenceText,
-                    ) || 'remains'
+                    ? 'remains'
                     : '',
         item:
             normalizeItem(
@@ -569,6 +574,8 @@ export function partitionItemProposals(
                             proposal.operation,
                             proposal
                                 .evidenceText,
+                            proposal
+                                .evidenceItemText,
                         )
                     ) {
                         return;
@@ -1015,17 +1022,7 @@ function applyOneOperation(
                     )
                     ? proposal
                         .physicalForm
-                    : inferDestroyedPhysicalForm(
-                        proposal
-                            .evidenceText,
-                    ) ||
-                    (
-                        next
-                            .physicalForm ===
-                            'absent'
-                            ? 'absent'
-                            : 'remains'
-                    );
+                    : 'remains';
         next.isEquipped =
             false;
     }

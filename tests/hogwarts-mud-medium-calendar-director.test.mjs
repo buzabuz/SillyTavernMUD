@@ -23,9 +23,9 @@ import {
 import {
     createMediumCalendarDirectorPrompt,
     createMediumCalendarDirectorWorkflow,
-    detectExplicitCalendarCommitment,
     evaluateMediumCalendarTriggers,
     projectMediumCalendarDirectorContext,
+    resolveCalendarCommitmentEvidence,
     validateMediumCalendarDirectorProposal,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/medium-calendar-director.js';
 import {
@@ -583,7 +583,7 @@ function createOrdinaryTagEntries() {
     );
 }
 
-test('Medium trigger detection covers horizon, successful high planning and conservative explicit commitments without day rollover', () => {
+test('Medium trigger detection consumes structured commitments without prose fallback or day rollover', () => {
     const adequate =
         createState(
             [],
@@ -624,6 +624,12 @@ test('Medium trigger detection covers horizon, successful high planning and cons
                 force: true,
                 playerAction:
                     '我答应你周末和你约会。',
+                calendarCommitment: {
+                    requested: true,
+                    evidenceText:
+                        '我答应你周末和你约会。',
+                    confidence: 0.95,
+                },
             },
         ),
         {
@@ -660,10 +666,46 @@ test('Medium trigger detection covers horizon, successful high planning and cons
     const promise =
         '我答应你周末和你约会。';
     assert.equal(
-        detectExplicitCalendarCommitment(
+        resolveCalendarCommitmentEvidence(
+            {
+                requested: true,
+                evidenceText: promise,
+                confidence: 0.95,
+            },
             promise,
         ),
         promise,
+    );
+    assert.equal(
+        evaluateMediumCalendarTriggers(
+            adequate,
+            {
+                playerAction:
+                    promise,
+                calendarCommitment: {
+                    requested: true,
+                    evidenceText:
+                        promise,
+                    confidence: 0.95,
+                },
+            },
+        ).reasons.includes(
+            'player_commitment',
+        ),
+        true,
+    );
+    assert.equal(
+        resolveCalendarCommitmentEvidence(
+            {
+                requested: true,
+                evidenceText:
+                    '我答应你周末和你约会。',
+                confidence: 0.95,
+            },
+            '也许以后可以约会。',
+        ),
+        '',
+        'ungrounded structured evidence must not trigger planning',
     );
     assert.equal(
         evaluateMediumCalendarTriggers(
@@ -675,14 +717,8 @@ test('Medium trigger detection covers horizon, successful high planning and cons
         ).reasons.includes(
             'player_commitment',
         ),
-        true,
-    );
-    assert.equal(
-        detectExplicitCalendarCommitment(
-            '也许以后可以约会。',
-        ),
-        '',
-        'speculative dialogue must not trigger planning',
+        false,
+        'player prose alone must not trigger planning',
     );
 });
 
@@ -1917,7 +1953,7 @@ test('context limiting preserves complete Calendar prompt authority under overfl
     );
 });
 
-test('application wiring schedules Medium after high planning but not every ordinary turn', async () => {
+test('application wiring schedules Medium after high planning or one structured commitment route', async () => {
     const application =
         await readFile(
             new URL(
@@ -1959,9 +1995,9 @@ test('application wiring schedules Medium after high planning but not every ordi
         application,
         /runTimelineMoment,/u,
     );
-    assert.doesNotMatch(
+    assert.match(
         turn,
-        /runMediumCalendarDirectorSafely/u,
+        /calendarCommitment[\s\S]{0,220}?requested[\s\S]{0,120}?true[\s\S]{0,240}?runMediumCalendarDirectorSafely\(\{[\s\S]{0,120}?playerAction[\s\S]{0,120}?calendarCommitment/u,
     );
     assert.match(
         turn,
