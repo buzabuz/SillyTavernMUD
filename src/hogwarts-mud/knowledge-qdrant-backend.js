@@ -55,6 +55,31 @@ function waitForRetry(delayMs) {
         ));
 }
 
+function getCollectionVectorSize(result) {
+    const vectors =
+        result?.result?.config
+            ?.params?.vectors;
+    if (
+        Number.isSafeInteger(
+            Number(vectors?.size),
+        )
+    ) {
+        return Number(
+            vectors.size,
+        );
+    }
+    return null;
+}
+
+function isCompatibleCollection(
+    result,
+    dimensions,
+) {
+    return getCollectionVectorSize(
+        result,
+    ) === dimensions;
+}
+
 function qdrantMatch(
     key,
     value,
@@ -439,17 +464,39 @@ export class QdrantKnowledgeBackend {
                         allowNotFound: true,
                     },
                 );
+            const compatible =
+                Boolean(result) &&
+                isCompatibleCollection(
+                    result,
+                    this.dimensions,
+                );
             return {
-                ok: Boolean(result),
+                ok: compatible,
                 configured: true,
                 backend: this.name,
                 indexMissing: !result,
+                indexIncompatible:
+                    Boolean(result) &&
+                    !compatible,
                 collection:
                     this.collectionName(
                         timelineId,
                     ),
                 collectionGeneration:
                     this.generation,
+                ...(result && !compatible
+                    ? {
+                        error:
+                            `Qdrant collection dimension ${
+                                getCollectionVectorSize(
+                                    result,
+                                ) ??
+                                'unknown'
+                            } does not match configured dimension ${
+                                this.dimensions
+                            }.`,
+                    }
+                    : {}),
                 stateRevision:
                     this.revisions.get(
                         timelineId,
@@ -462,6 +509,7 @@ export class QdrantKnowledgeBackend {
                 configured: true,
                 backend: this.name,
                 indexMissing: false,
+                indexIncompatible: false,
                 collectionGeneration:
                     this.generation,
                 error:
@@ -500,6 +548,7 @@ export class QdrantKnowledgeBackend {
             }`,
             {
                 method: 'PUT',
+                retryable: false,
                 body: {
                     vectors: {
                         size:
@@ -520,6 +569,7 @@ export class QdrantKnowledgeBackend {
             collection,
             collectionGeneration:
                 this.generation,
+            indexIncompatible: false,
         };
     }
 
@@ -601,37 +651,15 @@ export class QdrantKnowledgeBackend {
         };
     }
 
-    async upsert(input) {
-        this.assertRevision(
-            input.timelineId,
-            input.stateRevision,
-        );
-        const records =
-            normalizeBackendRecords(
-                input.records,
-            );
-        const vectors =
-            records.length
-                ? await this.embedTexts(
-                    records.map(record =>
-                        record.text),
-                    false,
-                )
-                : [];
-        await this.ensureCollection(
-            input.timelineId,
-        );
-        if (!records.length) {
-            return {
-                backend: this.name,
-                upserted: 0,
-                collectionGeneration:
-                    this.generation,
-            };
-        }
+    async putPoints(
+        timelineId,
+        records,
+        vectors,
+    ) {
+        if (!records.length) return;
         const collection =
             this.collectionName(
-                input.timelineId,
+                timelineId,
             );
         await this.request(
             `/collections/${
@@ -641,6 +669,7 @@ export class QdrantKnowledgeBackend {
             }/points?wait=true`,
             {
                 method: 'PUT',
+                retryable: false,
                 body: {
                     points:
                         records.map(
@@ -666,6 +695,147 @@ export class QdrantKnowledgeBackend {
                 },
             },
         );
+    }
+
+    async deletePointIds(
+        timelineId,
+        pointIds,
+    ) {
+        if (!pointIds.length) return 0;
+        await this.request(
+            `/collections/${
+                encodeURIComponent(
+                    this.collectionName(
+                        timelineId,
+                    ),
+                )
+            }/points/delete?wait=true`,
+            {
+                method: 'POST',
+                retryable: false,
+                body: {
+                    points:
+                        pointIds,
+                },
+            },
+        );
+        return pointIds.length;
+    }
+
+    async readManifest(timelineId) {
+        const collection =
+            this.collectionName(
+                timelineId,
+            );
+        const records = new Map();
+        const malformedPointIds = [];
+        let offset = null;
+        do {
+            const page =
+                await this.request(
+                    `/collections/${
+                        encodeURIComponent(
+                            collection,
+                        )
+                    }/points/scroll`,
+                    {
+                        method: 'POST',
+                        retryable: false,
+                        body: {
+                            limit: 256,
+                            with_payload: [
+                                'recordId',
+                                'contentChecksum',
+                            ],
+                            with_vector: false,
+                            ...(offset === null
+                                ? {}
+                                : {
+                                    offset,
+                                }),
+                        },
+                    },
+                );
+            const result =
+                page?.result ||
+                {};
+            for (const point of (
+                result.points ||
+                []
+            )) {
+                const recordId =
+                    String(
+                        point?.payload
+                            ?.recordId ||
+                        '',
+                    ).trim();
+                const contentChecksum =
+                    String(
+                        point?.payload
+                            ?.contentChecksum ||
+                        '',
+                    ).trim();
+                if (
+                    !recordId ||
+                    !contentChecksum
+                ) {
+                    malformedPointIds.push(
+                        point?.id,
+                    );
+                    continue;
+                }
+                records.set(
+                    recordId,
+                    {
+                        pointId:
+                            point?.id,
+                        contentChecksum,
+                    },
+                );
+            }
+            offset =
+                result.next_page_offset ??
+                null;
+        } while (offset !== null);
+        return {
+            records,
+            malformedPointIds:
+                malformedPointIds
+                    .filter(pointId =>
+                        pointId !== undefined &&
+                        pointId !== null),
+        };
+    }
+
+    async upsert(input) {
+        this.assertRevision(
+            input.timelineId,
+            input.stateRevision,
+        );
+        const records =
+            normalizeBackendRecords(
+                input.records,
+            );
+        const vectors =
+            records.length
+                ? await this.embedTexts(
+                    records.map(record =>
+                        record.text),
+                    false,
+                )
+                : [];
+        await this.ensureCollection(
+            input.timelineId,
+        );
+        await this.putPoints(
+            input.timelineId,
+            records,
+            vectors,
+        );
+        const collection =
+            this.collectionName(
+                input.timelineId,
+            );
         this.revisions.set(
             input.timelineId,
             input.stateRevision,
@@ -676,6 +846,114 @@ export class QdrantKnowledgeBackend {
             collection,
             collectionGeneration:
                 this.generation,
+        };
+    }
+
+    async reconcile(
+        input,
+        health = null,
+    ) {
+        this.assertRevision(
+            input.timelineId,
+            input.stateRevision,
+        );
+        const currentHealth =
+            health ||
+            await this.health(input);
+        if (!currentHealth.ok) {
+            if (
+                !currentHealth.indexMissing &&
+                !currentHealth.indexIncompatible
+            ) {
+                throw new Error(
+                    currentHealth.error ||
+                    'Qdrant health failed.',
+                );
+            }
+            const rebuilt =
+                await this.rebuild(input);
+            return {
+                ...rebuilt,
+                embedded:
+                    normalizeBackendRecords(
+                        input.records,
+                    ).length,
+                reused: 0,
+                deleted: 0,
+                reconciled: false,
+            };
+        }
+        const records =
+            normalizeBackendRecords(
+                input.records,
+            );
+        const manifest =
+            await this.readManifest(
+                input.timelineId,
+            );
+        const currentIds =
+            new Set(
+                records.map(record =>
+                    record.recordId),
+            );
+        const upsertRecords =
+            records.filter(record =>
+                manifest.records
+                    .get(record.recordId)
+                    ?.contentChecksum !==
+                record.contentChecksum);
+        const deletedPointIds = [
+            ...manifest.malformedPointIds,
+            ...[
+                ...manifest.records
+                    .entries(),
+            ]
+                .filter(([recordId]) =>
+                    !currentIds.has(
+                        recordId,
+                    ))
+                .map(([, entry]) =>
+                    entry.pointId),
+        ];
+        const vectors =
+            upsertRecords.length
+                ? await this.embedTexts(
+                    upsertRecords.map(record =>
+                        record.text),
+                    false,
+                )
+                : [];
+        await this.putPoints(
+            input.timelineId,
+            upsertRecords,
+            vectors,
+        );
+        const deleted =
+            await this.deletePointIds(
+                input.timelineId,
+                deletedPointIds,
+            );
+        this.revisions.set(
+            input.timelineId,
+            input.stateRevision,
+        );
+        return {
+            backend: this.name,
+            collection:
+                this.collectionName(
+                    input.timelineId,
+                ),
+            collectionGeneration:
+                this.generation,
+            upserted:
+                upsertRecords.length,
+            embedded:
+                upsertRecords.length,
+            reused:
+                records.length -
+                upsertRecords.length,
+            deleted,
+            reconciled: true,
         };
     }
 
@@ -700,31 +978,18 @@ export class QdrantKnowledgeBackend {
                     deterministicVectorPointId(
                         recordId,
                     ));
-        if (ids.length) {
-            await this.request(
-                `/collections/${
-                    encodeURIComponent(
-                        this.collectionName(
-                            input.timelineId,
-                        ),
-                    )
-                }/points/delete?wait=true`,
-                {
-                    method: 'POST',
-                    retryable: true,
-                    body: {
-                        points: ids,
-                    },
-                },
+        const deleted =
+            await this.deletePointIds(
+                input.timelineId,
+                ids,
             );
-        }
         this.revisions.set(
             input.timelineId,
             input.stateRevision,
         );
         return {
             backend: this.name,
-            deleted: ids.length,
+            deleted,
         };
     }
 
@@ -829,6 +1094,7 @@ export class QdrantKnowledgeBackend {
             {
                 method: 'DELETE',
                 allowNotFound: true,
+                retryable: false,
             },
         );
         this.revisions.delete(

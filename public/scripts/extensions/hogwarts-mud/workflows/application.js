@@ -15,6 +15,9 @@ import {
     createLocalizationQueue,
 } from '../domain/localization-queue.js';
 import {
+    normalizePostTurnSemanticProvider,
+} from '../domain/post-turn-semantic-provider.js';
+import {
     collectChatLocalizationCandidates,
     collectStateLocalizationCandidates,
 } from '../domain/localization-candidates.js';
@@ -326,6 +329,7 @@ export function createWorkflowApplication(ports) {
         extension_settings,
         getContext,
         normalizeModelSlots,
+        normalizePostTurnSemanticProvider,
         normalizeTranslationProvider,
     });
 
@@ -360,6 +364,7 @@ export function createWorkflowApplication(ports) {
         migrateSpellbookState,
         normalizeCausalCollapseState,
         normalizeModelSlots,
+        normalizePostTurnSemanticProvider,
         projectActorSocialRelationships,
         projectSceneTransitionPresence,
         reconcileCanonActorDisplayNames,
@@ -530,6 +535,18 @@ export function createWorkflowApplication(ports) {
                             'turn.generation',
                         emittedBy:
                             'turn.performance',
+                        tier: 'low',
+                    },
+                ),
+        postTurnSemantic:
+            modelEventScheduler
+                .createRoleRequest(
+                    'post_turn_semantic_proposal',
+                    {
+                        eventType:
+                            'turn.post_commit',
+                        emittedBy:
+                            'turn.post_semantic_provider',
                         tier: 'low',
                     },
                 ),
@@ -1399,10 +1416,14 @@ export function createWorkflowApplication(ports) {
         buildStructuredPlayerTurnSequence,
         findLocalRoomPath,
         getRequestHeaders,
+        normalizePostTurnSemanticProvider,
         projectObservedInventoryUpdates,
+        resolveRoleSlots,
         runLocalModelTask:
             modelEventScheduler
                 .runLocalTask,
+        sendPostTurnSemanticRequest:
+            roleRequests.postTurnSemantic,
         validatePerceptionContract,
     });
     const {

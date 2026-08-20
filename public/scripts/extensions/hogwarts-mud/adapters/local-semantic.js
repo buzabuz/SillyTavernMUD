@@ -16,6 +16,10 @@ import {
     buildDynamicInventoryContext,
 } from '../domain/inventory-observation-context.js';
 import {
+    createPostTurnSemanticMessages,
+    POST_TURN_JSON_SCHEMA,
+} from '../domain/post-turn-semantic-contract.js';
+import {
     createDynamicObservationAdapter,
 } from './dynamic-observation.js';
 
@@ -26,13 +30,23 @@ export function createLocalSemanticAdapter(ports) {
         fetchImpl = null,
         findLocalRoomPath,
         getRequestHeaders,
+        normalizePostTurnSemanticProvider =
+        value =>
+            value === 'local'
+                ? 'local'
+                : 'low',
         projectObservedInventoryUpdates,
+        resolveRoleSlots =
+        slots =>
+            slots || {},
         runLocalModelTask =
         async (
             _taskId,
             invoke,
         ) =>
             invoke(),
+        sendPostTurnSemanticRequest =
+        null,
         validatePerceptionContract,
     } = ports;
     const fetchRequest =
@@ -1299,41 +1313,109 @@ export function createLocalSemanticAdapter(ports) {
                 transaction.actorPresence ||
                 null,
         };
-        const provider = 'local';
+        const provider =
+            normalizePostTurnSemanticProvider(
+                state.postTurnSemanticProvider,
+            );
         try {
-            const response =
-                await runLocalModelTask(
-                    'post_turn_semantic_proposal',
-                    () =>
-                        fetchRequest(
-                            '/api/hogwarts-mud/local/observe',
-                            {
-                                method: 'POST',
-                                headers:
-                                    getRequestHeaders(),
-                                body:
-                                    JSON.stringify({
-                                        input,
-                                    }),
-                            },
+            let observation;
+            if (provider === 'local') {
+                const response =
+                    await runLocalModelTask(
+                        'post_turn_semantic_proposal',
+                        () =>
+                            fetchRequest(
+                                '/api/hogwarts-mud/local/observe',
+                                {
+                                    method: 'POST',
+                                    headers:
+                                        getRequestHeaders(),
+                                    body:
+                                        JSON.stringify({
+                                            input,
+                                        }),
+                                },
+                            ),
+                        {
+                            eventType:
+                                'turn.post_commit',
+                            emittedBy:
+                                'turn.post_semantic_provider',
+                        },
+                    );
+                if (!response.ok) {
+                    throw new Error(
+                        (
+                            await response.text()
+                        ).slice(0, 1_000) ||
+                        `HTTP ${response.status}`,
+                    );
+                }
+                observation =
+                    await response.json();
+            } else {
+                const lowSlot =
+                    resolveRoleSlots(
+                        state.modelSlots,
+                    ).low;
+                if (
+                    !lowSlot?.profileId ||
+                    typeof sendPostTurnSemanticRequest !==
+                        'function'
+                ) {
+                    throw new Error(
+                        'Low post semantic provider is unavailable.',
+                    );
+                }
+                const roleResponse =
+                    await sendPostTurnSemanticRequest(
+                        lowSlot,
+                        createPostTurnSemanticMessages(
+                            input,
                         ),
-                    {
-                        eventType:
-                            'turn.post_commit',
-                        emittedBy:
-                            'turn.local_observation',
-                    },
-                );
-            if (!response.ok) {
-                throw new Error(
-                    (
-                        await response.text()
-                    ).slice(0, 1_000) ||
-                    `HTTP ${response.status}`,
-                );
+                        {
+                            json: true,
+                            jsonSchema:
+                                POST_TURN_JSON_SCHEMA,
+                            stream: false,
+                            skipRegexPreset: true,
+                        },
+                    );
+                const raw =
+                    roleResponse?.content;
+                if (
+                    raw === undefined ||
+                    raw === null
+                ) {
+                    throw new Error(
+                        'Low post semantic provider returned no content.',
+                    );
+                }
+                const settled =
+                    await fetchRequest(
+                        '/api/hogwarts-mud/post/observe/settle',
+                        {
+                            method: 'POST',
+                            headers:
+                                getRequestHeaders(),
+                            body:
+                                JSON.stringify({
+                                    input,
+                                    raw,
+                                }),
+                        },
+                    );
+                if (!settled.ok) {
+                    throw new Error(
+                        (
+                            await settled.text()
+                        ).slice(0, 1_000) ||
+                        `HTTP ${settled.status}`,
+                    );
+                }
+                observation =
+                    await settled.json();
             }
-            const observation =
-                await response.json();
             const temporalValidation =
             validateSceneTemporalConsistency(
                 observation

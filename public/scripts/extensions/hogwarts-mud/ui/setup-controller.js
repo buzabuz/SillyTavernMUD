@@ -660,6 +660,8 @@ export function createSetupController(ports) {
                         character,
                         slots,
                         campaign,
+                        settings
+                            .postTurnSemanticProvider,
                     ),
                 );
         }

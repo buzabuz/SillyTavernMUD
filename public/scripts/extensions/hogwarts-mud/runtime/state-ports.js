@@ -5,6 +5,11 @@ export function createStatePorts(ports) {
         extension_settings,
         getContext,
         normalizeModelSlots,
+        normalizePostTurnSemanticProvider =
+        value =>
+            value === 'local'
+                ? 'local'
+                : 'low',
         normalizeTranslationProvider,
     } = ports;
 
@@ -36,6 +41,12 @@ export function createStatePorts(ports) {
             }
         }
         extension_settings.hogwartsMud.modelSlots = normalizeModelSlots(extension_settings.hogwartsMud.modelSlots);
+        extension_settings.hogwartsMud
+            .postTurnSemanticProvider =
+        normalizePostTurnSemanticProvider(
+            extension_settings.hogwartsMud
+                .postTurnSemanticProvider,
+        );
         extension_settings.hogwartsMud
             .translationProvider =
         normalizeTranslationProvider(

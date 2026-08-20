@@ -21,6 +21,7 @@ export function createModelAdapter(ports) {
             jsonSchema = null,
             stream = false,
             onProgress = null,
+            skipRegexPreset = false,
         } = {},
     ) {
         const profiles = getConnectionProfiles();
@@ -28,8 +29,12 @@ export function createModelAdapter(ports) {
         if (!baseProfile) {
             throw new Error('职责绑定的 Connection Profile 不存在。');
         }
-        const regexPresetId = slot.regexPresetId || baseProfile['regex-preset'];
-        await applyRegexPresetById(regexPresetId);
+        const regexPresetId = skipRegexPreset
+            ? ''
+            : slot.regexPresetId || baseProfile['regex-preset'];
+        if (!skipRegexPreset) {
+            await applyRegexPresetById(regexPresetId);
+        }
         const effectiveProfile = {
             ...structuredClone(baseProfile),
             id: `hpmud-runtime-${uuidv4()}`,

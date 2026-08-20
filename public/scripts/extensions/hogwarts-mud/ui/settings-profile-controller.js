@@ -42,6 +42,7 @@ export function createSettingsProfileController(ports) {
         getSetupControl,
         isGameStarted,
         normalizeModelSlots,
+        normalizePostTurnSemanticProvider,
         normalizeRegexScripts,
         normalizeTranslationProvider,
         refreshTranslationsForProvider,
@@ -617,6 +618,13 @@ export function createSettingsProfileController(ports) {
     function syncModelSlotControls() {
         const settings = getSettings();
         const slots = normalizeModelSlots(isGameStarted() ? getMudState().modelSlots : settings.modelSlots);
+        const provider = normalizePostTurnSemanticProvider(
+            isGameStarted()
+                ? getMudState()
+                    ?.postTurnSemanticProvider
+                : settings
+                    .postTurnSemanticProvider,
+        );
         const profiles = getConnectionProfiles();
         root.querySelector('#hpmud_profile_count').textContent = profiles.length
             ? `${profiles.length} ${staticText(
@@ -656,6 +664,42 @@ export function createSettingsProfileController(ports) {
             setControlValue(`response_${role}`, slots[role].maxResponseLength);
             renderProfileDetail(role, selected, profiles);
         });
+        const providerControl = root.querySelector(
+            '[data-hpmud-post-semantic-provider]',
+        );
+        if (providerControl) {
+            providerControl.value = provider;
+        }
+        const providerDetail = root.querySelector(
+            '#hpmud_post_semantic_provider_detail',
+        );
+        if (providerDetail) {
+            const lowProfile = profiles.find(
+                profile =>
+                    profile.id ===
+                    slots.low.profileId,
+            );
+            providerDetail.textContent =
+                provider === 'low'
+                    ? lowProfile
+                        ? `${staticText(
+                            'ui.setup.post_semantic.low_detail',
+                            'Uses the Low Connection Profile',
+                        )} · ${
+                            [
+                                lowProfile.name,
+                                lowProfile.model,
+                            ].filter(Boolean).join(' · ')
+                        }`
+                        : staticText(
+                            'ui.setup.post_semantic.low_missing',
+                            'Choose a Low Connection Profile before using it for post-turn semantics.',
+                        )
+                    : staticText(
+                        'ui.setup.post_semantic.local_detail',
+                        'Uses the local Ollama post-turn model.',
+                    );
+        }
         syncContextPolicyUi(slots);
     }
 
@@ -929,16 +973,56 @@ export function createSettingsProfileController(ports) {
         return { name, apiId, removed };
     }
 
-    function persistModelSlots(slots) {
+    function persistModelConfiguration(
+        slots,
+        provider,
+    ) {
         const normalized = normalizeModelSlots(slots);
+        const normalizedProvider =
+            normalizePostTurnSemanticProvider(
+                provider,
+            );
         getSettings().modelSlots = structuredClone(normalized);
+        getSettings().postTurnSemanticProvider =
+            normalizedProvider;
         const state = getMudState();
         if (isGameStarted() && state) {
             state.modelSlots = structuredClone(normalized);
+            state.postTurnSemanticProvider =
+                normalizedProvider;
             saveMetadataDebounced();
         }
         saveSettingsDebounced();
-        return normalized;
+        return {
+            slots: normalized,
+            provider: normalizedProvider,
+        };
+    }
+
+    function persistModelSlots(slots) {
+        const provider = isGameStarted()
+            ? getMudState()
+                ?.postTurnSemanticProvider
+            : getSettings()
+                .postTurnSemanticProvider;
+        return persistModelConfiguration(
+            slots,
+            provider,
+        ).slots;
+    }
+
+    function persistPostTurnSemanticProvider(
+        provider,
+    ) {
+        const slots = isGameStarted()
+            ? getMudState()
+                ?.modelSlots
+            : getSettings()
+                .modelSlots;
+        return persistModelConfiguration(
+            slots,
+            provider,
+        ).provider;
     }
 
     async function importRoleChatPreset(file, role) {
@@ -1165,6 +1249,7 @@ export function createSettingsProfileController(ports) {
         applyNativeRoleSettings,
         importPreset,
         persistModelSlots,
+        persistPostTurnSemanticProvider,
         importRoleChatPreset,
         normalizeRegexPresetItems,
         importRoleRegexPreset,

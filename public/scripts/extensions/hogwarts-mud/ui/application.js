@@ -90,6 +90,7 @@ export const UI_ACTION_NAMES = Object.freeze([
     'openSceneTransitionDialog',
     'openSpellPicker',
     'persistModelSlots',
+    'persistPostTurnSemanticProvider',
     'polishCharacterBackground',
     'populateLevelSelect',
     'populateMapScopeSelect',
