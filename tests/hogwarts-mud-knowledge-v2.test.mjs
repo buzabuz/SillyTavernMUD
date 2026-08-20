@@ -1299,6 +1299,13 @@ test('Qdrant REST adapter uses generations, deterministic IDs and payload filter
                             result: {
                                 status:
                                     'green',
+                                config: {
+                                    params: {
+                                        vectors: {
+                                            size: 3,
+                                        },
+                                    },
+                                },
                             },
                         },
                     )

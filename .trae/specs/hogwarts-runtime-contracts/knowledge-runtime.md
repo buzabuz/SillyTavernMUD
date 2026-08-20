@@ -76,6 +76,10 @@ Hogwarts `VectorBackend` 提供 `health/upsert/delete/query/rebuild`。
   `[recordId, contentChecksum]` 确定性计算，不含 `stateRevision`、时间戳、
   backend 状态或输入顺序。metadata/scheduler-only save 不得触发重复
   embedding 或把健康索引判为 stale。
+- 健康 Qdrant 同步始终用完整当前快照对照 collection payload manifest 的
+  `recordId + contentChecksum`：匹配点复用既有 vector，缺失或 checksum
+  不匹配点才 embedding/upsert，manifest 中不在当前快照的点删除。一次
+  Qdrant 降级后，即使 fingerprint 未变，下一次健康同步也必须重新对账。
 - 配置且健康时 Qdrant 是首选语义后端，使用 timeline、revision、audience、node type、category 和 clock payload filter。
 - Qdrant point ID 从 record ID 确定性生成；embedding model 或维度改变时使用新的 collection generation。
 - JSON exact 是始终可用的确定性检索基线；Vectra 若启用，也必须使用同一 V2 record/audience 契约。

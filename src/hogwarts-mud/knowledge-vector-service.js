@@ -157,7 +157,10 @@ export class KnowledgeVectorService {
                     await this
                         .preferredBackend
                         .health(input);
-                if (health.indexMissing) {
+                if (
+                    health.indexMissing ||
+                    health.indexIncompatible
+                ) {
                     preferredResult =
                         await this
                             .preferredBackend
@@ -178,34 +181,72 @@ export class KnowledgeVectorService {
                         } health failed`,
                     );
                 } else {
-                    const removedIds =
-                        (exactResult
-                            .removed ||
-                        []).map(entry =>
-                            entry.recordId ||
-                            entry.id);
                     if (
-                        removedIds.length
+                        typeof this
+                            .preferredBackend
+                            .reconcile ===
+                            'function'
                     ) {
-                        await this
-                            .preferredBackend
-                            .delete({
-                                ...input,
-                                recordIds:
-                                    removedIds,
-                            });
+                        preferredResult =
+                            await this
+                                .preferredBackend
+                                .reconcile(
+                                    {
+                                        ...input,
+                                        records,
+                                    },
+                                    health,
+                                );
+                    } else {
+                        const removedIds =
+                            (
+                                exactResult
+                                    .removed ||
+                                []
+                            ).map(entry =>
+                                entry.recordId ||
+                                entry.id);
+                        if (removedIds.length) {
+                            await this
+                                .preferredBackend
+                                .delete({
+                                    ...input,
+                                    recordIds:
+                                        removedIds,
+                                });
+                        }
+                        preferredResult =
+                            await this
+                                .preferredBackend
+                                .upsert({
+                                    ...input,
+                                    records,
+                                });
                     }
-                    preferredResult =
-                        await this
-                            .preferredBackend
-                            .upsert({
-                                ...input,
-                                records,
-                            });
                 }
                 diagnostics.backend =
                     this.preferredBackend
                         .name;
+                diagnostics.embeddedRecordCount =
+                    Number(
+                        preferredResult
+                            ?.embedded ??
+                        preferredResult
+                            ?.upserted ??
+                        0,
+                    );
+                diagnostics.reusedRecordCount =
+                    Number(
+                        preferredResult
+                            ?.reused ??
+                        0,
+                    );
+                diagnostics.deletedRecordCount =
+                    Number(
+                        preferredResult
+                            ?.deleted ??
+                        0,
+                    );
             } catch (error) {
                 diagnostics.degraded =
                     true;

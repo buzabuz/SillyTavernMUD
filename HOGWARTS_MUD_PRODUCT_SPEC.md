@@ -29,6 +29,7 @@ linked authority wins and this registry must be corrected in the same change.
 | `hogwarts-language-structured-input-identity-codes` | Revision 4 approved; Phase 2 implementation in progress | [PRD](.trae/specs/hogwarts-language-structured-input-identity-codes/prd.md) |
 | `hogwarts-causal-pacing-world-facts-story-arcs` | Revision 1 research TODO; 业务合同未定义，禁止模型与生产设计 | [PRD](.trae/specs/hogwarts-causal-pacing-world-facts-story-arcs/prd.md) |
 | `hogwarts-validator-governance` | Revision 25 implementation complete; final acceptance blocked on independent real provider/timeline evidence; fine-tuning deferred | [PRD](.trae/specs/hogwarts-validator-governance/prd.md) |
+| `hogwarts-knowledge-incremental-index-sync` | Revision 1 implemented and independently accepted; core-change debt closeout pending | [PRD](.trae/specs/hogwarts-knowledge-incremental-index-sync/prd.md) |
 
 ## Implemented And Accepted PRDs
 

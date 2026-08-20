@@ -1299,6 +1299,12 @@ export async function syncKnowledgeBase(context, state) {
     assertKnowledgeApiContract(
         health,
     );
+    const needsPreferredReconciliation =
+        health.preferred?.configured ===
+            true &&
+        state.knowledgeBase
+            ?.diagnostics
+            ?.degraded === true;
     if (
         health.exact?.ok === true &&
         health.exact
@@ -1310,7 +1316,8 @@ export async function syncKnowledgeBase(context, state) {
                 true ||
             health.preferred?.ok ===
                 true
-        )
+        ) &&
+        !needsPreferredReconciliation
     ) {
         const metadataBefore =
             JSON.stringify(
