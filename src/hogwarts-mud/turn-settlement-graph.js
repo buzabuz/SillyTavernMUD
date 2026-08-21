@@ -64,9 +64,9 @@ function finalizeTurn(state) {
             finalizeNarrativeTurnPerformance(
                 state.reconciled,
                 {
-                    movementResolution:
+                    movementPreflight:
                         input
-                            .movementResolution,
+                            .movementPreflight,
                     momentumDirective:
                         input
                             .momentumDirective,

@@ -1,17 +1,11 @@
 // Extracted from the helpers compatibility facade for Task 4.
 
 import {
-    createSceneItemStates,
-    synchronizeHeldItemLocations,
-} from './inventory.js';
-
-import {
     getLocalMapDefinition,
     getMapRooms,
 } from './map-access.js';
 
 import {
-    applyPlayerMovement,
     parseExplicitMovementDirective,
 } from './movement.js';
 
@@ -19,10 +13,6 @@ import {
     findLocalRoomPath,
     isRoutePassable,
 } from './pathfinding.js';
-
-import {
-    findExplicitRoomReference,
-} from './scene-destination.js';
 
 import {
     ACTOR_MOVEMENT_HISTORY_VERSION,
@@ -38,120 +28,12 @@ export function reconcileSpatialState(
 ) {
     let next = structuredClone(worldState);
     let changed = false;
-    const previousSpatialVersion = Number(
-        worldState.spatial?.version || 0,
-    );
     next.map ??= {};
     const mapId = String(next.map?.activeMapId || '');
     const map = getLocalMapDefinition(mapId, next.map);
     const rooms = getMapRooms(map, next.map);
     const roomIds = new Set(rooms.map(room => room.id));
-    const previousPlayerRoomId = String(
-        next.map.currentLocalNodeId || '',
-    );
-    const sceneOpeningText = String(
-        options.sceneOpeningText || '',
-    ).trim();
-    const openingGroundingVersion =
-        Number(
-            worldState.spatial
-                ?.openingGroundingVersion ||
-            0,
-        );
-    const hasCommittedSceneMovement =
-        worldState.spatial
-            ?.lastMovement?.moved === true;
-    const needsOpeningGrounding =
-        Boolean(sceneOpeningText) &&
-        openingGroundingVersion < 1 &&
-        !hasCommittedSceneMovement;
     let locationRepair = null;
-    if (
-        needsOpeningGrounding
-    ) {
-        const openingRoom =
-            findExplicitRoomReference(
-                sceneOpeningText,
-                map,
-                next.map,
-            );
-        if (
-            openingRoom &&
-            openingRoom.id !==
-                previousPlayerRoomId
-        ) {
-            next.map.currentLocalNodeId =
-                openingRoom.id;
-            next.map.currentLevelId =
-                openingRoom.levelId ||
-                next.map.currentLevelId;
-            next.map.discoveredLocalNodeIds =
-                [...new Set([
-                    ...(
-                        next.map
-                            .discoveredLocalNodeIds ||
-                        []
-                    ),
-                    `${mapId}:${openingRoom.id}`,
-                ])];
-            if (next.scene) {
-                next.scene.mapId = mapId;
-                next.scene.roomId =
-                    openingRoom.id;
-            }
-            next.actors = (next.actors || [])
-                .map(actor =>
-                    actor.present !== false &&
-                    (actor.mapId || mapId) ===
-                        mapId &&
-                    (
-                        actor.roomId ||
-                        previousPlayerRoomId
-                    ) === previousPlayerRoomId
-                        ? {
-                            ...actor,
-                            mapId,
-                            roomId:
-                                openingRoom.id,
-                        }
-                        : actor);
-            next.items =
-                synchronizeHeldItemLocations(
-                    next.items,
-                    {
-                        playerMapId:
-                            mapId,
-                        playerRoomId:
-                            openingRoom.id,
-                        actors:
-                            next.actors,
-                        clock:
-                            next.clock,
-                    },
-                );
-            if (next.scene) {
-                next.scene.itemStates =
-                    createSceneItemStates(
-                        next.items,
-                        {
-                            mapId,
-                            roomId:
-                                openingRoom.id,
-                        },
-                    );
-            }
-            locationRepair = {
-                fromMapId: mapId,
-                fromRoomId:
-                    previousPlayerRoomId,
-                toMapId: mapId,
-                toRoomId: openingRoom.id,
-                source:
-                    'scene_opening_text',
-            };
-            changed = true;
-        }
-    }
     const fallbackRoomId = roomIds.has(next.map?.currentLocalNodeId)
         ? next.map.currentLocalNodeId
         : rooms[0]?.id || '';
@@ -194,60 +76,21 @@ export function reconcileSpatialState(
             roomId,
         };
     });
-    let movement = null;
-    if (
-        (
-            !worldState.spatial?.version ||
-            (
-                previousSpatialVersion <
-                    SPATIAL_STATE_VERSION &&
-                Boolean(
-                    parseExplicitMovementDirective(
-                        recentPlayerAction,
-                    ),
-                ) &&
-                worldState.spatial
-                    ?.lastMovement
-                    ?.moved !== true
-            ) ||
-            options.retryUnresolvedMovement === true
-        ) &&
-        recentPlayerAction
-    ) {
-        const result = applyPlayerMovement(
-            next,
-            recentPlayerAction,
-            { confirmed: true },
-        );
-        next = result.state;
-        movement = result.movement;
-        changed ||= Boolean(movement?.moved);
-    }
+    // Reload reconciliation may repair structural projections, but never
+    // infers or replays a player movement from message text.
+    const movement = null;
     const player = {
         mapId: String(next.map?.activeMapId || ''),
         roomId: String(next.map?.currentLocalNodeId || ''),
     };
-    const nextOpeningGroundingVersion =
-        sceneOpeningText &&
-        (
-            needsOpeningGrounding ||
-            hasCommittedSceneMovement
-        )
-            ? 1
-            : openingGroundingVersion;
     if (next.spatial?.version !==
             SPATIAL_STATE_VERSION ||
-        next.spatial
-            ?.openingGroundingVersion !==
-            nextOpeningGroundingVersion ||
         next.spatial?.player?.mapId !== player.mapId ||
         next.spatial?.player?.roomId !== player.roomId) {
         changed = true;
     }
     next.spatial = {
         version: SPATIAL_STATE_VERSION,
-        openingGroundingVersion:
-            nextOpeningGroundingVersion,
         player,
         lastMovement: next.spatial?.lastMovement || movement || null,
     };

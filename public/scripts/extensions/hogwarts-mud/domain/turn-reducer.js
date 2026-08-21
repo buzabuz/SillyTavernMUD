@@ -56,6 +56,9 @@ import {
 import {
     validateTurnTransaction,
 } from './turn-validation.js';
+import {
+    settlePostPlayerMovement,
+} from './movement-post-settlement.js';
 
 export function applyTurnTransaction(
     worldState,
@@ -78,6 +81,34 @@ export function applyTurnTransaction(
         throw new Error(validation.errors.join('；'));
     }
     let next = structuredClone(worldState);
+    if (transaction.movementPreflight) {
+        const movementSettlement =
+            settlePostPlayerMovement(
+                next,
+                transaction.movementPreflight,
+                transaction.playerMovement,
+                transaction.segments,
+            );
+        if (!movementSettlement.valid) {
+            throw new Error(
+                movementSettlement.error,
+            );
+        }
+        next = movementSettlement.state;
+        transaction.movementOutcome =
+            movementSettlement.movementOutcome;
+        if (
+            movementSettlement
+                .movementOutcome
+                ?.moved ===
+            true
+        ) {
+            transaction.elapsedMinutes =
+                movementSettlement
+                    .movementOutcome
+                    .minutes;
+        }
+    }
     const requestedMinutes = Number(transaction.elapsedMinutes);
     const allowShortMagicTurn =
         transaction.instantaneousMagic ===

@@ -888,7 +888,7 @@ export function reconcileNarrativeTurnAuthority(
 export function finalizeNarrativeTurnPerformance(
     source,
     {
-        movementResolution = null,
+        movementPreflight = null,
         momentumDirective = null,
         checkResolution = null,
     } = {},
@@ -949,8 +949,9 @@ export function finalizeNarrativeTurnPerformance(
             }
             : {
                 type:
-                    movementResolution
-                        ?.moved
+                    movementPreflight
+                        ?.eligibility ===
+                        'eligible'
                         ? 'access_change'
                         : checkResolution
                             ? 'practical_step'

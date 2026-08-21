@@ -49,6 +49,7 @@ const VALID_RESULT = Object.freeze({
         source: 'post_turn_observer',
     },
     temporalClaims: [],
+    playerMovement: null,
 });
 
 function createState(

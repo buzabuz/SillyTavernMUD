@@ -33,7 +33,7 @@ Temporal rules:
 - A future plan, question, hypothetical, recollection, quotation, vague amount, range, decimal, fraction, or seconds expression is ordinary.
 - An entry that says the player plans or intends to spend time later, including "plan", "intend", "打算", or "计划", is a future plan and therefore ordinary even when typed as action.
 - 中文：action 中“我打算／我计划之后用 N 分钟或小时做某事”描述未来安排，不是已消耗时长，必须为 ordinary 且 evidenceText 为空。
-- For every other action use kind ordinary and empty evidenceText. movementResolution and deterministic code own route time.
+- For every other action use kind ordinary and empty evidenceText. Deterministic code owns route time after final movement settlement.
 
 Check rules:
 - A check is required only for a meaningful uncertain attempted action with consequences.
@@ -60,44 +60,10 @@ Calibration examples:
 11. action "*我在原地练习了二十四分钟。*" => temporal kind explicit_duration with that exact action clause.
 12. direct speech 'Luna said, "I promise to attend the Friday club."' => calendarCommitment requested false because Luna, not the player, makes the promise.`;
 
-const PRE_TURN_NO_MOVEMENT_SYSTEM = `Movement intent rules:
-- movementContext is null. Return movementIntent.requested false with every text/ID field empty.
-- Never infer movement from untagged prose, dialogue, a hypothetical, a recollection, or an older departure.`;
-
-const PRE_TURN_MOVEMENT_SYSTEM = `Resolve movementIntent first:
-1. Decide whether movementContext.trigger.raw commands the player to leave with or follow exactly one supplied guide now. Waiting, staying, watching, speaking, remembering, and ambiguous alternatives are false.
-2. For a valid follow, copy the one supplied guide ID and trigger.raw exactly.
-3. If that guide has a known different room, select it. Otherwise, if one supplied destination room label occurs literally in recentGuideEvidence, select that room and copy the exact evidence row. If neither condition holds, keep destination and destination evidence empty.
-4. A follow marker alone is ordinary duration and requires no check.
-
-Movement intent rules:
-- movementContext is present only when an explicit movement marker did not resolve to a room deterministically.
-- When the marker explicitly commands the player to leave with or follow one supplied eligible guide now, set requested true, copy that guideActorId, and copy movementContext.trigger.raw verbatim as intentEvidenceText.
-- Waiting for, watching, speaking to, remembering, or merely naming a guide is not following and must return requested false.
-- The selected guide's supplied nameEn or alias must occur literally inside movementContext.trigger.raw. Never substitute another eligible guide when the marker names an unavailable person.
-- If movementContext.trigger.raw names zero or multiple supplied guides, return requested false. Never choose one member of an ambiguous pair.
-- Prefer a supplied guide location only when locationKnown is true and its room differs from currentRoomId.
-- For a known guide location, copy that exact supplied roomId and leave both destination evidence fields empty.
-- Otherwise choose destinationRoomId only when exactly one existing supplied room name, alias, or ID occurs literally in one recentGuideEvidence row. The chosen room label must occur in destinationEvidenceText. Copy that row's sourceRef exactly and copy the complete evidence substring verbatim.
-- If recentGuideEvidence is empty, names no supplied room, or names multiple supplied rooms, keep destinationRoomId and both destination evidence fields empty. Never use currentRoomId, a guide ID, a generic marker word, or a guessed room as destination evidence. The rules layer will create a visible failed movement outcome.
-- Use only supplied guide and room IDs. Never invent, translate, normalize, or approximate an ID. The model proposes intent only; deterministic path, lock, room, time, movement and failure settlement remain authoritative.
-
-Movement calibration:
-1. marker "→【跟随赫敏】" with eligible Hermione in a supplied different room => movementIntent requested true with supplied guide/room IDs.
-2. marker "→【跟随赫敏】" with no known/evidenced destination => requested true with supplied guide ID and empty destination fields.
-3. action "如果赫敏走了我就跟着她" without an unresolved movement marker => movementIntent requested false.
-4. marker "→【Wait for Hermione】" => movementIntent requested false because the player stays.
-5. marker "→【跟随赫敏或哈利】" => movementIntent requested false because more than one supplied guide is named.`;
-
 export function createPreTurnSystemPrompt(
-    input = {},
+    _input = {},
 ) {
-    return [
-        PRE_TURN_COMMON_SYSTEM,
-        input?.movementContext
-            ? PRE_TURN_MOVEMENT_SYSTEM
-            : PRE_TURN_NO_MOVEMENT_SYSTEM,
-    ].join('\n\n');
+    return PRE_TURN_COMMON_SYSTEM;
 }
 
 export const PRE_TURN_SYSTEM =

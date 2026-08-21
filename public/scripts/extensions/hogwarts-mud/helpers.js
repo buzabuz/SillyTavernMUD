@@ -114,8 +114,8 @@ export {
 } from './domain/material-state.js';
 
 export {
-    applyPlayerMovement, inspectPlayerMovementIntent, parseExplicitMovementDirective,
-    removeExplicitMovementDirective, resolvePlayerMovement,
+    inspectPlayerMovementIntent, parseExplicitMovementDirective,
+    removeExplicitMovementDirective,
 } from './domain/movement.js';
 
 export {

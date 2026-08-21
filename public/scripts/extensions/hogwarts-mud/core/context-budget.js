@@ -220,7 +220,7 @@ const STRUCTURED_CONTEXT_PRESERVE_KEYS =
         'destinationAuthority',
         'nextScene',
         'presentActorStates',
-        'movementResolution',
+        'movementPreflight',
         'momentumDirective',
         'checkResolution',
         'mentionedKnownActors',

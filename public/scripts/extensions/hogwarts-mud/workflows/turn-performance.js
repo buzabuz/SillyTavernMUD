@@ -14,10 +14,6 @@ import {
     createModelLanguageMismatch,
     partitionModelSegments,
 } from '../domain/model-language-adoption.js';
-import {
-    ensureMovementOutcomeFact,
-} from '../domain/movement-outcome.js';
-
 const LOW_TIER_NARRATIVE_AUTHORITY_PROMPT_CONTRACT =
     NARRATIVE_AUTHORITY_PROMPT_CONTRACT
         .replaceAll(
@@ -215,6 +211,79 @@ const LOW_ITEM_PROPOSAL_KEYS =
         'held',
         'evidenceText',
     ]);
+
+export function sanitizeLowScenePerformancePayload(
+    payload,
+) {
+    if (
+        !payload ||
+        typeof payload !==
+            'object' ||
+        Array.isArray(
+            payload,
+        ) ||
+        !Array.isArray(
+            payload.stateProposals,
+        )
+    ) {
+        return payload;
+    }
+    const diagnostics = [];
+    payload.stateProposals =
+        payload.stateProposals.map(
+            (
+                proposal,
+                proposalIndex,
+            ) => {
+                if (
+                    !proposal ||
+                    typeof proposal !==
+                        'object' ||
+                    Array.isArray(
+                        proposal,
+                    )
+                ) {
+                    return proposal;
+                }
+                const allowed =
+                    LOW_PROPOSAL_KEYS[
+                        proposal.type
+                    ];
+                if (!allowed) {
+                    return proposal;
+                }
+                const droppedFields =
+                    Object.keys(proposal)
+                        .filter(field =>
+                            !allowed.has(field));
+                if (!droppedFields.length) {
+                    return proposal;
+                }
+                diagnostics.push({
+                    proposalIndex,
+                    fields: droppedFields,
+                });
+                return Object.fromEntries(
+                    Object.entries(
+                        proposal,
+                    ).filter(([
+                        field,
+                    ]) =>
+                        allowed.has(field)),
+                );
+            },
+        );
+    Object.defineProperty(
+        payload,
+        'modelShapeDiagnostics',
+        {
+            value: diagnostics,
+            enumerable: false,
+        },
+    );
+    return payload;
+}
+
 const LOW_PROGRESSION_TYPES =
     new Set([
         'npc_initiative',
@@ -699,7 +768,7 @@ export function createTurnPerformanceWorkflow(ports) {
         playerAction,
         budget,
         retrievedKnowledge = [],
-        movementResolution = null,
+        movementPreflight = null,
         momentumDirective = null,
         checkResolution = null,
         addressingOverride = null,
@@ -851,7 +920,7 @@ export function createTurnPerformanceWorkflow(ports) {
                                             .maximumIndividuatedSecondaryActors,
                                 }
                                 : null,
-                        movementResolution,
+                        movementPreflight,
                         checkResolution,
                     },
                     sceneFacts: {
@@ -967,10 +1036,10 @@ Strict boundaries from prohibitions:
 - Never add speech, thoughts, intentions, or choices for the player beyond the supplied action.
 - NPCs have agency. They must pursue their committed goals, initiate practical steps, and act without waiting for the player to prompt every motion.
 - When the player explicitly requests an immediate concrete step, complete it in this response when legal; do not stop at preparation.
-- Do not move the player to another authoritative room unless movementResolution already committed that move. NPCs may open access, move along valid routes, and expose what lies beyond while the player remains free to follow or refuse.
-- The rules layer has already settled player movement in spatialContext. Begin with the player at that committed room and never move them back.
-- If movementResolution.status is failed, explicitly state the attempted movement, its supplied reason, and movementResolution.remainingRoomId; never narrate arrival. If it is already_there, explicitly state that no travel occurred.
-- movementResolution.movementOutcomeFactEn is an authoritative visible fact. Include it exactly once when supplied; do not paraphrase, contradict, or omit it.
+- movementPreflight is a deterministic route/access boundary, never an already-committed arrival. Begin at the current spatialContext room.
+- If movementPreflight.eligibility is eligible, you may depict completion only to its exact candidate destination. Whether the player actually arrives, and whether an NPC agrees to accompany them, must follow this Scene's visible events.
+- If movementPreflight is ineligible, depict any block, refusal, uncertainty, or failed attempt honestly; never depict an authoritative arrival at its candidate destination.
+- If movementPreflight.eligibility is already_there, depict that no travel occurred. Do not add a different player movement.
 - NPCs in another room may react only when spatialContext says they can see or hear the player. Do not teleport an NPC between rooms.
 - actor_move proposals may move an NPC only through existing connected rooms on the same map. Omit the proposal when no movement occurs.
 - If checkResolution is supplied, the local rules layer has already resolved the uncertain action. Depict its exact outcome and consequences; never reroll, change the modifier, soften a failure, or stop before the resolved outcome.
@@ -1014,7 +1083,12 @@ Schema:
   ],
   "stateProposals":[
     {
-      "type":"actor_activity|actor_move|actor_enter|actor_exit",
+      "type":"actor_activity",
+      "actorId":"actor_id",
+      "currentActivityEn":"required resulting activity"
+    },
+    {
+      "type":"actor_move|actor_enter|actor_exit",
       "actorId":"actor_id",
       "currentActivityEn":"required resulting activity",
       "mapId":"existing_map_id when moving",
@@ -1076,7 +1150,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
         state,
         {
             playerAction,
-            movementResolution,
+            movementPreflight,
             momentumDirective,
             checkResolution,
         },
@@ -1085,7 +1159,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
             payload,
             worldState: state,
             playerAction,
-            movementResolution,
+            movementPreflight,
             momentumDirective,
             checkResolution,
         };
@@ -1134,7 +1208,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     state,
                     {
                         playerAction,
-                        movementResolution,
+                        movementPreflight,
                         momentumDirective,
                         checkResolution,
                     },
@@ -1151,7 +1225,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
         playerAction,
         budget,
         retrievedKnowledge,
-        movementResolution,
+        movementPreflight,
         momentumDirective,
         checkResolution,
         addressing,
@@ -1166,7 +1240,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
             playerAction,
             budget,
             retrievedKnowledge,
-            movementResolution,
+            movementPreflight,
             momentumDirective,
             checkResolution,
             addressing,
@@ -1301,9 +1375,8 @@ ${CANON_WIT_TONE_CONTRACT}`,
                         parsedPayload,
                     );
                 parsedPayload =
-                    ensureMovementOutcomeFact(
+                    sanitizeLowScenePerformancePayload(
                         parsedPayload,
-                        movementResolution,
                     );
                 const outputContract =
                     validateLowScenePerformanceOutputContract(
@@ -1334,7 +1407,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     state,
                     {
                         playerAction,
-                        movementResolution,
+                        movementPreflight,
                         momentumDirective,
                         checkResolution,
                     },
@@ -1345,7 +1418,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     budget,
                     momentumDirective,
                     checkResolution,
-                    movementResolution,
+                    movementPreflight,
                     playerAction,
                 );
                 recordTurnDiagnostic(
@@ -1380,6 +1453,9 @@ ${CANON_WIT_TONE_CONTRACT}`,
                             parsedPayload
                                 .modelLanguageDiagnostics
                                 .length,
+                        droppedStateProposalFields:
+                            parsedPayload
+                                .modelShapeDiagnostics,
                         settlementSource:
                             payload
                                 .settlementSource,
@@ -1420,7 +1496,7 @@ ${CANON_WIT_TONE_CONTRACT}`,
         budget,
         pacingBeat = null,
         checkResolution = null,
-        movementOutcome = null,
+        movementPreflight = null,
     ) {
         return {
             protocolVersion:
@@ -1483,10 +1559,10 @@ ${CANON_WIT_TONE_CONTRACT}`,
                     checkResolution,
                 ),
             } : {}),
-            ...(movementOutcome ? {
-                movementOutcome:
+            ...(movementPreflight ? {
+                movementPreflight:
                     structuredClone(
-                        movementOutcome,
+                        movementPreflight,
                     ),
             } : {}),
             ...(pacingBeat ? {

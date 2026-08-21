@@ -31,13 +31,6 @@ import {
     synchronizeHeldItemLocations,
 } from '../public/scripts/extensions/hogwarts-mud/domain/inventory.js';
 import {
-    buildFollowMovementContext,
-    settleFollowMovementIntent,
-} from '../public/scripts/extensions/hogwarts-mud/domain/movement.js';
-import {
-    createMovementOutcome,
-} from '../public/scripts/extensions/hogwarts-mud/domain/movement-outcome.js';
-import {
     normalizeSpellProposal,
     resolveSpellCandidate,
 } from '../public/scripts/extensions/hogwarts-mud/domain/spell-proposals.js';
@@ -310,10 +303,25 @@ function createTurnPerformancePromptHarness() {
     });
 }
 
+function deferred() {
+    let resolve;
+    const promise =
+        new Promise(resolvePromise => {
+            resolve =
+                resolvePromise;
+        });
+    return {
+        promise,
+        resolve,
+    };
+}
+
 function createTurnHarness({
     existingAssistant = false,
     invalidAddressing = false,
     legacyDiagnostics = null,
+    postGate = null,
+    translationGate = null,
 } = {}) {
     const playerAction = 'Wait by the door.';
     const playerMessage = {
@@ -393,6 +401,14 @@ function createTurnHarness({
                 diagnosticNow++,
         });
     let streamClears = 0;
+    let currentTurnLocalizationCalls =
+        0;
+    let settledLocalizationCalls =
+        0;
+    let currentTurnCandidates = [];
+    let translationCompletion =
+        Promise.resolve(true);
+    const workflowOrder = [];
     const workflow = createTurnWorkflow({
         TRANSLATION_FORMAT_VERSION: 12,
         admitMentionedKnownActors: current => ({
@@ -400,10 +416,6 @@ function createTurnHarness({
             admittedActors: [],
         }),
         applyObservedActorUpdates: () => {},
-        applyPlayerMovement: current => ({
-            state: current,
-            movement: null,
-        }),
         applyPresenceWitnessTransaction: current =>
             current,
         applySystemPrompt: () => {},
@@ -419,7 +431,6 @@ function createTurnHarness({
         }),
         attachTurnDiagnostics,
         ...diagnostics,
-        buildFollowMovementContext,
         buildLocalSemanticRoomContext: () => ({
             rooms: [],
         }),
@@ -448,7 +459,6 @@ function createTurnHarness({
         createContextBudgetPlan: () => ({
             ragLimit: 1,
         }),
-        createMovementOutcome,
         createSceneMomentumDirective: () => ({
             required: true,
         }),
@@ -462,6 +472,39 @@ function createTurnHarness({
             baseState: structuredClone(current),
             ...checkpoint,
         }),
+        enqueueCurrentTurnLocalizationCandidates:
+            async candidates => {
+                currentTurnLocalizationCalls++;
+                currentTurnCandidates =
+                    structuredClone(
+                        candidates,
+                    );
+                workflowOrder.push(
+                    'translation_start',
+                );
+                translationCompletion =
+                    translationGate
+                        ? translationGate
+                            .promise
+                            .then(() => {
+                                workflowOrder.push(
+                                    'translation_end',
+                                );
+                                return true;
+                            })
+                        : Promise.resolve(
+                            true,
+                        );
+                return {
+                    started: true,
+                    completion:
+                        translationCompletion,
+                };
+            },
+        enqueueLocalizationCandidates:
+            async () => {
+                settledLocalizationCalls++;
+            },
         assertWorldFoundationReady:
             () => true,
         ensurePacingDirectorAssessment: async () => {},
@@ -476,9 +519,15 @@ function createTurnHarness({
                 forceCheck: false,
             }
             : null,
-        generateScenePerformance: async () => ({
-            segments: [],
-        }),
+        generateScenePerformance:
+            async () => ({
+                segments: [{
+                    type:
+                        'narration',
+                    textEn:
+                        'Tina waits by the door.',
+                }],
+            }),
         getActiveAddressingState: () => ({}),
         getContext: () => context,
         getFailedPlayerTurn: () => ({
@@ -525,19 +574,34 @@ function createTurnHarness({
             },
             diagnostics: {},
         }),
-        requestPostTurnSemanticObservation: async () => ({
-            observation: {
-                diagnostics: {},
+        requestPostTurnSemanticObservation:
+            async () => {
+                workflowOrder.push(
+                    'post_start',
+                );
+                if (postGate) {
+                    await postGate
+                        .promise;
+                    workflowOrder.push(
+                        'post_end',
+                    );
+                }
+                return {
+                    observation: {
+                        diagnostics: {},
+                    },
+                    narrativeText:
+                        'Tina waits by the door.',
+                    materialEvents: [],
+                    itemUpdates: [],
+                    perception: {
+                        source:
+                            'deterministic_test',
+                    },
+                    targetActorIds:
+                        [],
+                };
             },
-            narrativeText:
-                'Tina waits by the door.',
-            materialEvents: [],
-            itemUpdates: [],
-            perception: {
-                source: 'deterministic_test',
-            },
-            targetActorIds: [],
-        }),
         resolveActionCheck: () => null,
         resolveEventWitnesses: () => null,
         resolvePlayerAddressing: () => ({
@@ -559,7 +623,6 @@ function createTurnHarness({
         }),
         retrieveLocalKnowledge: async () => [],
         setLiveSceneStreamPhase: () => {},
-        settleFollowMovementIntent,
         syncLocalKnowledge: async () => {},
         updateNativeMessageBlock: () => {},
         validateTurnTransaction: () => ({
@@ -573,6 +636,19 @@ function createTurnHarness({
         get streamClears() {
             return streamClears;
         },
+        get currentTurnLocalizationCalls() {
+            return currentTurnLocalizationCalls;
+        },
+        get settledLocalizationCalls() {
+            return settledLocalizationCalls;
+        },
+        get currentTurnCandidates() {
+            return currentTurnCandidates;
+        },
+        get translationCompletion() {
+            return translationCompletion;
+        },
+        workflowOrder,
         workflow,
     };
 }
@@ -2109,6 +2185,63 @@ test('model adapter records context limiting and the resulting model call', asyn
     );
 });
 
+test('production turn workflow overlaps Low post with P0 translation without awaiting translation completion', async () => {
+    const postGate =
+        deferred();
+    const translationGate =
+        deferred();
+    const harness =
+        createTurnHarness({
+            postGate,
+            translationGate,
+        });
+    let turnCompleted = false;
+    const turnPromise =
+        harness.workflow
+            .retryFailedPlayerTurn()
+            .then(() => {
+                turnCompleted = true;
+            });
+
+    await new Promise(resolve =>
+        setImmediate(resolve));
+    assert.deepEqual(
+        harness.workflowOrder
+            .slice(0, 2),
+        [
+            'post_start',
+            'translation_start',
+        ],
+    );
+    assert.equal(
+        turnCompleted,
+        false,
+    );
+
+    postGate.resolve();
+    await turnPromise;
+    assert.equal(
+        turnCompleted,
+        true,
+    );
+    assert.equal(
+        harness.workflowOrder
+            .includes(
+                'translation_end',
+            ),
+        false,
+    );
+
+    translationGate.resolve();
+    await harness
+        .translationCompletion;
+    assert.equal(
+        harness.workflowOrder
+            .at(-1),
+        'translation_end',
+    );
+});
+
 test('failed-turn retry appends one assistant response without duplicating player input', async () => {
     const legacyDiagnostics = {
         version: 1,
@@ -2190,11 +2323,45 @@ test('failed-turn retry appends one assistant response without duplicating playe
     );
     assert.equal(
         narrativeVisible.data.surface,
-        'live_scene_stream',
+        'chat_message',
     );
     assert.equal(
         stateSettled.data.scope,
-        'immediate_turn_reducers',
+        'persistent_turn_and_immediate_followups',
+    );
+    assert.equal(
+        harness
+            .currentTurnLocalizationCalls,
+        1,
+    );
+    assert.equal(
+        harness
+            .settledLocalizationCalls,
+        0,
+    );
+    assert.deepEqual(
+        harness.currentTurnCandidates
+            .map(candidate => ({
+                recordId:
+                    candidate
+                        .recordId,
+                priority:
+                    candidate
+                        .priority,
+            })),
+        [{
+            recordId:
+                'message:1:segment:0',
+            priority: 0,
+        }],
+    );
+    assert.deepEqual(
+        harness.workflowOrder
+            .slice(0, 2),
+        [
+            'post_start',
+            'translation_start',
+        ],
     );
     assert.equal(
         milestones.indexOf(
@@ -2204,6 +2371,25 @@ test('failed-turn retry appends one assistant response without duplicating playe
                 stateSettled,
             ),
         true,
+    );
+});
+
+test('selected provider paths keep one early current-message owner without post-settlement enqueue', async () => {
+    const harness =
+        createTurnHarness();
+
+    await harness.workflow
+        .retryFailedPlayerTurn();
+
+    assert.equal(
+        harness
+            .currentTurnLocalizationCalls,
+        1,
+    );
+    assert.equal(
+        harness
+            .settledLocalizationCalls,
+        0,
     );
 });
 

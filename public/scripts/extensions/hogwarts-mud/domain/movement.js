@@ -524,437 +524,7 @@ export function inspectPlayerMovementIntent(
     };
 }
 
-function movementFailure(
-    worldState,
-    reason,
-    details = {},
-) {
-    const mapId =
-        String(
-            worldState.map
-                ?.activeMapId ||
-            '',
-        );
-    const roomId =
-        String(
-            worldState.map
-                ?.currentLocalNodeId ||
-            '',
-        );
-    return {
-        state:
-            worldState,
-        movement: {
-            attempted: true,
-            moved: false,
-            fromMapId:
-                mapId,
-            fromRoomId:
-                roomId,
-            confirmed: true,
-            confirmationSource:
-                'player_marker',
-            reason,
-            ...details,
-        },
-    };
-}
-
-function findMovementEvidence(
-    context,
-    sourceRef,
-    evidenceText,
-    room,
-) {
-    const ref =
-        String(
-            sourceRef ||
-            '',
-        );
-    const evidence =
-        String(
-            evidenceText ||
-            '',
-        );
-    if (
-        !ref ||
-        !evidence
-    ) {
-        return false;
-    }
-    const sourceMatches = (
-        context
-            ?.recentGuideEvidence ||
-        []
-    ).some(entry =>
-        entry.sourceRef ===
-            ref &&
-        entry.textEn
-            .includes(evidence));
-    if (!sourceMatches) {
-        return false;
-    }
-    const normalizedEvidence =
-        evidence
-            .normalize('NFKC')
-            .toLocaleLowerCase();
-    return [
-        room?.id,
-        room?.nameEn,
-        ...(room?.aliases || []),
-    ]
-        .map(label =>
-            String(label || '')
-                .normalize('NFKC')
-                .toLocaleLowerCase()
-                .trim())
-        .filter(label =>
-            label.length >= 2)
-        .some(label =>
-            normalizedEvidence
-                .includes(label));
-}
-
-function intentEvidenceNamesGuide(
-    evidenceText,
-    guide,
-) {
-    const normalizedEvidence =
-        String(
-            evidenceText ||
-            '',
-        )
-            .normalize('NFKC')
-            .toLocaleLowerCase();
-    return [
-        guide?.nameEn,
-        ...(guide?.aliases || []),
-    ]
-        .map(label =>
-            String(label || '')
-                .normalize('NFKC')
-                .toLocaleLowerCase()
-                .trim())
-        .filter(label =>
-            label.length >= 2)
-        .some(label =>
-            normalizedEvidence
-                .includes(label));
-}
-
-export function settleFollowMovementIntent(
-    worldState,
-    playerAction,
-    movementContext,
-    movementIntent,
-    diagnostics = {},
-) {
-    if (!movementContext) {
-        return {
-            state:
-                worldState,
-            movement: null,
-        };
-    }
-    if (
-        diagnostics?.fallback ===
-        true
-    ) {
-        return movementFailure(
-            worldState,
-            'movement_semantic_unavailable',
-            {
-                guided: true,
-            },
-        );
-    }
-    if (
-        diagnostics
-            ?.movementIntentRejected ===
-        true
-    ) {
-        return movementFailure(
-            worldState,
-            'movement_schema_invalid',
-            {
-                guided: true,
-            },
-        );
-    }
-    if (
-        movementIntent
-            ?.requested !==
-        true
-    ) {
-        return movementFailure(
-            worldState,
-            'destination_unknown',
-            {
-                guided: true,
-            },
-        );
-    }
-    const intentEvidenceText =
-        String(
-            movementIntent
-                .intentEvidenceText ||
-            '',
-        );
-    if (
-        !intentEvidenceText ||
-        !String(
-            playerAction ||
-            '',
-        ).includes(
-            intentEvidenceText,
-        )
-    ) {
-        return movementFailure(
-            worldState,
-            'guide_evidence_invalid',
-            {
-                guided: true,
-            },
-        );
-    }
-    const guide =
-        (
-            movementContext
-                .eligibleGuideCandidates ||
-            []
-        ).find(candidate =>
-            candidate.id ===
-                movementIntent
-                    .guideActorId);
-    if (!guide) {
-        return movementFailure(
-            worldState,
-            'guide_not_eligible',
-            {
-                guided: true,
-            },
-        );
-    }
-    const namedGuides =
-        (
-            movementContext
-                .eligibleGuideCandidates ||
-            []
-        ).filter(candidate =>
-            intentEvidenceNamesGuide(
-                intentEvidenceText,
-                candidate,
-            ));
-    if (
-        namedGuides.length !== 1 ||
-        namedGuides[0].id !==
-            guide.id
-    ) {
-        return movementFailure(
-            worldState,
-            'guide_evidence_invalid',
-            {
-                guided: true,
-                guidedByActorId:
-                    guide.id,
-            },
-        );
-    }
-    const currentRoomId =
-        movementContext
-            .currentRoomId;
-    const authoritativeGuideRoomId =
-        guide.locationKnown &&
-        guide.mapId ===
-            movementContext.mapId &&
-        guide.roomId !==
-            currentRoomId
-            ? guide.roomId
-            : '';
-    const proposedRoomId =
-        String(
-            movementIntent
-                .destinationRoomId ||
-            '',
-        );
-    if (
-        authoritativeGuideRoomId &&
-        proposedRoomId &&
-        proposedRoomId !==
-            authoritativeGuideRoomId
-    ) {
-        return movementFailure(
-            worldState,
-            'destination_conflict',
-            {
-                guided: true,
-                guidedByActorId:
-                    guide.id,
-            },
-        );
-    }
-    const destinationRoomId =
-        authoritativeGuideRoomId ||
-        proposedRoomId;
-    if (!destinationRoomId) {
-        return movementFailure(
-            worldState,
-            'destination_unknown',
-            {
-                guided: true,
-                guidedByActorId:
-                    guide.id,
-            },
-        );
-    }
-    const room =
-        getMapRooms(
-            getLocalMapDefinition(
-                movementContext.mapId,
-                worldState.map,
-            ),
-            worldState.map,
-        ).find(candidate =>
-            candidate.id ===
-                destinationRoomId);
-    if (!room) {
-        return movementFailure(
-            worldState,
-            'destination_invalid',
-            {
-                guided: true,
-                guidedByActorId:
-                    guide.id,
-            },
-        );
-    }
-    if (
-        !authoritativeGuideRoomId &&
-        !findMovementEvidence(
-            movementContext,
-            movementIntent
-                .destinationEvidenceSourceRef,
-            movementIntent
-                .destinationEvidenceText,
-            room,
-        )
-    ) {
-        return movementFailure(
-            worldState,
-            'guide_evidence_invalid',
-            {
-                guided: true,
-                guidedByActorId:
-                    guide.id,
-            },
-        );
-    }
-    const settled =
-        applyPlayerMovement(
-        worldState,
-        playerAction,
-        {
-            guided: true,
-            guidedByActorId:
-                guide.id,
-            guidedDestination: {
-                mapId:
-                    movementContext
-                        .mapId,
-                roomId:
-                    room.id,
-                roomNameEn:
-                    room.nameEn ||
-                    room.id,
-                levelId:
-                    room.levelId,
-            },
-            companionIds: [
-                guide.id,
-            ],
-        },
-    );
-    if (
-        settled.movement?.moved !==
-        true
-    ) {
-        return settled;
-    }
-    const next =
-        structuredClone(
-            settled.state,
-        );
-    next.actors =
-        (
-            next.actors ||
-            []
-        ).map(actor =>
-            actor.id ===
-                guide.id &&
-            actor.mapId ===
-                settled.movement
-                    .toMapId &&
-            actor.roomId ===
-                settled.movement
-                    .toRoomId
-                ? {
-                    ...actor,
-                    present: true,
-                }
-                : actor);
-    next.activeInteractionActorIds =
-        [...new Set([
-            ...(
-                next
-                    .activeInteractionActorIds ||
-                []
-            ),
-            guide.id,
-        ])];
-    next.localPresence = {
-        ...(next.localPresence || {}),
-        mapId:
-            settled.movement
-                .toMapId,
-        roomId:
-            settled.movement
-                .toRoomId,
-        occupantActorIds:
-            [...new Set([
-                ...(
-                    next.localPresence
-                        ?.occupantActorIds ||
-                    []
-                ),
-                guide.id,
-            ])],
-        updatedTurn:
-            Number(
-                next.turn?.count ||
-                0,
-            ),
-        source:
-            'player_follow_movement',
-    };
-    return {
-        state: next,
-        movement: {
-            ...settled.movement,
-            companionIds:
-                [...new Set([
-                    ...(
-                        settled
-                            .movement
-                            .companionIds ||
-                        []
-                    ),
-                    guide.id,
-                ])],
-        },
-    };
-}
-
-export function applyPlayerMovement(
+function applyPlayerMovement(
     worldState,
     playerAction,
     options = {},
@@ -1604,148 +1174,245 @@ export function applyPlayerMovement(
     return { state: next, movement };
 }
 
-export function resolvePlayerMovement(
+export function applyAcceptedMovementPlan(
     worldState,
-    playerAction,
-    storedMovement = null,
-    options = {},
+    markerEvidence,
+    options,
 ) {
-    if (storedMovement?.moved !== true) {
-        return applyPlayerMovement(
-            worldState,
-            playerAction,
-            options,
-        );
-    }
-
-    const correctedGuidedDestination =
-        storedMovement.guided === true &&
-        storedMovement.destinationSource ===
-            'guide_context' &&
-        options.guidedDestination &&
-        (
-            options.guidedDestination.mapId !==
-                storedMovement.toMapId ||
-            options.guidedDestination.roomId !==
-                storedMovement.toRoomId
-        );
-    const replayBase = structuredClone(worldState);
-    replayBase.map ??= {};
-    replayBase.map.activeMapId =
-        storedMovement.fromMapId ||
-        replayBase.map.activeMapId;
-    replayBase.map.currentLocalNodeId =
-        storedMovement.fromRoomId ||
-        replayBase.map.currentLocalNodeId;
-    replayBase.spatial = {
-        ...(replayBase.spatial || {}),
-        player: {
-            mapId:
-                replayBase.map.activeMapId,
-            roomId:
-                replayBase.map.currentLocalNodeId,
-        },
-    };
-    if (correctedGuidedDestination) {
-        const staleCompanionIds = new Set([
-            ...(storedMovement.companionIds || []),
-            storedMovement.guidedByActorId,
-        ].filter(Boolean));
-        replayBase.actors = (
-            replayBase.actors || []
-        ).map(actor =>
-            staleCompanionIds.has(actor.id) &&
-            (actor.mapId ||
-                storedMovement.toMapId) ===
-                storedMovement.toMapId &&
-            (actor.roomId ||
-                storedMovement.toRoomId) ===
-                storedMovement.toRoomId
-                ? {
-                    ...actor,
-                    mapId:
-                        storedMovement.fromMapId,
-                    roomId:
-                        storedMovement.fromRoomId,
-                }
-                : actor);
-    }
-    const replayDestination =
-        correctedGuidedDestination
-            ? options.guidedDestination
-            : {
-                mapId:
-                    storedMovement.toMapId,
-                roomId:
-                    storedMovement.toRoomId,
-                roomName:
-                    storedMovement.toRoomName,
-                roomNameEn:
-                    storedMovement.toRoomNameEn,
-            };
-    const replayed = applyPlayerMovement(
-        replayBase,
-        playerAction,
-        {
-            ...options,
-            confirmed: true,
-            confirmedDestination:
-                replayDestination,
-        },
-    );
-    if (
-        correctedGuidedDestination &&
-        replayed.movement?.moved === true &&
-        replayed.movement.toMapId ===
-            options.guidedDestination.mapId &&
-        replayed.movement.toRoomId ===
-            options.guidedDestination.roomId
-    ) {
-        return replayed;
-    }
-    const sameDestination =
-        replayed.movement?.moved === true &&
-        replayed.movement.toMapId ===
-            storedMovement.toMapId &&
-        replayed.movement.toRoomId ===
-            storedMovement.toRoomId;
-    if (sameDestination) {
-        return {
-            state: replayed.state,
-            movement: {
-                ...structuredClone(storedMovement),
-                ...replayed.movement,
-                companionIds: [...new Set([
-                    ...(storedMovement.companionIds || []),
-                    ...(replayed.movement.companionIds || []),
-                ])],
-                committedAt:
-                    storedMovement.committedAt ||
-                    replayed.movement.committedAt,
-            },
-        };
-    }
-
-    const alreadyCommitted =
-        worldState.map?.activeMapId ===
-            storedMovement.toMapId &&
-        worldState.map?.currentLocalNodeId ===
-            storedMovement.toRoomId;
-    if (alreadyCommitted) {
-        return {
-            state: worldState,
-            movement:
-                structuredClone(storedMovement),
-        };
-    }
     return applyPlayerMovement(
         worldState,
-        playerAction,
+        markerEvidence,
+        options,
+    );
+}
+
+function findDeterministicFollowGuide(
+    movementContext,
+) {
+    const markerText =
+        normalizeSpatialText(
+            movementContext?.trigger
+                ?.destinationText ||
+            '',
+        );
+    const matches = (
+        movementContext
+            ?.eligibleGuideCandidates ||
+        []
+    ).filter(candidate =>
+        [
+            candidate.id,
+            candidate.nameEn,
+            ...(candidate.aliases || []),
+        ]
+            .map(normalizeSpatialText)
+            .filter(alias =>
+                alias.length >= 2)
+            .some(alias =>
+                markerText.includes(alias)));
+    return matches.length === 1
+        ? matches[0]
+        : null;
+}
+
+function createMovementPreflight(
+    worldState,
+    {
+        directive,
+        movement,
+        mode = 'direct_room',
+        guideActorId = '',
+    },
+) {
+    const attempted =
+        movement?.attempted ===
+        true;
+    const status =
+        movement?.moved ===
+        true
+            ? 'eligible'
+            : movement?.reason ===
+                'already_there'
+                ? 'already_there'
+                : 'ineligible';
+    const fromMapId =
+        String(
+            movement?.fromMapId ||
+            worldState.map
+                ?.activeMapId ||
+            '',
+        );
+    const fromRoomId =
+        String(
+            movement?.fromRoomId ||
+            worldState.map
+                ?.currentLocalNodeId ||
+            '',
+        );
+    return {
+        version: 2,
+        triggered: attempted,
+        mode,
+        eligibility: status,
+        reasonCode:
+            movement?.moved ===
+            true
+                ? 'eligible'
+                : String(
+                    movement?.reason ||
+                    'destination_unknown',
+                ),
+        fromMapId,
+        fromRoomId,
+        candidateMapId:
+            String(
+                movement?.toMapId ||
+                '',
+            ),
+        candidateRoomId:
+            String(
+                movement?.toRoomId ||
+                '',
+            ),
+        candidateRoomNameEn:
+            String(
+                movement?.toRoomNameEn ||
+                movement?.toRoomName ||
+                '',
+            ),
+        routeRoomIds:
+            Array.isArray(
+                movement?.path,
+            )
+                ? [...movement.path]
+                : [],
+        routeMinutes:
+            Number(
+                movement?.minutes ||
+                0,
+            ),
+        guideActorId:
+            String(
+                guideActorId ||
+                movement?.guidedByActorId ||
+                '',
+            ),
+        eligibleCompanionActorIds:
+            Array.isArray(
+                movement?.companionIds,
+            )
+                ? [...new Set(
+                    movement.companionIds,
+                )]
+                : [],
+        markerEvidence:
+            boundedText(
+                directive?.raw ||
+                '',
+                300,
+            ),
+    };
+}
+
+export function createPlayerMovementPreflight(
+    worldState,
+    playerAction,
+    chat = [],
+) {
+    const directive =
+        parseExplicitMovementDirective(
+            playerAction,
+        );
+    if (!directive) {
+        return null;
+    }
+    const movementContext =
+        buildFollowMovementContext(
+            worldState,
+            playerAction,
+            chat,
+        );
+    if (!movementContext) {
+        const settled =
+            applyPlayerMovement(
+                worldState,
+                playerAction,
+            );
+        return createMovementPreflight(
+            worldState,
+            {
+                directive,
+                movement:
+                    settled.movement ||
+                    {
+                        attempted: true,
+                        moved: false,
+                        reason: 'destination_unknown',
+                    },
+            },
+        );
+    }
+    const guide =
+        findDeterministicFollowGuide(
+            movementContext,
+        );
+    if (
+        !guide ||
+        !guide.locationKnown ||
+        !guide.mapId ||
+        !guide.roomId
+    ) {
+        return createMovementPreflight(
+            worldState,
+            {
+                directive,
+                mode: 'follow_actor',
+                guideActorId:
+                    guide?.id ||
+                    '',
+                movement: {
+                    attempted: true,
+                    moved: false,
+                    reason:
+                        guide
+                            ? 'guide_destination_unknown'
+                            : 'guide_not_eligible',
+                },
+            },
+        );
+    }
+    const settled =
+        applyPlayerMovement(
+            worldState,
+            playerAction,
+            {
+                guided: true,
+                guidedByActorId:
+                    guide.id,
+                guidedDestination: {
+                    mapId: guide.mapId,
+                    roomId: guide.roomId,
+                    roomNameEn: guide.roomId,
+                },
+                companionIds: [
+                    guide.id,
+                ],
+            },
+        );
+    return createMovementPreflight(
+        worldState,
         {
-            ...options,
-            confirmed: true,
-            confirmedDestination:
-                replayDestination,
+            directive,
+            movement:
+                settled.movement ||
+                {
+                    attempted: true,
+                    moved: false,
+                    reason: 'destination_unknown',
+                },
+            mode: 'follow_actor',
+            guideActorId:
+                guide.id,
         },
     );
 }

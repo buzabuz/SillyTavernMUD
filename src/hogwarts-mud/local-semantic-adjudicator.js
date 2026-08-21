@@ -24,12 +24,6 @@ import {
     validatePreTurnCalendarCommitment,
 } from './pre-turn-route-contract.js';
 import {
-    constrainPreTurnMovementJsonSchema,
-    movementIntentJsonSchema,
-    movementIntentSchema,
-    validatePreTurnMovementIntent,
-} from './pre-turn-movement-contract.js';
-import {
     createPreTurnSystemPrompt,
 } from './pre-turn-system-prompt.js';
 import { settlePreTurnCheck } from './pre-turn-check-contract.js';
@@ -43,7 +37,6 @@ import {
 
 export {
     validatePreTurnCalendarCommitment,
-    validatePreTurnMovementIntent,
     settlePreTurnCheck,
 };
 
@@ -168,8 +161,6 @@ const preTurnResultSchema =
         }).strict(),
         calendarCommitment:
             PRE_TURN_EVIDENCE_ROUTE_SCHEMA,
-        movementIntent:
-            movementIntentSchema,
     }).strict();
 
 const perceptionSchema =
@@ -268,7 +259,6 @@ const preTurnJsonSchema = {
         'temporal',
         'check',
         'calendarCommitment',
-        'movementIntent',
     ],
     properties: {
         schemaVersion: {
@@ -340,8 +330,6 @@ const preTurnJsonSchema = {
         },
         calendarCommitment:
             PRE_TURN_EVIDENCE_ROUTE_JSON_SCHEMA,
-        movementIntent:
-            movementIntentJsonSchema,
     },
 };
 
@@ -1458,11 +1446,6 @@ export function translateText(
 export function createPreTurnModelRequest(
     input,
 ) {
-    const jsonSchema =
-        constrainPreTurnMovementJsonSchema(
-            preTurnJsonSchema,
-            input,
-        );
     return {
         taskId:
             'local_pre_turn_adjudicator',
@@ -1472,7 +1455,7 @@ export function createPreTurnModelRequest(
             ),
         input,
         jsonSchema:
-            jsonSchema,
+            preTurnJsonSchema,
         resultSchema:
             preTurnResultSchema,
     };
@@ -1496,35 +1479,6 @@ export function settlePreTurnTemporal(
                 0,
             ),
     };
-    if (
-        input.movementResolution
-            ?.moved ===
-        true
-    ) {
-        return {
-            valid: true,
-            value: {
-                mode: 'travel',
-                elapsedMinutes:
-                    Math.max(
-                        15,
-                        Number(
-                            input
-                                .movementResolution
-                                .minutes ||
-                            0,
-                        ) ||
-                        15,
-                    ),
-                basis: 'route',
-                evidenceText: '',
-                reasonEn:
-                    'Deterministic route authority settled the travel duration.',
-                confidence: 1,
-            },
-            error: '',
-        };
-    }
     if (
         temporal?.kind ===
         'instantaneous'
@@ -1642,12 +1596,6 @@ export function adjudicateTurn(
                     .calendarCommitment,
                 input,
             );
-        const movementIntentValidation =
-            validatePreTurnMovementIntent(
-                modeled.result
-                    .movementIntent,
-                input,
-            );
         const temporalSettlement =
             settlePreTurnTemporal(
                 modeled.result
@@ -1664,9 +1612,6 @@ export function adjudicateTurn(
                     ...modeled.result,
                     calendarCommitment:
                         calendarCommitmentValidation
-                            .value,
-                    movementIntent:
-                        movementIntentValidation
                             .value,
                     check:
                         checkSettlement
@@ -1691,12 +1636,6 @@ export function adjudicateTurn(
                         .valid,
                 calendarCommitmentError:
                     calendarCommitmentValidation
-                        .error,
-                movementIntentRejected:
-                    !movementIntentValidation
-                        .valid,
-                movementIntentError:
-                    movementIntentValidation
                         .error,
                 temporalRejected:
                     !temporalSettlement

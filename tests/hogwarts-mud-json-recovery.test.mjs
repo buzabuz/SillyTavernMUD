@@ -6,17 +6,12 @@ import {
     recoverSceneTransitionPayload,
 } from '../public/scripts/extensions/hogwarts-mud/core/json-recovery.js';
 import {
-    resolvePlayerMovement,
-} from '../public/scripts/extensions/hogwarts-mud/domain/movement.js';
-import {
     normalizeSceneTransitionPackage,
     validateSceneTransitionPackage,
 } from '../public/scripts/extensions/hogwarts-mud/domain/scene-transition.js';
 import {
-    addCurrentPlayerRelationship,
     createCurrentPlayingState,
     createCurrentTransitionPackage,
-    normalizeCurrentActorFixtureInPlace,
 } from './hogwarts-mud-test-fixtures.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -282,96 +277,5 @@ test('scene transition recovery keeps a complete core and drops only a truncated
             { tier: 'medium' },
         ).valid,
         true,
-    );
-});
-
-test('unsettled turn recovery replays its committed move and route companions', () => {
-    const state = createCurrentPlayingState();
-    state.map.activeMapId = 'diagon_alley';
-    state.map.currentLocalNodeId =
-        'diagon_south';
-    state.map.currentLevelId = 'street';
-    state.scene.mapId = 'diagon_alley';
-    state.scene.roomId = 'diagon_south';
-    state.spatial = {
-        version: 3,
-        player: {
-            mapId: 'diagon_alley',
-            roomId: 'diagon_south',
-        },
-        lastMovement: null,
-    };
-    state.actors = [{
-        id: 'alex_zhang',
-        nameEn: 'Alex Zhang',
-        relationshipToPlayerEn: 'Father',
-        present: true,
-        mapId: 'diagon_alley',
-        roomId: 'gringotts_steps',
-    }];
-    state.actorLibrary = [{
-        id: 'alex_zhang',
-        nameEn: 'Alex Zhang',
-        identity: {
-            ...structuredClone(
-                state.actorLibrary[0]
-                    .identity,
-            ),
-            gender: {
-                code: 'male',
-                label: '',
-            },
-        },
-    }];
-    addCurrentPlayerRelationship(
-        state,
-        'alex_zhang',
-        ['parent'],
-    );
-    normalizeCurrentActorFixtureInPlace(
-        state,
-    );
-    const storedMovement = {
-        attempted: true,
-        moved: true,
-        fromMapId: 'diagon_alley',
-        fromRoomId: 'gringotts_lobby',
-        toMapId: 'diagon_alley',
-        toRoomId: 'diagon_south',
-        fromRoomName: '古灵阁大厅',
-        toRoomName: '对角巷南段',
-        toRoomNameEn: '对角巷南段',
-        companionIds: [],
-        path: [
-            'gringotts_lobby',
-            'gringotts_steps',
-            'diagon_south',
-        ],
-        minutes: 2,
-        committedAt: '2026-08-03T17:39:10.999Z',
-    };
-
-    const result = resolvePlayerMovement(
-        state,
-        '我冲向对角巷南段的街上，拉着爸爸去买饼。',
-        storedMovement,
-    );
-
-    assert.equal(result.movement.moved, true);
-    assert.equal(
-        result.movement.toRoomNameEn,
-        'Diagon Alley South',
-    );
-    assert.deepEqual(
-        result.movement.companionIds,
-        ['alex_zhang'],
-    );
-    assert.equal(
-        result.state.actors[0].roomId,
-        'diagon_south',
-    );
-    assert.equal(
-        result.movement.committedAt,
-        storedMovement.committedAt,
     );
 });

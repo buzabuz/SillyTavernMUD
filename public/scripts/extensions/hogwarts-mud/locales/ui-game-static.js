@@ -827,6 +827,22 @@ const GAME_TEXT = Object.freeze({
         en: 'The low-tier model did not submit a valid Scene reply.',
         zh: '低档没有提交有效的场景回复。',
     },
+    'ui.story.movement_unsettled.title': {
+        en: 'Scene saved. Movement is waiting for settlement.',
+        zh: '场景已保留，移动正在等待结算。',
+    },
+    'ui.story.movement_unsettled.detail': {
+        en: 'Your location has not changed. Retry settlement when ready.',
+        zh: '当前位置尚未改变；准备好后可重新结算。',
+    },
+    'ui.story.movement_unsettled.retry': {
+        en: 'Retry movement settlement',
+        zh: '重新结算移动',
+    },
+    'ui.story.movement_unsettled.blocked': {
+        en: 'Settle the saved movement before submitting another action.',
+        zh: '请先结算已保留的移动，再提交下一步行动。',
+    },
     'ui.story.retry_turn': {
         en: 'Retry this turn',
         zh: '重试本回合',
@@ -1100,12 +1116,12 @@ const GAME_TEXT = Object.freeze({
         zh: '结构校对后重新整理',
     },
     'ui.message.stream.phase.translating': {
-        en: 'Draft complete, preparing translation',
-        zh: '原稿完成，正在译入中文',
+        en: 'Translating this turn',
+        zh: '正在翻译本回合',
     },
     'ui.message.stream.phase.committing': {
-        en: 'Binding the Scene record',
-        zh: '正在装订现场记录',
+        en: 'Settling this turn',
+        zh: '正在结算本回合',
     },
     'ui.message.stream.detail.connecting': {
         en: 'Reading the player action, live facts, and Director instructions.',
@@ -1120,12 +1136,12 @@ const GAME_TEXT = Object.freeze({
         zh: '初稿未通过结构校验，正在重新整理；正文只在最终提交后显示。',
     },
     'ui.message.stream.detail.translating': {
-        en: 'The complete draft passed validation. Preparing display translation and commit.',
-        zh: '完整原稿已通过结构校验，正在翻译并准备提交。',
+        en: 'Generating the Chinese display while this turn continues settling in the background.',
+        zh: '正在生成本回合中文；本回合状态结算在后台继续。',
     },
     'ui.message.stream.detail.committing': {
-        en: 'Committing world State and the final message.',
-        zh: '正在提交世界状态与最终消息。',
+        en: 'The narrative is readable. Finishing this turn proposal and world State commit.',
+        zh: '正文已可阅读；正在完成本回合状态提案与世界状态提交。',
     },
     'ui.message.stream.step.read': {
         en: 'Read action',

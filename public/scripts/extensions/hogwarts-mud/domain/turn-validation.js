@@ -16,11 +16,6 @@ import {
 } from './checks.js';
 
 import {
-    getLocalMapDefinition,
-    getMapRooms,
-} from './map-access.js';
-
-import {
     validateItemOperation,
 } from './item-reducer.js';
 import {
@@ -34,10 +29,6 @@ import {
 import {
     findLocalRoomPath,
 } from './pathfinding.js';
-
-import {
-    normalizeSpatialText,
-} from './spatial-foundation.js';
 
 import {
     buildSpatialContext,
@@ -56,10 +47,10 @@ import {
 export function validateScenePerformance(
     payload,
     worldState,
-    budget,
+    _budget,
     momentumDirective = null,
     checkResolution = null,
-    movementResolution = null,
+    _movementPreflight = null,
     temporalSourceText = '',
 ) {
     const errors = [];
@@ -193,87 +184,6 @@ export function validateScenePerformance(
                 !narrativeFirst,
         },
     ));
-    if (movementResolution?.moved) {
-        const destinationMap =
-            getLocalMapDefinition(
-                movementResolution.toMapId,
-                worldState.map,
-            );
-        const destinationRoom = getMapRooms(
-            destinationMap,
-            worldState.map,
-        ).find(room =>
-            room.id === movementResolution.toRoomId);
-        const arrivalLabels = [
-            movementResolution.toRoomNameEn,
-            destinationRoom?.nameEn,
-            ...(destinationRoom?.aliases || []),
-            String(
-                movementResolution.toRoomId || '',
-            ).replace(/_/g, ' '),
-        ]
-            .map(normalizeSpatialText)
-            .filter(label =>
-                label.length >= 4 &&
-                /[a-z]/i.test(label));
-        const arrivalCorpus = normalizeSpatialText([
-            publicEvent,
-            payload.sceneProgression?.summaryEn,
-            ...segments.map(segment =>
-                segment.textEn),
-        ].filter(Boolean).join(' '));
-        if (arrivalLabels.length &&
-            !arrivalLabels.some(label =>
-                arrivalCorpus.includes(label))) {
-            errors.push(
-                `已提交移动必须在本回合明确抵达 ${movementResolution.toRoomName || movementResolution.toRoomNameEn || movementResolution.toRoomId}，不能停在途中。`,
-            );
-        }
-    } else if (
-        movementResolution &&
-        [
-            'failed',
-            'already_there',
-        ].includes(
-            movementResolution.status,
-        )
-    ) {
-        const fact =
-            String(
-                movementResolution
-                    .movementOutcomeFactEn ||
-                '',
-            ).trim();
-        if (
-            !fact ||
-            !segments.some(segment =>
-                segment?.type ===
-                    'narration' &&
-                String(
-                    segment.textEn ||
-                    '',
-                ).includes(fact))
-        ) {
-            errors.push(
-                '未移动结果必须在正文中保留确定性 movementOutcomeFactEn。',
-            );
-        }
-        if (
-            movementResolution
-                .remainingMapId !==
-                worldState.map
-                    ?.activeMapId ||
-            movementResolution
-                .remainingRoomId !==
-                worldState.map
-                    ?.currentLocalNodeId
-        ) {
-            errors.push(
-                '未移动结果的 remaining room 必须等于玩家当前权威房间。',
-            );
-        }
-    }
-
     if (
         momentumDirective?.required
     ) {
@@ -308,36 +218,6 @@ export function validateScenePerformance(
     if (!Array.isArray(actorUpdates)) {
         errors.push('actorUpdates 必须是数组。');
     } else {
-        if (
-            movementResolution?.moved &&
-            !narrativeFirst
-        ) {
-            const updatesByActor = new Map(
-                actorUpdates.map(update => [
-                    update.id,
-                    update,
-                ]),
-            );
-            (movementResolution.companionIds || [])
-                .forEach(actorId => {
-                    const update =
-                        updatesByActor.get(actorId);
-                    if (
-                        !update ||
-                        update.mapId !==
-                            movementResolution.toMapId ||
-                        update.roomId !==
-                            movementResolution.toRoomId ||
-                        !String(
-                            update.currentActivityEn || '',
-                        ).trim()
-                    ) {
-                        errors.push(
-                            `同行者 ${actorId} 必须更新到已提交目的地并刷新当前活动。`,
-                        );
-                    }
-                });
-        }
         const initialSpatialActors = new Map(
             buildSpatialContext(worldState).actors
                 .map(actor => [actor.id, actor]),
@@ -599,39 +479,6 @@ export function validateTurnTransaction(
                 errors.push(
                     'movementOutcome remaining room 与权威玩家位置不一致。',
                 );
-            }
-            if (
-                !changed
-            ) {
-                const fact =
-                    String(
-                        movement
-                            .movementOutcomeFactEn ||
-                        '',
-                    ).trim();
-                const hasFact =
-                    (
-                        transaction
-                            .segments ||
-                        []
-                    ).some(segment =>
-                        segment?.type ===
-                            'narration' &&
-                        String(
-                            segment
-                                .textEn ||
-                            '',
-                        ).includes(
-                            fact,
-                        ));
-                if (
-                    !fact ||
-                    !hasFact
-                ) {
-                    errors.push(
-                        '未移动 transaction 缺少确定性可见事实。',
-                    );
-                }
             }
         }
     }

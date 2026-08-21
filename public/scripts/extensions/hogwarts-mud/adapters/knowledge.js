@@ -306,7 +306,23 @@ export function createKnowledgeAdapter(ports) {
             ) {
                 return result;
             }
+            // #region debug-point A:knowledge-metadata-save
+            const debugTraceId =
+                `knowledge-metadata-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const debugStartedAt =
+                performance.now();
+            globalThis.__hogwartsChatSaveTailDebug = {
+                traceId: debugTraceId,
+                source: 'knowledge_metadata',
+                startedAt: debugStartedAt,
+            };
+            void fetch('http://127.0.0.1:7778/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'chat-save-tail-latency', runId: 'pre-fix', hypothesisId: 'A', location: 'adapters/knowledge.js:syncLocalKnowledge', msg: '[DEBUG] Knowledge endpoint returned; metadata save starts', data: { skipped: result?.skipped === true, metadataChanged: result?.metadataChanged === true, recordCount: Number(result?.recordCount || 0) }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            // #endregion
             await context.saveMetadata();
+            // #region debug-point A:knowledge-metadata-save
+            void fetch('http://127.0.0.1:7778/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'chat-save-tail-latency', runId: 'pre-fix', hypothesisId: 'A', location: 'adapters/knowledge.js:syncLocalKnowledge', msg: '[DEBUG] Knowledge metadata save completed', data: { elapsedMs: Math.round(performance.now() - debugStartedAt) }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            if (globalThis.__hogwartsChatSaveTailDebug?.traceId === debugTraceId) delete globalThis.__hogwartsChatSaveTailDebug;
+            // #endregion
             return result;
         } catch (error) {
             state.knowledgeBase ??= {};

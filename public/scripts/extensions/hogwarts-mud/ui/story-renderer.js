@@ -58,6 +58,7 @@ export function createStoryRenderer(ports) {
         projectPeoplePanel,
         requestFieldRetranslation =
         async () => [],
+        renderAll,
         renderAuthorQuillCard,
         renderComposerAddressing,
         renderInspector,
@@ -65,6 +66,8 @@ export function createStoryRenderer(ports) {
         renderMessage,
         renderMiniMap,
         retryFailedPlayerTurn,
+        retryPendingMovementSettlement =
+        async () => {},
         SAVE_REVISION_REFRESH_MESSAGE =
         'The timeline has changed. Refresh before continuing.',
         isSaveRevisionBlocked =
@@ -1596,6 +1599,74 @@ export function createStoryRenderer(ports) {
             );
         }
 
+        if (
+            state.turn?.status ===
+            'movement_unsettled' &&
+            !jobRegistry.turnActive
+        ) {
+            const recovery =
+                document.createElement(
+                    'div',
+                );
+            recovery.className =
+                'hpmud-system-turn hpmud-turn-failure';
+            const title =
+                document.createElement(
+                    'strong',
+                );
+            const detail =
+                document.createElement(
+                    'span',
+                );
+            const retry =
+                document.createElement(
+                    'button',
+                );
+            title.textContent =
+                staticText(
+                    'ui.story.movement_unsettled.title',
+                    'Scene saved. Movement is waiting for settlement.',
+                );
+            detail.textContent =
+                staticText(
+                    'ui.story.movement_unsettled.detail',
+                    'Your location has not changed. Retry settlement when ready.',
+                );
+            retry.type = 'button';
+            retry.className =
+                'hpmud-retry-turn';
+            retry.disabled =
+                saveRevisionBlocked;
+            retry.textContent =
+                staticText(
+                    'ui.story.movement_unsettled.retry',
+                    'Retry movement settlement',
+                );
+            retry.addEventListener(
+                'click',
+                () => {
+                    retry.disabled = true;
+                    retry.classList.add(
+                        'is-loading',
+                    );
+                    void retryPendingMovementSettlement()
+                        .catch(error => {
+                            console.error(
+                                '[Hogwarts MUD] Movement settlement retry failed',
+                                error,
+                            );
+                        })
+                        .finally(() =>
+                            renderAll());
+                },
+            );
+            recovery.append(
+                title,
+                detail,
+                retry,
+            );
+            storyElement.append(recovery);
+        }
         const failedPlayerTurn =
             getFailedPlayerTurn(
                 context.chat,

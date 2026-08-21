@@ -22,6 +22,42 @@ function hasActiveJobs(
     );
 }
 
+function hasBlockingCurrentTurnJobs(
+    registry,
+    turnJobKey,
+) {
+    const turnSettlements =
+        registry.turnSettlement;
+    const hasOtherTurnSettlement =
+        turnSettlements instanceof Map
+            ? [
+                ...turnSettlements
+                    .keys(),
+            ].some(key =>
+                key !== turnJobKey)
+            : Boolean(
+                turnSettlements?.size,
+            );
+    return Boolean(
+        registry.opening ||
+        registry.foundation ||
+        registry.daily ||
+        registry
+            .mediumCalendarDirector ||
+        registry.pacing ||
+        registry.memory ||
+        registry.sceneTransition ||
+        registry.calendarMoment ||
+        registry.interiorMap ||
+        registry
+            .sceneTransitionActive ||
+        registry
+            .localizationActiveBatch ||
+        registry.translation?.size ||
+        hasOtherTurnSettlement,
+    );
+}
+
 export function createIdleLocalizationScheduler({
     queue,
     automaticWork,
@@ -51,6 +87,8 @@ export function createIdleLocalizationScheduler({
     clearTimer =
     globalThis.clearTimeout
         ?.bind(globalThis),
+    onCurrentTurnP0StateChange =
+    () => {},
 } = {}) {
     if (
         !queue ||
@@ -66,6 +104,21 @@ export function createIdleLocalizationScheduler({
     let scheduled = null;
     let active = false;
     let stopped = false;
+
+    function notifyCurrentTurnP0State(
+        activeState,
+        keys,
+    ) {
+        try {
+            onCurrentTurnP0StateChange({
+                active:
+                    activeState,
+                keys: [...keys],
+            });
+        } catch {
+            // UI progress cannot fail or retry translation work.
+        }
+    }
 
     function gatesOpen() {
         return Boolean(
@@ -99,6 +152,102 @@ export function createIdleLocalizationScheduler({
         scheduled = null;
     }
 
+    function beginDispatch(
+        providerId,
+        batch,
+        {
+            currentTurnP0 =
+            false,
+        } = {},
+    ) {
+        if (
+            !batch.length ||
+            !queue.beginBatch(
+                batch,
+            )
+        ) {
+            return null;
+        }
+        const keys =
+            batch.map(item =>
+                item.key);
+        active = true;
+        if (jobRegistry) {
+            jobRegistry
+                .localizationActiveBatch = [
+                    ...keys,
+                ];
+        }
+        if (currentTurnP0) {
+            notifyCurrentTurnP0State(
+                true,
+                keys,
+            );
+        }
+        const completion =
+            (async () => {
+                try {
+                    const rows =
+                        await translateBatch({
+                            providerId,
+                            candidates:
+                                batch,
+                        });
+                    await upsertRows(
+                        rows,
+                    );
+                    queue.completeBatch(
+                        keys,
+                    );
+                    if (
+                        !currentTurnP0
+                    ) {
+                        render(keys);
+                    }
+                    return true;
+                } catch (error) {
+                    try {
+                        await recordFailure({
+                            candidates:
+                                batch,
+                            errorCode:
+                                error?.code ||
+                                'TRANSLATION_FAILED',
+                        });
+                    } catch {
+                        // The provider request is never retried.
+                    }
+                    queue.failBatch(
+                        keys,
+                        error?.code ||
+                            'TRANSLATION_FAILED',
+                    );
+                    return false;
+                } finally {
+                    active = false;
+                    if (jobRegistry) {
+                        jobRegistry
+                            .localizationActiveBatch =
+                            null;
+                    }
+                    if (
+                        currentTurnP0
+                    ) {
+                        notifyCurrentTurnP0State(
+                            false,
+                            keys,
+                        );
+                        render(keys);
+                    }
+                    schedule();
+                }
+            })();
+        return {
+            keys,
+            completion,
+        };
+    }
+
     async function dispatch(
         expectedActionId,
     ) {
@@ -127,64 +276,106 @@ export function createIdleLocalizationScheduler({
             queue.nextBatch(
                 providerId,
             );
+        const started =
+            beginDispatch(
+                providerId,
+                batch,
+            );
+        if (!started) {
+            return false;
+        }
+        return started.completion;
+    }
+
+    function dispatchCurrentTurnP0({
+        expectedActionId,
+        turnJobKey,
+        keys,
+    } = {}) {
+        const providerId =
+            getProviderId();
+        if (
+            stopped ||
+            automaticWork
+                ?.suppressed === true ||
+            ![
+                'local',
+                'google',
+                'bing',
+            ].includes(
+                providerId,
+            ) ||
+            jobRegistry
+                ?.turnActive !== true ||
+            !(
+                jobRegistry
+                    ?.turnSettlement instanceof
+                    Map &&
+                jobRegistry
+                    .turnSettlement
+                    .has(turnJobKey)
+            ) ||
+            hasBlockingCurrentTurnJobs(
+                jobRegistry || {},
+                turnJobKey,
+            ) ||
+            hasPendingSave() ||
+            active ||
+            !isDocumentVisible() ||
+            getActionId() !==
+                expectedActionId
+        ) {
+            return {
+                started: false,
+                keys: [],
+                completion:
+                    Promise.resolve(
+                        false,
+                    ),
+            };
+        }
+        const batch =
+            queue.nextBatchForKeys(
+                providerId,
+                keys || [],
+            );
         if (
             !batch.length ||
-            !queue.beginBatch(
-                batch,
-            )
+            batch.some(candidate =>
+                candidate.priority !==
+                0)
         ) {
-            return false;
+            return {
+                started: false,
+                keys: [],
+                completion:
+                    Promise.resolve(
+                        false,
+                    ),
+            };
         }
-        const keys =
-            batch.map(item =>
-                item.key);
-        active = true;
-        if (jobRegistry) {
-            jobRegistry
-                .localizationActiveBatch = [
-                    ...keys,
-                ];
-        }
-        try {
-            const rows =
-                await translateBatch({
-                    providerId,
-                    candidates:
-                        batch,
-                });
-            await upsertRows(rows);
-            queue.completeBatch(
-                keys,
+        const started =
+            beginDispatch(
+                providerId,
+                batch,
+                {
+                    currentTurnP0:
+                        true,
+                },
             );
-            render(keys);
-            return true;
-        } catch (error) {
-            try {
-                await recordFailure({
-                    candidates:
-                        batch,
-                    errorCode:
-                        error?.code ||
-                        'TRANSLATION_FAILED',
-                });
-            } catch {
-                // The provider request is never retried.
+        return started
+            ? {
+                started: true,
+                ...started,
             }
-            queue.failBatch(
-                keys,
-                error?.code ||
-                    'TRANSLATION_FAILED',
-            );
-            return false;
-        } finally {
-            active = false;
-            if (jobRegistry) {
-                jobRegistry
-                    .localizationActiveBatch =
-                    null;
-            }
-            schedule();
-        }
+            : {
+                started: false,
+                keys: [],
+                completion:
+                    Promise.resolve(
+                        false,
+                    ),
+            };
     }
 
     function schedule() {
@@ -259,6 +450,7 @@ export function createIdleLocalizationScheduler({
         stop,
         gatesOpen,
         dispatch,
+        dispatchCurrentTurnP0,
         isActive:
             () => active,
     });

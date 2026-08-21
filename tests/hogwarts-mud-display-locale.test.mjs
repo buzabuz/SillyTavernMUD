@@ -1274,6 +1274,131 @@ test('provider off and TranslationTable failures expose distinct fallback states
     );
 });
 
+test('a transient table read failure does not pin a later ready row as unavailable', async () => {
+    const session =
+        createUiSessionState();
+    const sourceTextEn =
+        'Hermione closed her book.';
+    const sourceHash =
+        await hashTranslationSource(
+            sourceTextEn,
+        );
+    const row = {
+        schemaVersion: 1,
+        timelineEpoch:
+            'timeline_one',
+        recordKind:
+            'message_segment',
+        recordId:
+            'message:216:segment:8',
+        fieldPath: 'textEn',
+        sourceHash,
+        sourceLocale: 'en',
+        targetLocale: 'zh-CN',
+        providerId: 'local',
+        translatorVersion: 1,
+        glossaryVersion: 1,
+        translatedText:
+            '赫敏合上了书。',
+        status: 'ready',
+        errorCode: '',
+    };
+    let failFirstQuery = true;
+    let queryCount = 0;
+    const controller =
+        createTranslationController({
+            getMudState:
+                () => ({
+                    timelineEpoch:
+                        'timeline_one',
+                }),
+            getSettings:
+                () => ({
+                    translationProvider:
+                        'local',
+                }),
+            idleLocalizationScheduler: {
+                schedule:
+                    () => {},
+            },
+            localizationQueue: {
+                enqueue:
+                    () => {},
+                raisePriority:
+                    () => {},
+            },
+            localizationTable: {
+                queryRows:
+                    async () => {
+                        queryCount++;
+                        if (failFirstQuery) {
+                            const error =
+                                new Error(
+                                    'table unavailable',
+                                );
+                            error.code =
+                                'TABLE_UNAVAILABLE';
+                            throw error;
+                        }
+                        return {
+                            rows: [row],
+                        };
+                    },
+            },
+            renderAll: () => {},
+            scheduleRender:
+                () => {},
+            session,
+            storage: {
+                getItem:
+                    () => 'zh-CN',
+                setItem:
+                    () => {},
+            },
+        });
+    const field = {
+        recordKind:
+            row.recordKind,
+        recordId:
+            row.recordId,
+        fieldPath:
+            row.fieldPath,
+        sourceTextEn,
+    };
+
+    await controller.ensureLocalizedFields([
+        field,
+    ]);
+    assert.equal(
+        controller
+            .getLocalizedField(
+                field,
+            ).status,
+        'error',
+    );
+
+    failFirstQuery = false;
+    await controller.ensureLocalizedFields([
+        field,
+    ]);
+
+    assert.equal(queryCount, 2);
+    assert.deepEqual(
+        controller.getLocalizedField(
+            field,
+        ),
+        {
+            text: '赫敏合上了书。',
+            status: 'translated',
+            errorCode: '',
+            key:
+                await createTranslationRowKey(
+                    row,
+                ),
+        },
+    );
+});
+
 test('explicit retranslation deletes exact rows, rehydrates candidates, then raises approved keys', async () => {
     const session =
         createUiSessionState();

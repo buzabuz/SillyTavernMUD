@@ -10,13 +10,6 @@ import {
     migrateActorContextV1,
 } from '../public/scripts/extensions/hogwarts-mud/domain/actor-context-cutover.js';
 import {
-    buildFollowMovementContext,
-    settleFollowMovementIntent,
-} from '../public/scripts/extensions/hogwarts-mud/domain/movement.js';
-import {
-    createMovementOutcome,
-} from '../public/scripts/extensions/hogwarts-mud/domain/movement-outcome.js';
-import {
     createModelAdapter,
 } from '../public/scripts/extensions/hogwarts-mud/adapters/model.js';
 import {
@@ -741,11 +734,6 @@ function createBoundaryTurnHarness({
                 }),
             applyObservedActorUpdates:
                 () => {},
-            applyPlayerMovement:
-                current => ({
-                    state: current,
-                    movement: null,
-                }),
             applyPresenceWitnessTransaction:
                 current => current,
             applySystemPrompt:
@@ -788,7 +776,6 @@ function createBoundaryTurnHarness({
                         ],
                     },
                 }),
-            buildFollowMovementContext,
             buildLocalSemanticRoomContext:
                 () => ({
                     rooms: [],
@@ -826,7 +813,6 @@ function createBoundaryTurnHarness({
                 () => ({
                     ragLimit: 1,
                 }),
-            createMovementOutcome,
             createSceneMomentumDirective:
                 () => ({
                     required: true,
@@ -1250,7 +1236,6 @@ function createBoundaryTurnHarness({
                 async () => null,
             setLiveSceneStreamPhase:
                 () => {},
-            settleFollowMovementIntent,
             syncLocalKnowledge:
                 async () => {},
             updateNativeMessageBlock:

@@ -27,13 +27,6 @@ import {
     hashTranslationSource,
 } from '../domain/localization-contract.js';
 import {
-    buildFollowMovementContext,
-    settleFollowMovementIntent,
-} from '../domain/movement.js';
-import {
-    createMovementOutcome,
-} from '../domain/movement-outcome.js';
-import {
     createModelEventScheduler,
 } from '../runtime/model-event-scheduler.js';
 import {
@@ -186,7 +179,6 @@ export function createWorkflowApplication(ports) {
         applyNativeRoleSettings,
         applyOpeningWorldPackage,
         applyPacingAssessment,
-        applyPlayerMovement,
         applyPresenceWitnessTransaction,
         applyRegexPresetById,
         applySceneTransition,
@@ -214,6 +206,7 @@ export function createWorkflowApplication(ports) {
         clearLiveSceneStream,
         consumePacingBeat,
         createContextBudgetPlan,
+        createPlayerMovementPreflight,
         createFallbackNextSceneIntent,
         createTranslationBatches,
         createTurnPerformanceBudget,
@@ -650,6 +643,14 @@ export function createWorkflowApplication(ports) {
         });
     const localizationQueue =
         createLocalizationQueue();
+    const getActiveActionId =
+        () =>
+            String(
+                getMudState()
+                    ?.modelTaskRuntime
+                    ?.activeActionId ||
+                '',
+            );
     const idleLocalizationScheduler =
         createIdleLocalizationScheduler({
             queue:
@@ -661,13 +662,21 @@ export function createWorkflowApplication(ports) {
                     getSettings()
                         .translationProvider,
             getActionId:
-                () =>
-                    String(
-                        getMudState()
-                            ?.modelTaskRuntime
-                            ?.activeActionId ||
-                        '',
-                    ),
+                getActiveActionId,
+            onCurrentTurnP0StateChange:
+                ({ active }) => {
+                    if (
+                        !jobRegistry
+                            ?.turnActive
+                    ) {
+                        return;
+                    }
+                    setLiveSceneStreamPhase(
+                        active
+                            ? 'translating'
+                            : 'committing',
+                    );
+                },
             isDocumentVisible:
                 () =>
                     globalThis.document
@@ -856,8 +865,12 @@ export function createWorkflowApplication(ports) {
                 () => renderAll(),
         });
 
-    async function enqueueLocalizationCandidates(
+    async function prepareLocalizationCandidates(
         candidates,
+        {
+            includeExisting =
+            true,
+        } = {},
     ) {
         const state =
             getMudState();
@@ -868,17 +881,29 @@ export function createWorkflowApplication(ports) {
             !state?.timelineEpoch ||
             providerId === 'off'
         ) {
-            return;
+            return {
+                pending: [],
+                total: 0,
+                errorCode: '',
+            };
         }
         const allCandidates = [
             ...(candidates || []),
-            ...collectStateLocalizationCandidates(
-                state,
+            ...(
+                includeExisting
+                    ? collectStateLocalizationCandidates(
+                        state,
+                    )
+                    : []
             ),
-            ...collectChatLocalizationCandidates(
-                getContext()
-                    ?.chat ||
-                [],
+            ...(
+                includeExisting
+                    ? collectChatLocalizationCandidates(
+                        getContext()
+                            ?.chat ||
+                        [],
+                    )
+                    : []
             ),
         ];
         const prepared =
@@ -979,9 +1004,10 @@ export function createWorkflowApplication(ports) {
                 error,
             );
             return {
-                enqueued: 0,
-                skipped:
-                    uniquePrepared.size,
+                pending: [],
+                total:
+                    uniquePrepared
+                        .size,
                 errorCode:
                     String(
                         error?.code ||
@@ -989,17 +1015,114 @@ export function createWorkflowApplication(ports) {
                     ).slice(0, 64),
             };
         }
-        localizationQueue.enqueue(
+        return {
             pending,
+            total:
+                uniquePrepared.size,
+            errorCode: '',
+        };
+    }
+
+    async function enqueueLocalizationCandidates(
+        candidates,
+    ) {
+        const prepared =
+            await prepareLocalizationCandidates(
+                candidates,
+            );
+        if (prepared.errorCode) {
+            return {
+                enqueued: 0,
+                skipped:
+                    prepared.total,
+                errorCode:
+                    prepared
+                        .errorCode,
+            };
+        }
+        localizationQueue.enqueue(
+            prepared.pending,
         );
         idleLocalizationScheduler
             .schedule();
         return {
             enqueued:
-                pending.length,
+                prepared
+                    .pending
+                    .length,
             skipped:
-                uniquePrepared.size -
-                pending.length,
+                prepared.total -
+                prepared
+                    .pending
+                    .length,
+            errorCode: '',
+        };
+    }
+
+    async function enqueueCurrentTurnLocalizationCandidates(
+        candidates,
+        {
+            turnJobKey,
+        } = {},
+    ) {
+        const prepared =
+            await prepareLocalizationCandidates(
+                candidates,
+                {
+                    includeExisting:
+                        false,
+                },
+            );
+        if (prepared.errorCode) {
+            return {
+                enqueued: 0,
+                skipped:
+                    prepared.total,
+                started: false,
+                completion:
+                    Promise.resolve(
+                        false,
+                    ),
+                errorCode:
+                    prepared
+                        .errorCode,
+            };
+        }
+        localizationQueue.enqueue(
+            prepared.pending,
+        );
+        const dispatched =
+            idleLocalizationScheduler
+                .dispatchCurrentTurnP0({
+                    expectedActionId:
+                        getActiveActionId(),
+                    turnJobKey,
+                    keys:
+                        prepared
+                            .pending
+                            .map(candidate =>
+                                candidate
+                                    .key),
+                });
+        if (!dispatched.started) {
+            idleLocalizationScheduler
+                .schedule();
+        }
+        return {
+            enqueued:
+                prepared
+                    .pending
+                    .length,
+            skipped:
+                prepared.total -
+                prepared
+                    .pending
+                    .length,
+            started:
+                dispatched.started,
+            completion:
+                dispatched
+                    .completion,
             errorCode: '',
         };
     }
@@ -1443,13 +1566,12 @@ export function createWorkflowApplication(ports) {
     const {
         runStructuredTurn,
         retryFailedPlayerTurn,
+        retryPendingMovementSettlement,
         preparePlayableState,
     } = createTurnWorkflow({
         admitCurrentLocationResidents,
         admitMentionedKnownActors,
         applyObservedActorUpdates,
-        applyPlayerMovement,
-        buildFollowMovementContext,
         applyPresenceWitnessTransaction,
         applySystemPrompt,
         applyTurnTransaction,
@@ -1462,11 +1584,11 @@ export function createWorkflowApplication(ports) {
         composeSceneSegments,
         consumePacingBeat,
         createContextBudgetPlan,
-        createMovementOutcome,
+        createPlayerMovementPreflight,
         createSceneMomentumDirective,
         createTurnPerformanceBudget,
         createTurnRetryCheckpoint,
-        enqueueLocalizationCandidates,
+        enqueueCurrentTurnLocalizationCandidates,
         ensureCurrentInteriorMap,
         assertWorldFoundationReady,
         ensurePacingDirectorAssessment,
@@ -1511,7 +1633,6 @@ export function createWorkflowApplication(ports) {
         runMediumCalendarDirectorSafely,
         scheduleBackgroundEventBoundary,
         setLiveSceneStreamPhase,
-        settleFollowMovementIntent,
         syncLocalKnowledge,
         updateNativeMessageBlock,
         validateTurnTransaction,
@@ -1619,6 +1740,7 @@ export function createWorkflowApplication(ports) {
         localizationTable,
         localizationQueue,
         idleLocalizationScheduler,
+        enqueueCurrentTurnLocalizationCandidates,
         enqueueLocalizationCandidates,
         runHighCalendarDirector,
         runHighCalendarDirectorSafely,
@@ -1647,6 +1769,7 @@ export function createWorkflowApplication(ports) {
         requestPostTurnSemanticObservation,
         runStructuredTurn,
         retryFailedPlayerTurn,
+        retryPendingMovementSettlement,
         preparePlayableState,
         acceptItemCandidate,
         ignoreItemCandidate,

@@ -1,6 +1,9 @@
 import {
     assertActorContextStateV1,
 } from './actor-context-runtime.js';
+import {
+    migrateActorContextV1,
+} from './actor-context-cutover.js';
 
 export function createTurnRetryCheckpoint(
     worldState,
@@ -53,12 +56,10 @@ export function restoreTurnRetryCheckpoint(
     ) {
         throw new Error('上一回合缺少可用的状态检查点。');
     }
-    assertActorContextStateV1(
-        checkpoint.baseState,
-    );
-    const restored = structuredClone(
-        checkpoint.baseState,
-    );
+    const restored =
+        migrateActorContextV1(
+            checkpoint.baseState,
+        ).state;
     delete restored.turnRetry;
     restored.turn = {
         ...(restored.turn || {}),
