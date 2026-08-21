@@ -183,6 +183,28 @@ const temporalClaimSchema =
         confidence:
             confidenceSchema,
     }).strict();
+const playerMovementSchema =
+    z.object({
+        outcome:
+            z.enum([
+                'moved',
+                'not_moved',
+                'already_there',
+            ]),
+        destinationMapId:
+            z.string().max(96),
+        destinationRoomId:
+            z.string().max(96),
+        accompanyingActorIds:
+            z.array(
+                z.string().max(96),
+            ).max(16),
+        evidenceText:
+            z.string()
+                .min(1)
+                .max(500),
+    }).strict()
+        .nullable();
 
 export const postTurnResultSchema =
     z.object({
@@ -206,6 +228,8 @@ export const postTurnResultSchema =
             z.array(
                 temporalClaimSchema,
             ).max(16),
+        playerMovement:
+            playerMovementSchema,
     }).strict();
 
 export const postTurnJsonSchema =

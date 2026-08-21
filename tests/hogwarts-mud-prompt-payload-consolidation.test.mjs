@@ -27,7 +27,7 @@ import {
     getInteriorMapRequest,
 } from '../public/scripts/extensions/hogwarts-mud/domain/interior-map.js';
 import {
-    applyPlayerMovement,
+    applyAcceptedMovementPlan as applyPlayerMovement,
 } from '../public/scripts/extensions/hogwarts-mud/domain/movement.js';
 import {
     findSceneDestination,
@@ -83,6 +83,7 @@ import {
     createSocialMemoryWorkflow,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/social-memory.js';
 import {
+    sanitizeLowScenePerformancePayload,
     validateLowScenePerformanceOutputContract,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/turn-performance.js';
 import {
@@ -1624,6 +1625,70 @@ test(
         assert.doesNotMatch(
             source,
             /"memoryUpdate"\s*:/u,
+        );
+    },
+);
+
+test(
+    'Low activity hints discard unsupported location fields without rejecting valid paid segments',
+    () => {
+        const payload = {
+            segments: [{
+                type: 'narration',
+                textEn:
+                    'Hermione leans over the table to inspect the quill.',
+            }],
+            stateProposals: [{
+                type:
+                    'actor_activity',
+                actorId:
+                    'hermione',
+                currentActivityEn:
+                    'Inspecting the quill across the table.',
+                mapId:
+                    'hogwarts_castle',
+                roomId:
+                    'gryffindor_common_room',
+            }],
+        };
+
+        const sanitized =
+            sanitizeLowScenePerformancePayload(
+                structuredClone(
+                    payload,
+                ),
+            );
+
+        assert.deepEqual(
+            sanitized.stateProposals,
+            [{
+                type:
+                    'actor_activity',
+                actorId:
+                    'hermione',
+                currentActivityEn:
+                    'Inspecting the quill across the table.',
+            }],
+        );
+        assert.deepEqual(
+            sanitized
+                .modelShapeDiagnostics,
+            [{
+                proposalIndex: 0,
+                fields: [
+                    'mapId',
+                    'roomId',
+                ],
+            }],
+        );
+        assert.deepEqual(
+            validateLowScenePerformanceOutputContract(
+                sanitized,
+            ),
+            {
+                valid: true,
+                errors: [],
+            },
         );
     },
 );

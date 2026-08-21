@@ -124,12 +124,19 @@ export function createLocalizationQueue() {
         }
     }
 
-    function nextBatch(
+    function selectBatch(
         providerId,
+        allowedKeys = null,
     ) {
         if (activeBatch) {
             return [];
         }
+        const allowedKeySet =
+            allowedKeys === null
+                ? null
+                : new Set(
+                    allowedKeys,
+                );
         const limit =
             LOCALIZATION_PROVIDER_LIMITS[
                 providerId
@@ -144,7 +151,14 @@ export function createLocalizationQueue() {
         ]
             .filter(candidate =>
                 candidate.status ===
-                'pending')
+                    'pending' &&
+                (
+                    allowedKeySet ===
+                        null ||
+                    allowedKeySet.has(
+                        candidate.key,
+                    )
+                ))
             .sort((left, right) =>
                 left.priority -
                     right.priority ||
@@ -199,6 +213,24 @@ export function createLocalizationQueue() {
             candidate => ({
                 ...candidate,
             }),
+        );
+    }
+
+    function nextBatch(
+        providerId,
+    ) {
+        return selectBatch(
+            providerId,
+        );
+    }
+
+    function nextBatchForKeys(
+        providerId,
+        keys,
+    ) {
+        return selectBatch(
+            providerId,
+            keys || [],
         );
     }
 
@@ -281,6 +313,7 @@ export function createLocalizationQueue() {
         enqueue,
         raisePriority,
         nextBatch,
+        nextBatchForKeys,
         beginBatch,
         completeBatch,
         failBatch,

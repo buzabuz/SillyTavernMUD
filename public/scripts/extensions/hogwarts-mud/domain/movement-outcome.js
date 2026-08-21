@@ -80,6 +80,7 @@ export function createMovementOutcome(
         mode = 'direct_room',
         evidenceSourceRef = '',
         evidenceText = '',
+        includeNarrativeFact = true,
     } = {},
 ) {
     if (!movement?.attempted) {
@@ -183,13 +184,15 @@ export function createMovementOutcome(
     }[reasonCode] ||
         'the movement could not be completed';
     const movementOutcomeFactEn =
-        status ===
-            'failed'
-            ? `The player tried to ${subject}, but ${reasonEn}, so the player remained in ${currentRoomNameEn}.`
-            : status ===
-                'already_there'
-                ? `The player was already in ${currentRoomNameEn}, so no travel occurred.`
-                : '';
+        includeNarrativeFact
+            ? status ===
+                'failed'
+                ? `The player tried to ${subject}, but ${reasonEn}, so the player remained in ${currentRoomNameEn}.`
+                : status ===
+                    'already_there'
+                    ? `The player was already in ${currentRoomNameEn}, so no travel occurred.`
+                    : ''
+            : '';
     return {
         version: 1,
         attempted: true,

@@ -7,6 +7,14 @@ import {
 
 export const POST_TURN_SEMANTIC_SYSTEM = `You are a sparse observer of an already-written RPG turn. Extract only explicit observable changes from playerAction and narrativeSegments.
 
+Player movement rules:
+- movementPreflight is null unless the player used an explicit movement marker. Ordinary prose, plans, room names, recollections, quotes, and NPC names never create player movement.
+- When movementPreflight is supplied, return exactly one playerMovement candidate. Use moved only when one exact narrative clause establishes that the player completed the supplied candidate route. Use not_moved when the scene establishes refusal, interruption, failure, or remaining in place. Use already_there only when the scene establishes no travel because the player was already there.
+- evidenceText must be one exact non-empty substring from narrativeSegments. It is not a summary.
+- moved destinationMapId and destinationRoomId must exactly equal movementPreflight.candidateMapId and movementPreflight.candidateRoomId. Do not select another room.
+- accompanyingActorIds contains only supplied eligible companion IDs visibly accompanying the player. For a follow marker, include the supplied guide only when the narrative establishes that they accompanied the player.
+- For not_moved or already_there, destinationMapId, destinationRoomId and accompanyingActorIds must be empty.
+
 Material rules:
 - Return only physical changes that should persist beyond the sentence: placement, movement, removal, damage, repair, dirt, cleaning, outfit, accessory, hairstyle, visible condition, or held object.
 - Do not treat incidental food, ordinary gestures, metaphors, comparisons, schedules, or unchanged surroundings as material events.
@@ -306,6 +314,53 @@ const temporalClaimJsonSchema = {
     },
 };
 
+const playerMovementJsonSchema = {
+    anyOf: [
+        {
+            type: 'null',
+        },
+        {
+            type: 'object',
+            additionalProperties: false,
+            required: [
+                'outcome',
+                'destinationMapId',
+                'destinationRoomId',
+                'accompanyingActorIds',
+                'evidenceText',
+            ],
+            properties: {
+                outcome: enumProperty([
+                    'moved',
+                    'not_moved',
+                    'already_there',
+                ]),
+                destinationMapId: {
+                    type: 'string',
+                    maxLength: 96,
+                },
+                destinationRoomId: {
+                    type: 'string',
+                    maxLength: 96,
+                },
+                accompanyingActorIds: {
+                    type: 'array',
+                    maxItems: 16,
+                    items: {
+                        type: 'string',
+                        maxLength: 96,
+                    },
+                },
+                evidenceText: {
+                    type: 'string',
+                    minLength: 1,
+                    maxLength: 500,
+                },
+            },
+        },
+    ],
+};
+
 export const POST_TURN_JSON_SCHEMA = {
     type: 'object',
     additionalProperties: false,
@@ -316,6 +371,7 @@ export const POST_TURN_JSON_SCHEMA = {
         'inventoryObservationRequired',
         'perception',
         'temporalClaims',
+        'playerMovement',
     ],
     properties: {
         schemaVersion: {
@@ -341,6 +397,8 @@ export const POST_TURN_JSON_SCHEMA = {
             maxItems: 16,
             items: temporalClaimJsonSchema,
         },
+        playerMovement:
+            playerMovementJsonSchema,
     },
 };
 

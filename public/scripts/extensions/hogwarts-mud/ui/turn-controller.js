@@ -46,16 +46,25 @@ export function createTurnController(ports) {
 
     async function rollbackLastTurn() {
         const context = getContext();
+        const stateBefore = getMudState();
         const checkpoint =
             getAvailableTurnRollbackCheckpoint(
-                getMudState(),
+                stateBefore,
                 context.chat,
             ) ||
             createLegacyTurnRollbackCheckpoint(
-                getMudState(),
+                stateBefore,
                 context.chat,
             );
+        const debugTraceId =
+            `rollback-${Date.now()}`;
+        // #region debug-point A:checkpoint-resolution
+        void fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'rollback-latest-failure', runId: 'post-fix', hypothesisId: 'A', location: 'ui/turn-controller.js:rollbackLastTurn', msg: '[DEBUG] rollback checkpoint resolution', data: { turnStatus: stateBefore?.turn?.status || '', stateRevision: Number(stateBefore?.stateRevision || 0), timelineEpoch: String(stateBefore?.timelineEpoch || ''), chatLength: context.chat.length, rawCheckpointPresent: Boolean(stateBefore?.turnRetry), rawPlayerMessageId: stateBefore?.turnRetry?.playerMessageId ?? null, rawAssistantMessageId: stateBefore?.turnRetry?.assistantMessageId ?? null, checkpointAvailable: Boolean(checkpoint), checkpointVersion: checkpoint?.version ?? null }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+        // #endregion
         if (!checkpoint) {
+            // #region debug-point D:no-checkpoint
+            void fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'rollback-latest-failure', runId: 'post-fix', hypothesisId: 'D', location: 'ui/turn-controller.js:rollbackLastTurn', msg: '[DEBUG] rollback rejected without an eligible checkpoint', data: { turnStatus: stateBefore?.turn?.status || '', chatLength: context.chat.length, rawCheckpointPresent: Boolean(stateBefore?.turnRetry) }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            // #endregion
             toastr.info(
                 staticText(
                     'ui.turn.rollback.none',
@@ -94,17 +103,40 @@ export function createTurnController(ports) {
                 restoreTurnRetryCheckpoint(
                     checkpoint,
                 );
+            const chatLengthBefore =
+                context.chat.length;
             context.chat.splice(
                 checkpoint
                     .playerMessageId,
             );
+            // #region debug-point B:restore-and-splice
+            void fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'rollback-latest-failure', runId: 'post-fix', hypothesisId: 'B', location: 'ui/turn-controller.js:rollbackLastTurn', msg: '[DEBUG] rollback restored checkpoint and removed tail messages', data: { priorRevision: Number(stateBefore?.stateRevision || 0), restoredRevision: Number(restored?.stateRevision || 0), priorEpoch: String(stateBefore?.timelineEpoch || ''), restoredEpoch: String(restored?.timelineEpoch || ''), playerMessageId: checkpoint.playerMessageId, assistantMessageId: checkpoint.assistantMessageId, chatLengthBefore, chatLengthAfter: context.chat.length }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            // #endregion
             context.chatMetadata
                 .hogwartsMud =
                 restored;
             await context.saveMetadata();
+            // #region debug-point E:metadata-save
+            void fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'rollback-latest-failure', runId: 'post-fix', hypothesisId: 'E', location: 'ui/turn-controller.js:rollbackLastTurn', msg: '[DEBUG] rollback metadata save completed', data: { restoredRevision: Number(restored?.stateRevision || 0), chatLength: context.chat.length }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            // #endregion
             await context.saveChat();
+            // #region debug-point E:chat-save
+            void fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'rollback-latest-failure', runId: 'post-fix', hypothesisId: 'E', location: 'ui/turn-controller.js:rollbackLastTurn', msg: '[DEBUG] rollback chat save completed', data: { chatLength: context.chat.length, restoredRevision: Number(restored?.stateRevision || 0) }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            // #endregion
+            // #region debug-point E:print-messages-start
+            void fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'rollback-latest-failure', runId: 'post-fix', hypothesisId: 'E', location: 'ui/turn-controller.js:rollbackLastTurn', msg: '[DEBUG] rollback printMessages starting', data: { chatLength: context.chat.length }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            // #endregion
             await context.printMessages();
+            // #region debug-point E:print-messages-complete
+            void fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'rollback-latest-failure', runId: 'post-fix', hypothesisId: 'E', location: 'ui/turn-controller.js:rollbackLastTurn', msg: '[DEBUG] rollback printMessages completed', data: { chatLength: context.chat.length }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            // #endregion
+            // #region debug-point E:knowledge-sync-start
+            void fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'rollback-latest-failure', runId: 'post-fix', hypothesisId: 'E', location: 'ui/turn-controller.js:rollbackLastTurn', msg: '[DEBUG] rollback Knowledge sync starting', data: { stateRevision: Number(getMudState()?.stateRevision || 0) }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            // #endregion
             await syncLocalKnowledge();
+            // #region debug-point E:knowledge-sync-complete
+            void fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'rollback-latest-failure', runId: 'post-fix', hypothesisId: 'E', location: 'ui/turn-controller.js:rollbackLastTurn', msg: '[DEBUG] rollback Knowledge sync completed', data: { stateRevision: Number(getMudState()?.stateRevision || 0) }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            // #endregion
             applySystemPrompt();
             composerInput.value =
                 checkpoint.playerAction;
@@ -117,7 +149,13 @@ export function createTurnController(ports) {
                     'Previous turn rolled back. The original input was restored to the editor.',
                 ),
             );
+            // #region debug-point E:rollback-complete
+            void fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'rollback-latest-failure', runId: 'post-fix', hypothesisId: 'E', location: 'ui/turn-controller.js:rollbackLastTurn', msg: '[DEBUG] rollback completed through render and composer restore', data: { chatLength: context.chat.length, composerLength: composerInput.value.length, stateRevision: Number(getMudState()?.stateRevision || 0) }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            // #endregion
         } catch (error) {
+            // #region debug-point E:rollback-failure
+            void fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'rollback-latest-failure', runId: 'post-fix', hypothesisId: 'E', location: 'ui/turn-controller.js:rollbackLastTurn', msg: '[DEBUG] rollback threw after checkpoint resolution', data: { errorName: String(error?.name || ''), errorMessage: String(error?.cause?.message || error?.message || error).slice(0, 500), chatLength: context.chat.length, stateRevision: Number(getMudState()?.stateRevision || 0) }, traceId: debugTraceId, ts: Date.now() }) }).catch(() => {});
+            // #endregion
             toastr.error(
                 String(
                     error?.cause?.message ||
@@ -137,6 +175,18 @@ export function createTurnController(ports) {
                 staticText(
                     'ui.turn.opening_incomplete',
                     'The opening is not complete. Actions cannot be submitted yet.',
+                ),
+            );
+            return;
+        }
+        if (
+            getMudState()?.turn?.status ===
+            'movement_unsettled'
+        ) {
+            toastr.warning(
+                staticText(
+                    'ui.story.movement_unsettled.blocked',
+                    'Settle the saved movement before submitting another action.',
                 ),
             );
             return;

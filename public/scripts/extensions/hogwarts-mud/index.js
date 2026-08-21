@@ -127,7 +127,10 @@ import {
     validateMapProposal,
 } from './domain/maps.js';
 import { buildCurrentMaterialState } from './domain/material-state.js';
-import { applyPlayerMovement, parseExplicitMovementDirective } from './domain/movement.js';
+import {
+    createPlayerMovementPreflight,
+    parseExplicitMovementDirective,
+} from './domain/movement.js';
 import { applyPacingAssessment, consumePacingBeat } from './domain/pacing-reducer.js';
 import { analyzePacingSignals } from './domain/pacing-signals.js';
 import {
@@ -287,8 +290,8 @@ const LIVE_STREAM_PHASE_LABELS = Object.freeze({
     connecting: '正在铺开羊皮纸',
     receiving: '正在生成完整回复',
     repairing: '结构校对后重新整理',
-    translating: '原稿完成，正在译入中文',
-    committing: '正在装订现场记录',
+    translating: '正在翻译本回合',
+    committing: '正在结算本回合',
 });
 const automaticWork = createAutomaticWorkGate(), jobRegistry = createJobRegistry();
 const saveRevisionPorts = createGuardedSavePorts({ getContext, saveMetadataDebounced,
@@ -342,7 +345,6 @@ const platform = {
     applyMapProposal,
     applyOpeningWorldPackage,
     applyPacingAssessment,
-    applyPlayerMovement,
     applyPresenceWitnessTransaction,
     applySceneTransition,
     applySocialDirectorResult,
@@ -353,6 +355,7 @@ const platform = {
     buildActorContinuityCapsules,
     buildActorKnowledgeCapsules,
     buildActorMemoryKnowledgeSeeds,
+    createPlayerMovementPreflight,
     buildActorSelectionPolicy,
     buildActorTranslationTerms,
     buildBehavioralEnvironment,

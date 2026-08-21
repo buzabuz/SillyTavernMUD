@@ -167,10 +167,9 @@ test('local pre and post build-only requests expose the exact production contrac
         ),
         [
             'schemaVersion',
-            'calendarCommitment',
             'temporal',
             'check',
-            'movementIntent',
+            'calendarCommitment',
         ],
     );
     assert.doesNotMatch(
@@ -204,13 +203,12 @@ test('local pre and post build-only requests expose the exact production contrac
         ),
         [
             'schemaVersion',
-            'movementIntent',
-            'calendarCommitment',
             'temporal',
             'check',
+            'calendarCommitment',
         ],
     );
-    assert.match(
+    assert.doesNotMatch(
         movementPre.system,
         /recentGuideEvidence/u,
     );
@@ -225,6 +223,13 @@ test('local pre and post build-only requests expose the exact production contrac
         post.jsonSchema.properties
             .temporalClaims.type,
         'array',
+    );
+    assert.equal(
+        Object.hasOwn(
+            post.jsonSchema.properties,
+            'playerMovement',
+        ),
+        true,
     );
     assert.equal(
         Object.hasOwn(
@@ -506,13 +511,6 @@ test('scene performance requires substantial narration for a fifteen-minute turn
         ),
         { valid: true, errors: [] },
     );
-    const movement = {
-        moved: true,
-        toMapId: 'diagon_alley',
-        toRoomId: 'gringotts_steps',
-        toRoomName: '古灵阁台阶',
-        toRoomNameEn: 'Gringotts',
-    };
     const missingArrival =
         validateScenePerformance(
             validPayload,
@@ -520,70 +518,13 @@ test('scene performance requires substantial narration for a fifteen-minute turn
             budget,
             null,
             null,
-            movement,
+            {
+                eligibility: 'eligible',
+                candidateRoomId:
+                    'gringotts_steps',
+            },
         );
-    assert.equal(missingArrival.valid, false);
-    assert.match(
-        missingArrival.errors.join('；'),
-        /明确抵达/,
-    );
-    const arrivedPayload =
-        structuredClone(validPayload);
-    arrivedPayload.publicEventEn +=
-        ' They arrive at Gringotts.';
-    assert.deepEqual(
-        validateScenePerformance(
-            arrivedPayload,
-            state,
-            budget,
-            null,
-            null,
-            movement,
-        ),
-        { valid: true, errors: [] },
-    );
-    const localizedDestination =
-        structuredClone(validPayload);
-    localizedDestination.publicEventEn +=
-        ' They reach the southern stretch of Diagon Alley.';
-    assert.deepEqual(
-        validateScenePerformance(
-            localizedDestination,
-            state,
-            budget,
-            null,
-            null,
-            {
-                moved: true,
-                toMapId: 'diagon_alley',
-                toRoomId: 'diagon_south',
-                toRoomName: '对角巷南段',
-                toRoomNameEn: '对角巷南段',
-            },
-        ),
-        { valid: true, errors: [] },
-    );
-    const possessiveDestination =
-        structuredClone(validPayload);
-    possessiveDestination.publicEventEn +=
-        ' They enter Madam Malkin\'s robe shop.';
-    assert.deepEqual(
-        validateScenePerformance(
-            possessiveDestination,
-            state,
-            budget,
-            null,
-            null,
-            {
-                moved: true,
-                toMapId: 'diagon_alley',
-                toRoomId: 'madam_malkins',
-                toRoomName: '摩金夫人长袍店',
-                toRoomNameEn: '摩金夫人长袍店',
-            },
-        ),
-        { valid: true, errors: [] },
-    );
+    assert.equal(missingArrival.valid, true);
     const playerDialogue =
         structuredClone(validPayload);
     playerDialogue.segments[1].actorId =
@@ -598,28 +539,6 @@ test('scene performance requires substantial narration for a fifteen-minute turn
     assert.match(
         invalidPlayerDialogue.errors.join('；'),
         /player_tina/,
-    );
-    const missingCompanionUpdate =
-        validateScenePerformance(
-            arrivedPayload,
-            state,
-            budget,
-            null,
-            null,
-            {
-                ...movement,
-                companionIds: [
-                    'minerva_mcgonagall',
-                ],
-            },
-        );
-    assert.equal(
-        missingCompanionUpdate.valid,
-        false,
-    );
-    assert.match(
-        missingCompanionUpdate.errors.join('；'),
-        /同行者/,
     );
     const pacingState = {
         ...state,

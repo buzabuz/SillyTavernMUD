@@ -1,6 +1,6 @@
 /* eslint-disable playwright/expect-expect */
 import {
-    applyPlayerMovement,
+    applyAcceptedMovementPlan as applyPlayerMovement,
 } from '../public/scripts/extensions/hogwarts-mud/domain/movement.js';
 import {
     inferActorRoomId,
@@ -180,7 +180,7 @@ test('spatial migration does not infer an actor room from activity prose', () =>
     );
 });
 
-test('spatial migration retries a recorded unresolved local movement once', () => {
+test('spatial migration never replays a recorded unresolved local movement', () => {
     const state = createCurrentPlayingState();
     state.map.activeMapId = 'diagon_alley';
     state.map.currentLocalNodeId =
@@ -258,15 +258,10 @@ test('spatial migration retries a recorded unresolved local movement once', () =
         { retryUnresolvedMovement: true },
     );
 
-    assert.equal(migrated.changed, true);
-    assert.equal(migrated.movement.moved, true);
+    assert.equal(migrated.movement, null);
     assert.equal(
         migrated.state.map.currentLocalNodeId,
-        'gringotts_lobby',
-    );
-    assert.deepEqual(
-        new Set(migrated.movement.companionIds),
-        new Set(['alex_zhang', 'eddie_cooper']),
+        'madam_malkins',
     );
     assert.equal(
         migrated.state.actors.find(actor =>
@@ -608,7 +603,7 @@ test('spatial migration restores actor rooms without inferring player movement f
     assert.equal(migrated.state.actors[1].mapId, 'zhang_home');
 });
 
-test('spatial v4 repairs a scene whose opening is at the barrier but room ID says train', () => {
+test('spatial reconciliation does not rewrite player position from opening prose', () => {
     const state = createCurrentKingsCrossState(
         'hogwarts_express',
     );
@@ -622,42 +617,27 @@ test('spatial v4 repairs a scene whose opening is at the barrier but room ID say
         },
     );
 
-    assert.equal(repaired.changed, true);
-    assert.deepEqual(
-        repaired.locationRepair,
-        {
-            fromMapId: 'kings_cross',
-            fromRoomId: 'hogwarts_express',
-            toMapId: 'kings_cross',
-            toRoomId: 'platform_barrier',
-            source: 'scene_opening_text',
-        },
-    );
+    assert.equal(repaired.locationRepair, null);
     assert.equal(
         repaired.state.map.currentLocalNodeId,
-        'platform_barrier',
+        'hogwarts_express',
     );
     assert.equal(
         repaired.state.scene.roomId,
-        'platform_barrier',
+        'hogwarts_express',
     );
     assert.ok(
         repaired.state.actors.every(actor =>
             actor.roomId ===
-                'platform_barrier'),
+                'hogwarts_express'),
     );
     assert.equal(
         repaired.state.items[0].roomId,
-        'platform_barrier',
+        'hogwarts_express',
     );
     assert.equal(
         repaired.state.spatial.version,
         7,
-    );
-    assert.equal(
-        repaired.state.spatial
-            .openingGroundingVersion,
-        1,
     );
 });
 

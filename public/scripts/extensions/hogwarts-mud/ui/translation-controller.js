@@ -298,6 +298,10 @@ export function createTranslationController(
                     error?.code ||
                     'TABLE_UNAVAILABLE',
                 ).slice(0, 64);
+            uniqueKeys.forEach(key =>
+                session
+                    .localizationQueriedKeys
+                    .delete(key));
             session
                 .localizationTableErrors
                 .set(

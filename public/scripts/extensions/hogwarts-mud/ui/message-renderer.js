@@ -1110,12 +1110,12 @@ export function createMessageRenderer(ports) {
             translating:
                 staticText(
                     'ui.message.stream.detail.translating',
-                    'The complete draft passed validation. Preparing display translation and commit.',
+                    'Generating the Chinese display while this turn continues settling in the background.',
                 ),
             committing:
                 staticText(
                     'ui.message.stream.detail.committing',
-                    'Committing world State and the final message.',
+                    'The narrative is readable. Finishing this turn proposal and world State commit.',
                 ),
         };
         return createGenerationStatusCard({

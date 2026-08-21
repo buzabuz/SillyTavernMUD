@@ -243,38 +243,16 @@ export function createLocalSemanticAdapter(ports) {
     }
 
     function createFallbackLocalAdjudication(
-        movementResolution,
         forceCheck,
         error = '',
     ) {
-        const routeMinutes =
-        movementResolution?.moved
-            ? Math.max(
-                15,
-                Number(
-                    movementResolution
-                        .minutes ||
-                    0,
-                ) ||
-                15,
-            )
-            : 15;
         return {
             result: {
                 schemaVersion: 1,
                 temporal: {
-                    mode:
-                    movementResolution
-                        ?.moved
-                        ? 'travel'
-                        : 'ordinary',
-                    elapsedMinutes:
-                    routeMinutes,
-                    basis:
-                    movementResolution
-                        ?.moved
-                        ? 'route'
-                        : 'fallback',
+                    mode: 'ordinary',
+                    elapsedMinutes: 15,
+                    basis: 'fallback',
                     evidenceText: '',
                     reasonEn:
                     'Narrative-first fallback uses one ordinary short turn.',
@@ -302,15 +280,6 @@ export function createLocalSemanticAdapter(ports) {
                     evidenceText: '',
                     confidence: 0,
                 },
-                movementIntent: {
-                    requested: false,
-                    guideActorId: '',
-                    destinationRoomId: '',
-                    intentEvidenceText: '',
-                    destinationEvidenceSourceRef: '',
-                    destinationEvidenceText: '',
-                    confidence: 0,
-                },
             },
             diagnostics: {
                 fallback: true,
@@ -326,9 +295,7 @@ export function createLocalSemanticAdapter(ports) {
         state,
         playerAction,
         addressing,
-        movementResolution,
         forceCheck,
-        movementContext = null,
     ) {
         try {
             const response =
@@ -388,10 +355,6 @@ export function createLocalSemanticAdapter(ports) {
                                     buildLocalSemanticActorContext(
                                         state,
                                     ),
-                                        movementResolution:
-                                    movementResolution ||
-                                    null,
-                                        movementContext,
                                         timePolicy:
                                     getDeterministicTimePolicy(),
                                     },
@@ -507,7 +470,6 @@ export function createLocalSemanticAdapter(ports) {
                 error,
             );
             return createFallbackLocalAdjudication(
-                movementResolution,
                 forceCheck,
                 error?.message ||
             error,
@@ -1230,6 +1192,7 @@ export function createLocalSemanticAdapter(ports) {
         transaction,
         {
             addressing = {},
+            movementOnly = false,
         } = {},
     ) {
         const narrativeText = (
@@ -1311,6 +1274,10 @@ export function createLocalSemanticAdapter(ports) {
                 null,
             existingActorPresence:
                 transaction.actorPresence ||
+                null,
+            movementPreflight:
+                transaction
+                    .movementPreflight ||
                 null,
         };
         const provider =
@@ -1416,6 +1383,9 @@ export function createLocalSemanticAdapter(ports) {
                 observation =
                     await settled.json();
             }
+            observation.result ??= {};
+            observation.result.playerMovement ??=
+                null;
             const temporalValidation =
             validateSceneTemporalConsistency(
                 observation
@@ -1490,7 +1460,6 @@ export function createLocalSemanticAdapter(ports) {
             }
             const perception =
                 perceptionValidation.value;
-            observation.result ??= {};
             observation.result
                 .perception =
             perception;
@@ -1526,6 +1495,30 @@ export function createLocalSemanticAdapter(ports) {
                 state,
                 narrativeText,
             );
+            if (movementOnly) {
+                return {
+                    observation,
+                    narrativeText,
+                    materialEvents: [],
+                    itemUpdates: [],
+                    identityObservations: [],
+                    identityDiagnostics: {
+                        routed: false,
+                        modelCalls: 0,
+                    },
+                    inventoryDiagnostics: {
+                        routed: false,
+                        modelCalls: 0,
+                    },
+                    temporalClaims: [],
+                    temporalDiagnostics:
+                        observation
+                            .diagnostics
+                            .temporalClaims,
+                    perception: null,
+                    targetActorIds,
+                };
+            }
             const dynamicObservation =
                 await requestDynamicTurnObservation(
                     playerAction,
@@ -1604,6 +1597,11 @@ export function createLocalSemanticAdapter(ports) {
                 targetActorIds,
             };
         } catch (error) {
+            const movementSettlementFailure =
+                transaction
+                    ?.movementPreflight
+                    ?.triggered ===
+                true;
             console.warn(
                 '[Hogwarts MUD] Post-turn semantic provider failed; committing narrative without observations',
                 error,
@@ -1620,6 +1618,8 @@ export function createLocalSemanticAdapter(ports) {
                         [],
                         temporalClaims:
                         [],
+                        playerMovement:
+                        null,
                         perception:
                         null,
                     },
@@ -1664,6 +1664,7 @@ export function createLocalSemanticAdapter(ports) {
                 perception:
                 null,
                 targetActorIds,
+                movementSettlementFailure,
             };
         }
     }

@@ -160,6 +160,65 @@ test('last-turn retry checkpoint restores one non-recursive pre-commit state', (
     );
 });
 
+test('rollback upgrades a V1 Actor Context checkpoint without mutating the stored snapshot', () => {
+    const state =
+        createCurrentPlayingState();
+    const checkpoint =
+        createTurnRetryCheckpoint(
+            state,
+            {
+                playerMessageId: 41,
+                assistantMessageId: 42,
+                playerAction:
+                    'I wait for Hermione.',
+            },
+        );
+
+    checkpoint.baseState
+        .actorContextVersion = 1;
+    checkpoint.baseState.actors =
+        checkpoint.baseState
+            .actors.map(
+                ({
+                    locationKnown:
+                    _locationKnown,
+                    ...actor
+                }) =>
+                    actor,
+            );
+
+    const restored =
+        restoreTurnRetryCheckpoint(
+            checkpoint,
+        );
+
+    assert.equal(
+        restored.actorContextVersion,
+        2,
+    );
+    assert.ok(
+        restored.actors.every(
+            actor =>
+                typeof actor
+                    .locationKnown ===
+                'boolean',
+        ),
+    );
+    assert.equal(
+        checkpoint.baseState
+            .actorContextVersion,
+        1,
+    );
+    assert.ok(
+        checkpoint.baseState
+            .actors.every(actor =>
+                !Object.hasOwn(
+                    actor,
+                    'locationKnown',
+                )),
+    );
+});
+
 test('legacy rollback projection stays removed after the V1 cutover', () => {
     const state =
         createCurrentPlayingState();
