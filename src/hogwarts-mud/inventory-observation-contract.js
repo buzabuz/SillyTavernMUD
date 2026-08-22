@@ -415,6 +415,9 @@ export function normalizeDynamicInventoryInput(
 
 export function createDynamicInventoryModelRequest(
     input,
+    {
+        enforcePromptBudget = true,
+    } = {},
 ) {
     const normalizedInput =
         normalizeDynamicInventoryInput(
@@ -450,6 +453,7 @@ export function createDynamicInventoryModelRequest(
             DYNAMIC_INVENTORY_TASK_ID,
         );
     if (
+        enforcePromptBudget &&
         promptMeasurement.characters >
         budget.maximumCharacters
     ) {

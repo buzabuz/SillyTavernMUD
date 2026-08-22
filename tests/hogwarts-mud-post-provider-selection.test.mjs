@@ -10,9 +10,12 @@ import {
     normalizePostTurnSemanticProvider,
 } from '../public/scripts/extensions/hogwarts-mud/domain/post-turn-semantic-provider.js';
 import {
+    createLowPostTurnSemanticMessages,
     createPostTurnSemanticMessages,
+    LOW_POST_TURN_SEMANTIC_SYSTEM,
+    LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
     POST_TURN_JSON_SCHEMA,
-    POST_TURN_SEMANTIC_SYSTEM,
+    POST_TURN_TRANSPORT_JSON_SCHEMA,
 } from '../public/scripts/extensions/hogwarts-mud/domain/post-turn-semantic-contract.js';
 import {
     getModelTaskDefinition,
@@ -50,6 +53,12 @@ const VALID_RESULT = Object.freeze({
     },
     temporalClaims: [],
     playerMovement: null,
+});
+
+const LOW_VALID_RESULT = Object.freeze({
+    ...VALID_RESULT,
+    inventoryUpdates: [],
+    identityObservations: [],
 });
 
 function createState(
@@ -233,7 +242,7 @@ test('provider selector persists the same normalized value to extension settings
     );
 });
 
-test('Low provider sends one shared-schema request, skips Regex, and settles its raw result on the server', async () => {
+test('Low retry sends one complete-Post request, skips Regex, and settles its raw result on the server', async () => {
     const roleCalls = [];
     const localCalls = [];
     const requests = [];
@@ -252,7 +261,7 @@ test('Low provider sends one shared-schema request, skips Regex, and settles its
                 return {
                     content:
                         JSON.stringify(
-                            VALID_RESULT,
+                            LOW_VALID_RESULT,
                         ),
                 };
             },
@@ -294,6 +303,9 @@ test('Low provider sends one shared-schema request, skips Regex, and settles its
                 createState('low'),
                 'I wait for Hermione.',
                 createTransaction(),
+                {
+                    settlementOnly: true,
+                },
             );
 
     assert.equal(roleCalls.length, 1);
@@ -305,17 +317,17 @@ test('Low provider sends one shared-schema request, skips Regex, and settles its
     );
     assert.equal(
         roleCalls[0].messages[0].content,
-        POST_TURN_SEMANTIC_SYSTEM,
+        LOW_POST_TURN_SEMANTIC_SYSTEM,
     );
     assert.deepEqual(
         roleCalls[0].messages,
-        createPostTurnSemanticMessages(
+        createLowPostTurnSemanticMessages(
             requests[0].body.input,
         ),
     );
     assert.strictEqual(
         roleCalls[0].options.jsonSchema,
-        POST_TURN_JSON_SCHEMA,
+        LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
     );
     assert.equal(
         roleCalls[0].options.skipRegexPreset,
@@ -328,6 +340,287 @@ test('Low provider sends one shared-schema request, skips Regex, and settles its
     assert.deepEqual(
         result.perception,
         VALID_RESULT.perception,
+    );
+    assert.deepEqual(
+        result.itemUpdates,
+        [],
+    );
+});
+
+test('Low directly settles Item and Identity proposals without a Dynamic 4B call', async () => {
+    const narrative =
+        'Hermione\'s bleeding cut was visible as I placed the signed note on the desk.';
+    const state =
+        createState('low');
+    state.items = [{
+        id: 'signed_note',
+        labelEn: 'Signed Note',
+        appearanceEn:
+            'A folded parchment with a careful signature.',
+        type: 'document',
+        ownerId: 'player',
+        holderId: '',
+        custody: 'stored',
+        location: {
+            mapId: 'hogwarts_castle',
+            roomId: 'classroom',
+            placement: 'in_room',
+        },
+        state: 'intact',
+        physicalForm: 'whole',
+        visibility: 'public',
+        isEquipped: false,
+    }];
+    const transaction =
+        createTransaction();
+    transaction.segments = [{
+        type: 'narration',
+        actorId: 'hermione',
+        textEn: narrative,
+    }];
+    transaction.checkResolution = {
+        kind: 'perception',
+        target: {
+            actorId: 'hermione',
+        },
+    };
+    const lowResult = {
+        ...LOW_VALID_RESULT,
+        perception: {
+            ...LOW_VALID_RESULT.perception,
+            evidenceText: narrative,
+        },
+        inventoryUpdates: [{
+            id: 'signed_note',
+            operation: 'place',
+            type: 'document',
+            labelEn: 'Signed Note',
+            appearanceEn:
+                'A folded parchment with a careful signature.',
+            ownerId: 'player',
+            holderId: '',
+            targetHolderId: '',
+            transferMode: 'none',
+            storyRoles: [],
+            visibility: 'public',
+            isEquipped: false,
+            held: false,
+            sourceKind: 'narrative',
+            evidenceText:
+                'placed the signed note on the desk',
+            evidenceItemText:
+                'signed note',
+            physicalForm: 'whole',
+            confidence: 0.9,
+        }],
+        identityObservations: [{
+            actorId: 'hermione',
+            injuryStatus: 'injured',
+            evidenceText:
+                'bleeding cut was visible',
+            evidenceSegmentIndex: 0,
+            confidence: 0.9,
+        }],
+    };
+    const roleCalls = [];
+    let localCalls = 0;
+    const requests = [];
+    const adapter = createAdapter({
+        projectObservedInventoryUpdates:
+            updates =>
+                updates,
+        runLocalModelTask:
+            async () => {
+                localCalls++;
+            },
+        sendPostTurnSemanticRequest:
+            async (
+                _slot,
+                _messages,
+                _options,
+            ) => {
+                roleCalls.push(true);
+                return {
+                    content:
+                        JSON.stringify(
+                            lowResult,
+                        ),
+                };
+            },
+        fetchImpl:
+            async (
+                url,
+                options,
+            ) => {
+                const request = {
+                    url,
+                    body:
+                        JSON.parse(
+                            options.body,
+                        ),
+                };
+                requests.push(request);
+                return {
+                    ok: true,
+                    json:
+                        async () =>
+                            settlePostTurnModelResult(
+                                request.body.input,
+                                request.body.raw,
+                            ),
+                };
+            },
+    });
+
+    const result =
+        await adapter
+            .requestPostTurnSemanticObservation(
+                state,
+                'I place the signed note on the desk.',
+                transaction,
+            );
+
+    assert.equal(roleCalls.length, 1);
+    assert.equal(localCalls, 0);
+    assert.deepEqual(
+        requests.map(request =>
+            request.url),
+        ['/api/hogwarts-mud/post/observe/settle'],
+    );
+    assert.deepEqual(
+        requests[0].body.input.itemCandidates.map(item =>
+            item.id),
+        ['signed_note'],
+    );
+    assert.deepEqual(
+        requests[0].body.input.identityTargetActorIds,
+        ['hermione'],
+    );
+    assert.deepEqual(
+        result.itemUpdates,
+        lowResult.inventoryUpdates,
+    );
+    assert.deepEqual(
+        result.identityObservations,
+        [{
+            version: 1,
+            actorId: 'hermione',
+            kind: 'injury_assessment',
+            status: 'visible_injury',
+            injuryType: 'unknown',
+            description:
+                'bleeding cut was visible',
+            evidenceText:
+                'bleeding cut was visible',
+            evidenceSegmentIndex: 0,
+            confidence: 0.9,
+        }],
+    );
+});
+
+test('Low proposal guards omit invalid Item and Identity candidates before transaction settlement', async () => {
+    const input = {
+        playerAction:
+            'I place the Signed Note on the desk.',
+        narrativeSegments: [{
+            type: 'narration',
+            actorId: 'hermione',
+            textEn:
+                'Hermione\'s bleeding cut was visible as I placed the signed note on the desk.',
+        }],
+        actors: [{
+            id: 'hermione',
+            nameEn: 'Hermione Granger',
+        }],
+        itemCandidates: [{
+            id: 'signed_note',
+            labelEn: 'Signed Note',
+            label: 'Signed Note',
+            appearanceEn:
+                'A folded parchment with a careful signature.',
+            type: 'document',
+            ownerId: 'player',
+            holderId: '',
+            state: 'intact',
+            isEquipped: false,
+        }],
+        identityTargetActorIds: [
+            'hermione',
+        ],
+        inspectionTargetActorIds: [
+            'hermione',
+        ],
+    };
+    const settled =
+        await settlePostTurnModelResult(
+            input,
+            {
+                ...LOW_VALID_RESULT,
+                perception: {
+                    ...LOW_VALID_RESULT.perception,
+                    evidenceText:
+                        input.narrativeSegments[0]
+                            .textEn,
+                },
+                inventoryUpdates: [{
+                    id: 'signed_note',
+                    operation: 'place',
+                    type: 'document',
+                    labelEn: 'Signed Note',
+                    appearanceEn:
+                        'A folded parchment with a careful signature.',
+                    ownerId: 'player',
+                    holderId: '',
+                    targetHolderId: '',
+                    transferMode: 'none',
+                    storyRoles: [],
+                    visibility: 'public',
+                    isEquipped: false,
+                    held: false,
+                    sourceKind: 'player',
+                    evidenceText:
+                        input.playerAction,
+                    evidenceItemText:
+                        'Signed Note',
+                    physicalForm: 'whole',
+                    confidence: 0.1,
+                }],
+                identityObservations: [{
+                    actorId: 'hermione',
+                    injuryStatus: 'injured',
+                    evidenceText:
+                        'bleeding cut was visible',
+                    evidenceSegmentIndex: 0,
+                    confidence: 0.1,
+                }],
+            },
+        );
+
+    assert.deepEqual(
+        settled.result.inventoryUpdates,
+        [],
+    );
+    assert.deepEqual(
+        settled.result.identityObservations,
+        [],
+    );
+    assert.deepEqual(
+        settled.diagnostics
+            .lowAuxiliary
+            .inventoryRejected,
+        [{
+            index: 0,
+            code: 'confidence_below_threshold',
+        }],
+    );
+    assert.deepEqual(
+        settled.diagnostics
+            .lowAuxiliary
+            .identityRejected,
+        [{
+            index: 0,
+            code: 'confidence_below_threshold',
+        }],
     );
 });
 
@@ -401,6 +694,207 @@ test('Local provider makes one local request and never invokes the Low role requ
     );
 });
 
+test('Local retains one shared Dynamic request after an Item-routed core Post', async () => {
+    const state =
+        createState('local');
+    state.items = [{
+        id: 'signed_note',
+        labelEn: 'Signed Note',
+        appearanceEn:
+            'A folded parchment with a careful signature.',
+        type: 'document',
+        ownerId: 'player',
+        holderId: '',
+        custody: 'stored',
+        location: {
+            mapId: 'hogwarts_castle',
+            roomId: 'classroom',
+            placement: 'in_room',
+        },
+        state: 'intact',
+        physicalForm: 'whole',
+        visibility: 'public',
+        isEquipped: false,
+    }];
+    const update = {
+        id: 'signed_note',
+        operation: 'place',
+        type: 'document',
+        labelEn: 'Signed Note',
+        appearanceEn:
+            'A folded parchment with a careful signature.',
+        ownerId: 'player',
+        holderId: '',
+        targetHolderId: '',
+        transferMode: 'none',
+        storyRoles: [],
+        visibility: 'public',
+        isEquipped: false,
+        held: false,
+        sourceKind: 'player',
+        evidenceText:
+            'I place the Signed Note on the desk.',
+        evidenceItemText:
+            'Signed Note',
+        physicalForm: 'whole',
+        confidence: 0.9,
+    };
+    const taskIds = [];
+    const requests = [];
+    const adapter = createAdapter({
+        projectObservedInventoryUpdates:
+            updates =>
+                updates,
+        runLocalModelTask:
+            async (
+                taskId,
+                invoke,
+            ) => {
+                taskIds.push(taskId);
+                return invoke();
+            },
+        sendPostTurnSemanticRequest:
+            async () => {
+                throw new Error(
+                    'Low must not run for the Local provider.',
+                );
+            },
+        fetchImpl:
+            async (
+                url,
+                options,
+            ) => {
+                const request = {
+                    url,
+                    body:
+                        JSON.parse(
+                            options.body,
+                        ),
+                };
+                requests.push(request);
+                if (
+                    url ===
+                    '/api/hogwarts-mud/local/observe'
+                ) {
+                    return {
+                        ok: true,
+                        json:
+                            async () =>
+                                settlePostTurnModelResult(
+                                    request.body.input,
+                                    {
+                                        ...VALID_RESULT,
+                                        inventoryObservationRequired:
+                                            true,
+                                    },
+                                    {
+                                        transport:
+                                            'ollama',
+                                    },
+                                ),
+                    };
+                }
+                assert.equal(
+                    url,
+                    '/api/hogwarts-mud/local/dynamic/observe',
+                );
+                return {
+                    ok: true,
+                    json:
+                        async () => ({
+                            result: {
+                                identityObservations: [],
+                                inventoryUpdates: [
+                                    update,
+                                ],
+                            },
+                            diagnostics: {
+                                routed: true,
+                                requestedTasks: [
+                                    'inventory',
+                                ],
+                                modelCalls: 1,
+                                identity: {},
+                                inventory: {},
+                            },
+                        }),
+                };
+            },
+    });
+
+    const result =
+        await adapter
+            .requestPostTurnSemanticObservation(
+                state,
+                'I place the Signed Note on the desk.',
+                createTransaction(),
+            );
+
+    assert.deepEqual(
+        taskIds,
+        [
+            'post_turn_semantic_proposal',
+            'local_dynamic_turn_observer',
+        ],
+    );
+    assert.deepEqual(
+        requests.map(request =>
+            request.url),
+        [
+            '/api/hogwarts-mud/local/observe',
+            '/api/hogwarts-mud/local/dynamic/observe',
+        ],
+    );
+    assert.deepEqual(
+        requests[1].body.input.inventory.inventory.map(item =>
+            item.id),
+        ['signed_note'],
+    );
+    assert.deepEqual(
+        result.itemUpdates,
+        [update],
+    );
+});
+
+test('Local no-fit does not invoke either selected Post transport', async () => {
+    let localCalls = 0;
+    let roleCalls = 0;
+    const adapter = createAdapter({
+        localPostCapacity: {
+            contextTokens: 1_000,
+            responseReserveTokens: 500,
+            estimatedCharactersPerToken: 4,
+        },
+        sendPostTurnSemanticRequest:
+            async () => {
+                roleCalls++;
+            },
+        runLocalModelTask:
+            async () => {
+                localCalls++;
+            },
+    });
+
+    const result =
+        await adapter
+            .requestPostTurnSemanticObservation(
+                createState('local'),
+                'I wait for Hermione.',
+                createTransaction(),
+            );
+
+    assert.equal(localCalls, 0);
+    assert.equal(roleCalls, 0);
+    assert.equal(
+        result.postSettlementFailure,
+        true,
+    );
+    assert.equal(
+        result.failureCode,
+        'post_no_fit',
+    );
+});
+
 test('Low JSON or settlement failure does not invoke Local, perception, or dynamic observation fallback', async () => {
     let roleCalls = 0;
     let localCalls = 0;
@@ -460,7 +954,7 @@ test('Low JSON or settlement failure does not invoke Local, perception, or dynam
     );
 });
 
-test('server settlement accepts one strict JSON object and rejects recovery-shaped text', () => {
+test('server settlement accepts one strict JSON object and rejects recovery-shaped text', async () => {
     const input = {
         playerAction: 'I wait for Hermione.',
         narrativeSegments: [{
@@ -472,7 +966,7 @@ test('server settlement accepts one strict JSON object and rejects recovery-shap
         }],
     };
     const settled =
-        settlePostTurnModelResult(
+        await settlePostTurnModelResult(
             input,
             JSON.stringify(
                 VALID_RESULT,
@@ -503,6 +997,7 @@ test('Low post request disables the profile Regex preset without changing its JS
     const appliedRegexIds = [];
     let effectiveProfile;
     let overridePayload;
+    let contextLimiterCalls = 0;
     const adapter = createModelAdapter({
         ConnectionManagerRequestService: {
             sendRequest:
@@ -533,8 +1028,10 @@ test('Low post request disables the profile Regex preset without changing its JS
             }),
         getConnectionProfiles:
             () => profiles,
-        limitMessagesToContext:
-            messages => messages,
+        limitMessagesToContext: () => {
+            contextLimiterCalls++;
+            return [];
+        },
         parseCompleteJsonObject:
             JSON.parse,
         uuidv4:
@@ -553,8 +1050,9 @@ test('Low post request disables the profile Regex preset without changing its JS
         {
             json: true,
             jsonSchema:
-                POST_TURN_JSON_SCHEMA,
+                POST_TURN_TRANSPORT_JSON_SCHEMA,
             skipRegexPreset: true,
+            preservePrompt: true,
         },
     );
 
@@ -568,6 +1066,13 @@ test('Low post request disables the profile Regex preset without changing its JS
     );
     assert.strictEqual(
         overridePayload.json_schema,
+        POST_TURN_TRANSPORT_JSON_SCHEMA,
+    );
+    assert.strictEqual(
+        overridePayload
+            .json_schema
+            .value,
         POST_TURN_JSON_SCHEMA,
     );
+    assert.equal(contextLimiterCalls, 0);
 });

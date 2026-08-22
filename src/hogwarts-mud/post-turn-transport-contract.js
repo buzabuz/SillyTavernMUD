@@ -7,8 +7,15 @@ import {
     MATERIAL_OPERATIONS,
 } from '../../public/scripts/extensions/hogwarts-mud/material-schema.js';
 import {
+    LOW_POST_TURN_JSON_SCHEMA,
     POST_TURN_JSON_SCHEMA,
 } from '../../public/scripts/extensions/hogwarts-mud/domain/post-turn-semantic-contract.js';
+
+/**
+ * Field routes: vcon013.result.inventoryUpdates,
+ * vcon013.result.identityObservations.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
 
 const confidenceSchema =
     z.number().min(0).max(1);
@@ -234,3 +241,29 @@ export const postTurnResultSchema =
 
 export const postTurnJsonSchema =
     POST_TURN_JSON_SCHEMA;
+
+export const lowPostTurnJsonSchema =
+    LOW_POST_TURN_JSON_SCHEMA;
+
+/**
+ * @param {{ inventoryUpdates?: any, identityObservations?: any }} [schemas]
+ */
+export function createLowPostTurnResultSchema(
+    {
+        inventoryUpdates,
+        identityObservations,
+    } = {},
+) {
+    if (
+        !inventoryUpdates ||
+        !identityObservations
+    ) {
+        throw new TypeError(
+            'Low Post transport requires Item and Identity proposal schemas.',
+        );
+    }
+    return postTurnResultSchema.extend({
+        inventoryUpdates,
+        identityObservations,
+    }).strict();
+}

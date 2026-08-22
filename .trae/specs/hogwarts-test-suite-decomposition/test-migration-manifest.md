@@ -379,6 +379,16 @@ Final destination evidence:
 | `tests/hogwarts-mud-turn-recovery.test.mjs` | 6 | 577 | character.js, initial-world.js, turn-reducer.js, turn-rollback.js | ./hogwarts-mud-test-fixtures.mjs | passed in 180/180 migrated batch |
 | `tests/hogwarts-mud-turn-validation.test.mjs` | 3 | 1021 | spatial-performance.js, turn-reducer.js, turn-time.js, turn-validation.js | ./hogwarts-mud-test-fixtures.mjs | passed in 180/180 migrated batch |
 
+## Later Contract Migrations
+
+| Retired assertion | Replacement owner | Retirement authority | No-caller / replacement evidence | Verification |
+| --- | --- | --- | --- | --- |
+| `scene performance requires substantial narration for a fifteen-minute turn`: destination English substring proves a pre-committed move | `tests/hogwarts-mud-post-settled-player-movement.test.mjs` exact Post evidence and preflight guard | `hogwarts-pre-validated-post-settled-player-movement` PRD | `turn-validation.js` no longer parses destination prose; Post candidate guard owns completion | focused validation and new movement test pass |
+| `spatial migration retries a recorded unresolved local movement once` | `tests/hogwarts-mud-post-settled-player-movement.test.mjs` reload does not replay a marker | same PRD | `spatial-reconciliation.js` no longer calls `applyPlayerMovement()` | focused spatial and new movement test pass |
+| Revision 17 Pre `movementIntent` JSON shape and follow-only prompt route | deterministic `createPlayerMovementPreflight()` test | same PRD | production Pre request no longer receives `movementContext` or exposes `movementIntent` | focused validation and new movement test pass |
+| `resolvePlayerMovement()` replay helper and its stale-guide/json-recovery assertions | `tests/hogwarts-mud-post-settled-player-movement.test.mjs` sole-reducer and no-reload-replay assertions | same PRD | helper export and all production callers removed; `movement-post-settlement.js` is the remaining reducer-owned write path | focused movement, spatial and JSON recovery tests pass |
+| `settleFollowMovementIntent()` and its three Pre-direct-writer follow assertions | `createPlayerMovementPreflight()` plus Post candidate/Reducer contract tests | same PRD | follow destination is now deterministic preflight and final move requires Post evidence; no Pre semantic settlement export remains | focused movement and call-budget tests pass |
+
 ## Completion Rules
 
 - no source test may be absent or appear twice;

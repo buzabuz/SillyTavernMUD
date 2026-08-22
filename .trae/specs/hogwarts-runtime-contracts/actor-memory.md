@@ -70,6 +70,11 @@ eventKnowledge
 - `summaryEn` 是 observer-specific interpretation，不是 event summary 的复制；
 - observer、target、来源与 audience 都通过校验。
 
+本地模型的 Appraisal confidence 最终只以 decimal `[0,1]` 进入既有
+Appraisal 验证与 Reducer。transport 适配层确定性保留 `0..1`，将
+`>1..100` 视为百分数除以 100，并将更大有限非负数截断为 `1`；负数、
+非数值或非有限数仍拒绝，不触发 retry 或额外模型调用。
+
 已批准的 Memory Synapse V2 让历史 Appraisal 只持有 `sourceEventIds`。`sceneId/sourceMessageIds/witnesses/sourceRumorIds` 均不再复制。`knowledgeSource=reported` 取代 `authorized_rumor`；无 Event 的 migrated Appraisal 固定 `historicalClaimAllowed=false`。
 
 Person Schema 只由既有中档 event-boundary/Memory Consolidation 调用中的 `schemaOperations` 整理，不增加第二次中档调用。稳定 Schema 至少需要同一 observer-target 的 3 条 accepted Appraisal，且跨至少 2 个 Scene；每对最多保留 3 个 active Schema。反例保存在 `counterAppraisalIds`，会降低 confidence 或把状态改为 `contested`；旧解释通过 supersede 保留来源，不能静默重写。单一事件只能形成 Appraisal，不能固化人格。

@@ -388,6 +388,82 @@ test(
 );
 
 test(
+    'Qdrant reconciliation checkpoints completed batches in the manifest',
+    async () => {
+        const harness =
+            createHarness();
+        const records = [
+            record(
+                'events_alpha',
+                'Alpha remains on the table.',
+                1,
+            ),
+            record(
+                'events_beta',
+                'Beta remains by the fire.',
+                1,
+            ),
+        ];
+        const first =
+            await harness.backend
+                .reconcile(
+                    syncInput(1, records),
+                    null,
+                    {
+                        batchSize: 1,
+                    },
+                );
+
+        assert.equal(
+            first.complete,
+            false,
+        );
+        assert.equal(
+            first.pendingRecordCount,
+            1,
+        );
+        assert.deepEqual(
+            harness.embedCalls,
+            [
+                [
+                    'Alpha remains on the table.',
+                ],
+            ],
+        );
+
+        const resumed =
+            await harness.backend
+                .reconcile(
+                    syncInput(1, records),
+                    null,
+                    {
+                        batchSize: 1,
+                    },
+                );
+
+        assert.equal(
+            resumed.complete,
+            true,
+        );
+        assert.equal(
+            resumed.pendingRecordCount,
+            0,
+        );
+        assert.deepEqual(
+            harness.embedCalls,
+            [
+                [
+                    'Alpha remains on the table.',
+                ],
+                [
+                    'Beta remains by the fire.',
+                ],
+            ],
+        );
+    },
+);
+
+test(
     'Qdrant reconciliation repairs missing points and deletes absent records',
     async () => {
         const harness =

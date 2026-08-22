@@ -17,6 +17,7 @@ import {
 } from '../public/scripts/extensions/hogwarts-mud/domain/pre-turn-route-guards.js';
 import {
     POST_TURN_CONTEXT_SIZE,
+    POST_TURN_RESPONSE_RESERVE_TOKENS,
     createPostTurnModelRequest,
     createPreTurnModelRequest,
     validatePreTurnCalendarCommitment,
@@ -243,12 +244,20 @@ test('local pre and post build-only requests expose the exact production contrac
         true,
     );
     assert.equal(
-        post.exactContextSize,
+        post.contextSizeOverride,
         POST_TURN_CONTEXT_SIZE,
     );
     assert.equal(
         POST_TURN_CONTEXT_SIZE,
-        4_096,
+        8_192,
+    );
+    assert.equal(
+        post.responseReserveTokens,
+        POST_TURN_RESPONSE_RESERVE_TOKENS,
+    );
+    assert.equal(
+        POST_TURN_RESPONSE_RESERVE_TOKENS,
+        1_024,
     );
 });
 

@@ -1,6 +1,6 @@
 ---
 name: "hogwarts-change-governance"
-description: "Requires fixed-PM business discovery, production reconnaissance, prompt budgets, single-attempt failure, blind simulation, and real-save verification. Invoke for any Hogwarts MUD change."
+description: "Grades Hogwarts changes L0-L3 and applies proportional PM, PRD, execution, and testing. Invoke for any Hogwarts MUD requirement or behavior change."
 ---
 
 # Hogwarts Change Governance
@@ -17,7 +17,7 @@ This is a project-only, mandatory governance skill.
 
 ## Authoritative Artifacts
 
-For every change, create or reuse exactly one stable directory:
+For every governed change, create or reuse at most one stable directory:
 
 ```text
 .trae/specs/<change-id>/
@@ -25,7 +25,14 @@ For every change, create or reuse exactly one stable directory:
 
 `<change-id>` must be a stable, descriptive kebab-case identifier. Reuse the same identifier for follow-up work on the same requirement. Never create date-stamped, attempt-specific, implementation-phase, or debug variants of the change directory.
 
-The directory must contain and continuously maintain these five files:
+Artifact depth is grade-proportional:
+
+- `L0`: update one concise `prd.md` after user feedback. Reuse existing
+  `tasks.md/checklist.md/progress.md` when already present; do not create a
+  speculative Spec or evidence tree for a one-condition edit.
+- `L1`: maintain `prd.md`, a compact task/checklist/progress record, and add a
+  Spec only when the bounded implementation has a real interface contract.
+- `L2/L3`: the directory must contain and continuously maintain all five files:
 
 ```text
 prd.md
@@ -74,6 +81,18 @@ The JSON file is registry authority. The Markdown file is its human-readable
 companion. Update both in the owning system change; do not create a central
 runtime validator or generic cross-domain test harness.
 
+The permanent model-field route authority is:
+
+```text
+.trae/specs/hogwarts-runtime-contracts/model-field-routes.md
+```
+
+It is the readable registry for every field that crosses a model task,
+Prompt projection, output Schema, route decision, validation boundary, or
+Reducer carrier. It supplements `state-fields.md`: State fields retain their
+State contract there; transient model fields must not be hidden because they
+are not persisted.
+
 The fixed PM business-discovery role is:
 
 ```text
@@ -95,6 +114,7 @@ Use exactly these documentation routes:
 | Execution and evidence index | `tasks.md`, `checklist.md`, `progress.md` in the same change | Status and evidence only; cannot override the PRD or living contract |
 | Current runtime behavior | `.trae/specs/hogwarts-runtime-contracts/` | Maintained in the same change as production behavior |
 | Runtime field registry | `.trae/specs/hogwarts-runtime-contracts/state-fields.md` | Sole documentation registry for field meaning, writer, readers, migration, compatibility, and diagnostics |
+| Model field-route registry | `.trae/specs/hogwarts-runtime-contracts/model-field-routes.md` | Sole readable route table for Prompt/Schema/transient model fields: source, selector, consumers, route edges, validation and State outcome |
 | Cross-change debt | `.trae/specs/TECH_DEBT.md` | Current evidence-backed debt and change/feature counts |
 | Validation responsibility registry | `.trae/skills/hogwarts-change-governance/VALIDATION_RESPONSIBILITY_REGISTRY.json` | Permanent contract and rule ownership across Regex, Embedding, model, Schema, transform, validator and Reducer stages |
 | Validation responsibility table | `.trae/skills/hogwarts-change-governance/VALIDATION_RESPONSIBILITY_REGISTRY.md` | Human-readable companion updated with the JSON registry by each owning system |
@@ -190,6 +210,96 @@ At closeout, verify:
 ## Mandatory Workflow
 
 Follow these gates in order. Do not skip or reorder them.
+
+### Permanent Complexity Grade And Proportional Governance
+
+This section controls how much process every later gate may impose. A later
+gate cannot expand an L0/L1 task into L2/L3 ceremony without concrete evidence
+and an explicit regrade.
+
+#### Required Order
+
+For every incoming requirement:
+
+1. The fixed PM first assigns exactly one complexity grade: `L0`, `L1`, `L2`
+   or `L3`.
+2. The PM gives the user a short impact boundary and simple proposed approach.
+3. Stop and ask for the user's opinion. **Do not create or edit a PRD, Spec,
+   tasks, checklist, implementation plan or production code before this user
+   response.**
+4. After the user responds, the PM incorporates that decision into the PRD.
+5. Execute only the process allowed by the selected grade.
+
+The user's latest instruction overrides older PRDs, PM conclusions and
+technical assumptions. Implementation constraints such as FIFO, model
+residency, queueing or provider capability must not be promoted into product
+eligibility rules unless the user explicitly approves that business rule.
+
+#### Grade Definitions
+
+| Grade | Scope | Required process | Target elapsed time |
+| --- | --- | --- | --- |
+| `L0` | One obvious narrow change, such as deleting a gate, changing one condition/copy value, or moving one existing call without changing contracts, State, Prompt, Schema, persistence or cross-module ownership | One PM grade + short approach -> user opinion -> concise PRD update -> implement -> focused self-test -> plain-language report. No independent test Agent, no repeated PM round, no broad browser matrix and no unrelated cleanup. | Complete within 10 minutes |
+| `L1` | Bounded feature/fix in one workflow or a small set of directly coupled files, with known ownership and no broad migration | One PM Agent round -> user opinion -> PRD -> implement -> exactly one fresh test Agent round -> report. | Complete within 30 minutes |
+| `L2` | Multi-module behavior or contract change involving shared scheduler/wiring, State/Schema/validator ownership, persistence, provider policy or several user workflows | Full PM discovery plus production-informed follow-up, governed artifacts, focused and regression tests, and one fresh acceptance Agent. Additional rounds only after a concrete failure. | Estimate and report before execution |
+| `L3` | Cross-domain architecture, migration/repair of real saves, security/privacy boundary, Prompt architecture, high blast radius or unresolved business semantics | Multi-round PM alignment, full artifacts, staged implementation, blind/real-save/browser evidence as applicable, and repeated fresh acceptance after each failed fix. | Milestones and blockers required |
+
+#### Regrading Rules
+
+1. Start from the smallest grade supported by the user-visible scope.
+2. Regrade upward only when production evidence proves a wider writer,
+   migration, contract, security or user-workflow impact.
+3. Before regrading, stop and tell the user in one short message:
+   - current grade;
+   - exact new evidence;
+   - proposed new grade;
+   - added time/testing cost.
+4. Never regrade because the existing governance documents are long, the
+   worktree is dirty, optional cleanup exists, or more testing would feel
+   safer.
+5. A time target never authorizes cutting business scope. If L0/L1 cannot meet
+   its target, report the concrete blocker immediately instead of silently
+   adding process.
+
+#### L0 Fast Path
+
+For L0, the following later requirements are satisfied proportionally:
+
+- business completeness is the PM's short impact boundary plus the user's
+  response; a full entity matrix and production-informed second PM pass are
+  not required;
+- the PRD may be concise and update an existing change artifact; do not create
+  speculative supporting reports;
+- implementation approval is the user's response to the PM's proposed
+  approach;
+- verification is the smallest focused self-test that reaches the changed
+  production boundary, plus syntax/lint when applicable;
+- independent acceptance, broad frontend-registry expansion, full test glob,
+  blind model simulation and real-save/browser evidence are required only if
+  the L0 edit actually changes those surfaces;
+- after the focused test passes, report the result and stop. Do not continue
+  into optional cleanup, technical-debt inventory or additional Agents.
+
+#### L1 Fast Path
+
+For L1:
+
+- use one PM Agent only; the PM's initial scope/approach and the PRD after user
+  feedback are the same round;
+- use exactly one fresh test Agent after implementation;
+- run focused tests and only directly affected regressions;
+- a failed test Agent may trigger one fix and one replacement test Agent;
+  further rounds require explicit regrading to L2;
+- finish with a concise Before/After, changed files, tests and residual
+  blockers.
+
+#### Anti-Pattern
+
+The permanent negative example is turning “remove one provider gate and start
+two existing promises together” into provider-specific product policy,
+multiple PM rounds, repeated independent Agents and broad browser acceptance.
+That is an L0 change unless concrete production evidence proves a wider
+contract change.
 
 ### Permanent PRD-Goal Acceptance Invariant
 
@@ -335,6 +445,17 @@ This gate runs before technical reconnaissance, PRD drafting, Spec drafting,
 task decomposition or implementation planning for every new or reopened
 Hogwarts requirement.
 
+Apply it proportionally:
+
+- `L0`: PM outputs grade, impact boundary, one simple approach and a direct
+  question for the user; stop there until the user responds.
+- `L1`: one PM round covers bounded scope and approach; after user feedback the
+  same round writes the PRD.
+- `L2/L3`: use the complete discovery and production-informed follow-up below.
+
+The full matrix and second PM verdict requirements below are mandatory only
+for `L2/L3`; they must not delay L0/L1.
+
 1. Launch exactly one fixed PM Agent using
    `PM_BUSINESS_DISCOVERY_AGENT.md`:
    - canonical task name: `pm_business_discovery`;
@@ -391,7 +512,8 @@ Hogwarts requirement.
 
 Hard blockers:
 
-- no fixed PM Agent or either PM verdict is not `PASS`;
+- no fixed PM Agent, or a PM verdict required by the selected grade is not
+  `PASS`;
 - any entity, field, workflow, failure result or authority remains
   unclassified;
 - capability name is broader than its field coverage;
@@ -399,7 +521,7 @@ Hard blockers:
 - the proposed scope began from Regex, tests, benchmarks, defects, modules or
   tasks rather than the product goal;
 - PM and main Agent disagree on business scope or semantics;
-- technical research changed the scope after the PM follow-up review;
+- technical research changed the scope after the grade-required PM review;
 - the user has not confirmed the business scope.
 
 The Identity incident is the permanent negative example: three injury Regex
@@ -408,12 +530,150 @@ coverage. A complete Identity claim had to start from all Identity fields and
 the user workflows spanning Identity Body, Presentation/Material and
 Inventory/Item.
 
+### Provider Replacement Chain Gate
+
+This gate is mandatory when a user asks to select, switch, upgrade, replace,
+retire, or substitute a model, provider, model tier, backend, or semantic
+executor. It applies before a PM labels the work a narrow provider setting.
+
+Definitions:
+
+- **executor switch**: changes the provider for exactly one existing task.
+- **chain replacement**: changes the user-visible semantic pipeline, including
+  every conditional downstream model task that consumes or refines the
+  executor's output.
+
+The PM must never silently interpret a user request for a model replacement as
+an executor switch. Before recommending scope, it must ask or state which
+meaning applies.
+
+For either meaning, the PM must produce a replacement matrix covering the
+normal, every routed, every failure, and every no-change workflow:
+
+| Stage | Current task/provider | Trigger/consumer | Target disposition | User-visible result |
+| --- | --- | --- | --- | --- |
+| Each upstream model task | ... | ... | retained/replaced/removed | ... |
+| Each router or route field | ... | ... | retained/replaced/removed | ... |
+| Each conditional downstream model task | ... | ... | retained/replaced/removed | ... |
+| Guard and sole Reducer | ... | ... | unchanged or explicitly changed | ... |
+
+`retained` requires an explicit user-approved reason. `replaced` or `removed`
+requires the same-change reader/caller removal plan. A PM verdict is
+`BLOCKED` when any conditional model call, prompt projection, State proposal,
+fallback, queue, or failure path has no disposition.
+
+The PRD and technical spec must repeat this matrix and separately list:
+
+1. total model calls and provider/model identity for every normal and routed
+   workflow;
+2. whether calls are serial or concurrent and what remains resident;
+3. exact post-executor route fields and every task they can wake;
+4. final State writer and failure result for every retained or replaced stage.
+
+Acceptance must observe actual task/provider calls, not only logical labels.
+For a chain replacement, every retired downstream model task must be asserted
+absent on normal and routed flows. A test such as "zero local Post requests"
+does not prove replacement if a local Inventory, Identity, Appraisal, repair,
+or other dependent call still runs.
+
+#### 2026-08-19 Incident Retrospective: Partial Post Provider Switch
+
+`d52510499` introduced the explicit immediate-turn chain:
+
+```text
+local post core
+-> optional shared dynamic 4B Inventory/Identity
+-> guards
+-> Reducers
+```
+
+`042cf6d7` added `postTurnSemanticProvider=low|local`, but treated the work as
+an executor switch for VCON-013. It replaced only the main Post request and
+left the routed Dynamic 4B chain active. Its governing PRD named the partial
+capability "VCON-013 post-turn semantic-provider selection"; its tests proved
+the selected main Post call but did not assert that Dynamic 4B was absent in
+Low mode.
+
+The PM and review failure was not a missing unit case. The review classified
+`inventoryObservationRequired` as an output field rather than as a
+model-routing edge, did not enumerate the full `Post -> Dynamic 4B -> Reducer`
+workflow, and therefore approved a provider setting that contradicted the
+user's intended chain replacement. Future provider/model reviews must apply
+this gate; a narrow task-level provider PRD cannot be accepted as a substitute.
+
+### Permanent Model Field-Route Registry Gate
+
+Apply this gate before designing, implementing, reviewing, or accepting a
+Hogwarts model task, Prompt projection, output Schema, parser, route field,
+transform, validator, reducer carrier, or model-facing UI diagnostic.
+
+Names, object nesting, TypeScript/JSDoc types, tests, and example payloads are
+not field documentation. No reviewer may infer that two fields are equivalent
+because their names overlap or one is derived from the other.
+
+1. Read and update
+   `.trae/specs/hogwarts-runtime-contracts/model-field-routes.md` for every
+   affected field before implementation. A field route has a stable
+   `<task-or-domain>.<field>` identifier and must name:
+   - exact source path and whether it is canonical State, message evidence,
+     derived projection, model proposal, or diagnostic;
+   - one-sentence semantic meaning, including what it explicitly does *not*
+     mean;
+   - model/task audience and input/output/carrier position;
+   - deterministic admission selector, evidence requirement, and compaction or
+     exclusion rule;
+   - Schema type/shape and normalizer/parser;
+   - every direct reader, every route task it can wake, and every downstream
+     consumer;
+   - deterministic guards, sole writer or explicit no-State result;
+   - no-change and failure behavior, plus the focused test owner.
+2. State-backed fields retain their complete writer/migration contract in
+   `state-fields.md`; the model route row links to that path instead of
+   duplicating authority. A transient field has no State writer, but still
+   requires a route row.
+3. Every Prompt builder, transport descriptor, parser/normalizer, and
+   workflow that introduces or consumes a changed routed field must contain a
+   short module-level JSDoc/Markdown reference to the relevant field-route IDs.
+   Do not add per-line narrative comments that repeat syntax; the route table
+   is the readable source of truth.
+4. A field that can wake another model task is a routing edge. Its route row
+   must enumerate the task, provider/tier, call budget, serial/concurrent
+   behavior, and failure result. A Boolean field is never "just metadata" when
+   it can cause a model call.
+5. Same-named or related fields require distinct rows whenever their audience,
+   source, selector, or writer differs. The PRD/Spec must state whether they
+   can be substituted. For example, `scene.itemStates` is a Scene snapshot and
+   cannot serve as Post Item context when its holder-follow projection includes
+   carried/equipped Items that the Post selection rule excludes.
+6. The PRD and spec must contain a compact field-route matrix for every
+   changed task. Tests must assert the important admission/exclusion and
+   route-edge rows, not only final object shape.
+7. A missing route row, undocumented consumer, unknown route wake, or a
+   builder/parser without its route reference blocks implementation and
+   acceptance.
+
+#### 2026-08-22 Incident Retrospective: Scene Snapshot Mistaken For Post Input
+
+`scene.itemStates` was documented only as a derived current-Scene Item
+snapshot. Its implementation follows carried/equipped Items into the player's
+room. The Dynamic 4B Post auxiliary path separately projected all
+`state.items[]`, but neither field had a compact route table naming its model
+audience, selection rule, downstream task, or non-substitutability.
+
+That gap forced later reviewers to reconstruct field meaning from code and
+caused the false shortcut "scene item state equals Post Item input". The
+approved Post rule is stricter: independently room-material formal Items are
+eligible; a holder-carried Item is eligible only when the current player action
+or paid narration directly names it. This gate makes that distinction
+reviewable before code changes.
+
 ### Gate 1: Identify And Reuse The Change
 
 1. Search `.trae/specs/` for an existing directory that represents the same requirement.
 2. Reuse it when the product intent and acceptance boundary are the same.
 3. Create a new stable `<change-id>` only for a genuinely distinct change.
-4. Create any missing one of the five required files before continuing.
+4. For `L2/L3`, create any missing one of the five required files. For
+   `L0/L1`, use the proportional artifact set defined above.
 5. Add or update exactly one matching row in
    `HOGWARTS_MUD_PRODUCT_SPEC.md`.
 
@@ -423,6 +683,10 @@ Run this gate only after Gate 0 business-scope confirmation. Do not design
 from field names, schemas, tests, or a previous agent's summary. Before
 proposing a solution, trace the PM-confirmed business scope through the real
 production path.
+
+Depth is proportional: `L0` reads only the direct production path and focused
+test owner; `L1` traces the bounded workflow and direct interfaces; `L2/L3`
+perform the complete map below.
 
 1. Before interpreting current code or save data, retrieve the relevant project memory/history, explicit user decisions, approved PRD, living runtime contract and prior incident evidence. Current State, archived prose, model output and repair scripts may be wrong; they are evidence, not automatic product authority.
 2. Write the semantic invariant before designing: define each concept, orthogonal fields, allowed combinations, forbidden transitions, evidence priority and sole writer. Do not collapse two fields merely because their names sound related.
@@ -633,8 +897,13 @@ Hogwarts frontend change:
 
 ### Permanent Independent Acceptance Agent Gate
 
-Apply this gate to every Hogwarts change while running acceptance, regardless
-of whether the change affects model Prompts:
+Apply by grade:
+
+- `L0`: no independent acceptance Agent unless the actual edit changes a
+  migration, security boundary, model contract or real-save writer; such
+  evidence normally requires regrading.
+- `L1`: exactly one fresh test Agent round as defined by the L1 fast path.
+- `L2/L3`: apply the full gate below, regardless of Prompt impact.
 
 1. The implementation agent cannot be the sole acceptance authority. After
    implementation and deterministic tests, launch a fresh independent Agent
@@ -673,7 +942,9 @@ of whether the change affects model Prompts:
 
 ### Permanent Technical Debt Closeout
 
-For every Hogwarts change:
+Mandatory for `L2/L3`. Apply to `L1` only when the bounded change actually
+introduces or resolves registered debt. `L0` ends after focused self-test and
+report; it does not trigger ledger work or re-inventory.
 
 1. The PRD declares exactly one `Change kind` from
    `feature|fix|refactor|governance`, a `Feature delta` and whether it is a
@@ -765,6 +1036,9 @@ Requirements for key sections:
 - Record the configured runtime ceiling and any proposed product target separately. A lower product target is not authoritative until the user explicitly approves it in the current PRD revision. Do not claim a separate System Prompt cap unless the production runtime actually enforces one.
 - Model failure policy defaults to exactly one paid model request per task invocation. Parse, Schema, authority, provenance, settlement, or validation failure must surface as the original error without an automatic second repair/retry round or model-generated fallback. An exception is forbidden unless the current PRD names the exact task, eligible error classes, maximum attempts, added call budget, and receives explicit user approval. Historical retry code or an older PRD is not approval for a new or changed path.
 - System Prompt, output Schema, player action, current Authority Snapshot, and current-scene actor capsule contract are protected. Protection means they cannot be silently truncated; it does not permit them to exceed the approved total budget.
+- **Provider-aware Prompt Assembly:** Measure the complete provider-visible request: System messages, User payload, transport/format Schema, tool or response reserve, and every runtime wrapper field. The selected provider's configured capacity is the hard eligibility boundary; a legacy local-only target cannot reject a request for another selected provider. Product targets may request compaction but cannot turn a request that fits the selected provider into a synthetic provider failure.
+- **Structured Capacity Degradation:** Before any provider call, assemble one canonical structured payload and compact only PRD-approved optional sections in deterministic priority order. Keep each retained record atomic; record every omitted section and count in bounded diagnostics and the user-visible pending/degraded state. Never cut JSON bytes or prose strings, silently omit protected fields, summarize with another model, switch provider, retry automatically, or promote omitted evidence into State.
+- **No-fit Settlement Safety:** If protected content cannot fit the selected provider after permitted compaction, do not issue a malformed/oversized request. Preserve paid narration, leave the turn uncommitted, block a new player action, and expose only explicit retry against the saved Post request or explicit discard. A nonblocking exception requires explicit user approval in the current PRD.
 - Full actor libraries, raw `actorKnowledge`, full Social Graph state, raw database records, and unbounded transcript/history are forbidden prompt inputs unless the PRD explicitly proves their necessity and budget.
 - Event and memory sharing defaults to stable IDs and authoritative lookup. Do not copy the same event summary into multiple witnesses, projections, capsules, and prompt sections.
 - Every newly injected projection must name the old prompt reader or payload it replaces. Additive injection without a same-change removal plan is forbidden.
@@ -779,6 +1053,10 @@ Requirements for key sections:
 
 ### Gate 5: Complete The Technical Spec And Execution Files
 
+For `L2/L3`, complete the full technical artifact set below. For `L0`, update
+the concise PRD only; for `L1`, use compact execution records and add a Spec
+only when a real interface contract requires it.
+
 Before seeking approval:
 
 1. Make `spec.md` map every PRD behavior to components, data flow, runtime-contract rows, writer/reader ownership, migration, old-field removal, failure handling, and verification.
@@ -791,7 +1069,12 @@ At most one task may be `in_progress`. Before implementation approval, implement
 
 ### Gate 6: Obtain Explicit Approval
 
-Present the current `prd.md`, `spec.md`, `tasks.md`, and `checklist.md` for review and stop.
+For `L0/L1`, the user's response to the PM's pre-PRD approach is implementation
+approval when the resulting PRD matches that response exactly; do not impose a
+second approval wait. If the PRD differs, stop and reconcile it.
+
+For `L2/L3`, present the current `prd.md`, `spec.md`, `tasks.md`, and
+`checklist.md` for review and stop.
 
 Implementation is forbidden until the user explicitly approves the current artifact revision. Silence, prior approval of an older revision, approval of only the general idea, or a request to "continue" before reviewing the artifacts is not approval.
 
@@ -1016,7 +1299,14 @@ current user goal, approved PRD scope or active task ownership.
 
 ### Gate 9: Close The Change
 
-A change is complete only when:
+Close proportionally:
+
+- `L0`: focused self-test passes, the concise PRD matches the user's decision,
+  and the assistant reports Before/After, changed behavior and any blocker.
+- `L1`: focused tests and the one required fresh test Agent pass, then report.
+- `L2/L3`: every full closeout condition below applies.
+
+For `L2/L3`, a change is complete only when:
 
 1. Every required task is `completed` or explicitly removed through an approved scope revision.
 2. Every checklist item is passed, waived with explicit user approval, or documented as blocked.
@@ -1106,9 +1396,8 @@ Stop and ask for resolution when any of these is true:
 - A frontend dynamic text value is absent from the permanent registry, has an
   unknown route, remains marked `NO`/`PATCH`, or lacks its required rendered
   repeated-instance evidence.
-- No fresh independent Agent can execute and pass the complete project-goal
-  acceptance scope, or the only acceptance claim comes from the implementation
-  Agent.
+- An `L1` required test Agent or `L2/L3` independent acceptance Agent cannot
+  execute and pass. This is not an L0 stop condition.
 - Atomic migration or old-field removal semantics are unknown.
 - Prompt growth has no explicit field-level budget or overflow behavior.
 - The real production call graph, existing prompt readers, or semantic removal targets have not been mapped.
@@ -1118,7 +1407,8 @@ Stop and ask for resolution when any of these is true:
 - A proposed remediation would change a module or business semantic outside
   the current user goal, approved PRD scope or active task ownership, even when
   the underlying issue was discovered during current acceptance.
-- Only synthetic fixtures or unit tests support the completion claim.
+- An `L2/L3` completion claim is supported only by synthetic fixtures or unit
+  tests. L0 uses its focused self-test fast path.
 - A Prompt-affecting change has not passed blind model simulation for every
   affected active task/mode/entry path.
 - A model path can automatically issue a second repair/retry request or

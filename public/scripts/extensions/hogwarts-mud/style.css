@@ -3820,8 +3820,8 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
     white-space: nowrap;
 }
 
-.hpmud-transition-failure button,
-.hpmud-turn-failure button {
+.hpmud-transition-failure > button,
+.hpmud-turn-failure > button {
     grid-row: 1 / span 2;
     grid-column: 2;
     min-height: 30px;
@@ -4339,6 +4339,26 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
     font-size: 7px;
     font-style: normal;
     white-space: nowrap;
+}
+
+.hpmud-post-settlement-actions {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.hpmud-post-settlement-actions > button {
+    min-height: 30px;
+    border-radius: 7px;
+    padding: 0 9px;
+    white-space: nowrap;
+}
+
+.hpmud-discard-turn {
+    border-color: rgb(201 121 121 / 48%);
+    color: #efcfca;
 }
 
 .hpmud-spell-progress {

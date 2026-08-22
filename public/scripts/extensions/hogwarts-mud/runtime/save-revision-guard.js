@@ -1018,6 +1018,74 @@ export function createSaveRevisionStorageAdapter(
         return registerHead(hostHead);
     }
 
+    function hasLiveClaimMutex(
+        timelineEpoch,
+        claimId,
+    ) {
+        const prefix =
+            lockPrefixFor(
+                timelineEpoch,
+            );
+        const encodedClaimId =
+            encodeURIComponent(claimId);
+        const ticket =
+            readMutexRecord(
+                `${prefix}ticket:${encodedClaimId}`,
+            );
+        const owner =
+            readMutexRecord(
+                `${prefix}owner`,
+            );
+        const checkedAt =
+            currentTime();
+        return Boolean(
+            ticket?.claimId === claimId &&
+            owner?.claimId === claimId &&
+            Number.isSafeInteger(ticket.ticket) &&
+            ticket.ticket > 0 &&
+            owner.ticket === ticket.ticket &&
+            ticket.expiresAt > checkedAt &&
+            owner.expiresAt > checkedAt,
+        );
+    }
+
+    function replaceHead(hostHead) {
+        const current =
+            readHead(
+                hostHead.timelineEpoch,
+            );
+        if (
+            current?.claimId &&
+            (
+                current.claimPhase !==
+                    CLAIM_PHASE_HOST_SAVE_STARTED ||
+                hasLiveClaimMutex(
+                    hostHead.timelineEpoch,
+                    current.claimId,
+                )
+            )
+        ) {
+            return current;
+        }
+        const replacement = {
+            ...hostHead,
+            claimId: '',
+        };
+        writeHead(
+            replacement,
+            {
+                allowRevisionRollback:
+                    true,
+            },
+        );
+        return (
+            readHead(
+                hostHead.timelineEpoch,
+            ) ||
+            replacement
+        );
+    }
+
     async function claimHead(
         head,
         nextRevision,
@@ -1280,6 +1348,7 @@ export function createSaveRevisionStorageAdapter(
         readHead,
         beginHostSave,
         recoverHead,
+        replaceHead,
         registerHead,
         claimHead,
         finalizeHead,
@@ -1381,6 +1450,29 @@ export function createSaveRevisionGuard(
                 'function'
         ) {
             return heads.recoverHead(
+                head,
+            );
+        }
+        return heads.registerHead(
+            head,
+        );
+    }
+
+    async function replaceHead(worldState) {
+        const head =
+            getSaveRevisionHead(
+                worldState,
+            );
+        if (!head) {
+            throw new TypeError(
+                'World state is required to replace a revision head.',
+            );
+        }
+        if (
+            typeof heads.replaceHead ===
+                'function'
+        ) {
+            return heads.replaceHead(
                 head,
             );
         }
@@ -1841,6 +1933,7 @@ export function createSaveRevisionGuard(
     return {
         registerHead,
         recoverHead,
+        replaceHead,
         guardedSave,
     };
 }

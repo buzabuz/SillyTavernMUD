@@ -70,6 +70,9 @@ import { router as usersPublicRouter } from './endpoints/users-public.js';
 import { init as statsInit, onExit as statsOnExit } from './endpoints/stats.js';
 import { checkForNewContent } from './endpoints/content-manager.js';
 import { init as settingsInit } from './endpoints/settings.js';
+import {
+    resumeHogwartsKnowledgeRepairs,
+} from './endpoints/hogwarts-mud.js';
 import { redirectDeprecatedEndpoints, ServerStartup, setupPrivateEndpoints } from './server-startup.js';
 import { diskCache } from './endpoints/characters.js';
 import { migrateFlatSecrets } from './endpoints/secrets.js';
@@ -484,6 +487,11 @@ initUserStorage(globalThis.DATA_ROOT)
     .then(migratePublicOverrides)
     .then(verifySecuritySettings)
     .then(preSetupTasks)
+    .then(async () => {
+        resumeHogwartsKnowledgeRepairs(
+            await getUserDirectoriesList(),
+        );
+    })
     .then(apply404Middleware)
     .then(() => new ServerStartup(app, cliArgs).start())
     .then(postSetupTasks);

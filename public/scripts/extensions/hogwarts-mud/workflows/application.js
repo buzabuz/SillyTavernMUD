@@ -45,6 +45,9 @@ import {
 import { createHighCalendarDirectorWorkflow } from './high-calendar-director.js';
 import { createMediumCalendarDirectorWorkflow } from './medium-calendar-director.js';
 import { createCalendarMomentWorkflow } from './calendar-moment.js';
+import {
+    restoreTurnRetryCheckpoint,
+} from '../domain/turn-rollback.js';
 
 function highPlanningAllowsMedium(
     result,
@@ -1566,7 +1569,8 @@ export function createWorkflowApplication(ports) {
     const {
         runStructuredTurn,
         retryFailedPlayerTurn,
-        retryPendingMovementSettlement,
+        retryPendingPostSettlement,
+        discardPendingPostSettlement,
         preparePlayableState,
     } = createTurnWorkflow({
         admitCurrentLocationResidents,
@@ -1588,6 +1592,7 @@ export function createWorkflowApplication(ports) {
         createSceneMomentumDirective,
         createTurnPerformanceBudget,
         createTurnRetryCheckpoint,
+        restoreTurnRetryCheckpoint,
         enqueueCurrentTurnLocalizationCandidates,
         ensureCurrentInteriorMap,
         assertWorldFoundationReady,
@@ -1769,7 +1774,8 @@ export function createWorkflowApplication(ports) {
         requestPostTurnSemanticObservation,
         runStructuredTurn,
         retryFailedPlayerTurn,
-        retryPendingMovementSettlement,
+        retryPendingPostSettlement,
+        discardPendingPostSettlement,
         preparePlayableState,
         acceptItemCandidate,
         ignoreItemCandidate,

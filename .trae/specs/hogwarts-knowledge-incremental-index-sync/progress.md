@@ -2,9 +2,9 @@
 
 ## Current Status
 
-Revision 1 was approved on 2026-08-20. KIS-03 and KIS-05 remain in progress:
-the implementation and focused verification are complete, while authenticated
-active-save evidence is pending.
+Revision 2 is approved and implementation is in progress. It reopens the
+previously completed incremental-sync change because real active-save evidence
+proved a failed Qdrant reconciliation can still block a completed player turn.
 
 ## 2026-08-20 - Runtime Investigation
 
@@ -138,5 +138,106 @@ None. The user instructed progression through governance after PM PASS.
 
 ## Next Step
 
-Record the user decision on core-change technical-debt re-inventory, update
-HTD-001 and the Change Ledger, then close KIS-05.
+Implement JSON-exact handoff, resumable Qdrant repair, and bounded
+request-failure diagnostics. Then verify a real active-save turn completes
+without waiting for Qdrant repair.
+
+## 2026-08-22 - Revision 2 Real-Save Reopen
+
+- A user-initiated normal turn took 308,832ms. Scene Performer used 49.4s,
+  selected Post used 24.8s, and approximately 207s elapsed in Knowledge sync
+  after State/message commit. Chat persistence calls measured 0.2-3.1s.
+- JSON exact had 147 records. The active Qdrant manifest had 143 points and
+  100 mismatched checksums; reconciliation eventually reported `fetch failed`.
+- This proves Revision 1 incremental reuse cannot prevent player-visible
+  blocking when a stale repair is large or transport work fails.
+- The user approved a narrow Revision 2: current-turn JSON exact stays
+  synchronous; Qdrant repair continues automatically in the background from
+  manifest truth, records bounded failed-request diagnostics, and never
+  requires player action.
+- Dynamic Inventory (`9544 > 9000`) and Appraisal confidence-schema errors
+  were independently investigated and are explicitly outside this change.
+
+## 2026-08-22 - Revision 2 Implementation and Runtime Evidence
+
+- Replacement PM production-informed follow-up returned PASS: the scope is
+  limited to post-JSON-exact Qdrant repair; State/chat and Post, Calendar,
+  Social, translation, and chat-persistence ordering remain unchanged.
+- `/knowledge/sync` against the active 147-record snapshot returned `200` in
+  `743ms` with JSON exact complete and `qdrantRepair.status=queued`; the
+  Qdrant batch then ran independently.
+- A real active repair failure persisted `operation=point_upsert`,
+  `method=PUT`, the collection point-write path, `status=null`, and a bounded
+  network error. No record text, State/chat, Prompt, or credential was written
+  to `qdrant-repair.json`.
+- The coordinator now uses 5s/15s/60s retry delays, Qdrant manifest points as
+  the durable batch checkpoint, latest-snapshot coalescing, and Node-start
+  recovery from current JSON exact record files. A no-new-sync Node restart
+  advanced the existing checkpoint from attempt 8 to attempt 9.
+- Focused Knowledge/Qdrant coverage passed `31/31`, including queued return,
+  stale active-batch supersession, restart recovery, null network status,
+  checksum-batch reuse, single-attempt collection health, and safe diagnostic
+  rejection. Syntax, lint, and diff checks passed.
+- The active collection health and manifest scroll both succeed. An isolated
+  scratch collection accepted a 768-dimensional point write through the same
+  Node fetch protocol. The active batch records the precise transport failure
+  `fetch failed [ECONNRESET] read ECONNRESET`; it no longer blocks the
+  completed JSON exact operation.
+- Browser normal-turn acceptance is deferred: the currently loaded user save
+  is intentionally in `post_unsettled`, so no player action, retry, or discard
+  was automated for this change.
+
+## 2026-08-22 - Independent Acceptance Finding
+
+- Fresh independent acceptance found that the failure counter was incremented
+  before retry-delay lookup, skipping the required initial 5s delay. The
+  scheduler now indexes `attempt - 1`, and the coordinator test asserts the
+  first failed attempt schedules exactly 5,000ms.
+- A new fresh acceptance recheck is required after this correction. Real
+  normal-turn `state_settled` evidence remains deferred because the active
+  browser timeline is `post_unsettled` and was not mutated.
+
+## 2026-08-22 - Second Independent Acceptance Finding
+
+- Fresh acceptance proved that raw `error.message` could persist arbitrary
+  record text in the checkpoint. Diagnostics now store only a fixed safe
+  category plus HTTP status or a whitelisted transport code; the focused test
+  injects `RECORD_TEXT_SHOULD_NOT_PERSIST` and proves neither it nor the raw
+  socket message reaches disk.
+- A new fresh acceptance recheck is required after this confidentiality fix.
+
+## 2026-08-22 - Third Independent Acceptance Finding
+
+- Fresh acceptance found that diagnostic operation/method/path and transport
+  code also needed whitelisting, collection health retried before reaching the
+  coordinator, and browser degraded diagnostics lacked a completed-repair read
+  path. All three are corrected: every diagnostic field is now validated,
+  collection health is a single attempt, and health returns the sanitized
+  current checkpoint for matching-fingerprint degraded clearance.
+- A new fresh acceptance recheck is required after these corrections. Real
+  normal-turn `state_settled` evidence remains deferred because the active
+  browser timeline is `post_unsettled` and was not mutated.
+
+## 2026-08-22 - Final Independent Acceptance
+
+- A fresh independent acceptance found no remaining target-code failure.
+  It passed hostile diagnostic-field rejection, one-attempt collection health,
+  `5s/15s/60s` cadence, manifest continuation, stale supersession, restart
+  recovery, checkpoint health reporting, browser degraded clearance, and the
+  JSON-exact handoff. Its fresh affected suite passed `36/36`.
+- Acceptance is blocked only on the approved real player workflow: the active
+  browser save is `post_unsettled`, so the verifier did not trigger, retry, or
+  discard a turn. The required observation remains a completed turn reaching
+  `state_settled` while a Qdrant repair stays in the background.
+
+## 2026-08-22 - Active Repair Transport Fix
+
+- Real repair batches were structurally valid: 8 finite 768-dimensional
+  vectors and 96,911-387,259 byte bodies. Equivalent payloads, active
+  collection single-point writes, and Qdrant health/manifest requests all
+  succeeded outside the running repair.
+- The native fetch point-write socket reset before Qdrant accepted the
+  request. Qdrant now uses a dedicated non-keepalive transport.
+- The active repair then completed 13 batches with `embedded=99`,
+  `reused=143`, `pending=0`, `lastFailure=null`. JSON exact and Qdrant both
+  report 146 current records/points.

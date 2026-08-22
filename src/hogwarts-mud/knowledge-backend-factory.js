@@ -1,4 +1,8 @@
 import path from 'node:path';
+import http from 'node:http';
+import https from 'node:https';
+
+import nodeFetch from 'node-fetch';
 
 import { getConfigValue } from '../util.js';
 import {
@@ -16,6 +20,31 @@ import {
 import {
     createKnowledgeVectorService,
 } from './knowledge-vector-service.js';
+
+const qdrantHttpAgent =
+    new http.Agent({
+        keepAlive: false,
+    });
+const qdrantHttpsAgent =
+    new https.Agent({
+        keepAlive: false,
+    });
+
+function fetchQdrantWithFreshSocket(
+    url,
+    options,
+) {
+    return nodeFetch(
+        url,
+        {
+            ...options,
+            agent:
+                String(url).startsWith('https:')
+                    ? qdrantHttpsAgent
+                    : qdrantHttpAgent,
+        },
+    );
+}
 
 function configBoolean(name, fallback) {
     return Boolean(
@@ -98,7 +127,7 @@ export function getKnowledgeBackendConfig() {
 
 export function createConfiguredKnowledgeService({
     filesRoot,
-    fetchImpl = globalThis.fetch,
+    fetchImpl = null,
     embedder =
     async texts =>
         getTransformersBatchVector(
@@ -119,7 +148,9 @@ export function createConfiguredKnowledgeService({
         config.qdrant?.enabled
             ? createQdrantKnowledgeBackend({
                 ...config.qdrant,
-                fetchImpl,
+                fetchImpl:
+                    fetchImpl ||
+                    fetchQdrantWithFreshSocket,
                 embedder,
             })
             : null;

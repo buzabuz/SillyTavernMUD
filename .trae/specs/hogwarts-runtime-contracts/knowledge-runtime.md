@@ -76,10 +76,25 @@ Hogwarts `VectorBackend` 提供 `health/upsert/delete/query/rebuild`。
   `[recordId, contentChecksum]` 确定性计算，不含 `stateRevision`、时间戳、
   backend 状态或输入顺序。metadata/scheduler-only save 不得触发重复
   embedding 或把健康索引判为 stale。
-- 健康 Qdrant 同步始终用完整当前快照对照 collection payload manifest 的
+- JSON exact 同步始终用完整当前快照完成当前回合的确定性索引对账。随后健康
+  Qdrant repair 用同一完整快照对照 collection payload manifest 的
   `recordId + contentChecksum`：匹配点复用既有 vector，缺失或 checksum
   不匹配点才 embedding/upsert，manifest 中不在当前快照的点删除。一次
-  Qdrant 降级后，即使 fingerprint 未变，下一次健康同步也必须重新对账。
+  Qdrant 降级后，即使 fingerprint 未变，后续后台 repair 也必须重新对账。
+- Qdrant repair 在 JSON exact 成功后异步运行，绝不阻塞已提交玩家回合的
+  `state_settled`；它是可从当前 manifest 重建的派生工作。每个成功 point
+  batch 以 manifest 为断点，失败只记录有界的 operation/method/path/status/error
+  与计数；error 只能是固定安全分类加 HTTP status 或白名单 transport code，
+  不保存 raw error message、record text、State/chat、Prompt 或凭据。重载或进程中断时，
+  启动器从当前 JSON exact record files 重建未完成派生输入并立即重新入队；
+  新快照到达时只允许最新快照 repair，旧快照不得写入 authority 或覆盖当前
+  repair diagnostics。
+- collection health、manifest、embedding 与 point mutation 的一次失败必须直接交给
+  repair coordinator；禁止在该边界之前作 HTTP transport retry。health 返回同一
+  sanitized checkpoint，浏览器仅在 fingerprint 匹配的 `completed` 状态清除旧
+  degraded 标记。
+- Qdrant transport 使用独立 non-keepalive agent；每次请求建立新 socket，避免
+  已被 peer 关闭的 idle connection 在实际 point batch 发出前触发 reset。
 - 配置且健康时 Qdrant 是首选语义后端，使用 timeline、revision、audience、node type、category 和 clock payload filter。
 - Qdrant point ID 从 record ID 确定性生成；embedding model 或维度改变时使用新的 collection generation。
 - JSON exact 是始终可用的确定性检索基线；Vectra 若启用，也必须使用同一 V2 record/audience 契约。
@@ -89,7 +104,7 @@ Hogwarts `VectorBackend` 提供 `health/upsert/delete/query/rebuild`。
   handshake 证明当前进程加载了新 contract。仅有 build-only
   `0 network calls` 不能证明真实 Knowledge backend 可用。
 
-diagnostics 至少记录实际 backend、preferred backend、degraded、错误摘要、selected record ID、suppressed reason、source path 和 rebuild 状态。
+diagnostics 至少记录实际 backend、preferred backend、degraded、错误摘要、selected record ID、suppressed reason、source path、rebuild 状态及有界 `qdrantRepair` 进度/失败请求摘要。
 
 ## 本机 Qdrant v1.19.0 运维契约
 

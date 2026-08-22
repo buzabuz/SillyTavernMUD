@@ -629,16 +629,16 @@ const UI_TEXT = Object.freeze({
         zh: '不覆盖 Regex Preset',
     },
     'ui.setup.post_semantic.title': {
-        en: 'Post-turn semantic proposal',
-        zh: '回合后语义提案',
+        en: 'Post-turn state proposal model',
+        zh: '回合后状态提案模型',
     },
     'ui.setup.post_semantic.low': {
         en: 'Low Connection Profile',
         zh: '低档 Connection Profile',
     },
     'ui.setup.post_semantic.local': {
-        en: 'Local',
-        zh: '本地模型',
+        en: 'Local 1.7B (Ollama)',
+        zh: '本地 1.7B（Ollama）',
     },
     'ui.setup.post_semantic.low_detail': {
         en: 'Uses the Low Connection Profile',

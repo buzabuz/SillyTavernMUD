@@ -5,6 +5,8 @@
 - [x] PM grades the change L2 and returns PASS.
 - [x] User confirms the proposed semantic boundary before drafting.
 - [x] User approves Revision 1 PRD, Spec, tasks, and checklist before code work.
+- [x] User approves Revision 2 boundary: JSON exact remains turn-owned while
+  Qdrant repair is resumable background work.
 
 ## Authority and Compatibility
 
@@ -16,6 +18,8 @@
 - [x] API contract 3, index/projector versions, deterministic point IDs, and
   Qdrant generation semantics remain compatible.
 - [x] No State, chat, Prompt, Reducer, ACL, or hydration semantic changes.
+- [x] Qdrant repair checkpoint remains derived-only and cannot write State/chat.
+- [x] Newer exact snapshots supersede stale queued Qdrant repair work.
 
 ## Failure Behavior
 
@@ -25,6 +29,10 @@
 - [x] A later healthy manifest reconciliation restores an earlier missing
   Qdrant point.
 - [x] Stale write rejection and future-revision rejection remain covered.
+- [x] Failed Qdrant operation records bounded request metadata without record
+  text, Prompt data, or credentials.
+- [x] A failed batch resumes from the Qdrant manifest without embedding
+  successfully written records again.
 
 ## Tests and Real Evidence
 
@@ -40,6 +48,10 @@
   active archive; the only observed archive change is the user-initiated
   normal-turn transaction.
 - [x] Lint, syntax, and diff checks pass.
+- [ ] A blocked Qdrant request does not delay the existing `state_settled`
+  completion boundary after JSON exact succeeds.
+- [ ] Real active-save repair proves a completed turn remains playable while
+  Qdrant catches up.
 
 ## Closeout
 
@@ -48,3 +60,5 @@
 - [ ] HTD-001 is updated with final evidence or retained with explicit reason.
 - [ ] Change ledger and core-change debt review are completed.
 - [x] Fresh independent acceptance covers the approved user outcome.
+- [ ] Fresh Revision 2 acceptance covers background repair, restart/resume,
+  and completed-turn behavior.

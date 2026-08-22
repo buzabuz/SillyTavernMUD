@@ -8,7 +8,7 @@ import {
     enqueueLocalSemanticOperation,
 } from './local-semantic-adjudicator.js';
 
-const appraisalProposalSchema =
+const appraisalProposalTransportSchema =
     z.object({
         observerId:
             z.string().min(1).max(96),
@@ -29,7 +29,21 @@ const appraisalProposalSchema =
                     .max(80),
             ).max(8),
         confidence:
-            z.number().min(0).max(1),
+            z.number().finite().min(0),
+    }).strict();
+
+const appraisalProposalSchema =
+    appraisalProposalTransportSchema.extend({
+        confidence:
+            z.number().finite().min(0).max(1),
+    });
+
+const appraisalBatchTransportResultSchema =
+    z.object({
+        appraisalProposals:
+            z.array(
+                appraisalProposalTransportSchema,
+            ).max(64),
     }).strict();
 
 const appraisalBatchResultSchema =
@@ -162,16 +176,63 @@ export function adoptLocalAppraisalLanguage(
     };
 }
 
+export function normalizeAppraisalConfidence(
+    value,
+) {
+    const confidence =
+        Number(value);
+    if (
+        !Number.isFinite(confidence) ||
+        confidence < 0
+    ) {
+        throw new RangeError(
+            'Appraisal confidence must be a finite nonnegative number.',
+        );
+    }
+    if (confidence <= 1) {
+        return confidence;
+    }
+    if (confidence <= 100) {
+        return confidence / 100;
+    }
+    return 1;
+}
+
+export function normalizeAppraisalBatchResult(
+    result,
+) {
+    const normalized = {
+        ...result,
+        appraisalProposals:
+            result.appraisalProposals.map(
+                proposal => ({
+                    ...proposal,
+                    confidence:
+                        normalizeAppraisalConfidence(
+                            proposal.confidence,
+                        ),
+                }),
+            ),
+    };
+    return appraisalBatchResultSchema.parse(
+        normalized,
+    );
+}
+
 export function proposeTurnAppraisals(
     input,
     {
         model = '',
+        callModel =
+        callStructuredModel,
+        enqueue =
+        enqueueLocalSemanticOperation,
     } = {},
 ) {
-    return enqueueLocalSemanticOperation(
+    return enqueue(
         async () => {
             const modeled =
-                await callStructuredModel({
+                await callModel({
                     taskId:
                     'local_appraisal_proposer',
                     system:
@@ -180,14 +241,16 @@ export function proposeTurnAppraisals(
                     jsonSchema:
                     appraisalBatchJsonSchema,
                     resultSchema:
-                    appraisalBatchResultSchema,
+                    appraisalBatchTransportResultSchema,
                     unload: true,
                     modelOverride:
                     model,
                 });
             const adopted =
                 adoptLocalAppraisalLanguage(
-                    modeled.result,
+                    normalizeAppraisalBatchResult(
+                        modeled.result,
+                    ),
                 );
             return {
                 ...modeled,

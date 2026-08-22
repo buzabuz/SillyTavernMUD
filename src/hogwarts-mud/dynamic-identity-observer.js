@@ -10,6 +10,13 @@ import {
     enqueueLocalSemanticOperation,
 } from './local-semantic-adjudicator.js';
 
+/**
+ * Field routes: vcon013.input.identityTargetActorIds,
+ * vcon013.input.inspectionTargetActorIds,
+ * vcon013.result.identityObservations.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
+
 export const DYNAMIC_IDENTITY_CONTEXT_SIZE =
     2_048;
 export const DYNAMIC_IDENTITY_TASK_ID =
@@ -147,7 +154,9 @@ function unique(values) {
     ];
 }
 
-function normalizeInput(input) {
+export function normalizeDynamicIdentityInput(
+    input,
+) {
     let parsed;
     try {
         parsed =
@@ -441,7 +450,9 @@ export function createDynamicIdentityModelRequest(
     input,
 ) {
     const normalized =
-        normalizeInput(input);
+        normalizeDynamicIdentityInput(
+            input,
+        );
     const resultSchema =
         createDynamicIdentityResultSchema(
             normalized

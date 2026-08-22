@@ -66,7 +66,9 @@ export function createStoryRenderer(ports) {
         renderMessage,
         renderMiniMap,
         retryFailedPlayerTurn,
-        retryPendingMovementSettlement =
+        retryPendingPostSettlement =
+        async () => {},
+        discardPendingPostSettlement =
         async () => {},
         SAVE_REVISION_REFRESH_MESSAGE =
         'The timeline has changed. Refresh before continuing.',
@@ -1230,6 +1232,19 @@ export function createStoryRenderer(ports) {
             );
             return;
         }
+        if (
+            getWorldState()
+                ?.turn?.status ===
+            'post_unsettled'
+        ) {
+            toastr.warning(
+                staticText(
+                    'ui.story.post_unsettled.blocked',
+                    'Settle or discard the saved Scene before submitting another action.',
+                ),
+            );
+            return;
+        }
         const state = getWorldState();
         if (state.phase !== 'playing' || !state.scene) {
             toastr.warning(
@@ -1601,7 +1616,7 @@ export function createStoryRenderer(ports) {
 
         if (
             state.turn?.status ===
-            'movement_unsettled' &&
+            'post_unsettled' &&
             !jobRegistry.turnActive
         ) {
             const recovery =
@@ -1622,25 +1637,40 @@ export function createStoryRenderer(ports) {
                 document.createElement(
                     'button',
                 );
+            const discard =
+                document.createElement(
+                    'button',
+                );
+            const actions =
+                document.createElement(
+                    'div',
+                );
+            const pending =
+                context.chat.at(-1)?.extra
+                    ?.hogwartsMud
+                    ?.pendingPostSettlement ||
+                null;
             title.textContent =
                 staticText(
-                    'ui.story.movement_unsettled.title',
-                    'Scene saved. Movement is waiting for settlement.',
+                    'ui.story.post_unsettled.title',
+                    'Scene saved. Post settlement is pending.',
                 );
             detail.textContent =
                 staticText(
-                    'ui.story.movement_unsettled.detail',
-                    'Your location has not changed. Retry settlement when ready.',
+                    'ui.story.post_unsettled.detail',
+                    'No world changes were committed. Retry Post or discard this turn.',
                 );
             retry.type = 'button';
             retry.className =
                 'hpmud-retry-turn';
             retry.disabled =
-                saveRevisionBlocked;
+                saveRevisionBlocked ||
+                pending?.retryable !==
+                    true;
             retry.textContent =
                 staticText(
-                    'ui.story.movement_unsettled.retry',
-                    'Retry movement settlement',
+                    'ui.story.post_unsettled.retry',
+                    'Retry Post',
                 );
             retry.addEventListener(
                 'click',
@@ -1649,10 +1679,69 @@ export function createStoryRenderer(ports) {
                     retry.classList.add(
                         'is-loading',
                     );
-                    void retryPendingMovementSettlement()
+                    void retryPendingPostSettlement()
                         .catch(error => {
                             console.error(
-                                '[Hogwarts MUD] Movement settlement retry failed',
+                                '[Hogwarts MUD] Post settlement retry failed',
+                                error,
+                            );
+                            toastr.error(
+                                String(
+                                    error?.cause?.message ||
+                                    error?.message ||
+                                    error,
+                                ),
+                            );
+                        })
+                        .finally(() =>
+                            renderAll());
+                },
+            );
+            discard.type = 'button';
+            discard.className =
+                'hpmud-retry-turn hpmud-discard-turn';
+            discard.disabled =
+                saveRevisionBlocked ||
+                pending?.discardable !==
+                    true;
+            discard.textContent =
+                staticText(
+                    'ui.story.post_unsettled.discard',
+                    'Discard turn',
+                );
+            discard.addEventListener(
+                'click',
+                () => {
+                    if (
+                        !window.confirm(
+                            staticText(
+                                'ui.story.post_unsettled.discard_confirm',
+                                'Discard this uncommitted turn and remove its saved Scene?',
+                            ),
+                        )
+                    ) {
+                        return;
+                    }
+                    discard.disabled = true;
+                    discard.classList.add(
+                        'is-loading',
+                    );
+                    void discardPendingPostSettlement()
+                        .then(result => {
+                            if (
+                                result?.playerAction &&
+                                composerInput
+                            ) {
+                                composerInput.value =
+                                    result.playerAction;
+                                composerInput.dispatchEvent(
+                                    new Event('input'),
+                                );
+                            }
+                        })
+                        .catch(error => {
+                            console.error(
+                                '[Hogwarts MUD] Post settlement discard failed',
                                 error,
                             );
                         })
@@ -1660,10 +1749,16 @@ export function createStoryRenderer(ports) {
                             renderAll());
                 },
             );
+            actions.className =
+                'hpmud-post-settlement-actions';
+            actions.append(
+                retry,
+                discard,
+            );
             recovery.append(
                 title,
                 detail,
-                retry,
+                actions,
             );
             storyElement.append(recovery);
         }
@@ -1966,6 +2061,9 @@ export function createStoryRenderer(ports) {
                 getContext().chat,
                 state.turn,
             );
+        const postSettlementPending =
+            state.turn?.status ===
+            'post_unsettled';
         const saveRevisionBlocked =
             isSaveRevisionBlocked();
         const ready = state.phase === 'playing' &&
@@ -1973,6 +2071,7 @@ export function createStoryRenderer(ports) {
             !memoryDirectorBuilding &&
             !sceneTransitionBuilding &&
             !failedPlayerTurn &&
+            !postSettlementPending &&
             !saveRevisionBlocked &&
             !jobRegistry.turnActive;
         const composer = root.querySelector('#hpmud_composer');
@@ -1998,7 +2097,8 @@ export function createStoryRenderer(ports) {
         if (sceneTransitionButton) {
             sceneTransitionButton
                 .disabled =
-                saveRevisionBlocked;
+                saveRevisionBlocked ||
+                postSettlementPending;
         }
         rollbackButton.title =
             rollbackCheckpoint

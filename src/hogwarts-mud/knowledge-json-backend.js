@@ -225,6 +225,69 @@ export class JsonKnowledgeBackend {
         );
     }
 
+    listRepairSnapshots() {
+        let directories = [];
+        try {
+            directories = fs.readdirSync(
+                this.root,
+                {
+                    withFileTypes: true,
+                },
+            );
+        } catch {
+            return [];
+        }
+        const snapshots = [];
+        for (const directory of directories) {
+            if (!directory.isDirectory()) {
+                continue;
+            }
+            const index =
+                this.readIndex(directory.name);
+            if (
+                !index ||
+                !index.timelineId ||
+                !index.timelineEpoch ||
+                !Number.isSafeInteger(
+                    Number(index.stateRevision),
+                ) ||
+                Number(index.stateRevision) < 0
+            ) {
+                continue;
+            }
+            const entries =
+                Object.values(index.records);
+            const records = entries
+                .map(entry =>
+                    this.readRecord(
+                        index.timelineId,
+                        entry,
+                    ))
+                .filter(Boolean);
+            if (records.length !== entries.length) {
+                continue;
+            }
+            try {
+                snapshots.push({
+                    timelineId: index.timelineId,
+                    timelineEpoch: index.timelineEpoch,
+                    stateRevision:
+                        Number(index.stateRevision),
+                    records:
+                        normalizeBackendRecords(
+                            records,
+                        ),
+                    replace: true,
+                    projectionFingerprint:
+                        index.projectionFingerprint,
+                });
+            } catch {
+                // A partial or invalid derived snapshot is not resumable.
+            }
+        }
+        return snapshots;
+    }
+
     async health({ timelineId }) {
         const timelineRoot =
             this.timelineRoot(timelineId);

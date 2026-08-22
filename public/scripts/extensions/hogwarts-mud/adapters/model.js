@@ -22,6 +22,7 @@ export function createModelAdapter(ports) {
             stream = false,
             onProgress = null,
             skipRegexPreset = false,
+            preservePrompt = false,
         } = {},
     ) {
         const profiles = getConnectionProfiles();
@@ -42,11 +43,14 @@ export function createModelAdapter(ports) {
             'regex-preset': regexPresetId,
         };
         profiles.push(effectiveProfile);
-        const requestPrompt = limitMessagesToContext(
-            prompt,
-            slot.contextSize,
-            slot.maxResponseLength,
-        );
+        const requestPrompt =
+            preservePrompt
+                ? structuredClone(prompt)
+                : limitMessagesToContext(
+                    prompt,
+                    slot.contextSize,
+                    slot.maxResponseLength,
+                );
         const requestCharacters =
             Array.isArray(requestPrompt)
                 ? requestPrompt.reduce(

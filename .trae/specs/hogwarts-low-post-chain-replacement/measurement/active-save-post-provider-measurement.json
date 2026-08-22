@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-22T10:13:58.091Z",
+  "archive": {
+    "path": "/Users/bytedance/sillytavern/SillyTavern/data/default-user/chats/Hogwarts_World_Director/Hogwarts World Director - 2026-08-02@22h16m07s339ms.jsonl",
+    "sha256": "0252e93509c030866965c8ac975af548800ab7846ade76873cf48cd3b26d255f",
+    "bytes": 4467895,
+    "unchanged": true
+  },
+  "modelCalls": 0,
+  "input": {
+    "playerActionCharacters": 113,
+    "narrativeSegmentCount": 7,
+    "narrativeCharacters": 2328,
+    "itemCandidates": {
+      "candidateCount": 9,
+      "selectedCount": 0,
+      "includedByRoom": [],
+      "includedByDirective": [],
+      "includedByText": []
+    },
+    "actorCount": 2
+  },
+  "providers": {
+    "low": {
+      "fit": true,
+      "capacity": {
+        "provider": "low",
+        "kind": "role_context",
+        "maximumCharacters": 298080,
+        "contextSize": 120000,
+        "responseReserve": 12000,
+        "promptTokenBudget": 99360,
+        "estimatedCharactersPerToken": 3
+      },
+      "fullMeasurement": {
+        "characters": 19950,
+        "messageCharacters": 13278,
+        "transportSchemaCharacters": 6529,
+        "runtimeWrapperCharacters": 143,
+        "estimatedTokens": 6650,
+        "sections": [
+          {
+            "role": "system",
+            "characters": 8029
+          },
+          {
+            "role": "user",
+            "characters": 5249
+          }
+        ]
+      },
+      "finalMeasurement": {
+        "characters": 19950,
+        "messageCharacters": 13278,
+        "transportSchemaCharacters": 6529,
+        "runtimeWrapperCharacters": 143,
+        "estimatedTokens": 6650,
+        "sections": [
+          {
+            "role": "system",
+            "characters": 8029
+          },
+          {
+            "role": "user",
+            "characters": 5249
+          }
+        ]
+      },
+      "compactedSections": []
+    },
+    "local": {
+      "fit": true,
+      "capacity": {
+        "provider": "local",
+        "kind": "local_context_estimate",
+        "maximumCharacters": 28672,
+        "contextSize": 8192,
+        "responseReserve": 1024,
+        "promptTokenBudget": 7168,
+        "estimatedCharactersPerToken": 4,
+        "model": ""
+      },
+      "fullMeasurement": {
+        "characters": 16789,
+        "messageCharacters": 12169,
+        "transportSchemaCharacters": 4399,
+        "runtimeWrapperCharacters": 221,
+        "estimatedTokens": 4198,
+        "sections": [
+          {
+            "role": "system",
+            "characters": 6998
+          },
+          {
+            "role": "user",
+            "characters": 5171
+          }
+        ]
+      },
+      "finalMeasurement": {
+        "characters": 16789,
+        "messageCharacters": 12169,
+        "transportSchemaCharacters": 4399,
+        "runtimeWrapperCharacters": 221,
+        "estimatedTokens": 4198,
+        "sections": [
+          {
+            "role": "system",
+            "characters": 6998
+          },
+          {
+            "role": "user",
+            "characters": 5171
+          }
+        ]
+      },
+      "compactedSections": []
+    }
+  }
+}

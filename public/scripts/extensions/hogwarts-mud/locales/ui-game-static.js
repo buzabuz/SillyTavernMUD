@@ -827,21 +827,29 @@ const GAME_TEXT = Object.freeze({
         en: 'The low-tier model did not submit a valid Scene reply.',
         zh: '低档没有提交有效的场景回复。',
     },
-    'ui.story.movement_unsettled.title': {
-        en: 'Scene saved. Movement is waiting for settlement.',
-        zh: '场景已保留，移动正在等待结算。',
+    'ui.story.post_unsettled.title': {
+        en: 'Scene saved. Post settlement is pending.',
+        zh: '场景已保留，Post 正在等待结算。',
     },
-    'ui.story.movement_unsettled.detail': {
-        en: 'Your location has not changed. Retry settlement when ready.',
-        zh: '当前位置尚未改变；准备好后可重新结算。',
+    'ui.story.post_unsettled.detail': {
+        en: 'No world changes were committed. Retry Post or discard this turn.',
+        zh: '尚未提交世界状态；可重试 Post 或丢弃本回合。',
     },
-    'ui.story.movement_unsettled.retry': {
-        en: 'Retry movement settlement',
-        zh: '重新结算移动',
+    'ui.story.post_unsettled.retry': {
+        en: 'Retry Post',
+        zh: '重试 Post',
     },
-    'ui.story.movement_unsettled.blocked': {
-        en: 'Settle the saved movement before submitting another action.',
-        zh: '请先结算已保留的移动，再提交下一步行动。',
+    'ui.story.post_unsettled.discard': {
+        en: 'Discard turn',
+        zh: '丢弃本回合',
+    },
+    'ui.story.post_unsettled.discard_confirm': {
+        en: 'Discard this uncommitted turn and remove its saved Scene?',
+        zh: '丢弃这个未结算回合，并删除已保留的场景正文？',
+    },
+    'ui.story.post_unsettled.blocked': {
+        en: 'Settle or discard the saved Scene before submitting another action.',
+        zh: '请先结算或丢弃已保留场景，再提交下一步行动。',
     },
     'ui.story.retry_turn': {
         en: 'Retry this turn',

@@ -5,6 +5,12 @@ import {
     MATERIAL_OPERATIONS,
 } from '../material-schema.js';
 
+/**
+ * Field routes: vcon013.input.itemCandidates,
+ * vcon013.result.inventoryUpdates, vcon013.result.identityObservations.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
+
 export const POST_TURN_SEMANTIC_SYSTEM = `You are a sparse observer of an already-written RPG turn. Extract only explicit observable changes from playerAction and narrativeSegments.
 
 Player movement rules:
@@ -73,6 +79,16 @@ Calibration examples:
 4. A failed secret spell sends Ron into the rafters in front of class => visualScope room, audibleScope room, concealment attempted, Ron as a direct participant.
 5. A note quietly passed to Harry without discovery => visualScope target, audibleScope none, concealment successful, Harry as a direct participant.
 6. Narrative "At 14:50 the shop door opened, five minutes later." => two temporalClaims: absolute_clock clock 14:50, and relative_duration durationMinutes 5 relation later.`;
+
+export const LOW_POST_TURN_SEMANTIC_SYSTEM = `${POST_TURN_SEMANTIC_SYSTEM}
+
+Low complete-Post rules:
+- inventoryObservationRequired is retired as a Low route. Always return false; it must not request another model task.
+- itemCandidates is the complete formal Item context for this turn, never evidence. Existing Item proposals use only a supplied itemCandidates id. Never substitute a similar Item or invent an ID.
+- inventoryUpdates contains only an exact completed Item operation grounded in playerAction or narrativeSegments. evidenceText and evidenceItemText must be exact source substrings. Return [] when no Item operation is established.
+- identityTargetActorIds is the complete Actor set eligible for direct injury observations. inspectionTargetActorIds is the narrower set allowed to receive no_visible_injury.
+- identityObservations uses only narration evidence. evidenceSegmentIndex identifies the exact narration segment. Return [] when a direct injury or deliberate no-injury examination is not established.
+- Item and Identity candidates are proposals only. They never write State directly.`;
 
 const temporalKinds = [
     'absolute_clock',
@@ -361,6 +377,169 @@ const playerMovementJsonSchema = {
     ],
 };
 
+const inventoryUpdateJsonSchema = {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+        'id',
+        'operation',
+        'type',
+        'labelEn',
+        'appearanceEn',
+        'ownerId',
+        'holderId',
+        'targetHolderId',
+        'transferMode',
+        'storyRoles',
+        'visibility',
+        'isEquipped',
+        'held',
+        'sourceKind',
+        'evidenceText',
+        'evidenceItemText',
+        'physicalForm',
+        'confidence',
+    ],
+    properties: {
+        id: {
+            type: 'string',
+            maxLength: 80,
+        },
+        operation: enumProperty([
+            'acquire',
+            'carry',
+            'place',
+            'equip',
+            'unequip',
+            'give',
+            'lend',
+            'consume',
+            'damage',
+            'clean',
+            'lose',
+            'destroy',
+        ]),
+        type: enumProperty([
+            'wand',
+            'eyewear',
+            'clothing',
+            'accessory',
+            'document',
+            'container',
+            'money',
+            'key',
+            'book',
+            'tool',
+            'consumable',
+            'keepsake',
+            'clue',
+            'other',
+        ]),
+        labelEn: {
+            type: 'string',
+            maxLength: 200,
+        },
+        appearanceEn: {
+            type: 'string',
+            maxLength: 600,
+        },
+        ownerId: {
+            type: 'string',
+            maxLength: 96,
+        },
+        holderId: {
+            type: 'string',
+            maxLength: 96,
+        },
+        targetHolderId: {
+            type: 'string',
+            maxLength: 96,
+        },
+        transferMode: enumProperty([
+            'none',
+            'gift',
+            'loan',
+            'theft',
+            'return',
+        ]),
+        storyRoles: {
+            type: 'array',
+            maxItems: 5,
+            items: enumProperty([
+                'signature',
+                'social',
+                'clue',
+                'promise',
+                'keepsake',
+            ]),
+        },
+        visibility: enumProperty([
+            'public',
+            'owner_known',
+            'hidden',
+        ]),
+        isEquipped: {
+            type: 'boolean',
+        },
+        held: {
+            type: 'boolean',
+        },
+        sourceKind: enumProperty([
+            'player',
+            'narrative',
+        ]),
+        evidenceText: {
+            type: 'string',
+            maxLength: 500,
+        },
+        evidenceItemText: {
+            type: 'string',
+            maxLength: 300,
+        },
+        physicalForm: enumProperty([
+            'whole',
+            'remains',
+            'absent',
+            'unknown',
+        ]),
+        confidence: confidenceProperty,
+    },
+};
+
+const identityObservationJsonSchema = {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+        'actorId',
+        'injuryStatus',
+        'evidenceText',
+        'evidenceSegmentIndex',
+        'confidence',
+    ],
+    properties: {
+        actorId: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 96,
+        },
+        injuryStatus: enumProperty([
+            'injured',
+            'no_visible_injury',
+        ]),
+        evidenceText: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 500,
+        },
+        evidenceSegmentIndex: {
+            type: 'integer',
+            minimum: 0,
+            maximum: 23,
+        },
+        confidence: confidenceProperty,
+    },
+};
+
 export const POST_TURN_JSON_SCHEMA = {
     type: 'object',
     additionalProperties: false,
@@ -402,6 +581,50 @@ export const POST_TURN_JSON_SCHEMA = {
     },
 };
 
+export const LOW_POST_TURN_JSON_SCHEMA = {
+    ...POST_TURN_JSON_SCHEMA,
+    required: [
+        ...POST_TURN_JSON_SCHEMA.required,
+        'inventoryUpdates',
+        'identityObservations',
+    ],
+    properties: {
+        ...POST_TURN_JSON_SCHEMA.properties,
+        inventoryUpdates: {
+            type: 'array',
+            maxItems: 8,
+            items: inventoryUpdateJsonSchema,
+        },
+        identityObservations: {
+            type: 'array',
+            maxItems: 4,
+            items: identityObservationJsonSchema,
+        },
+    },
+};
+
+export const POST_TURN_TRANSPORT_JSON_SCHEMA =
+    Object.freeze({
+        name:
+            'hogwarts_mud_post_turn_semantic',
+        description:
+            'Observed consequences of an already-written Hogwarts MUD turn.',
+        strict: true,
+        value:
+            POST_TURN_JSON_SCHEMA,
+    });
+
+export const LOW_POST_TURN_TRANSPORT_JSON_SCHEMA =
+    Object.freeze({
+        name:
+            'hogwarts_mud_low_post_turn_semantic',
+        description:
+            'Complete observed consequences of an already-written Hogwarts MUD turn.',
+        strict: true,
+        value:
+            LOW_POST_TURN_JSON_SCHEMA,
+    });
+
 export function createPostTurnSemanticMessages(
     input,
 ) {
@@ -410,6 +633,23 @@ export function createPostTurnSemanticMessages(
             role: 'system',
             content:
                 POST_TURN_SEMANTIC_SYSTEM,
+        },
+        {
+            role: 'user',
+            content:
+                JSON.stringify(input),
+        },
+    ];
+}
+
+export function createLowPostTurnSemanticMessages(
+    input,
+) {
+    return [
+        {
+            role: 'system',
+            content:
+                LOW_POST_TURN_SEMANTIC_SYSTEM,
         },
         {
             role: 'user',
