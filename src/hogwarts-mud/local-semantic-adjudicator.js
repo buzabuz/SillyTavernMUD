@@ -31,9 +31,16 @@ import {
     POST_TURN_SYSTEM,
 } from './post-turn-system-prompt.js';
 import {
+    createLowPostTurnResultSchema,
     postTurnJsonSchema,
     postTurnResultSchema,
 } from './post-turn-transport-contract.js';
+
+/**
+ * Field routes: vcon013.result.inventoryUpdates,
+ * vcon013.result.identityObservations.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
 
 export {
     validatePreTurnCalendarCommitment,
@@ -45,10 +52,12 @@ const DEFAULT_API_URL =
     'http://127.0.0.1:11434';
 const DEFAULT_MODEL = 'qwen3:1.7b';
 const DEFAULT_KEEP_ALIVE = '60s';
-const DEFAULT_CONTEXT_SIZE = 4096;
+const DEFAULT_CONTEXT_SIZE = 8_192;
 const DEFAULT_TIMEOUT_MS = 120_000;
 export const POST_TURN_CONTEXT_SIZE =
-    4_096;
+    8_192;
+export const POST_TURN_RESPONSE_RESERVE_TOKENS =
+    1_024;
 const MODULE_ROOT =
     path.dirname(
         fileURLToPath(
@@ -891,6 +900,7 @@ export async function callStructuredModel({
     modelOverride = '',
     contextSizeOverride = 0,
     exactContextSize = 0,
+    responseReserveTokens = 0,
 }) {
     const taskDefinition =
         getModelTaskDefinition(
@@ -979,6 +989,14 @@ export async function callStructuredModel({
                                     contextSizeOverride ||
                                     0,
                                 ),
+                            ),
+                            ...(
+                                responseReserveTokens > 0
+                                    ? {
+                                        num_predict:
+                                            responseReserveTokens,
+                                    }
+                                    : {}
                             ),
                             seed: 42,
                         },
@@ -1871,6 +1889,10 @@ export function validateObservedTemporalClaims(
 
 export function createPostTurnModelRequest(
     input,
+    {
+        contextSize =
+        POST_TURN_CONTEXT_SIZE,
+    } = {},
 ) {
     return {
         taskId:
@@ -1883,12 +1905,14 @@ export function createPostTurnModelRequest(
         resultSchema:
             postTurnResultSchema,
         unload: true,
-        exactContextSize:
-            POST_TURN_CONTEXT_SIZE,
+        contextSizeOverride:
+            contextSize,
+        responseReserveTokens:
+            POST_TURN_RESPONSE_RESERVE_TOKENS,
     };
 }
 
-export function parsePostTurnModelResult(
+function parsePostTurnRawObject(
     rawResult,
 ) {
     if (
@@ -1899,9 +1923,7 @@ export function parsePostTurnModelResult(
             rawResult,
         )
     ) {
-        return postTurnResultSchema.parse(
-            rawResult,
-        );
+        return rawResult;
     }
     if (
         typeof rawResult !==
@@ -1912,21 +1934,166 @@ export function parsePostTurnModelResult(
             'Post-turn model result must be one JSON object.',
         );
     }
+    return JSON.parse(
+        rawResult,
+    );
+}
+
+export function parsePostTurnModelResult(
+    rawResult,
+) {
     return postTurnResultSchema.parse(
-        JSON.parse(
+        parsePostTurnRawObject(
             rawResult,
         ),
     );
 }
 
-export function settlePostTurnModelResult(
+async function settleLowPostAuxiliaryProposals(
+    input,
+    rawResult,
+) {
+    const [
+        inventoryContract,
+        identityContract,
+    ] = await Promise.all([
+        import(
+            './inventory-observation-contract.js'
+        ),
+        import(
+            './dynamic-identity-observer.js'
+        ),
+    ]);
+    const inventoryInput =
+        inventoryContract
+            .normalizeDynamicInventoryInput({
+                playerAction:
+                    String(
+                        input.playerAction ||
+                        '',
+                    ),
+                narrativeSegments:
+                    Array.isArray(
+                        input.narrativeSegments,
+                    )
+                        ? input.narrativeSegments
+                        : [],
+                inventory:
+                    Array.isArray(
+                        input.itemCandidates,
+                    )
+                        ? input.itemCandidates
+                        : [],
+            });
+    const identityInput =
+        identityContract
+            .normalizeDynamicIdentityInput({
+                narrativeSegments:
+                    Array.isArray(
+                        input.narrativeSegments,
+                    )
+                        ? input.narrativeSegments
+                        : [],
+                actors:
+                    Array.isArray(input.actors)
+                        ? input.actors.map(actor => ({
+                            id:
+                                String(
+                                    actor?.id ||
+                                    '',
+                                ),
+                            nameEn:
+                                String(
+                                    actor?.nameEn ||
+                                    '',
+                                ),
+                        }))
+                        : [],
+                identityTargetActorIds:
+                    Array.isArray(
+                        input.identityTargetActorIds,
+                    )
+                        ? input
+                            .identityTargetActorIds
+                        : [],
+                inspectionTargetActorIds:
+                    Array.isArray(
+                        input.inspectionTargetActorIds,
+                    )
+                        ? input
+                            .inspectionTargetActorIds
+                        : [],
+            });
+    const lowResultSchema =
+        createLowPostTurnResultSchema({
+            inventoryUpdates:
+                inventoryContract
+                    .createDynamicInventoryResultSchema()
+                    .shape
+                    .inventoryUpdates,
+            identityObservations:
+                identityContract
+                    .createDynamicIdentityResultSchema(
+                        identityInput
+                            .identityTargetActorIds,
+                        identityInput
+                            .narrativeSegments
+                            .length,
+                    )
+                    .shape
+                    .identityObservations,
+        });
+    const parsed =
+        lowResultSchema.parse(
+            parsePostTurnRawObject(
+                rawResult,
+            ),
+        );
+    const inventory =
+        inventoryContract
+            .guardDynamicInventoryResult(
+                {
+                    inventoryUpdates:
+                        parsed.inventoryUpdates,
+                },
+                inventoryInput,
+            );
+    const identity =
+        identityContract
+            .guardDynamicIdentityResult(
+                {
+                    identityObservations:
+                        parsed.identityObservations,
+                },
+                identityInput,
+            );
+    return {
+        parsed,
+        inventory,
+        identity,
+    };
+}
+
+export async function settlePostTurnModelResult(
     input,
     rawResult,
     diagnostics = {},
 ) {
     const coreInput =
         input || {};
+    const lowMode =
+        Array.isArray(
+            coreInput.itemCandidates,
+        );
+    const lowAuxiliary =
+        lowMode
+            ? await settleLowPostAuxiliaryProposals(
+                coreInput,
+                rawResult,
+            )
+            : null;
     const parsed =
+        lowAuxiliary?.parsed ||
         parsePostTurnModelResult(
             rawResult,
         );
@@ -1949,6 +2116,16 @@ export function settlePostTurnModelResult(
     return {
         result: {
             ...coreAdoption.result,
+            inventoryUpdates:
+                lowAuxiliary
+                    ?.inventory
+                    .inventoryUpdates ||
+                [],
+            identityObservations:
+                lowAuxiliary
+                    ?.identity
+                    .identityObservations ||
+                [],
             perception:
                 perceptionValidation.valid
                     ? perceptionValidation
@@ -1979,6 +2156,19 @@ export function settlePostTurnModelResult(
             temporalClaimErrors:
                 temporalClaimsValidation
                     .errors,
+            lowAuxiliary:
+                lowAuxiliary
+                    ? {
+                        inventoryRejected:
+                            lowAuxiliary
+                                .inventory
+                                .rejections,
+                        identityRejected:
+                            lowAuxiliary
+                                .identity
+                                .rejections,
+                    }
+                    : null,
         },
     };
 }
@@ -1996,10 +2186,15 @@ export function observeTurn(
             await callStructuredModel({
                 ...createPostTurnModelRequest(
                     coreInput,
+                    {
+                        contextSize:
+                            getSettings()
+                                .contextSize,
+                    },
                 ),
                 modelOverride: model,
             });
-        return settlePostTurnModelResult(
+        return await settlePostTurnModelResult(
             coreInput,
             coreModel.result,
             coreModel.diagnostics,

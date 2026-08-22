@@ -14,6 +14,9 @@ import {
 import {
     createCharacterInputLocalizationField,
 } from '../domain/localization-candidates.js';
+import {
+    synchronizePendingPostSettlementRevision,
+} from '../domain/pending-post-settlement.js';
 
 export function repairLoadedModelSlots({
     loadedSlots,
@@ -257,23 +260,34 @@ export function createSaveLibrary(ports) {
             context
                 ?.chatMetadata
                 ?.hogwartsMud;
-        if (
-            !state ||
-            !ensureSceneLifecycleState(
-                state,
-            )
-        ) {
+        if (!state) {
             return false;
         }
-        saveMetadataDebounced({
-            source:
-                'lifecycle_migration',
-            changedDomains: [
-                'migration',
-            ],
-        });
-        await flushPendingMetadataSave();
-        return true;
+        const lifecycleChanged =
+            ensureSceneLifecycleState(
+                state,
+            );
+        if (lifecycleChanged) {
+            saveMetadataDebounced({
+                source:
+                    'lifecycle_migration',
+                changedDomains: [
+                    'migration',
+                ],
+            });
+            await flushPendingMetadataSave();
+        }
+        if (
+            synchronizePendingPostSettlementRevision(
+                context.chatMetadata
+                    .hogwartsMud,
+                context.chat,
+            )
+        ) {
+            await context.saveChat();
+            return true;
+        }
+        return lifecycleChanged;
     }
 
     async function repairLoadedModelConfiguration(
@@ -951,6 +965,7 @@ export function createSaveLibrary(ports) {
                     {
                         persistMigration:
                             false,
+                        adoptPersistedHead: true,
                     },
                 );
                 if (
@@ -1017,6 +1032,7 @@ export function createSaveLibrary(ports) {
                 {
                     persistMigration:
                         false,
+                    adoptPersistedHead: true,
                 },
             );
             if (

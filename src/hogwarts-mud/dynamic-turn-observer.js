@@ -133,6 +133,10 @@ export function createDynamicTurnModelRequest(
         input.inventory
             ? createDynamicInventoryModelRequest(
                 input.inventory,
+                {
+                    // The composed request owns the shared 20k budget.
+                    enforcePromptBudget: false,
+                },
             )
             : null;
     assertSharedNarrative(
@@ -314,9 +318,9 @@ export async function observeDynamicTurn(
     {
         model = '',
         callModel =
-            callStructuredModel,
+        callStructuredModel,
         enqueue =
-            enqueueLocalSemanticOperation,
+        enqueueLocalSemanticOperation,
     } = {},
 ) {
     const request =

@@ -21,6 +21,9 @@ import {
 import {
     migrateInteriorMountAuthority,
 } from '../domain/interior-mount.js';
+import {
+    migrateLegacyPendingMovementSettlement,
+} from '../domain/pending-post-settlement.js';
 
 export function createLifecycleRuntime(ports) {
     const {
@@ -29,7 +32,6 @@ export function createLifecycleRuntime(ports) {
         getLocalMapDefinition =
         () => null,
         getMudState,
-        getRoomName,
         jobRegistry,
         migrateActorContextState =
         state => ({
@@ -153,6 +155,16 @@ export function createLifecycleRuntime(ports) {
                 postTurnSemanticProvider;
             changed = true;
         }
+        const pendingSettlementMigration =
+            migrateLegacyPendingMovementSettlement(
+                state,
+                getContext().chat,
+            );
+        state =
+            pendingSettlementMigration.state;
+        changed =
+            pendingSettlementMigration.changed ||
+            changed;
         const normalizedTaskRuntime =
             normalizeModelTaskRuntime(
                 state
@@ -749,17 +761,6 @@ export function createLifecycleRuntime(ports) {
             changed = true;
         }
         if (state.scene) {
-            if (
-                state.scene.id ===
-                'settling_in_gryffindor_dormitory' &&
-            false
-            ) {
-                state.scene.nameEn =
-                'Gryffindor Girls\' Dormitory — Settling In';
-                state.scene.name =
-                '格兰芬多女生宿舍 — 安顿下来';
-                changed = true;
-            }
             if (!state.scene.startedClock) {
                 state.scene.startedClock = state.opening?.package?.clock ||
                 state.scene

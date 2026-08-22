@@ -106,7 +106,7 @@ export class KnowledgeVectorService {
         };
     }
 
-    async sync(input) {
+    async syncExact(input) {
         const records =
             validateProjectionBatch(
                 input,
@@ -150,29 +150,55 @@ export class KnowledgeVectorService {
                     .stateRevision,
             errors: [],
         };
+        return {
+            input: {
+                ...input,
+                records,
+            },
+            exact: exactResult,
+            diagnostics,
+        };
+    }
+
+    async repairPreferred(
+        input,
+        {
+            batchSize = 0,
+        } = {},
+    ) {
+        const records =
+            validateProjectionBatch(
+                input,
+            );
+        const diagnostics = {
+            backend:
+                this.exactBackend.name ||
+                'json',
+            preferredBackend:
+                this.preferredBackend
+                    ?.name ||
+                'none',
+            degraded: false,
+            fallback:
+                this.exactBackend.name ||
+                'json',
+            errors: [],
+        };
         let preferredResult = null;
         if (this.preferredBackend) {
-            try {
-                const health =
-                    await this
-                        .preferredBackend
-                        .health(input);
-                if (
-                    health.indexMissing ||
-                    health.indexIncompatible
-                ) {
-                    preferredResult =
-                        await this
-                            .preferredBackend
-                            .rebuild({
-                                ...input,
-                                records,
-                            });
-                    diagnostics
-                        .indexRebuilt =
-                        true;
-                } else if (!health.ok) {
-                    throw new Error(
+            const health =
+                await this
+                    .preferredBackend
+                    .health(input);
+            if (
+                health.indexMissing ||
+                health.indexIncompatible
+            ) {
+                diagnostics.indexRebuilt =
+                    true;
+            } else if (!health.ok) {
+                const error =
+                    new Error(
                         health.error ||
                         `${
                             this
@@ -180,86 +206,114 @@ export class KnowledgeVectorService {
                                 .name
                         } health failed`,
                     );
-                } else {
-                    if (
-                        typeof this
+                error.qdrantRequest =
+                    health.qdrantRequest ||
+                    null;
+                throw error;
+            }
+            if (
+                typeof this
+                    .preferredBackend
+                    .reconcile ===
+                'function'
+            ) {
+                preferredResult =
+                    await this
+                        .preferredBackend
+                        .reconcile(
+                            {
+                                ...input,
+                                records,
+                            },
+                            health,
+                            {
+                                batchSize,
+                            },
+                        );
+            } else {
+                preferredResult =
+                    (
+                        health.indexMissing ||
+                        health.indexIncompatible
+                    )
+                        ? await this
                             .preferredBackend
-                            .reconcile ===
-                            'function'
-                    ) {
-                        preferredResult =
-                            await this
-                                .preferredBackend
-                                .reconcile(
-                                    {
-                                        ...input,
-                                        records,
-                                    },
-                                    health,
-                                );
-                    } else {
-                        const removedIds =
-                            (
-                                exactResult
-                                    .removed ||
-                                []
-                            ).map(entry =>
-                                entry.recordId ||
-                                entry.id);
-                        if (removedIds.length) {
-                            await this
-                                .preferredBackend
-                                .delete({
-                                    ...input,
-                                    recordIds:
-                                        removedIds,
-                                });
-                        }
-                        preferredResult =
-                            await this
-                                .preferredBackend
-                                .upsert({
-                                    ...input,
-                                    records,
-                                });
-                    }
-                }
-                diagnostics.backend =
-                    this.preferredBackend
-                        .name;
-                diagnostics.embeddedRecordCount =
-                    Number(
-                        preferredResult
-                            ?.embedded ??
-                        preferredResult
-                            ?.upserted ??
-                        0,
-                    );
-                diagnostics.reusedRecordCount =
-                    Number(
-                        preferredResult
-                            ?.reused ??
-                        0,
-                    );
-                diagnostics.deletedRecordCount =
-                    Number(
-                        preferredResult
-                            ?.deleted ??
-                        0,
-                    );
-            } catch (error) {
-                diagnostics.degraded =
-                    true;
-                diagnostics.errors.push(
-                    String(
-                        error?.message ||
-                        error,
-                    ).slice(0, 1_000),
-                );
+                            .rebuild({
+                                ...input,
+                                records,
+                            })
+                        : await this
+                            .preferredBackend
+                            .upsert({
+                                ...input,
+                                records,
+                            });
             }
         }
         return {
-            exact: exactResult,
+            preferred:
+                preferredResult,
+            diagnostics,
+        };
+    }
+
+    async sync(input) {
+        const exactResult =
+            await this.syncExact(input);
+        const diagnostics = {
+            ...exactResult.diagnostics,
+        };
+        let preferredResult = null;
+        try {
+            const repair =
+                await this.repairPreferred(
+                    exactResult.input,
+                );
+            preferredResult =
+                repair.preferred;
+            Object.assign(
+                diagnostics,
+                repair.diagnostics,
+            );
+            if (preferredResult) {
+                diagnostics.backend =
+                    this.preferredBackend
+                        ?.name ||
+                    diagnostics.backend;
+            }
+            diagnostics.embeddedRecordCount =
+                Number(
+                    preferredResult
+                        ?.embedded ??
+                    preferredResult
+                        ?.upserted ??
+                    0,
+                );
+            diagnostics.reusedRecordCount =
+                Number(
+                    preferredResult
+                        ?.reused ??
+                    0,
+                );
+            diagnostics.deletedRecordCount =
+                Number(
+                    preferredResult
+                        ?.deleted ??
+                    0,
+                );
+        } catch (error) {
+            diagnostics.degraded =
+                true;
+            diagnostics.errors.push(
+                String(
+                    error?.message ||
+                    error,
+                ).slice(0, 1_000),
+            );
+        }
+        return {
+            exact:
+                exactResult.exact,
             preferred:
                 preferredResult,
             diagnostics,

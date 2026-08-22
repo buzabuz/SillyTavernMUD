@@ -1148,6 +1148,7 @@ export function createGuardedSavePorts(
         {
             persistMigration =
             true,
+            adoptPersistedHead = false,
         } = {},
     ) {
         const prepared =
@@ -1156,6 +1157,15 @@ export function createGuardedSavePorts(
             );
         if (prepared) {
             if (
+                adoptPersistedHead &&
+                typeof guard
+                    .replaceHead ===
+                'function'
+            ) {
+                await guard.replaceHead(
+                    prepared.state,
+                );
+            } else if (
                 typeof guard
                     .recoverHead ===
                 'function'

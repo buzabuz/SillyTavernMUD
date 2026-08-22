@@ -1492,17 +1492,20 @@ test('[defect-probing] local Appraisal failure falls back without blocking the c
     );
 });
 
-test('[defect-probing] stale post-turn Appraisal work cannot overwrite a newer revision', async () => {
+test('[defect-probing] stale post-turn Appraisal work cannot overwrite a newer revision and leaves Post pending', async () => {
     const harness =
         createBoundaryTurnHarness({
             staleAppraisal: true,
         });
-    await assert.rejects(
-        harness.workflow
-            .runStructuredTurn(
-                harness.playerAction,
-            ),
-        /stale post-turn Appraisal/iu,
+    await harness.workflow
+        .runStructuredTurn(
+            harness.playerAction,
+        );
+
+    assert.equal(
+        harness.context.chatMetadata
+            .hogwartsMud.turn.status,
+        'post_unsettled',
     );
 
     assert.equal(
@@ -1513,7 +1516,7 @@ test('[defect-probing] stale post-turn Appraisal work cannot overwrite a newer r
         harness.context.chatMetadata
             .hogwartsMud
             .stateRevision,
-        8,
+        7,
     );
     assert.deepEqual(
         harness.context.chatMetadata
@@ -1521,6 +1524,11 @@ test('[defect-probing] stale post-turn Appraisal work cannot overwrite a newer r
             .memorySynapse
             .appraisals,
         [],
+    );
+    assert.ok(
+        harness.context.chat[1]
+            .extra.hogwartsMud
+            .pendingPostSettlement,
     );
 });
 

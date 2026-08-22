@@ -149,6 +149,7 @@ const policies = Object.freeze({
     },
     post_turn_semantic: {
         maximumCharacters: 10_500,
+        providerAware: true,
         sectionPriority: [
             'system',
             'schema',
@@ -266,6 +267,9 @@ export function getTaskPromptBudgetPolicy(
         maximumCharacters:
             policy
                 .maximumCharacters,
+        providerAware:
+            policy.providerAware ===
+            true,
         sectionPriority:
             Object.freeze([
                 ...policy
@@ -274,11 +278,16 @@ export function getTaskPromptBudgetPolicy(
     });
 }
 
+/**
+ * @param {Array<{ role?: string, content?: string }>} [messages]
+ * @param {{ transportJsonSchema?: object | null, runtimeWrapper?: object | null }} [options]
+ */
 export function measurePromptMessages(
     messages = [],
     {
         transportJsonSchema =
         null,
+        runtimeWrapper = null,
     } = {},
 ) {
     const sections =
@@ -320,12 +329,20 @@ export function measurePromptMessages(
                 transportJsonSchema,
             ).length
             : 0;
+    const runtimeWrapperCharacters =
+        runtimeWrapper
+            ? JSON.stringify(
+                runtimeWrapper,
+            ).length
+            : 0;
     return {
         characters:
             messageCharacters +
-            transportSchemaCharacters,
+            transportSchemaCharacters +
+            runtimeWrapperCharacters,
         messageCharacters,
         transportSchemaCharacters,
+        runtimeWrapperCharacters,
         sections,
     };
 }
@@ -357,11 +374,14 @@ export function createTaskPromptBudget(
         runtimeMaximumCharacters:
             normalizedRuntimeMaximum,
         effectiveMaximumCharacters:
-            Math.min(
-                policy
-                    .maximumCharacters,
-                normalizedRuntimeMaximum,
-            ),
+            policy.providerAware ===
+            true
+                ? normalizedRuntimeMaximum
+                : Math.min(
+                    policy
+                        .maximumCharacters,
+                    normalizedRuntimeMaximum,
+                ),
     };
 }
 

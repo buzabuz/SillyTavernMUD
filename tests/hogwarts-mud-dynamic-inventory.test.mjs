@@ -42,6 +42,27 @@ function input() {
     };
 }
 
+function oversizedInput() {
+    return {
+        ...input(),
+        narrativeSegments: Array.from(
+            {
+                length: 3,
+            },
+            (_, index) => ({
+                type: 'narration',
+                actorId: '',
+                textEn: `${
+                    index
+                } ${
+                    'The signed note remained on the desk. '
+                        .repeat(100)
+                }`,
+            }),
+        ),
+    };
+}
+
 function update(
     overrides = {},
 ) {
@@ -112,6 +133,16 @@ test('dynamic Inventory derives the model Schema from one descriptor and rejects
             index: 0,
             code: 'ungrounded_evidence',
         }],
+    );
+});
+
+test('standalone dynamic Inventory retains its 9,000-character budget', () => {
+    assert.throws(
+        () =>
+            createDynamicInventoryModelRequest(
+                oversizedInput(),
+            ),
+        /above 9000/u,
     );
 });
 

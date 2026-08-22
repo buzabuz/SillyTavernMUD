@@ -184,14 +184,14 @@
     {
       "ownerId": "local_pre_turn_1_7b",
       "mechanismId": "local_semantic_model",
-      "responsibility": "Check need/mode, movement intent, elapsed-time intent and Calendar commitment.",
-      "deterministicSettlement": "Check arithmetic, route/access, clock legality, Calendar validation and owning Reducers."
+      "responsibility": "Check need/mode, elapsed-time intent and Calendar commitment.",
+      "deterministicSettlement": "Check arithmetic, clock legality, Calendar validation and owning Reducers; deterministic MovementPreflightV2 owns route/access without a model proposal."
     },
     {
       "ownerId": "local_post_core_1_7b",
       "mechanismId": "local_semantic_model",
-      "responsibility": "Existing Material events, Inventory route, Actor activity/departure/presence/location, perception and narrative temporal claims.",
-      "deterministicSettlement": "Material, Actor/room/presence, witness/ACL and temporal evidence guards; Item route delegates to VCON-014."
+      "responsibility": "Existing Material events, Inventory route, Actor activity/departure/presence/location, perception, narrative temporal claims and bounded player-movement candidate.",
+      "deterministicSettlement": "Movement preflight/evidence/ID guard and Movement Reducer; Material, Actor/room/presence, witness/ACL and temporal evidence guards; Item route delegates to VCON-014."
     },
     {
       "ownerId": "gliner2_base_zero_shot_research",
@@ -265,7 +265,7 @@
       "contractId": "VCON-001",
       "domain": "setup_character_polish",
       "title": "Character polish setup input",
-      "status": "legacy_registered",
+      "status": "implementation_in_progress",
       "runtimeModelTaskIds": ["character_polish"],
       "outputClass": "setup_input_proposal",
       "stateWritePolicy": "validated_single_writer",
@@ -541,7 +541,7 @@
       "contractId": "VCON-007",
       "domain": "scene_performance",
       "title": "Player-visible Scene performance and turn proposal",
-      "status": "legacy_registered",
+      "status": "implementation_in_progress",
       "runtimeModelTaskIds": ["scene_performance"],
       "outputClass": "player_narrative_and_state_proposal",
       "stateWritePolicy": "validated_single_writer",
@@ -567,10 +567,10 @@
         "targetAutomaticRetry": "forbidden",
         "currentProviderFallback": "forbidden",
         "targetProviderFallback": "forbidden",
-        "currentSemanticRegexFallback": "present_hard_reject_and_filter",
+      "currentSemanticRegexFallback": "retiring_destination_text_gate",
         "targetSemanticRegexFallback": "forbidden",
         "stateOnFailure": "turn_transaction_not_committed",
-        "paidNarrativeOnFailure": "phase3_append_only_ledger_required"
+        "paidNarrativeOnFailure": "triggered_movement_post_failure_preserves_visible_paid_narrative_in_movement_unsettled"
       },
       "callPolicy": {
         "callsWhenNotTriggered": 0,
@@ -581,7 +581,7 @@
         "targetMaxLoadedModels": 1
       },
       "testSources": ["tests/hogwarts-mud-turn-protocol.test.mjs", "tests/hogwarts-mud-turn-validation.test.mjs", "tests/hogwarts-mud-movement-resolution.test.mjs"],
-      "currentDebt": ["Prompt, raw allowlists, fold and final validator duplicate the proposal contract.", "Semantic regex can reject or filter prose.", "Paid narrative preservation requires the separate Phase 3 ledger.", "Revision 16 removes paid signals.eventEnded; Event closure moves to VCON-027.", "Revision 17 preserves every paid segment while deterministically prepending an absent required movement failure/already-there fact."]
+      "currentDebt": ["Prompt, raw allowlists, fold and final validator duplicate the proposal contract.", "The pre-validated post-settled movement change retires destination-text rejection and injected movement facts.", "Paid narrative preservation now uses bounded movement_unsettled recovery.", "Revision 16 removes paid signals.eventEnded; Event closure moves to VCON-027."]
     },
     {
       "contractId": "VCON-008",
@@ -770,13 +770,13 @@
     {
       "contractId": "VCON-012",
       "domain": "local_pre_turn",
-      "title": "Local pre-turn movement, time, check and Calendar commitment proposal",
-      "status": "legacy_registered",
+      "title": "Local pre-turn time, check and Calendar commitment proposal",
+      "status": "implementation_in_progress",
       "runtimeModelTaskIds": ["local_pre_turn_adjudicator"],
-      "outputClass": "state_and_transient_route_proposal",
+      "outputClass": "state_and_transient_precondition_proposal",
       "stateWritePolicy": "validated_single_writer",
       "writerOwnerId": "turn_precondition_settlement",
-      "stateFieldRefs": ["checks", "spatial.player", "spatial.lastMovement", "clock", "calendar.entries[]", "extra.hogwartsMud.turnTransaction.movementOutcome"],
+      "stateFieldRefs": ["checks", "clock", "calendar.entries[]", "extra.hogwartsMud.movementPreflight"],
       "schemaAuthority": "json_schema_plus_zod_duplicated",
       "schemaSources": ["src/hogwarts-mud/local-semantic-adjudicator.js", "src/hogwarts-mud/pre-turn-route-contract.js", "src/hogwarts-mud/pre-turn-movement-contract.js"],
       "transformSources": ["public/scripts/extensions/hogwarts-mud/adapters/local-semantic.js"],
@@ -799,8 +799,8 @@
         "targetProviderFallback": "forbidden",
         "currentSemanticRegexFallback": "forbidden",
         "targetSemanticRegexFallback": "forbidden",
-        "stateOnFailure": "affected_precondition_omitted_or_turn_stopped",
-        "paidNarrativeOnFailure": "paid_request_not_started_when_blocking"
+        "stateOnFailure": "movement_preflight_stays_deterministic_and_other_precondition_is_omitted_or_turn_stopped",
+        "paidNarrativeOnFailure": "movement_preflight_failure_never_writes_position_or_outcome"
       },
       "callPolicy": {
         "callsWhenNotTriggered": 0,
@@ -811,23 +811,23 @@
         "targetMaxLoadedModels": 1
       },
       "testSources": ["tests/hogwarts-mud-local-semantic-recall.test.mjs", "tests/hogwarts-mud-movement-resolution.test.mjs", "tests/hogwarts-mud-task8-call-budget.test.mjs", "tests/hogwarts-mud-time-calendar.test.mjs", "tests/hogwarts-mud-turn-validation.test.mjs", "tests/hogwarts-mud-medium-calendar-director.test.mjs"],
-      "currentDebt": ["Transport JSON Schema and Zod shape are independently maintained.", "Calendar commitment and follow movement are transient evidence-bounded routes; only the existing Medium Calendar and movement settlement owners may write State.", "Structured Spell observation remains owned by the separate dynamic Spell retirement path.", "Revision 16 removes model arithmetic from elapsedMinutes; enacted explicit-duration evidence is normalized by deterministic grammar.", "Revision 17 adds supplied-ID/evidence movementIntent only for unresolved follow tags; deterministic movement settlement owns the three-state outcome and narrative fact.", "Revision 18 removes the non-State pre progression classifier; one static paid System Prompt rule now owns immediate concrete-step narrative completion.", "The pre Prompt includes full follow-NPC rules only when movementContext exists; ordinary requests use the same one-call output contract with an empty movementIntent rule.", "Fresh qwen3:1.7b acceptance still misses valid date/time-prefixed Chinese Calendar commitments; no Regex, 4B or retry fallback is approved."]
+      "currentDebt": ["Transport JSON Schema and Zod shape are independently maintained.", "MovementPreflightV2 is deterministic eligibility only; it never writes position, outcome, travel time or spatial history.", "Structured Spell observation remains owned by the separate dynamic Spell retirement path.", "Revision 16 removes model arithmetic from elapsedMinutes; enacted explicit-duration evidence is normalized by deterministic grammar.", "Revision 18 removes the non-State pre progression classifier; one static paid System Prompt rule now owns immediate concrete-step narrative completion.", "Fresh qwen3:1.7b acceptance still misses valid date/time-prefixed Chinese Calendar commitments; no Regex, 4B or retry fallback is approved."]
     },
     {
       "contractId": "VCON-013",
       "domain": "post_turn_semantic_proposal",
-      "title": "Selected Low/Local post-turn Material, Item route, Actor/presence, perception and temporal-claim proposal",
-      "status": "implemented_acceptance_pending",
+      "title": "Low complete core/Item/direct-injury proposal and Local core post-turn proposal",
+      "status": "implementation_in_progress",
       "runtimeModelTaskIds": ["post_turn_semantic_proposal"],
       "outputClass": "state_and_transient_authority_proposal",
       "stateWritePolicy": "validated_single_writer",
-      "writerOwnerId": "turn_post_observation_settlement",
-      "stateFieldRefs": ["actors[]", "activeInteractionActorIds[]", "localPresence", "presenceWitnessVersion", "eventKnowledgeVersion", "eventKnowledge[]", "materialStateVersion", "materialEventLog[]", "actorPresentations", "map.roomStates"],
-      "schemaAuthority": "shared_executable_descriptor",
+      "writerOwnerId": "turn_post_observation_settlement_and_movement_reducer",
+      "stateFieldRefs": ["map.activeMapId", "map.currentLocalNodeId", "scene.mapId", "scene.roomId", "spatial.player", "spatial.lastMovement", "actors[]", "activeInteractionActorIds[]", "localPresence", "presenceWitnessVersion", "eventKnowledgeVersion", "eventKnowledge[]", "materialStateVersion", "materialEventLog[]", "actorPresentations", "map.roomStates"],
+      "schemaAuthority": "provider_aware_strict_descriptor",
       "schemaSources": ["public/scripts/extensions/hogwarts-mud/domain/post-turn-semantic-contract.js", "src/hogwarts-mud/post-turn-transport-contract.js"],
       "transformSources": ["src/hogwarts-mud/local-semantic-adjudicator.js", "public/scripts/extensions/hogwarts-mud/adapters/local-semantic.js"],
-      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/material-state.js", "public/scripts/extensions/hogwarts-mud/presence-witness-contract.js", "public/scripts/extensions/hogwarts-mud/domain/turn-authority.js", "public/scripts/extensions/hogwarts-mud/domain/turn-time.js"],
-      "writerSources": ["public/scripts/extensions/hogwarts-mud/workflows/turn.js", "public/scripts/extensions/hogwarts-mud/domain/material-state.js", "public/scripts/extensions/hogwarts-mud/presence-witness-contract.js"],
+      "validatorSources": ["public/scripts/extensions/hogwarts-mud/domain/movement-post-settlement.js", "public/scripts/extensions/hogwarts-mud/domain/material-state.js", "public/scripts/extensions/hogwarts-mud/presence-witness-contract.js", "public/scripts/extensions/hogwarts-mud/domain/turn-authority.js", "public/scripts/extensions/hogwarts-mud/domain/turn-time.js"],
+      "writerSources": ["public/scripts/extensions/hogwarts-mud/domain/movement-post-settlement.js", "public/scripts/extensions/hogwarts-mud/domain/turn-reducer.js", "public/scripts/extensions/hogwarts-mud/domain/material-state.js", "public/scripts/extensions/hogwarts-mud/presence-witness-contract.js"],
       "semanticOwnerIds": ["post_turn_semantic_provider"],
       "retrievalOwnerIds": [],
       "responsibilityIds": {
@@ -845,7 +845,7 @@
         "targetProviderFallback": "forbidden",
         "currentSemanticRegexFallback": "forbidden",
         "targetSemanticRegexFallback": "forbidden",
-        "stateOnFailure": "no_post_turn_semantic_proposal_or_post_derived_event_knowledge_written",
+        "stateOnFailure": "selected_post_failure_preserves_paid_narrative_as_post_unsettled_without_position_or_turn_commit",
         "paidNarrativeOnFailure": "existing_narrative_already_generated"
       },
       "callPolicy": {
@@ -853,16 +853,16 @@
         "normalCallsWhenTriggered": 1,
         "worstCallsWhenTriggered": 1,
         "targetWorstCallsWhenTriggered": 1,
-        "targetExecution": "serial",
+        "targetExecution": "Low=one complete selected Post with zero Local/Dynamic calls; Local=one core Post plus zero-or-one serial shared Dynamic 4B call; selected Post starts independently from VCON-016 current-turn translation",
         "targetMaxLoadedModels": 1
       },
-      "testSources": ["tests/hogwarts-mud-post-provider-selection.test.mjs", "tests/hogwarts-mud-local-semantic-recall.test.mjs", "tests/hogwarts-mud-local-observer-presence.test.mjs", "tests/hogwarts-mud-material-state.test.mjs", "tests/hogwarts-mud-dynamic-inventory.test.mjs", "tests/hogwarts-mud-turn-validation.test.mjs", "tests/hogwarts-mud-npc-identity-observation.test.mjs", "tests/hogwarts-mud-witness-resolver.test.mjs"],
-      "currentDebt": ["Revision 25 uses one shared browser/server System Prompt and JSON Schema descriptor; server Zod remains the settlement shape authority.", "Selected provider is exclusive: low uses the existing Low Connection Profile, local uses Ollama. There is no cross-provider fallback, retry, repair, semantic Regex fallback, synthetic perception fallback, or dynamic 4B substitute after selected-provider failure.", "Temporal claims are transient guard inputs and never write clock or Calendar State.", "Identity injury meaning is not part of this contract.", "Revision 16 removes eventBoundary from this immediate contract and adds explicit Actor locationKnown settlement.", "inventoryObservationRequired is a transient route into VCON-014; Item guards and Item Reducer remain sole Item authority.", "Material events retain their existing evidence/transition guards and Material reducer; Revision 19 adds no Material field or writer.", "Revision 19 production-shape development baseline has Inventory, Actor, Material and temporal positive recall 0/5, 0/3, 0/3 and 0/1 with zero parse failures. Focused assessment prototypes improved individual domains but failed when merged into one request; all experimental post contracts were withdrawn.", "Revision 20 fresh research found structured/exact candidate wake gives 100% candidate recall for Inventory, Actor and temporal but 0/13 for Material because new scene objects have no non-semantic structured source. Material always-on caused 26/48 parse/transport failures. No branch entered blind or production; old matrices remained non-scoring diagnostics."]
+      "testSources": ["tests/hogwarts-mud-post-provider-selection.test.mjs", "tests/hogwarts-mud-current-turn-post-translation-parallel.test.mjs", "tests/hogwarts-mud-local-semantic-recall.test.mjs", "tests/hogwarts-mud-local-observer-presence.test.mjs", "tests/hogwarts-mud-material-state.test.mjs", "tests/hogwarts-mud-dynamic-inventory.test.mjs", "tests/hogwarts-mud-turn-validation.test.mjs", "tests/hogwarts-mud-npc-identity-observation.test.mjs", "tests/hogwarts-mud-witness-resolver.test.mjs"],
+      "currentDebt": ["Local core and Low complete-Post transport schemas remain separately provider-aware; server settlement is the shape authority.", "Selected provider is exclusive: Low uses the Low Connection Profile and directly carries bounded Item/direct-injury candidates; Local uses Ollama core and may route one shared 4B call. There is no cross-provider fallback, repair, semantic Regex fallback, synthetic perception fallback, or Low-to-Dynamic substitute after selected-provider failure.", "Selected Post capacity is measured over System, User, transport Schema and output reserve. Low uses its selected role capacity; Local uses its independent fixed context. Permitted compaction is atomic and diagnostic; protected sections are never cut.", "Current-turn scheduling submits the selected post independently from VCON-016 current-message translation after paid English is saved and visible. When both tasks are local, the existing one-resident FIFO may serialize execution without changing eligibility.", "Any selected Post no-fit/provider/schema/guard failure preserves paid narration as post_unsettled, blocks the next action, and allows only explicit Post-only retry or discard.", "Temporal claims are transient guard inputs and never write clock or Calendar State.", "Low Item/Identity candidates reuse VCON-014/VCON-020 guards and reducers; the Low result never writes State directly.", "Revision 16 removes eventBoundary from this immediate contract and adds explicit Actor locationKnown settlement.", "inventoryObservationRequired is a Local-only route into VCON-014; Low always returns false and never consumes it.", "Material events retain their existing evidence/transition guards and Material reducer; Revision 19 adds no Material field or writer.", "Revision 19 production-shape development baseline has Inventory, Actor, Material and temporal positive recall 0/5, 0/3, 0/3 and 0/1 with zero parse failures. Focused assessment prototypes improved individual domains but failed when merged into one request; all experimental post contracts were withdrawn.", "Revision 20 fresh research found structured/exact candidate wake gives 100% candidate recall for Inventory, Actor and temporal but 0/13 for Material because new scene objects have no non-semantic structured source. Material always-on caused 26/48 parse/transport failures. No branch entered blind or production; old matrices remained non-scoring diagnostics."]
     },
     {
       "contractId": "VCON-014",
       "domain": "local_inventory",
-      "title": "Post-core routed, stable-ID-guarded dynamic 4B Inventory proposal",
+      "title": "Local-core-routed, stable-ID-guarded dynamic 4B Inventory proposal",
       "status": "compliant",
       "runtimeModelTaskIds": ["local_inventory_observer", "local_dynamic_turn_observer"],
       "outputClass": "state_proposal",
@@ -899,11 +899,11 @@
         "normalCallsWhenTriggered": 1,
         "worstCallsWhenTriggered": 1,
         "targetWorstCallsWhenTriggered": 1,
-        "targetExecution": "serial_shared_dynamic_4b_call",
+        "targetExecution": "Local-only serial_shared_dynamic_4b_call; Low=zero calls",
         "targetMaxLoadedModels": 1
       },
       "testSources": ["tests/hogwarts-mud-dynamic-inventory.test.mjs", "tests/hogwarts-mud-dynamic-turn-observer.test.mjs", "tests/hogwarts-mud-item-system-v2.test.mjs", "tests/hogwarts-mud-model-language-adoption.test.mjs"],
-      "currentDebt": ["The current route is Regex-free and the approved existing-Item stable-ID blind workflow passes through the Item Reducer. Ordinary Turn shares one quality-first qwen3:4b request at context 4096 with routed Identity work. Current production-effect evidence shows an existing-Item placement false negative and requires follow-up. New NPC-owned transfer lifecycle input remains outside Revision 11 and cannot add an Actor directory or narrow Actor coverage without approval."]
+      "currentDebt": ["Standalone Inventory retains its 9,000-character gate. Shared Dynamic Turn composes Inventory without standalone budget admission, then applies its final 20,000-character combined-request gate before the one shared 4B call.", "The current route is Regex-free and the approved existing-Item stable-ID blind workflow passes through the Item Reducer. Ordinary Turn shares one quality-first qwen3:4b request at context 4096 with routed Identity work. Current production-effect evidence shows an existing-Item placement false negative and requires follow-up. New NPC-owned transfer lifecycle input remains outside Revision 11 and cannot add an Actor directory or narrow Actor coverage without approval."]
     },
     {
       "contractId": "VCON-015",
@@ -948,8 +948,8 @@
         "targetExecution": "serial",
         "targetMaxLoadedModels": 1
       },
-      "testSources": ["tests/hogwarts-mud-memory-synapse.test.mjs"],
-      "currentDebt": ["Transport JSON Schema, Zod and proposal allowlist are independently maintained.", "Validator returns the canonical value consumed by the reducer.", "Some rejection categories are inferred from error prose."]
+      "testSources": ["tests/hogwarts-mud-local-appraisal-proposer.test.mjs", "tests/hogwarts-mud-memory-synapse.test.mjs"],
+      "currentDebt": ["The transport parser admits finite nonnegative confidence, then deterministically preserves decimal 0..1, divides percentage notation above 1 through 100 by 100, and clamps greater values to 1 before the existing decimal Appraisal validator and reducer.", "Transport JSON Schema, Zod and proposal allowlist are independently maintained.", "Validator returns the canonical value consumed by the reducer.", "Some rejection categories are inferred from error prose."]
     },
     {
       "contractId": "VCON-016",
@@ -979,10 +979,13 @@
       "failurePolicy": {
         "currentAutomaticRetry": "explicit_user_retranslation_only",
         "targetAutomaticRetry": "forbidden",
+        "currentTurnP0AutomaticRetry": "forbidden",
         "currentProviderFallback": "forbidden",
         "targetProviderFallback": "forbidden",
+        "currentTurnP0ProviderFallback": "forbidden",
         "currentSemanticRegexFallback": "present_contextual_literal_filter",
         "targetSemanticRegexFallback": "forbidden",
+        "currentTurnP0SemanticRegexFallback": "forbidden",
         "stateOnFailure": "world_state_unchanged_translation_error_record_only",
         "paidNarrativeOnFailure": "source_display_fallback_is_resilience_not_acceptance"
       },
@@ -991,11 +994,12 @@
         "normalCallsWhenTriggered": 1,
         "worstCallsWhenTriggered": "one_per_translation_chunk_legacy",
         "targetWorstCallsWhenTriggered": 1,
-        "targetExecution": "serial",
+        "currentTurnP0CallsWhenTriggered": 1,
+        "targetExecution": "selected_provider_current_turn_independent_start; local_tasks_share_fifo",
         "targetMaxLoadedModels": 1
       },
-      "testSources": ["tests/hogwarts-mud-translation.test.mjs", "tests/hogwarts-mud-localization-table.test.mjs"],
-      "currentDebt": ["Transport JSON Schema and Zod shape are independently maintained.", "Contextual Latin-literal meaning still has registered regex ownership.", "One translation action may issue multiple sequential local calls when values split into tasks or chunks.", "Persistence validation spans the browser adapter, authenticated endpoint and server Translation Table service."]
+      "testSources": ["tests/hogwarts-mud-translation.test.mjs", "tests/hogwarts-mud-localization-table.test.mjs", "tests/hogwarts-mud-current-turn-post-translation-parallel.test.mjs"],
+      "currentDebt": ["Transport JSON Schema and Zod shape are independently maintained.", "Contextual Latin-literal meaning still has registered regex ownership.", "One translation action may issue multiple sequential local calls when values split into tasks or chunks.", "Current-message P0 dispatch uses the selected local/google/bing provider independently from selected post; off is zero work. P1-P4 remain behind idle gates, and local tasks share the existing FIFO.", "Persistence validation spans the browser adapter, authenticated endpoint and server Translation Table service."]
     },
     {
       "contractId": "VCON-017",
@@ -1138,7 +1142,7 @@
     {
       "contractId": "VCON-020",
       "domain": "phase2_dynamic_identity",
-      "title": "Dynamic 4B Identity observation proposal",
+      "title": "Local Dynamic 4B Identity observation proposal",
       "status": "compliant",
       "runtimeModelTaskIds": ["local_dynamic_identity_observer", "local_dynamic_turn_observer"],
       "outputClass": "state_proposal",
@@ -1175,7 +1179,7 @@
         "normalCallsWhenTriggered": 1,
         "worstCallsWhenTriggered": 1,
         "targetWorstCallsWhenTriggered": 1,
-        "targetExecution": "serial_shared_dynamic_4b_call",
+        "targetExecution": "Local-only serial_shared_dynamic_4b_call; Low=zero calls",
         "targetMaxLoadedModels": 1
       },
       "testSources": ["tests/hogwarts-mud-dynamic-identity.test.mjs", "tests/hogwarts-mud-dynamic-turn-observer.test.mjs", "tests/hogwarts-mud-npc-identity-observation.test.mjs", ".trae/specs/hogwarts-validator-governance/acceptance/phase2-production-identity-blind-report-attempt-2.md", ".trae/specs/hogwarts-validator-governance/acceptance/phase2-production-identity-independent-report-attempt-4.md"],

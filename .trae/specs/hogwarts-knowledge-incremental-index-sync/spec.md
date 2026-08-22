@@ -2,8 +2,8 @@
 
 ## Status
 
-Revision 1 is approved, implemented, and independently accepted. Technical
-debt closeout remains pending the user's re-inventory decision.
+Revision 2 is approved for implementation. It supersedes Revision 1 only for
+the Qdrant reconciliation scheduling boundary.
 
 ## Design Goal
 
@@ -32,18 +32,52 @@ every record as requiring a new vector.
 State + committed chat
 -> full canonical Knowledge V2 snapshot
 -> JSON exact full reconciliation
--> Qdrant manifest (recordId, contentChecksum)
--> classify current snapshot:
-     unchanged = same ID and checksum
-     upsert = missing ID or changed checksum
-     delete = manifest ID absent from snapshot
--> delete stale Qdrant points
--> embed and upsert only upsert records
--> JSON exact fallback or Qdrant diagnostics
+-> current turn continues through its existing Calendar/Social completion path
+-> server-side Qdrant repair coordinator:
+     current Qdrant manifest
+     -> classify current snapshot
+     -> embed + upsert bounded batches
+     -> persist batch/checkpoint diagnostics
+     -> delete stale points
 ```
 
 The snapshot is always complete. Only the Qdrant embedding work is
-incremental.
+incremental and asynchronous after JSON exact succeeds.
+
+## Revision 2 Scheduling Contract
+
+`syncKnowledgeBase()` remains the turn-owned JSON exact operation. The
+existing `/knowledge/sync` server boundary must acknowledge JSON exact success
+without awaiting preferred Qdrant reconciliation.
+
+The endpoint hands the same immutable snapshot to a server-side repair
+coordinator. The coordinator is keyed by user files root plus timeline ID and
+coalesces newer snapshots over older queued snapshots. It owns only derived
+Qdrant work:
+
+```text
+JSON exact succeeds
+-> enqueue current snapshot
+-> persist queued checkpoint
+-> Qdrant manifest read
+-> deterministic upsert/delete batches
+-> persist completed batch count or precise failed request
+-> retry after the bounded 5s, 15s, 60s cadence
+-> on Node startup, reload unfinished jobs from current JSON exact record files
+   and re-enqueue only the latest snapshot
+```
+
+Qdrant collection health is one transport attempt. It must not consume
+internal HTTP retries before the repair coordinator records the failure and
+owns the 5s/15s/60s background cadence.
+
+Qdrant uses a dedicated non-keepalive HTTP transport. Each request opens a
+fresh socket so a peer-closed idle connection cannot abort an otherwise valid
+point batch before Qdrant receives it.
+
+The current `state_settled` ordering remains unchanged apart from no longer
+awaiting Qdrant work. Calendar, Social, Post, translation, and chat-save
+ordering are not moved by this change.
 
 ## Identity and Reconciliation Contract
 
@@ -92,6 +126,11 @@ It must perform deletion and upsert with the existing deterministic point ID.
 It may use Qdrant payload-only pagination or equivalent deterministic point
 lookup, but must not load vectors merely to compare checksums.
 
+Repair embeddings and point upserts are bounded deterministic batches. A batch
+is considered checkpointed only after its Qdrant point write succeeds; the
+next repair re-reads the manifest and therefore never trusts an in-memory
+cursor as vector truth.
+
 ### Full Rebuild
 
 Qdrant receives the full snapshot for embedding only when:
@@ -109,15 +148,23 @@ chat and never writes authority data.
 ### Failure and Degradation
 
 JSON exact must complete before Qdrant mutation. If Qdrant manifest read,
-delete, or upsert fails:
+embedding, delete, or upsert fails:
 
-1. return current diagnostics as degraded;
+1. persist a derived checkpoint with current snapshot fingerprint, collection
+   generation, aggregate counts, and the precise request/operation failure;
 2. preserve committed State/chat and JSON exact;
-3. do not retry automatically or invoke a model;
-4. allow the next healthy full-snapshot reconciliation to repair missing or
-   stale Qdrant points.
+3. do not invoke a paid model, mutate authority data, or keep the completed
+   turn active;
+4. resume on the bounded background cadence, later exact-sync enqueue, or
+   Node startup from the current Qdrant manifest, repairing only missing or
+   stale points.
 
-The current health/query fallback policy remains unchanged.
+The checkpoint records only bounded IDs/counts/checksums and error metadata.
+It must not contain record text, raw State, chat bodies, model output, Prompt
+content, credentials, or any data that could become a second authority.
+Its error string is a fixed safe category plus an HTTP status or whitelisted
+transport code; it must never persist a raw exception message or response
+detail.
 
 The browser must not take its content-unchanged fast path while its last
 Knowledge diagnostics are degraded. It sends the complete snapshot again until
@@ -128,8 +175,12 @@ a healthy manifest reconciliation clears that degraded result.
 - `knowledgeApiContractVersion=3` remains unchanged because the browser still
   sends the same full snapshot and the public response shape remains
   compatible.
-- Any additive count diagnostics are bounded and live under the existing
-  `knowledgeBase.diagnostics` path.
+- Bounded browser-visible status lives under
+  `knowledgeBase.diagnostics.qdrantRepair`; durable server checkpoint data
+  lives beside the JSON exact timeline index and remains derived-only.
+- Knowledge health returns the latest sanitized repair checkpoint. When its
+  status is `completed` for the same projection fingerprint, the browser
+  clears its old degraded flag without another full JSON exact write.
 - JSON index format and projector version remain unchanged.
 - No State, chat, or collection migration is required.
 - A legacy or incomplete Qdrant payload is treated as non-matching and is
@@ -143,6 +194,8 @@ a healthy manifest reconciliation clears that degraded result.
 | Canonical snapshot and checksum | Knowledge Projector V2 |
 | Full JSON reconciliation and removed-record proof | JSON exact backend |
 | Qdrant manifest, delta classification, vector reuse, point mutation | Qdrant backend |
+| JSON exact handoff and repair enqueue | Knowledge vector service / Knowledge endpoint |
+| Qdrant batch/checkpoint/request diagnostics | server-side Qdrant repair coordinator |
 | Backend ordering and degraded diagnostics | Knowledge vector service |
 | State/chat authority and candidate hydration | Existing Knowledge runtime, unchanged |
 | Current-turn loading boundary and chat persistence | Existing turn/host save workflows, out of scope |
@@ -162,6 +215,13 @@ Focused tests must prove:
 8. existing API/revision/ACL/hydration behavior remains intact.
 9. a content-unchanged snapshot after a degraded Qdrant result reaches
    manifest reconciliation instead of being skipped locally.
+10. JSON exact completes and the turn reaches `state_settled` before a
+    deliberately blocked Qdrant batch completes.
+11. successful Qdrant batches are not re-embedded after a later batch fails.
+12. restart/reload resumes the latest snapshot from manifest state, while a
+    stale queued snapshot cannot mutate the current repair status.
+13. diagnostics identify the failed Qdrant operation and request path without
+    recording secret or record text.
 
 Real-service evidence must use the active save, restart Node, verify health,
 perform a normal changed synchronization, capture total/current/embedded/reused

@@ -13,15 +13,45 @@ import {
     guardPreTurnEvidenceRoutes,
 } from '../domain/pre-turn-route-guards.js';
 import {
-    buildDynamicInventoryContext,
+    selectPostItemContext,
 } from '../domain/inventory-observation-context.js';
 import {
-    createPostTurnSemanticMessages,
-    POST_TURN_JSON_SCHEMA,
+    createLowPostTurnSemanticMessages,
+    LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
 } from '../domain/post-turn-semantic-contract.js';
+import {
+    assemblePostTurnSemanticPrompt,
+} from '../domain/post-turn-prompt-assembly.js';
 import {
     createDynamicObservationAdapter,
 } from './dynamic-observation.js';
+
+/**
+ * Field routes: vcon013.input.itemCandidates,
+ * vcon013.result.inventoryObservationRequired, dynamic.inventory.items,
+ * dynamic.result.inventoryUpdates, dynamic.result.identityObservations.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
+
+class PostSettlementError extends Error {
+    constructor(
+        failureCode,
+        message,
+    ) {
+        super(message);
+        this.postSettlementFailureCode =
+            failureCode;
+    }
+}
+
+function getPostSettlementFailureCode(
+    error,
+) {
+    return error instanceof
+        PostSettlementError
+        ? error.postSettlementFailureCode
+        : 'post_provider_failed';
+}
 
 export function createLocalSemanticAdapter(ports) {
     const {
@@ -36,6 +66,8 @@ export function createLocalSemanticAdapter(ports) {
                 ? 'local'
                 : 'low',
         projectObservedInventoryUpdates,
+        localPostCapacity =
+        {},
         resolveRoleSlots =
         slots =>
             slots || {},
@@ -1192,7 +1224,7 @@ export function createLocalSemanticAdapter(ports) {
         transaction,
         {
             addressing = {},
-            movementOnly = false,
+            settlementOnly = false,
         } = {},
     ) {
         const narrativeText = (
@@ -1232,18 +1264,32 @@ export function createLocalSemanticAdapter(ports) {
             roomId:
                 actor.roomId,
         }));
-        const inventory =
-            buildDynamicInventoryContext(
+        const itemContext =
+            selectPostItemContext({
                 state,
-            );
+                playerAction,
+                narrativeSegments,
+            });
+        const inventory =
+            itemContext.items;
         const playerTurnSequence =
         buildStructuredPlayerTurnSequence(
             playerAction,
             addressing,
         );
+        const addressingActorIds =
+            Array.isArray(
+                /** @type {{ actorIds?: string[] }} */ (
+                    addressing
+                ).actorIds,
+            )
+                ? /** @type {{ actorIds?: string[] }} */ (
+                    addressing
+                ).actorIds
+                : [];
         const targetActorIds = [
             ...(
-                addressing.actorIds ||
+                addressingActorIds ||
             []
             ),
             transaction
@@ -1251,7 +1297,33 @@ export function createLocalSemanticAdapter(ports) {
                 ?.target
                 ?.actorId,
         ].filter(Boolean);
-        const input = {
+        const provider =
+            normalizePostTurnSemanticProvider(
+                state.postTurnSemanticProvider,
+            );
+        const checkTargetActorId =
+            String(
+                transaction
+                    .checkResolution
+                    ?.target
+                    ?.actorId ||
+                '',
+            ).trim();
+        const identityTargetActorIds =
+            checkTargetActorId &&
+            actors.some(actor =>
+                actor.id ===
+                checkTargetActorId)
+                ? [checkTargetActorId]
+                : [];
+        const inspectionTargetActorIds =
+            transaction
+                .checkResolution
+                ?.kind ===
+                'perception'
+                ? identityTargetActorIds
+                : [];
+        let input = {
             clock:
                 state.clock,
             elapsedMinutes:
@@ -1280,10 +1352,84 @@ export function createLocalSemanticAdapter(ports) {
                     .movementPreflight ||
                 null,
         };
-        const provider =
-            normalizePostTurnSemanticProvider(
-                state.postTurnSemanticProvider,
-            );
+        if (provider === 'low') {
+            input = {
+                ...input,
+                itemCandidates:
+                    inventory,
+                identityTargetActorIds,
+                inspectionTargetActorIds,
+            };
+        }
+        const lowSlot =
+            provider === 'low'
+                ? resolveRoleSlots(
+                    state.modelSlots,
+                ).low
+                : null;
+        const promptAssembly =
+            assemblePostTurnSemanticPrompt({
+                provider,
+                input,
+                lowSlot,
+                localCapacity:
+                    localPostCapacity,
+            });
+        input =
+            promptAssembly.input;
+        if (!promptAssembly.fit) {
+            return {
+                observation: {
+                    result: {
+                        schemaVersion: 1,
+                        materialEvents: [],
+                        inventoryObservationRequired:
+                            false,
+                        actorUpdates: [],
+                        temporalClaims: [],
+                        playerMovement: null,
+                        perception: null,
+                    },
+                    diagnostics: {
+                        provider,
+                        providerFailure: true,
+                        failureCode: 'post_no_fit',
+                        promptAssembly:
+                            promptAssembly.diagnostics,
+                    },
+                },
+                narrativeText,
+                materialEvents: [],
+                itemUpdates: [],
+                identityObservations: [],
+                identityDiagnostics: {
+                    routed: false,
+                    modelCalls: 0,
+                },
+                inventoryDiagnostics: {
+                    routed: false,
+                    modelCalls: 0,
+                },
+                temporalClaims: [],
+                temporalDiagnostics: {
+                    valid: false,
+                    accepted: 0,
+                    rejected: 0,
+                    errors: [
+                        'Selected Post provider cannot fit the protected request.',
+                    ],
+                    rejectedClaims: [],
+                    provider,
+                    providerFailure: true,
+                },
+                perception: null,
+                targetActorIds,
+                postSettlementFailure: true,
+                failureCode: 'post_no_fit',
+                promptAssembly:
+                    promptAssembly.diagnostics,
+            };
+        }
         try {
             let observation;
             if (provider === 'local') {
@@ -1321,10 +1467,6 @@ export function createLocalSemanticAdapter(ports) {
                 observation =
                     await response.json();
             } else {
-                const lowSlot =
-                    resolveRoleSlots(
-                        state.modelSlots,
-                    ).low;
                 if (
                     !lowSlot?.profileId ||
                     typeof sendPostTurnSemanticRequest !==
@@ -1337,15 +1479,16 @@ export function createLocalSemanticAdapter(ports) {
                 const roleResponse =
                     await sendPostTurnSemanticRequest(
                         lowSlot,
-                        createPostTurnSemanticMessages(
+                        createLowPostTurnSemanticMessages(
                             input,
                         ),
                         {
                             json: true,
                             jsonSchema:
-                                POST_TURN_JSON_SCHEMA,
+                                LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
                             stream: false,
                             skipRegexPreset: true,
+                            preservePrompt: true,
                         },
                     );
                 const raw =
@@ -1373,7 +1516,8 @@ export function createLocalSemanticAdapter(ports) {
                         },
                     );
                 if (!settled.ok) {
-                    throw new Error(
+                    throw new PostSettlementError(
+                        'post_schema_failed',
                         (
                             await settled.text()
                         ).slice(0, 1_000) ||
@@ -1400,6 +1544,14 @@ export function createLocalSemanticAdapter(ports) {
                 playerAction,
                 narrativeSegments,
             );
+            const acceptedTemporalClaims =
+                temporalValidation
+                    .acceptedClaims ||
+                [];
+            const rejectedTemporalClaims =
+                temporalValidation
+                    .rejectedClaims ||
+                [];
             const perceptionValidation =
             validatePerceptionContract(
                 observation
@@ -1454,7 +1606,8 @@ export function createLocalSemanticAdapter(ports) {
                 rejectedFailedConcealment ||
                 !temporalValidation.valid;
             if (sourceRejected) {
-                throw new Error(
+                throw new PostSettlementError(
+                    'post_guard_failed',
                     'Post-turn semantic proposal was rejected by a deterministic guard.',
                 );
             }
@@ -1465,8 +1618,7 @@ export function createLocalSemanticAdapter(ports) {
             perception;
             observation.result
                 .temporalClaims =
-            temporalValidation
-                .acceptedClaims;
+            acceptedTemporalClaims;
             observation.diagnostics ??= {};
             observation.diagnostics
                 .temporalClaims = {
@@ -1474,63 +1626,185 @@ export function createLocalSemanticAdapter(ports) {
                     temporalValidation
                         .valid,
                     accepted:
-                    temporalValidation
-                        .acceptedClaims
+                    acceptedTemporalClaims
                         .length,
                     rejected:
-                    temporalValidation
-                        .rejectedClaims
+                    rejectedTemporalClaims
                         .length,
                     errors:
                     temporalValidation
                         .errors,
                     rejectedClaims:
-                    temporalValidation
-                        .rejectedClaims,
+                    rejectedTemporalClaims,
                 };
             observation.diagnostics.provider =
                 provider;
+            observation.diagnostics.promptAssembly =
+                promptAssembly.diagnostics;
             recoverObservedActorMovements(
                 observation,
                 state,
                 narrativeText,
             );
-            if (movementOnly) {
+            if (settlementOnly) {
+                const lowInventoryUpdates =
+                    provider === 'low' &&
+                    Array.isArray(
+                        observation
+                            ?.result
+                            ?.inventoryUpdates,
+                    )
+                        ? observation
+                            .result
+                            .inventoryUpdates
+                            .filter((update, index) =>
+                                !rejectNonEnglishObservation(
+                                    observation,
+                                    update,
+                                    [
+                                        'labelEn',
+                                        'appearanceEn',
+                                    ],
+                                    {
+                                        taskId:
+                                        'post_turn_semantic_proposal',
+                                        fieldPrefix:
+                                        `inventoryUpdates[${index}]`,
+                                        recordId:
+                                        String(
+                                            update?.id ||
+                                            index,
+                                        ),
+                                    },
+                                ))
+                        : [];
+                const lowDiagnostics = {
+                    routed: false,
+                    requestedTasks: [],
+                    modelCalls: 0,
+                    source: 'low_direct',
+                    identity: {
+                        rejections:
+                            observation
+                                ?.diagnostics
+                                ?.lowAuxiliary
+                                ?.identityRejected ||
+                            [],
+                    },
+                    inventory: {
+                        rejections:
+                            observation
+                                ?.diagnostics
+                                ?.lowAuxiliary
+                                ?.inventoryRejected ||
+                            [],
+                    },
+                };
                 return {
                     observation,
                     narrativeText,
                     materialEvents: [],
-                    itemUpdates: [],
-                    identityObservations: [],
-                    identityDiagnostics: {
-                        routed: false,
-                        modelCalls: 0,
-                    },
-                    inventoryDiagnostics: {
-                        routed: false,
-                        modelCalls: 0,
-                    },
-                    temporalClaims: [],
+                    itemUpdates:
+                        provider === 'low'
+                            ? projectObservedInventoryUpdates(
+                                lowInventoryUpdates,
+                                state,
+                                playerAction,
+                                narrativeText,
+                            )
+                            : [],
+                    identityObservations:
+                        provider === 'low' &&
+                        Array.isArray(
+                            observation
+                                ?.result
+                                ?.identityObservations,
+                        )
+                            ? observation
+                                .result
+                                .identityObservations
+                            : [],
+                    identityDiagnostics:
+                        provider === 'low'
+                            ? lowDiagnostics
+                            : {
+                                routed: false,
+                                modelCalls: 0,
+                            },
+                    inventoryDiagnostics:
+                        provider === 'low'
+                            ? lowDiagnostics
+                            : {
+                                routed: false,
+                                modelCalls: 0,
+                            },
+                    temporalClaims:
+                        acceptedTemporalClaims,
                     temporalDiagnostics:
                         observation
                             .diagnostics
                             .temporalClaims,
-                    perception: null,
+                    perception,
                     targetActorIds,
                 };
             }
             const dynamicObservation =
-                await requestDynamicTurnObservation(
-                    playerAction,
-                    narrativeSegments,
-                    actors,
-                    inventory,
-                    transaction
-                        .checkResolution,
-                    observation
-                        ?.result
-                        ?.inventoryObservationRequired,
-                );
+                provider === 'local'
+                    ? await requestDynamicTurnObservation(
+                        playerAction,
+                        narrativeSegments,
+                        actors,
+                        inventory,
+                        transaction
+                            .checkResolution,
+                        observation
+                            ?.result
+                            ?.inventoryObservationRequired,
+                    )
+                    : {
+                        identityObservations:
+                            Array.isArray(
+                                observation
+                                    ?.result
+                                    ?.identityObservations,
+                            )
+                                ? observation
+                                    .result
+                                    .identityObservations
+                                : [],
+                        inventoryUpdates:
+                            Array.isArray(
+                                observation
+                                    ?.result
+                                    ?.inventoryUpdates,
+                            )
+                                ? observation
+                                    .result
+                                    .inventoryUpdates
+                                : [],
+                        diagnostics: {
+                            routed: false,
+                            requestedTasks: [],
+                            modelCalls: 0,
+                            source: 'low_direct',
+                            identity: {
+                                rejections:
+                                    observation
+                                        ?.diagnostics
+                                        ?.lowAuxiliary
+                                        ?.identityRejected ||
+                                    [],
+                            },
+                            inventory: {
+                                rejections:
+                                    observation
+                                        ?.diagnostics
+                                        ?.lowAuxiliary
+                                        ?.inventoryRejected ||
+                                    [],
+                            },
+                        },
+                    };
             observation.diagnostics ??= {};
             observation.diagnostics
                 .inventory =
@@ -1550,7 +1824,9 @@ export function createLocalSemanticAdapter(ports) {
                             ],
                             {
                                 taskId:
-                                'local_inventory_observer',
+                                provider === 'low'
+                                    ? 'post_turn_semantic_proposal'
+                                    : 'local_inventory_observer',
                                 fieldPrefix:
                                 `inventoryUpdates[${index}]`,
                                 recordId:
@@ -1587,8 +1863,7 @@ export function createLocalSemanticAdapter(ports) {
                     dynamicObservation
                         .diagnostics,
                 temporalClaims:
-                    temporalValidation
-                        .acceptedClaims,
+                    acceptedTemporalClaims,
                 temporalDiagnostics:
                     observation
                         .diagnostics
@@ -1597,13 +1872,8 @@ export function createLocalSemanticAdapter(ports) {
                 targetActorIds,
             };
         } catch (error) {
-            const movementSettlementFailure =
-                transaction
-                    ?.movementPreflight
-                    ?.triggered ===
-                true;
             console.warn(
-                '[Hogwarts MUD] Post-turn semantic provider failed; committing narrative without observations',
+                '[Hogwarts MUD] Selected Post provider failed; preserving the pending turn',
                 error,
             );
             return {
@@ -1626,6 +1896,10 @@ export function createLocalSemanticAdapter(ports) {
                     diagnostics: {
                         provider,
                         providerFailure: true,
+                        failureCode:
+                            getPostSettlementFailureCode(
+                                error,
+                            ),
                         error:
                         String(
                             error?.message ||
@@ -1664,7 +1938,13 @@ export function createLocalSemanticAdapter(ports) {
                 perception:
                 null,
                 targetActorIds,
-                movementSettlementFailure,
+                postSettlementFailure: true,
+                failureCode:
+                    getPostSettlementFailureCode(
+                        error,
+                    ),
+                promptAssembly:
+                    promptAssembly.diagnostics,
             };
         }
     }

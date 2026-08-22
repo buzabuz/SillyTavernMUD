@@ -6,10 +6,12 @@ import {
     createPlayerMovementPreflight,
 } from '../public/scripts/extensions/hogwarts-mud/domain/movement.js';
 import {
-    isPendingMovementSettlementCurrent,
     settlePostPlayerMovement,
     validatePostPlayerMovement,
 } from '../public/scripts/extensions/hogwarts-mud/domain/movement-post-settlement.js';
+import {
+    isPendingPostSettlementCurrent,
+} from '../public/scripts/extensions/hogwarts-mud/domain/pending-post-settlement.js';
 import {
     reconcileSpatialState,
 } from '../public/scripts/extensions/hogwarts-mud/domain/spatial-reconciliation.js';
@@ -165,7 +167,7 @@ test('reload reconciliation never replays a movement marker', () => {
     );
 });
 
-test('pending movement settlement rejects a changed State revision', () => {
+test('pending Post settlement rejects a changed State revision', () => {
     const state =
         createCurrentPlayingState();
     state.timelineEpoch = 'timeline-a';
@@ -177,17 +179,21 @@ test('pending movement settlement rejects a changed State revision', () => {
     };
 
     assert.equal(
-        isPendingMovementSettlementCurrent(
+        isPendingPostSettlementCurrent(
             state,
-            pending,
+            {
+                ...pending,
+                version: 1,
+            },
         ),
         false,
     );
     assert.equal(
-        isPendingMovementSettlementCurrent(
+        isPendingPostSettlementCurrent(
             state,
             {
                 ...pending,
+                version: 1,
                 stateRevision: 7,
             },
         ),

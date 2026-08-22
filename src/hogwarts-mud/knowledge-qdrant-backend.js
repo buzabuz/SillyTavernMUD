@@ -55,6 +55,38 @@ function waitForRetry(delayMs) {
         ));
 }
 
+function createQdrantRequestError(
+    {
+        operation,
+        method,
+        pathname,
+        status = null,
+    },
+    cause,
+) {
+    const error =
+        cause instanceof Error
+            ? cause
+            : new Error(String(cause || 'Qdrant request failed.'));
+    error.qdrantRequest = {
+        operation:
+            String(operation || 'request'),
+        method:
+            String(method || 'GET'),
+        path:
+            String(pathname || ''),
+        status:
+            status !== null &&
+            status !== undefined &&
+            Number.isSafeInteger(
+                Number(status),
+            )
+                ? Number(status)
+                : null,
+    };
+    return error;
+}
+
 function getCollectionVectorSize(result) {
     const vectors =
         result?.result?.config
@@ -328,6 +360,7 @@ export class QdrantKnowledgeBackend {
             method = 'GET',
             body,
             allowNotFound = false,
+            operation = 'request',
             retryable,
         } = {},
     ) {
@@ -393,7 +426,15 @@ export class QdrantKnowledgeBackend {
                         QDRANT_RETRY_DELAYS_MS
                             .length
                 ) {
-                    throw error;
+                    throw createQdrantRequestError(
+                        {
+                            operation,
+                            method:
+                                requestMethod,
+                            pathname,
+                        },
+                        error,
+                    );
                 }
                 await waitForRetry(
                     QDRANT_RETRY_DELAYS_MS[
@@ -428,8 +469,18 @@ export class QdrantKnowledgeBackend {
                 const detail =
                     await response.text()
                         .catch(() => '');
-                throw new Error(
-                    `Qdrant ${requestMethod} ${pathname} failed with ${response.status}: ${detail.slice(0, 500)}`,
+                throw createQdrantRequestError(
+                    {
+                        operation,
+                        method:
+                            requestMethod,
+                        pathname,
+                        status:
+                            response.status,
+                    },
+                    new Error(
+                        `Qdrant ${requestMethod} ${pathname} failed with ${response.status}: ${detail.slice(0, 500)}`,
+                    ),
                 );
             }
             if (response.status === 204) {
@@ -462,6 +513,9 @@ export class QdrantKnowledgeBackend {
                     }`,
                     {
                         allowNotFound: true,
+                        operation:
+                            'collection_health',
+                        retryable: false,
                     },
                 );
             const compatible =
@@ -517,6 +571,9 @@ export class QdrantKnowledgeBackend {
                         error?.message ||
                         error,
                     ),
+                qdrantRequest:
+                    error?.qdrantRequest ||
+                    null,
             };
         }
     }
@@ -548,6 +605,8 @@ export class QdrantKnowledgeBackend {
             }`,
             {
                 method: 'PUT',
+                operation:
+                    'collection_create',
                 retryable: false,
                 body: {
                     vectors: {
@@ -593,15 +652,33 @@ export class QdrantKnowledgeBackend {
     }
 
     async embedTexts(texts, isQuery) {
-        const vectors =
-            await this.embedder(
-                texts,
+        let vectors;
+        try {
+            vectors =
+                await this.embedder(
+                    texts,
+                    {
+                        isQuery,
+                        model:
+                            this.embeddingModel,
+                    },
+                );
+        } catch (error) {
+            throw createQdrantRequestError(
                 {
-                    isQuery,
-                    model:
-                        this.embeddingModel,
+                    operation:
+                        isQuery
+                            ? 'query_embedding'
+                            : 'record_embedding',
+                    method: 'LOCAL',
+                    pathname:
+                        `embedding/${
+                            this.embeddingModel
+                        }`,
                 },
+                error,
             );
+        }
         if (
             !Array.isArray(vectors) ||
             vectors.length !==
@@ -661,6 +738,30 @@ export class QdrantKnowledgeBackend {
             this.collectionName(
                 timelineId,
             );
+        const points =
+            records.map(
+                (
+                    record,
+                    index,
+                ) => ({
+                    id:
+                        deterministicVectorPointId(
+                            record
+                                .recordId,
+                        ),
+                    vector:
+                        vectors[
+                            index
+                        ],
+                    payload:
+                        this.pointPayload(
+                            record,
+                        ),
+                }),
+            );
+        const requestBody = {
+            points,
+        };
         await this.request(
             `/collections/${
                 encodeURIComponent(
@@ -669,30 +770,10 @@ export class QdrantKnowledgeBackend {
             }/points?wait=true`,
             {
                 method: 'PUT',
+                operation:
+                    'point_upsert',
                 retryable: false,
-                body: {
-                    points:
-                        records.map(
-                            (
-                                record,
-                                index,
-                            ) => ({
-                                id:
-                                    deterministicVectorPointId(
-                                        record
-                                            .recordId,
-                                    ),
-                                vector:
-                                    vectors[
-                                        index
-                                    ],
-                                payload:
-                                    this.pointPayload(
-                                        record,
-                                    ),
-                            }),
-                        ),
-                },
+                body: requestBody,
             },
         );
     }
@@ -712,6 +793,8 @@ export class QdrantKnowledgeBackend {
             }/points/delete?wait=true`,
             {
                 method: 'POST',
+                operation:
+                    'point_delete',
                 retryable: false,
                 body: {
                     points:
@@ -740,6 +823,8 @@ export class QdrantKnowledgeBackend {
                     }/points/scroll`,
                     {
                         method: 'POST',
+                        operation:
+                            'manifest_read',
                         retryable: false,
                         body: {
                             limit: 256,
@@ -852,6 +937,9 @@ export class QdrantKnowledgeBackend {
     async reconcile(
         input,
         health = null,
+        {
+            batchSize = 0,
+        } = {},
     ) {
         this.assertRevision(
             input.timelineId,
@@ -860,28 +948,50 @@ export class QdrantKnowledgeBackend {
         const currentHealth =
             health ||
             await this.health(input);
+        let rebuilt = false;
         if (!currentHealth.ok) {
             if (
                 !currentHealth.indexMissing &&
                 !currentHealth.indexIncompatible
             ) {
-                throw new Error(
-                    currentHealth.error ||
-                    'Qdrant health failed.',
+                throw createQdrantRequestError(
+                    currentHealth.qdrantRequest || {
+                        operation:
+                            'collection_health',
+                        method: 'GET',
+                        pathname: '',
+                    },
+                    new Error(
+                        currentHealth.error ||
+                        'Qdrant health failed.',
+                    ),
                 );
             }
-            const rebuilt =
-                await this.rebuild(input);
-            return {
-                ...rebuilt,
-                embedded:
-                    normalizeBackendRecords(
-                        input.records,
-                    ).length,
-                reused: 0,
-                deleted: 0,
-                reconciled: false,
-            };
+            if (currentHealth.indexIncompatible) {
+                await this.request(
+                    `/collections/${
+                        encodeURIComponent(
+                            this.collectionName(
+                                input.timelineId,
+                            ),
+                        )
+                    }`,
+                    {
+                        method: 'DELETE',
+                        allowNotFound: true,
+                        operation:
+                            'collection_rebuild_reset',
+                        retryable: false,
+                    },
+                );
+                this.revisions.delete(
+                    input.timelineId,
+                );
+            }
+            await this.ensureCollection(
+                input.timelineId,
+            );
+            rebuilt = true;
         }
         const records =
             normalizeBackendRecords(
@@ -915,24 +1025,41 @@ export class QdrantKnowledgeBackend {
                 .map(([, entry]) =>
                     entry.pointId),
         ];
+        const normalizedBatchSize =
+            Math.max(
+                0,
+                Number(batchSize) || 0,
+            );
+        const batchRecords =
+            normalizedBatchSize > 0
+                ? upsertRecords.slice(
+                    0,
+                    normalizedBatchSize,
+                )
+                : upsertRecords;
         const vectors =
-            upsertRecords.length
+            batchRecords.length
                 ? await this.embedTexts(
-                    upsertRecords.map(record =>
+                    batchRecords.map(record =>
                         record.text),
                     false,
                 )
                 : [];
         await this.putPoints(
             input.timelineId,
-            upsertRecords,
+            batchRecords,
             vectors,
         );
+        const complete =
+            batchRecords.length ===
+            upsertRecords.length;
         const deleted =
-            await this.deletePointIds(
-                input.timelineId,
-                deletedPointIds,
-            );
+            complete
+                ? await this.deletePointIds(
+                    input.timelineId,
+                    deletedPointIds,
+                )
+                : 0;
         this.revisions.set(
             input.timelineId,
             input.stateRevision,
@@ -946,14 +1073,19 @@ export class QdrantKnowledgeBackend {
             collectionGeneration:
                 this.generation,
             upserted:
-                upsertRecords.length,
+                batchRecords.length,
             embedded:
-                upsertRecords.length,
+                batchRecords.length,
             reused:
                 records.length -
                 upsertRecords.length,
             deleted,
-            reconciled: true,
+            pendingRecordCount:
+                upsertRecords.length -
+                batchRecords.length,
+            complete,
+            rebuilt,
+            reconciled: complete,
         };
     }
 
@@ -1094,6 +1226,8 @@ export class QdrantKnowledgeBackend {
             {
                 method: 'DELETE',
                 allowNotFound: true,
+                operation:
+                    'collection_rebuild_reset',
                 retryable: false,
             },
         );

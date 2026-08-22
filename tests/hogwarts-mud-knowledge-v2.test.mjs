@@ -560,6 +560,24 @@ test('JSON backend rejects stale sync and rebuilds after index loss', async t =>
         replace: true,
     };
     await backend.upsert(input);
+    const repairSnapshots =
+        backend.listRepairSnapshots();
+    assert.equal(
+        repairSnapshots.length,
+        1,
+    );
+    assert.deepEqual(
+        repairSnapshots[0].records.map(record =>
+            record.recordId).sort(),
+        input.records.map(record =>
+            record.recordId).sort(),
+    );
+    assert.equal(
+        repairSnapshots[0].projectionFingerprint,
+        backend.readIndex(
+            input.timelineId,
+        ).projectionFingerprint,
+    );
     const publicResult =
         await backend.query({
             timelineId:
@@ -1046,6 +1064,52 @@ test('Qdrant REST request retries transient network and HTTP failures before suc
     assert.equal(
         attempts,
         4,
+    );
+});
+
+test('Qdrant collection health leaves retry cadence to the repair coordinator', async () => {
+    let attempts = 0;
+    const backend =
+        qdrantRequestBackend(
+            async () => {
+                attempts += 1;
+                return jsonResponse(
+                    503,
+                    {
+                        status:
+                            'warming',
+                    },
+                );
+            },
+        );
+
+    const health =
+        await backend.health({
+            timelineId: 'timeline_health',
+        });
+
+    assert.equal(
+        health.ok,
+        false,
+    );
+    assert.equal(
+        attempts,
+        1,
+    );
+    assert.deepEqual(
+        health.qdrantRequest,
+        {
+            operation:
+                'collection_health',
+            method: 'GET',
+            path:
+                `/collections/${
+                    backend.collectionName(
+                        'timeline_health',
+                    )
+                }`,
+            status: 503,
+        },
     );
 });
 
@@ -1680,12 +1744,19 @@ test('knowledge API reports stale revisions and audience-filtered diagnostics', 
         currentClientHealth.status,
         200,
     );
+    const currentHealth =
+        await currentClientHealth
+            .json();
     assert.equal(
-        (
-            await currentClientHealth
-                .json()
-        ).knowledgeApiContractVersion,
+        currentHealth
+            .knowledgeApiContractVersion,
         KNOWLEDGE_API_CONTRACT_VERSION,
+    );
+    assert.equal(
+        currentHealth
+            .qdrantRepair
+            .status,
+        'idle',
     );
     const sync = async input =>
         fetch(

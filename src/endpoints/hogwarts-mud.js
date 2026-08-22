@@ -15,6 +15,9 @@ import {
     createConfiguredKnowledgeService,
 } from '../hogwarts-mud/knowledge-backend-factory.js';
 import {
+    createQdrantRepairCoordinator,
+} from '../hogwarts-mud/knowledge-qdrant-repair-coordinator.js';
+import {
     TranslationTableError,
     createTranslationTableService,
 } from '../hogwarts-mud/localization-table.js';
@@ -54,6 +57,12 @@ import {
 import { runTurnSettlementGraph } from '../hogwarts-mud/turn-settlement-graph.js';
 import { clientRelativePath } from '../util.js';
 
+/**
+ * Field routes: vcon013.result.inventoryUpdates,
+ * vcon013.result.identityObservations.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
+
 export const router = express.Router();
 
 const KNOWLEDGE_CATEGORY_SET =
@@ -65,13 +74,72 @@ const MAX_KNOWLEDGE_BODY_LENGTH =
     8_000_000;
 const translationTableServices =
     new Map();
+const knowledgeRuntimes =
+    new Map();
+
+function getKnowledgeRuntimeForFilesRoot(
+    value,
+) {
+    const filesRoot =
+        path.resolve(
+            value,
+        );
+    let runtime =
+        knowledgeRuntimes.get(filesRoot);
+    if (!runtime) {
+        const service =
+            createConfiguredKnowledgeService({
+                filesRoot,
+            });
+        runtime = {
+            service,
+            qdrantRepair:
+                createQdrantRepairCoordinator({
+                    service,
+                }),
+        };
+        knowledgeRuntimes.set(
+            filesRoot,
+            runtime,
+        );
+    }
+    return runtime;
+}
+
+function getKnowledgeRuntime(request) {
+    return getKnowledgeRuntimeForFilesRoot(
+        request.user
+            .directories.files,
+    );
+}
+
+export function resumeHogwartsKnowledgeRepairs(
+    userDirectories,
+) {
+    const resumed = [];
+    for (
+        const directories
+        of userDirectories || []
+    ) {
+        if (!directories?.files) {
+            continue;
+        }
+        const runtime =
+            getKnowledgeRuntimeForFilesRoot(
+                directories.files,
+            );
+        resumed.push(
+            ...runtime
+                .qdrantRepair
+                .resumePersisted(),
+        );
+    }
+    return resumed;
+}
 
 function getKnowledgeService(request) {
-    return createConfiguredKnowledgeService({
-        filesRoot:
-            request.user
-                .directories.files,
-    });
+    return getKnowledgeRuntime(request)
+        .service;
 }
 
 function getTranslationTableService(
@@ -583,20 +651,30 @@ router.post(
                 return response
                     .sendStatus(400);
             }
-            const result =
-                await getKnowledgeService(
+            const timelineId =
+                String(
+                    request.body
+                        .timelineId,
+                );
+            const runtime =
+                getKnowledgeRuntime(
                     request,
-                ).health({
-                    timelineId:
-                        String(
-                            request.body
-                                .timelineId,
-                        ),
-                });
+                );
+            const result =
+                await runtime
+                    .service
+                    .health({
+                        timelineId,
+                    });
             return response.json({
                 knowledgeApiContractVersion:
                     KNOWLEDGE_API_CONTRACT_VERSION,
                 ...result,
+                qdrantRepair:
+                    runtime.qdrantRepair
+                        .getCheckpoint({
+                            timelineId,
+                        }),
             });
         } catch (error) {
             return sendKnowledgeError(
@@ -647,10 +725,22 @@ router.post(
                     request.body
                         .replace === true,
             };
-            const result =
-                await getKnowledgeService(
+            const runtime =
+                getKnowledgeRuntime(
                     request,
-                ).sync(input);
+                );
+            const result =
+                await runtime
+                    .service
+                    .vectorService
+                    .syncExact(input);
+            const qdrantRepair =
+                runtime.qdrantRepair.enqueue({
+                    ...result.input,
+                    projectionFingerprint:
+                        result.exact
+                            .projectionFingerprint,
+                });
             return response.json({
                 knowledgeApiContractVersion:
                     KNOWLEDGE_API_CONTRACT_VERSION,
@@ -667,15 +757,23 @@ router.post(
                         ),
                     ),
                 records:
-                    result.exact
+                    result
+                        .exact
                         .records,
                 removed:
-                    result.exact
+                    result
+                        .exact
                         .removed ||
                     [],
                 diagnostics:
-                    result
-                        .diagnostics,
+                    {
+                        ...result
+                            .diagnostics,
+                        degraded:
+                            qdrantRepair.status !==
+                            'completed',
+                        qdrantRepair,
+                    },
             });
         } catch (error) {
             return sendKnowledgeError(
@@ -1635,8 +1733,8 @@ router.post('/post/observe/settle', async (request, response) => {
             .sendStatus(400);
     }
     try {
-        return response.json(
-            settlePostTurnModelResult(
+        const settled =
+            await settlePostTurnModelResult(
                 input,
                 raw,
                 {
@@ -1645,7 +1743,9 @@ router.post('/post/observe/settle', async (request, response) => {
                     transport:
                         'connection_profile',
                 },
-            ),
+            );
+        return response.json(
+            settled,
         );
     } catch (error) {
         console.warn(

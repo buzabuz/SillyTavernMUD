@@ -2185,7 +2185,7 @@ test('model adapter records context limiting and the resulting model call', asyn
     );
 });
 
-test('production turn workflow overlaps Low post with P0 translation without awaiting translation completion', async () => {
+test('production turn workflow overlaps Low post with P0 translation before committing', async () => {
     const postGate =
         deferred();
     const translationGate =
@@ -2219,10 +2219,11 @@ test('production turn workflow overlaps Low post with P0 translation without awa
     );
 
     postGate.resolve();
-    await turnPromise;
+    await new Promise(resolve =>
+        setImmediate(resolve));
     assert.equal(
         turnCompleted,
-        true,
+        false,
     );
     assert.equal(
         harness.workflowOrder
@@ -2233,8 +2234,11 @@ test('production turn workflow overlaps Low post with P0 translation without awa
     );
 
     translationGate.resolve();
-    await harness
-        .translationCompletion;
+    await turnPromise;
+    assert.equal(
+        turnCompleted,
+        true,
+    );
     assert.equal(
         harness.workflowOrder
             .at(-1),

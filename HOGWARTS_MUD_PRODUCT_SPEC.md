@@ -1,6 +1,6 @@
 # Hogwarts MUD Product PRD Registry
 
-Last updated: 2026-08-19
+Last updated: 2026-08-22
 
 ## Purpose
 
@@ -29,7 +29,12 @@ linked authority wins and this registry must be corrected in the same change.
 | `hogwarts-language-structured-input-identity-codes` | Revision 4 approved; Phase 2 implementation in progress | [PRD](.trae/specs/hogwarts-language-structured-input-identity-codes/prd.md) |
 | `hogwarts-causal-pacing-world-facts-story-arcs` | Revision 1 research TODO; 业务合同未定义，禁止模型与生产设计 | [PRD](.trae/specs/hogwarts-causal-pacing-world-facts-story-arcs/prd.md) |
 | `hogwarts-validator-governance` | Revision 25 implementation complete; final acceptance blocked on independent real provider/timeline evidence; fine-tuning deferred | [PRD](.trae/specs/hogwarts-validator-governance/prd.md) |
-| `hogwarts-knowledge-incremental-index-sync` | Revision 1 implemented and independently accepted; core-change debt closeout pending | [PRD](.trae/specs/hogwarts-knowledge-incremental-index-sync/prd.md) |
+| `hogwarts-current-turn-post-translation-parallel` | Revision 2 implementation complete; 61/61 self-tests pass; browser acceptance pending | [PRD](.trae/specs/hogwarts-current-turn-post-translation-parallel/prd.md) |
+| `hogwarts-knowledge-incremental-index-sync` | Revision 2 approved; resumable post-JSON-exact Qdrant repair implementation in progress | [PRD](.trae/specs/hogwarts-knowledge-incremental-index-sync/prd.md) |
+| `hogwarts-pre-validated-post-settled-player-movement` | L2 specification complete; awaiting implementation approval | [PRD](.trae/specs/hogwarts-pre-validated-post-settled-player-movement/prd.md) |
+| `hogwarts-selected-post-capacity-settlement-safety` | L2 approved; implementation in progress | [PRD](.trae/specs/hogwarts-selected-post-capacity-settlement-safety/prd.md) |
+| `hogwarts-auxiliary-observation-normalization` | L1 implemented and verified | [PRD](.trae/specs/hogwarts-auxiliary-observation-normalization/prd.md) |
+| `hogwarts-low-post-chain-replacement` | L2 implementation in progress: Low complete Post chain and provider-neutral Item context | [PRD](.trae/specs/hogwarts-low-post-chain-replacement/prd.md) |
 
 ## Implemented And Accepted PRDs
 
@@ -48,6 +53,7 @@ linked authority wins and this registry must be corrected in the same change.
 | --- | --- | --- |
 | Runtime contract index | [spec.md](.trae/specs/hogwarts-runtime-contracts/spec.md) | Current production transactions and module ownership |
 | Runtime field registry | [state-fields.md](.trae/specs/hogwarts-runtime-contracts/state-fields.md) | Field meaning, sole writer, readers, compatibility, and diagnostics |
+| Model field-route registry | [model-field-routes.md](.trae/specs/hogwarts-runtime-contracts/model-field-routes.md) | Prompt/Schema/transient field source, selector, route edges, consumers, guards, and State outcome |
 | Technical-debt ledger | [TECH_DEBT.md](.trae/specs/TECH_DEBT.md) | Cross-change debt and feature/change counts |
 | Change governance | [SKILL.md](.trae/skills/hogwarts-change-governance/SKILL.md) | Mandatory artifacts, approval, evidence, and maintenance gates |
 

@@ -1645,6 +1645,14 @@ ${CANON_WIT_TONE_CONTRACT}`,
         if (!state?.scene || state.phase !== 'playing') {
             throw new Error('当前没有可以结束的活动场景。');
         }
+        if (
+            state.turn?.status ===
+            'post_unsettled'
+        ) {
+            throw new Error(
+                'Post 结算尚未完成，请先重试 Post 或丢弃本回合。',
+            );
+        }
         ensureSceneLifecycleState(state);
         const committedIntent = state.scene.nextSceneIntent;
         const defaultHint = formatNextSceneIntent(committedIntent);

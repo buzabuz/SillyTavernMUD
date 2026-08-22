@@ -21,6 +21,7 @@
 - `knowledge-runtime.md`：Knowledge V2、可降级后端、Planner/Relational Synapse、Prompt 权威、调用预算与 Task 7 修复。
 - `spell-observation.md`：咒语观测 D20、获知边界、教学旁路与 Catalog 权威。
 - `state-fields.md`：当前 State、消息、Prompt、Knowledge 与 UI 字段的唯一文档注册表；Low 非法输出直接失败且不 repair。
+- `model-field-routes.md`：所有已登记模型输入/输出、Prompt 投影、路由字段、瞬态 proposal carrier 的来源、选择规则、消费者、下游模型边、Guard 与最终 State 结果；同名字段不可据此推断可替换。
 - `item-lifecycle.md`：当前 Item V3 proposal、Reducer、physicalForm、迁移、呈现与 UI 可见性。
 - `../add-calendar-storyline-system/spec.md`：Calendar V2 四层权威，以及 V2.1 日期视图、导演边界、并发日程、自由开场、迁移与 UI。
 
@@ -234,9 +235,12 @@ Hogwarts metadata/chat save
 新增或修改运行时字段时必须同时完成：
 
 1. 在 `state-fields.md` 登记字段路径、唯一写入者和读取者。
-2. 在对应 domain module 中实现 normalize/validate/reducer。
-3. 在 workflow 中只做事务编排，不复制规则。
-4. 为旧档提供确定性迁移或明确版本门槛。
-5. 为消息或世界状态补可读取 diagnostics。
-6. 添加至少一个正常路径和一个边界回归测试。
-7. 更新 `progress.md` 的证据等级。
+2. 如果字段进入模型、Prompt、Schema、路由、瞬态 transaction 或
+   Reducer carrier，在 `model-field-routes.md` 登记稳定 route ID、来源、
+   筛选/排除、受众、消费者、下游任务、Guard、writer 与失败结果。
+3. 在对应 domain module 中实现 normalize/validate/reducer。
+4. 在 workflow 中只做事务编排，不复制规则。
+5. 为旧档提供确定性迁移或明确版本门槛。
+6. 为消息或世界状态补可读取 diagnostics。
+7. 添加至少一个正常路径和一个边界回归测试。
+8. 更新 `progress.md` 的证据等级。

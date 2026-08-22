@@ -18,9 +18,14 @@ import {
     getInteriorMount,
 } from '../domain/interior-mount.js';
 import {
-    isPendingMovementSettlementCurrent,
     validatePostPlayerMovement,
 } from '../domain/movement-post-settlement.js';
+import {
+    createPendingPostSettlement,
+    findPendingPostSettlement,
+    isPendingPostSettlementCurrent,
+    isPendingPostSettlementTail,
+} from '../domain/pending-post-settlement.js';
 
 function capturePostTurnAppraisalGuard(
     state,
@@ -158,6 +163,7 @@ export function createTurnWorkflow(ports) {
         createSceneMomentumDirective,
         createTurnPerformanceBudget,
         createTurnRetryCheckpoint,
+        restoreTurnRetryCheckpoint,
         enqueueCurrentTurnLocalizationCandidates =
         async () => ({
             started: false,
@@ -229,6 +235,357 @@ export function createTurnWorkflow(ports) {
         discardTurnDiagnostics =
         () => {},
     } = ports;
+
+    async function preservePendingPostSettlement({
+        playerMessageId,
+        sceneMessageId,
+        sceneMessage,
+        transaction,
+        movementPreflight,
+        preTurnCheckpoint,
+        observation,
+        failureCode,
+        retryCount = 0,
+        baseState = null,
+    }) {
+        const context = getContext();
+        const state =
+            baseState
+                ? structuredClone(
+                    baseState,
+                )
+                : getMudState();
+        sceneMessage.extra ??= {};
+        sceneMessage.extra.hogwartsMud ??= {};
+        delete sceneMessage.extra
+            .hogwartsMud
+            .turnTransaction;
+        sceneMessage.extra
+            .hogwartsMud
+            .pendingPostSettlement =
+            createPendingPostSettlement({
+                state,
+                playerMessageId,
+                sceneMessageId,
+                transactionDraft:
+                    transaction,
+                movementPreflight,
+                preTurnCheckpoint,
+                provider:
+                    observation?.observation
+                        ?.diagnostics?.provider ||
+                    state.postTurnSemanticProvider,
+                failureCode,
+                promptAssembly:
+                    observation?.promptAssembly ||
+                    observation?.observation
+                        ?.diagnostics
+                        ?.promptAssembly,
+                retryCount,
+            });
+        state.turn ??= {};
+        state.turn.status =
+            'post_unsettled';
+        state.turn.error = '';
+        context.chatMetadata.hogwartsMud =
+            state;
+        await context.saveMetadata();
+        sceneMessage.extra
+            .hogwartsMud
+            .pendingPostSettlement
+            .stateRevision =
+            Number(
+                getMudState()
+                    ?.stateRevision ||
+                0,
+            );
+        await context.saveChat();
+        renderAll();
+        return sceneMessage.extra
+            .hogwartsMud
+            .pendingPostSettlement;
+    }
+
+    function integratePostObservation(
+        transaction,
+        observation,
+        state,
+        playerAction,
+        playerMessageId,
+        sceneMessageId,
+        {
+            movementPreflight = null,
+            activationSchemaIds = [],
+        } = {},
+    ) {
+        const movementValidation =
+            validatePostPlayerMovement(
+                movementPreflight,
+                observation
+                    .observation
+                    ?.result
+                    ?.playerMovement,
+                transaction.segments,
+            );
+        if (!movementValidation.valid) {
+            return {
+                valid: false,
+                failureCode:
+                    'post_candidate_rejected',
+            };
+        }
+        if (movementPreflight) {
+            transaction.playerMovement =
+                movementValidation.value;
+        }
+        transaction.materialEvents =
+            observation.materialEvents;
+        transaction.identityObservations =
+            observation.identityObservations ||
+            [];
+        recordTurnDiagnostic(
+            'temporal_claim_validation',
+            {
+                ...(
+                    observation.temporalDiagnostics ||
+                    {
+                        valid: true,
+                        accepted: 0,
+                        rejected: 0,
+                    }
+                ),
+                persisted: false,
+            },
+        );
+        if (
+            Number(
+                observation
+                    .temporalDiagnostics
+                    ?.rejected ||
+                0,
+            ) > 0
+        ) {
+            transaction.settlementWarnings = [
+                ...(
+                    transaction
+                        .settlementWarnings ||
+                    []
+                ),
+                {
+                    code:
+                        'temporal_claim_rejected',
+                    detail:
+                        'Narrative remains visible; unsupported temporal claims did not affect clock or Calendar State.',
+                },
+            ].slice(-24);
+        }
+        const itemSourceEventId =
+            `${
+                state.scene?.id ||
+                'scene'
+            }_turn_${
+                Number(
+                    state.turn?.count ||
+                    0,
+                ) + 1
+            }`;
+        const itemOptions = {
+            sourceEventId:
+                itemSourceEventId,
+            sourceMessageIds:
+                playerMessageId >= 0
+                    ? [playerMessageId]
+                    : [],
+            clock: state.clock,
+            sourceTexts: [
+                playerAction,
+                observation.narrativeText,
+            ],
+        };
+        const performanceItems =
+            partitionItemProposals(
+                transaction.itemUpdates ||
+                [],
+                state,
+                {
+                    ...itemOptions,
+                    sourceRole: 'low',
+                },
+            );
+        const observedItems =
+            partitionItemProposals(
+                observation.itemUpdates ||
+                [],
+                state,
+                {
+                    ...itemOptions,
+                    sourceRole:
+                        'local_observer',
+                },
+            );
+        transaction.itemOperations = [
+            ...new Map(
+                [
+                    ...performanceItems.operations,
+                    ...observedItems.operations,
+                ].map(proposal => [
+                    proposal.key,
+                    proposal,
+                ]),
+            ).values(),
+        ];
+        transaction.itemCandidates = [
+            ...new Map(
+                [
+                    ...performanceItems.candidates,
+                    ...observedItems.candidates,
+                ].map(proposal => [
+                    proposal.key,
+                    proposal,
+                ]),
+            ).values(),
+        ];
+        transaction.itemUpdates = [];
+        transaction.spellCandidates =
+            extractSpellCandidates(
+                transaction,
+                state,
+                {
+                    ...itemOptions,
+                    playerAction,
+                },
+            );
+        transaction.materialExtraction = {
+            schemaVersion: 1,
+            source:
+                'post_turn_semantic_provider',
+            provider:
+                observation.observation
+                    ?.diagnostics?.provider ||
+                'unknown',
+            ...(
+                observation.observation
+                    ?.diagnostics ||
+                {}
+            ),
+        };
+        applyObservedActorUpdates(
+            transaction,
+            observation.observation,
+            state,
+            observation.narrativeText,
+        );
+        transaction =
+            reconcileTurnActorPresenceWithSpatialState(
+                transaction,
+                state,
+            );
+        transaction.localPresence =
+            reduceLocalPresence(
+                state,
+                {
+                    actorUpdates:
+                        transaction.actorUpdates,
+                },
+            );
+        transaction.perception =
+            observation.perception;
+        const witnessResolution =
+            resolveEventWitnesses({
+                perception:
+                    transaction.perception,
+                localPresence:
+                    transaction.localPresence,
+                activeInteractionActorIds:
+                    transaction.actorPresence
+                        ?.presentActorIdsAfterTurn ||
+                    [],
+                targetActorIds:
+                    observation.targetActorIds,
+                actors:
+                    state.actors ||
+                    [],
+                knownActorIds: (
+                    state.actorLibrary ||
+                    []
+                ).map(actor =>
+                    actor.id),
+                spatialGraph:
+                    buildLocalSemanticRoomContext(
+                        state,
+                    ),
+            });
+        if (witnessResolution) {
+            transaction.participantActorIds =
+                witnessResolution
+                    .participantActorIds;
+            transaction.witnessActorIds =
+                witnessResolution
+                    .witnessActorIds;
+            transaction.witnessCohortIds =
+                witnessResolution
+                    .witnessCohortIds;
+            transaction.witnessBasis =
+                witnessResolution
+                    .witnessBasis;
+            const rawSceneId =
+                String(
+                    state.scene?.id ||
+                    '',
+                );
+            const sceneId =
+                /^[a-z][a-z0-9_]{0,79}$/u
+                    .test(rawSceneId)
+                    ? rawSceneId
+                    : 'scene_current';
+            transaction.eventKnowledge =
+                normalizeEventKnowledge({
+                    version: 2,
+                    eventKind: 'observed',
+                    sceneId,
+                    clock:
+                        transaction.committedClock ||
+                        state.clock,
+                    sourceMessageIds: [
+                        ...(
+                            playerMessageId >= 0
+                                ? [playerMessageId]
+                                : []
+                        ),
+                        sceneMessageId,
+                    ],
+                    summaryEn:
+                        transaction.publicEventEn,
+                    activationSchemaIds,
+                    ...witnessResolution,
+                    perception:
+                        transaction.perception,
+                    source:
+                        transaction.perception
+                            .source,
+                }, {
+                    actors:
+                        state.actors ||
+                        [],
+                    knownActorIds: (
+                        state.actorLibrary ||
+                        []
+                    ).map(actor =>
+                        actor.id),
+                    cohortIds:
+                        transaction.localPresence
+                            .cohortIds,
+                    sourceTexts: [
+                        playerAction,
+                        observation.narrativeText,
+                    ],
+                });
+        }
+        return {
+            valid: true,
+            transaction,
+        };
+    }
 
     async function repairNarratedCurrentLocationResidents() {
         const context =
@@ -453,6 +810,13 @@ export function createTurnWorkflow(ports) {
                 directives: [],
                 errors: [],
             };
+            let postSettlementStarted = false;
+            let postSettlementCommitted = false;
+            let postSettlementDraft = null;
+            let postSettlementBaseState = null;
+            let postSettlementPlayerMessageId = -1;
+            let postSettlementMovementPreflight = null;
+            let postSettlementRollbackCheckpoint = null;
             try {
                 playerMessage = assistantMessageId === null
                     ? [...context.chat].reverse().find(message =>
@@ -594,6 +958,8 @@ export function createTurnWorkflow(ports) {
                 context.chat.indexOf(
                     playerMessage,
                 );
+                postSettlementPlayerMessageId =
+                    playerMessageId;
                 const rollbackCheckpoint =
                 playerMessageId >= 0
                     ? createTurnRetryCheckpoint(
@@ -609,12 +975,16 @@ export function createTurnWorkflow(ports) {
                         },
                     )
                     : null;
+                postSettlementRollbackCheckpoint =
+                    rollbackCheckpoint;
                 const movementPreflight =
                     createPlayerMovementPreflight(
                         state,
                         narrativePlayerAction,
                         context.chat,
                     );
+                postSettlementMovementPreflight =
+                    movementPreflight;
                 const storedMentionedActors =
                 playerMessage?.extra
                     ?.hogwartsMud
@@ -994,6 +1364,15 @@ export function createTurnWorkflow(ports) {
                 if (!validation.valid) {
                     throw new Error(`合并后的回合事务无效：${validation.errors.join('；')}`);
                 }
+                postSettlementStarted = true;
+                postSettlementDraft =
+                    structuredClone(
+                        transaction,
+                    );
+                postSettlementBaseState =
+                    structuredClone(
+                        getMudState(),
+                    );
                 const postObservationPromise =
                     requestPostTurnSemanticObservation(
                         state,
@@ -1029,9 +1408,23 @@ export function createTurnWorkflow(ports) {
                                 ),
                         };
                     });
-                await currentTurnLocalizationStart;
+                const currentTurnLocalization =
+                    await currentTurnLocalizationStart;
                 const localObservation =
                     await postObservationPromise;
+                if (
+                    currentTurnLocalization
+                        ?.completion
+                ) {
+                    await currentTurnLocalization
+                        .completion
+                        .catch(error => {
+                            console.warn(
+                                '[Hogwarts MUD] Current-turn localization failed',
+                                error,
+                            );
+                        });
+                }
                 const movementValidation =
                     validatePostPlayerMovement(
                         movementPreflight,
@@ -1042,60 +1435,30 @@ export function createTurnWorkflow(ports) {
                         transaction.segments,
                     );
                 if (
-                    movementPreflight &&
-                    (
-                        localObservation
-                            .movementSettlementFailure ||
-                        !movementValidation.valid
-                    )
+                    localObservation
+                        .postSettlementFailure ||
+                    !movementValidation.valid
                 ) {
-                    narrativeMessage.extra ??= {};
-                    narrativeMessage.extra.hogwartsMud ??= {};
-                    narrativeMessage.extra
-                        .hogwartsMud
-                        .pendingTurnSettlement = {
-                            version: 1,
-                            status: 'post_failed',
-                            playerMessageId,
-                            sceneMessageId:
-                                narrativeMessageId,
-                            timelineEpoch:
-                                String(
-                                    state.timelineEpoch ||
-                                    '',
-                                ),
-                            stateRevision:
-                                Number(
-                                    state.stateRevision ||
-                                    0,
-                                ),
-                            sceneId:
-                                String(
-                                    state.scene?.id ||
-                                    '',
-                                ),
-                            movementPreflight:
-                                structuredClone(
-                                    movementPreflight,
-                                ),
-                            transactionDraft:
-                                structuredClone(
-                                    transaction,
-                                ),
-                            retryCount: 0,
-                            failureCode:
-                                localObservation
-                                    .movementSettlementFailure
-                                    ? 'post_provider_failed'
-                                    : 'post_candidate_rejected',
-                        };
-                    state.turn ??= {};
-                    state.turn.status =
-                        'movement_unsettled';
-                    state.turn.error = '';
-                    await context.saveMetadata();
-                    await context.saveChat();
-                    renderAll();
+                    await preservePendingPostSettlement({
+                        playerMessageId,
+                        sceneMessageId:
+                            narrativeMessageId,
+                        sceneMessage:
+                            narrativeMessage,
+                        transaction,
+                        movementPreflight,
+                        preTurnCheckpoint:
+                            rollbackCheckpoint,
+                        observation:
+                            localObservation,
+                        failureCode:
+                            localObservation
+                                .postSettlementFailure
+                                ? localObservation
+                                    .failureCode ||
+                                    'post_provider_failed'
+                                : 'post_candidate_rejected',
+                    });
                     return;
                 }
                 if (movementPreflight) {
@@ -1685,6 +2048,7 @@ export function createTurnWorkflow(ports) {
                 );
                 await context.saveMetadata();
                 await context.saveChat();
+                postSettlementCommitted = true;
                 if (
                     transaction
                         .eventKnowledge
@@ -1796,6 +2160,43 @@ export function createTurnWorkflow(ports) {
                         error?.message ||
                         error,
                     );
+                if (
+                    postSettlementStarted &&
+                    !postSettlementCommitted &&
+                    narrativeMessage &&
+                    postSettlementDraft &&
+                    postSettlementPlayerMessageId >=
+                        0 &&
+                    narrativeMessageId !==
+                        null
+                ) {
+                    await preservePendingPostSettlement({
+                        playerMessageId:
+                            postSettlementPlayerMessageId,
+                        sceneMessageId:
+                            narrativeMessageId,
+                        sceneMessage:
+                            narrativeMessage,
+                        transaction:
+                            postSettlementDraft,
+                        movementPreflight:
+                            postSettlementMovementPreflight,
+                        preTurnCheckpoint:
+                            postSettlementRollbackCheckpoint,
+                        failureCode:
+                            'post_guard_failed',
+                        baseState:
+                            postSettlementBaseState,
+                    });
+                    return;
+                }
+                if (postSettlementCommitted) {
+                    console.error(
+                        '[Hogwarts MUD] Post-commit follow-up failed',
+                        error,
+                    );
+                    throw error;
+                }
                 recordTurnDiagnostic(
                     'turn_error',
                     {
@@ -1905,33 +2306,43 @@ export function createTurnWorkflow(ports) {
         }
     }
 
-    async function retryPendingMovementSettlement() {
+    async function retryPendingPostSettlement() {
         const context = getContext();
-        const state = getMudState();
+        let state = getMudState();
+        const retrySaved =
+            findPendingPostSettlement(
+                context.chat,
+            );
         if (
             state?.turn?.status !==
-            'movement_unsettled'
+            'post_unsettled'
         ) {
             return;
         }
+        if (
+            jobRegistry.turnActive ||
+            jobRegistry.sceneTransitionActive
+        ) {
+            throw new Error(
+                'The world is still settling.',
+            );
+        }
+        const saved = retrySaved;
         const sceneMessageId =
-            context.chat.findLastIndex(message =>
-                message?.is_user !== true &&
-                message?.extra
-                    ?.hogwartsMud
-                    ?.pendingTurnSettlement
-                    ?.version ===
-                    1);
+            saved?.sceneMessageId;
         const sceneMessage =
-            context.chat[sceneMessageId];
+            saved?.sceneMessage;
         const pending =
-            sceneMessage?.extra
-                ?.hogwartsMud
-                ?.pendingTurnSettlement;
+            saved?.pending;
         if (
             !pending ||
-            !isPendingMovementSettlementCurrent(
+            pending.retryable !== true ||
+            !isPendingPostSettlementCurrent(
                 state,
+                pending,
+            ) ||
+            !isPendingPostSettlementTail(
+                context.chat,
                 pending,
             )
         ) {
@@ -1946,21 +2357,25 @@ export function createTurnWorkflow(ports) {
         if (
             playerMessage?.is_user !==
             true ||
-            !pending.transactionDraft ||
-            !pending.movementPreflight
+            !pending.transactionDraft
         ) {
             throw new Error(
-                'The saved movement settlement is incomplete.',
+                'The saved Post settlement is incomplete.',
             );
         }
         let transaction =
             structuredClone(
                 pending.transactionDraft,
             );
+        jobRegistry.turnActive = true;
         state.turn.status = 'resolving';
         state.turn.error = '';
+        context.chatMetadata.hogwartsMud =
+            state;
         await context.saveMetadata();
+        state = getMudState();
         renderAll();
+        let committed = false;
         try {
             const observation =
                 await requestPostTurnSemanticObservation(
@@ -1976,43 +2391,81 @@ export function createTurnWorkflow(ports) {
                                 ?.hogwartsMud
                                 ?.addressing ||
                             {},
-                        movementOnly: true,
+                        settlementOnly: true,
                     },
-                );
-            const movementValidation =
-                validatePostPlayerMovement(
-                    pending.movementPreflight,
-                    observation
-                        .observation
-                        ?.result
-                        ?.playerMovement,
-                    transaction.segments,
                 );
             if (
                 observation
-                    .movementSettlementFailure ||
-                !movementValidation.valid
+                    .postSettlementFailure
             ) {
-                pending.status = 'post_failed';
-                pending.retryCount =
-                    Number(
-                        pending.retryCount ||
-                        0,
-                    ) + 1;
-                pending.failureCode =
-                    observation
-                        .movementSettlementFailure
-                        ? 'post_provider_failed'
-                        : 'post_candidate_rejected';
-                state.turn.status =
-                    'movement_unsettled';
-                await context.saveMetadata();
-                await context.saveChat();
-                renderAll();
-                return;
+                await preservePendingPostSettlement({
+                    playerMessageId:
+                        pending.playerMessageId,
+                    sceneMessageId,
+                    sceneMessage,
+                    transaction,
+                    movementPreflight:
+                        pending.movementPreflight,
+                    preTurnCheckpoint:
+                        pending.preTurnCheckpoint,
+                    observation,
+                    failureCode:
+                        observation
+                            .failureCode ||
+                        'post_provider_failed',
+                    retryCount:
+                        Number(
+                            pending.retryCount ||
+                            0,
+                        ) + 1,
+                });
+                return {
+                    settled: false,
+                };
             }
-            transaction.playerMovement =
-                movementValidation.value;
+            const integrated =
+                integratePostObservation(
+                    transaction,
+                    observation,
+                    state,
+                    String(
+                        playerMessage.mes ||
+                        '',
+                    ),
+                    pending.playerMessageId,
+                    sceneMessageId,
+                    {
+                        movementPreflight:
+                            pending
+                                .movementPreflight,
+                    },
+                );
+            if (!integrated.valid) {
+                await preservePendingPostSettlement({
+                    playerMessageId:
+                        pending.playerMessageId,
+                    sceneMessageId,
+                    sceneMessage,
+                    transaction,
+                    movementPreflight:
+                        pending.movementPreflight,
+                    preTurnCheckpoint:
+                        pending.preTurnCheckpoint,
+                    observation,
+                    failureCode:
+                        integrated.failureCode,
+                    retryCount:
+                        Number(
+                            pending.retryCount ||
+                            0,
+                        ) + 1,
+                });
+                return {
+                    settled: false,
+                };
+            }
+            transaction =
+                integrated.transaction;
             let nextState =
                 applyTurnTransaction(
                     state,
@@ -2033,19 +2486,19 @@ export function createTurnWorkflow(ports) {
                 true
             ) {
                 transaction =
-                reconcileTurnActorPresenceWithSpatialState(
-                    transaction,
-                    nextState,
-                );
+                    reconcileTurnActorPresenceWithSpatialState(
+                        transaction,
+                        nextState,
+                    );
                 transaction.localPresence =
-                reduceLocalPresence(
-                    nextState,
-                    {
-                        actorUpdates:
-                            transaction
-                                .actorUpdates,
-                    },
-                );
+                    reduceLocalPresence(
+                        nextState,
+                        {
+                            actorUpdates:
+                                transaction
+                                    .actorUpdates,
+                        },
+                    );
             }
             nextState =
                 applyPresenceWitnessTransaction(
@@ -2053,53 +2506,151 @@ export function createTurnWorkflow(ports) {
                     transaction,
                 );
             nextState = consumePacingBeat(nextState);
-            nextState.turnRetry =
-                createTurnRetryCheckpoint(
-                    state,
-                    {
-                        playerMessageId:
-                            pending.playerMessageId,
-                        assistantMessageId:
-                            sceneMessageId,
-                        playerAction:
-                            String(
-                                playerMessage.mes ||
-                                '',
-                            ),
-                    },
-                );
+            const liveModelTaskRuntime =
+                getMudState()
+                    ?.modelTaskRuntime;
+            if (liveModelTaskRuntime) {
+                nextState.modelTaskRuntime =
+                    structuredClone(
+                        liveModelTaskRuntime,
+                    );
+            }
+            if (pending.preTurnCheckpoint) {
+                nextState.turnRetry =
+                    structuredClone(
+                        pending
+                            .preTurnCheckpoint,
+                    );
+            }
             context.chatMetadata.hogwartsMud =
                 nextState;
+            state = getMudState();
             transaction.committedClock =
-                getMudState().clock;
+                state.clock;
             const committedMessage =
                 buildSceneMessage(
                     transaction,
-                    getMudState(),
+                    state,
                     sceneMessage,
                 );
             delete committedMessage.extra
                 .hogwartsMud
-                .pendingTurnSettlement;
+                .pendingPostSettlement;
             delete playerMessage.extra
                 ?.hogwartsMud
                 ?.movementPreflight;
             await context.saveMetadata();
             await context.saveChat();
+            committed = true;
             updateNativeMessageBlock(
                 sceneMessageId,
                 committedMessage,
             );
-            await syncLocalKnowledge();
             applySystemPrompt();
             renderAll();
+            return {
+                settled: true,
+            };
         } catch (error) {
-            state.turn.status =
-                'movement_unsettled';
-            state.turn.error = '';
-            await context.saveMetadata();
-            renderAll();
+            if (!committed) {
+                await preservePendingPostSettlement({
+                    playerMessageId:
+                        pending.playerMessageId,
+                    sceneMessageId,
+                    sceneMessage,
+                    transaction,
+                    movementPreflight:
+                        pending.movementPreflight,
+                    preTurnCheckpoint:
+                        pending.preTurnCheckpoint,
+                    failureCode:
+                        'post_provider_failed',
+                    retryCount:
+                        Number(
+                            pending.retryCount ||
+                            0,
+                        ) + 1,
+                });
+            }
             throw error;
+        } finally {
+            jobRegistry.turnActive = false;
+            renderAll();
+        }
+    }
+
+    async function discardPendingPostSettlement() {
+        const context = getContext();
+        const state = getMudState();
+        if (
+            state?.turn?.status !==
+            'post_unsettled'
+        ) {
+            return null;
+        }
+        if (
+            jobRegistry.turnActive ||
+            jobRegistry.sceneTransitionActive
+        ) {
+            throw new Error(
+                'The world is still settling.',
+            );
+        }
+        const saved =
+            findPendingPostSettlement(
+                context.chat,
+            );
+        const pending =
+            saved?.pending;
+        if (
+            !pending ||
+            pending.discardable !== true ||
+            !isPendingPostSettlementCurrent(
+                state,
+                pending,
+            ) ||
+            !isPendingPostSettlementTail(
+                context.chat,
+                pending,
+            ) ||
+            !pending.preTurnCheckpoint
+        ) {
+            throw new Error(
+                'The saved Scene can no longer be discarded safely.',
+            );
+        }
+        const playerMessage =
+            context.chat[
+                pending.playerMessageId
+            ];
+        const restored =
+            restoreTurnRetryCheckpoint(
+                pending.preTurnCheckpoint,
+            );
+        jobRegistry.turnActive = true;
+        try {
+            context.chat.splice(
+                pending.playerMessageId,
+                2,
+            );
+            context.chatMetadata.hogwartsMud =
+                restored;
+            await context.saveMetadata();
+            await context.saveChat();
+            applySystemPrompt();
+            renderAll();
+            return {
+                playerAction:
+                    String(
+                        playerMessage?.mes ||
+                        pending.preTurnCheckpoint
+                            .playerAction ||
+                        '',
+                    ),
+            };
+        } finally {
+            jobRegistry.turnActive = false;
+            renderAll();
         }
     }
 
@@ -2107,7 +2658,7 @@ export function createTurnWorkflow(ports) {
         const context = getContext();
         if (
             getMudState()?.turn?.status ===
-            'movement_unsettled'
+            'post_unsettled'
         ) {
             renderAll();
             return;
@@ -2169,8 +2720,36 @@ export function createTurnWorkflow(ports) {
             presence.changed
             ) {
                 await context.saveMetadata();
+                if (lifecycleChanged) {
+                    const pending =
+                        findPendingPostSettlement(
+                            context.chat,
+                        )?.pending;
+                    if (
+                        pending &&
+                        getMudState()
+                            ?.turn?.status ===
+                            'post_unsettled'
+                    ) {
+                        pending.stateRevision =
+                            Number(
+                                getMudState()
+                                    ?.stateRevision ||
+                                0,
+                            );
+                    }
+                    await context.saveChat();
+                }
                 applySystemPrompt();
                 renderAll();
+            }
+            state = getMudState();
+            if (
+                state.turn?.status ===
+                'post_unsettled'
+            ) {
+                renderAll();
+                return;
             }
             await ensureCurrentInteriorMap();
             state = getMudState();
@@ -2208,7 +2787,8 @@ export function createTurnWorkflow(ports) {
         buildSceneMessage,
         runStructuredTurn,
         retryFailedPlayerTurn,
-        retryPendingMovementSettlement,
+        retryPendingPostSettlement,
+        discardPendingPostSettlement,
         processUnsettledTurn,
         preparePlayableState,
     };

@@ -96,6 +96,198 @@ function createInterleavedStorageHarness() {
     };
 }
 
+test('explicit persisted-load head replacement clears an unclaimed stale browser head', () => {
+    const storage = createStorage();
+    const adapter =
+        createSaveRevisionStorageAdapter(
+            storage,
+        );
+    const stale = {
+        saveRevisionVersion: 1,
+        timelineEpoch: 'timeline_persisted_load',
+        stateRevision: 9,
+        claimId: '',
+    };
+    const persisted = {
+        ...stale,
+        stateRevision: 7,
+    };
+
+    adapter.registerHead(stale);
+    const replacement =
+        adapter.replaceHead(persisted);
+
+    assert.deepEqual(
+        replacement,
+        persisted,
+    );
+    assert.deepEqual(
+        adapter.readHead(
+            persisted.timelineEpoch,
+        ),
+        persisted,
+    );
+});
+
+test('persisted-load head replacement never overrides an active claim', () => {
+    const storage = createStorage();
+    const adapter =
+        createSaveRevisionStorageAdapter(
+            storage,
+        );
+    const active = {
+        saveRevisionVersion: 1,
+        timelineEpoch: 'timeline_active_claim',
+        stateRevision: 9,
+        claimId: 'active',
+        claimBaseRevision: 8,
+        claimPhase: 'pending',
+        claimFence: 1,
+    };
+    const persisted = {
+        saveRevisionVersion: 1,
+        timelineEpoch: active.timelineEpoch,
+        stateRevision: 7,
+        claimId: '',
+    };
+
+    storage.setItem(
+        `hogwartsMud.saveRevision:${
+            encodeURIComponent(
+                active.timelineEpoch,
+            )
+        }`,
+        JSON.stringify(active),
+    );
+    const result =
+        adapter.replaceHead(persisted);
+
+    assert.equal(
+        result.claimId,
+        'active',
+    );
+    assert.equal(
+        result.stateRevision,
+        9,
+    );
+});
+
+test('persisted-load head replacement clears an orphaned host-save claim', () => {
+    const storage = createStorage();
+    const adapter =
+        createSaveRevisionStorageAdapter(
+            storage,
+        );
+    const orphaned = {
+        saveRevisionVersion: 1,
+        timelineEpoch:
+            'timeline_orphaned_host_save',
+        stateRevision: 9,
+        claimId: 'orphaned',
+        claimBaseRevision: 8,
+        claimPhase:
+            'host_save_started',
+        claimFence: 1,
+    };
+    const persisted = {
+        saveRevisionVersion: 1,
+        timelineEpoch:
+            orphaned.timelineEpoch,
+        stateRevision: 8,
+        claimId: '',
+    };
+
+    storage.setItem(
+        `hogwartsMud.saveRevision:${
+            encodeURIComponent(
+                orphaned.timelineEpoch,
+            )
+        }`,
+        JSON.stringify(orphaned),
+    );
+    const replacement =
+        adapter.replaceHead(persisted);
+
+    assert.deepEqual(
+        replacement,
+        persisted,
+    );
+});
+
+test('persisted-load head replacement keeps a live host-save claim', () => {
+    let now = 10_000;
+    const storage = createStorage();
+    const adapter =
+        createSaveRevisionStorageAdapter(
+            storage,
+            {
+                now: () => now,
+            },
+        );
+    const active = {
+        saveRevisionVersion: 1,
+        timelineEpoch:
+            'timeline_live_host_save',
+        stateRevision: 9,
+        claimId: 'active',
+        claimBaseRevision: 8,
+        claimPhase:
+            'host_save_started',
+        claimFence: 1,
+    };
+    const persisted = {
+        saveRevisionVersion: 1,
+        timelineEpoch:
+            active.timelineEpoch,
+        stateRevision: 8,
+        claimId: '',
+    };
+    const prefix =
+        `hogwartsMud.saveRevision.mutex:${
+            encodeURIComponent(
+                active.timelineEpoch,
+            )
+        }:`;
+    const lease = {
+        claimId: active.claimId,
+        ticket: 1,
+        expiresAt: now + 5_000,
+    };
+
+    storage.setItem(
+        `hogwartsMud.saveRevision:${
+            encodeURIComponent(
+                active.timelineEpoch,
+            )
+        }`,
+        JSON.stringify(active),
+    );
+    storage.setItem(
+        `${prefix}ticket:${
+            encodeURIComponent(
+                active.claimId,
+            )
+        }`,
+        JSON.stringify(lease),
+    );
+    storage.setItem(
+        `${prefix}owner`,
+        JSON.stringify(lease),
+    );
+    const result =
+        adapter.replaceHead(persisted);
+
+    assert.equal(
+        result.claimId,
+        active.claimId,
+    );
+    assert.equal(
+        result.stateRevision,
+        active.stateRevision,
+    );
+    now += 5_001;
+});
+
 function durable(value) {
     return {
         durable: true,

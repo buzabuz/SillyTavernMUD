@@ -4,35 +4,6 @@ import {
 import {
     createMovementOutcome,
 } from './movement-outcome.js';
-import {
-    isStateRevisionCurrentOrModelTaskRuntimeOnly,
-} from './save-revision.js';
-
-export function isPendingMovementSettlementCurrent(
-    state,
-    pending,
-) {
-    return Boolean(
-        pending &&
-        pending.timelineEpoch ===
-            String(
-                state?.timelineEpoch ||
-                '',
-            ) &&
-        pending.sceneId ===
-            String(
-                state?.scene?.id ||
-                '',
-            ) &&
-        isStateRevisionCurrentOrModelTaskRuntimeOnly(
-            state,
-            Number(
-                pending.stateRevision ||
-                0,
-            ),
-        ),
-    );
-}
 
 function hasExactNarrativeEvidence(
     evidenceText,

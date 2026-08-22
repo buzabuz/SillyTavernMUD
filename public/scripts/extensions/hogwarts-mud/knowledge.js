@@ -1299,12 +1299,19 @@ export async function syncKnowledgeBase(context, state) {
     assertKnowledgeApiContract(
         health,
     );
+    const qdrantRepairCompleted =
+        health.qdrantRepair?.status ===
+            'completed' &&
+        health.qdrantRepair
+            ?.snapshotFingerprint ===
+            projectionFingerprint;
     const needsPreferredReconciliation =
         health.preferred?.configured ===
             true &&
         state.knowledgeBase
             ?.diagnostics
-            ?.degraded === true;
+            ?.degraded === true &&
+        !qdrantRepairCompleted;
     if (
         health.exact?.ok === true &&
         health.exact
@@ -1380,6 +1387,9 @@ export async function syncKnowledgeBase(context, state) {
                     'none',
                 degraded: false,
                 projectionFingerprint,
+                qdrantRepair:
+                    health.qdrantRepair ||
+                    null,
                 syncSkipped:
                     'content_unchanged',
             };

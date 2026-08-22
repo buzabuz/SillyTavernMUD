@@ -64,6 +64,27 @@ function inventoryInput() {
     };
 }
 
+function oversizedInventoryInput() {
+    return {
+        ...inventoryInput(),
+        narrativeSegments: Array.from(
+            {
+                length: 3,
+            },
+            (_, index) => ({
+                type: 'narration',
+                actorId: '',
+                textEn: `${
+                    index
+                } ${
+                    'The signed note remained on the desk. '
+                        .repeat(100)
+                }`,
+            }),
+        ),
+    };
+}
+
 function identityObservation() {
     return {
         actorId: 'harry',
@@ -264,6 +285,56 @@ test(
                 .characters <=
             20_000,
             true,
+        );
+    },
+);
+
+test(
+    'shared dynamic Turn admits an Inventory component above the standalone budget',
+    async () => {
+        const input = oversizedInventoryInput();
+        let calls = 0;
+        const request =
+            createDynamicTurnModelRequest({
+                inventory: input,
+                identity: null,
+            });
+
+        assert.equal(
+            request.promptMeasurement.characters >
+                9_000,
+            true,
+        );
+        assert.equal(
+            request.promptMeasurement.characters <=
+                20_000,
+            true,
+        );
+        const result =
+            await observeDynamicTurn(
+                {
+                    inventory: input,
+                    identity: null,
+                },
+                {
+                    enqueue: operation =>
+                        operation(),
+                    callModel: async () => {
+                        calls++;
+                        return {
+                            result: {
+                                inventoryUpdates: [],
+                            },
+                        };
+                    },
+                },
+            );
+
+        assert.equal(calls, 1);
+        assert.equal(
+            result.diagnostics
+                .promptCharacters,
+            request.promptMeasurement.characters,
         );
     },
 );
