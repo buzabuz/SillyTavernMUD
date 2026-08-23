@@ -10,7 +10,7 @@ import { createComposerController } from './composer-controller.js';
 import { createTurnController } from './turn-controller.js';
 import { createAppController } from './app-controller.js';
 import { createUiBindings } from './bindings.js';
-import { createCalendarController } from './calendar-controller.js';
+import { createCalendarController } from './calendar-controller.js?v=0.1.3';
 import { createHostEventBindings } from '../runtime/host-events.js';
 
 export const UI_ACTION_NAMES = Object.freeze([

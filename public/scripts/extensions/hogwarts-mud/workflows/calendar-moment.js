@@ -10,6 +10,11 @@ import {
     worldClockToEpochMinutes,
 } from '../domain/time-environment.js';
 
+/**
+ * Model-route: sceneTransition.result.languageSkipped.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
+
 function createConflictError(
     result,
 ) {
@@ -68,6 +73,24 @@ function buildCalendarDestinationHint(
         `Target clock: ${context.targetClock}.`,
         `Suggested location only: ${context.suggestedDestination.mapId}/${context.suggestedDestination.roomId}.`,
     ].join(' ');
+}
+
+function createCalendarMomentLanguageSkippedError(
+    diagnostics,
+) {
+    const error =
+        new Error(
+            'Scene director returned non-English structured content.',
+        );
+    error.name =
+        'CalendarMomentLanguageSkippedError';
+    error.code =
+        'language_skipped';
+    error.diagnostics =
+        Array.isArray(diagnostics)
+            ? diagnostics
+            : [];
+    return error;
 }
 
 export function createCalendarMomentWorkflow(
@@ -294,6 +317,14 @@ export function createCalendarMomentWorkflow(
                     contextPlan,
                     transitionContext,
                 );
+            if (
+                payload
+                    ?.languageSkipped
+            ) {
+                throw createCalendarMomentLanguageSkippedError(
+                    payload.diagnostics,
+                );
+            }
             setMomentPhase(
                 'opening',
             );

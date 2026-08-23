@@ -515,6 +515,10 @@ const CALENDAR_TEXT = Object.freeze({
         en: 'The Scene could not be opened.',
         zh: '无法打开该场景。',
     },
+    'ui.calendar.language_skipped': {
+        en: 'The Scene director returned non-English structured content. The Scene was not opened.',
+        zh: '场景导演返回了非英语结构内容，本次未进入场景。',
+    },
     'ui.calendar.meta.time': {
         en: 'Time',
         zh: '时间',

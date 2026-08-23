@@ -1394,9 +1394,8 @@ export function createCalendarController(ports) {
         } catch (error) {
             console.error('[Hogwarts MUD] Calendar Moment failed', error);
             session.calendarMomentError =
-                staticText(
-                    'ui.calendar.runtime_error',
-                    'The Scene could not be opened.',
+                getMomentErrorMessage(
+                    error,
                 );
             announce(
                 session.calendarMomentError,
@@ -1457,6 +1456,35 @@ export function createCalendarController(ports) {
         };
     }
 
+    function getMomentErrorMessage(
+        error,
+    ) {
+        if (
+            error?.code ===
+            'language_skipped'
+        ) {
+            return staticText(
+                'ui.calendar.language_skipped',
+                'The Scene director returned non-English structured content. The Scene was not opened.',
+            );
+        }
+        const fallback = staticText(
+            'ui.calendar.runtime_error',
+            'The Scene could not be opened.',
+        );
+        const detail = String(
+            error?.cause?.message ||
+            error?.message ||
+            '',
+        )
+            .replace(/\s+/gu, ' ')
+            .trim()
+            .slice(0, 240);
+        return detail
+            ? `${fallback} ${detail}`
+            : fallback;
+    }
+
     async function enterTimelineMoment(draft) {
         if (session.calendarMomentBusy) return;
         const state = getWorldState();
@@ -1502,9 +1530,8 @@ export function createCalendarController(ports) {
         } catch (error) {
             console.error('[Hogwarts MUD] Timeline Moment failed', error);
             session.calendarMomentError =
-                staticText(
-                    'ui.calendar.runtime_error',
-                    'The Scene could not be opened.',
+                getMomentErrorMessage(
+                    error,
                 );
             announce(session.calendarMomentError, true);
         } finally {

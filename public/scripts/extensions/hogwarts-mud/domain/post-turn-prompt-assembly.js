@@ -2,12 +2,13 @@ import {
     createContextBudgetPlan,
 } from '../core/context-budget.js';
 import {
+    createRoleTransportEnvelope,
     measurePromptMessages,
 } from './prompt-budget-allocator.js';
 import {
     createLowPostTurnSemanticMessages,
     createPostTurnSemanticMessages,
-    LOW_POST_TURN_JSON_SCHEMA,
+    LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
     POST_TURN_JSON_SCHEMA,
 } from './post-turn-semantic-contract.js';
 
@@ -125,6 +126,17 @@ function measureInput(
     const isLow =
         capacity.provider ===
         'low';
+    const roleTransportEnvelope =
+        isLow
+            ? createRoleTransportEnvelope({
+                maxResponseLength:
+                    capacity
+                        .responseReserve,
+                json: true,
+                jsonSchema:
+                    LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
+            })
+            : null;
     return measurePromptMessages(
         isLow
             ? createLowPostTurnSemanticMessages(
@@ -135,10 +147,12 @@ function measureInput(
             ),
         {
             transportJsonSchema:
-                isLow
-                    ? LOW_POST_TURN_JSON_SCHEMA
-                    : POST_TURN_JSON_SCHEMA,
+                roleTransportEnvelope
+                    ?.transportJsonSchema ||
+                POST_TURN_JSON_SCHEMA,
             runtimeWrapper:
+                roleTransportEnvelope
+                    ?.runtimeWrapper ||
                 createRuntimeWrapper(
                     capacity,
                 ),

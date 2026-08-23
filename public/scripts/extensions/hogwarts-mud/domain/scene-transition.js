@@ -296,22 +296,17 @@ export function normalizeSceneTransitionPackage(
                 .filter(Boolean)
                 .slice(0, 6)
             : [];
-    const hookWords = String(
-        nextScene.explorationHookEn || '',
-    )
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-    nextScene.explorationHookEn = (
-        hookWords.length >= 6
-            ? hookWords
-            : [
-                ...hookWords,
-                'A nearby detail can be inspected or ignored.',
-            ]
-    )
-        .slice(0, 60)
-        .join(' ');
+    const explorationHookEn =
+        String(
+            nextScene.explorationHookEn ||
+            '',
+        ).trim();
+    if (explorationHookEn) {
+        nextScene.explorationHookEn =
+            explorationHookEn;
+    } else {
+        delete nextScene.explorationHookEn;
+    }
     const crowdedRoom =
         CROWDED_SCENE_ROOM_KINDS
             .has(room?.kind) ||
@@ -488,7 +483,6 @@ export function normalizeSceneTransitionPackage(
                         segment?.rawText ||
                         '',
                     ).trim())
-                .slice(0, 8)
             : [];
     const presentIds = new Set(
         nextScene.actorStates
@@ -589,31 +583,9 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
                 .globalChronicleSummaryEn ||
             '',
         ).trim();
-    const chronicleWords =
-        chronicleSummaryEn
-            .split(/\s+/u)
-            .filter(Boolean)
-            .length;
-    if (
-        chronicleWords < 40 ||
-        chronicleWords > 80 ||
-        chronicleSummaryEn.length > 640
-    ) {
+    if (!chronicleSummaryEn) {
         errors.push(
-            'globalChronicleSummaryEn 必须是 40–80 词且不超过 640 字符的英文语义史书摘要。',
-        );
-    }
-    const authorQuillEn = String(
-        payload.authorQuillEn || '',
-    ).trim();
-    const authorQuillWords = authorQuillEn
-        .split(/\s+/)
-        .filter(Boolean)
-        .length;
-    if (authorQuillWords < 40 ||
-        authorQuillWords > 500) {
-        errors.push(
-            '作者的羽毛笔必须是 40–500 词的具体 OOC 章节评价。',
+            '场景切换包缺少 globalChronicleSummaryEn。',
         );
     }
     if (!Array.isArray(payload.unresolvedThreadsEn) || payload.unresolvedThreadsEn.length > 8 ||
@@ -638,22 +610,6 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
         if (!String(nextScene[key] || '').trim()) {
             errors.push(`nextScene 缺少 ${key}。`);
         }
-    }
-    const explorationHookEn = String(
-        nextScene.explorationHookEn || '',
-    ).trim();
-    const explorationHookWords =
-        explorationHookEn
-            .split(/\s+/)
-            .filter(Boolean)
-            .length;
-    if (
-        explorationHookWords < 6 ||
-        explorationHookWords > 60
-    ) {
-        errors.push(
-            '下一场景必须包含 6–60 词的非剧透 explorationHookEn。',
-        );
     }
     if (
         !Array.isArray(
@@ -890,9 +846,6 @@ export function validateSceneTransitionPackage(payload, worldState, options = {}
             .deferOpeningSegments !==
         true
     ) {
-        if (segments.length < 2 || segments.length > 8) {
-            errors.push('下一场景开场必须包含 2–8 个分段。');
-        }
         if (!segments.some(segment => segment.type === 'narration')) {
             errors.push('下一场景开场至少需要一个环境或动作描写分段。');
         }

@@ -3,7 +3,7 @@ import {
 } from '../domain/calendar-projection.js';
 import {
     applyCommittedSceneOpeningExperience as applyCommittedSceneOpeningExperienceDeterministically,
-} from '../domain/archive-projection.js';
+} from '../domain/archive-projection.js?v=0.1.2';
 import {
     NARRATIVE_AUTHORITY_PROMPT_CONTRACT,
     NARRATIVE_PROMPT_ACCESS,
@@ -24,6 +24,11 @@ import {
     getInteriorMount,
     listMapsByMountHierarchy,
 } from '../domain/interior-mount.js';
+
+/**
+ * Model-route: sceneTransition.result.languageSkipped.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
 
 function isFixedMomentContext(
     transitionContext,
@@ -327,14 +332,6 @@ export function validateLowSceneOpeningOutput(
         )
             ? payload.segments
             : [];
-    if (
-        segments.length < 2 ||
-        segments.length > 6
-    ) {
-        errors.push(
-            '低档场景开场必须包含 2–6 个分段。',
-        );
-    }
     let narrationCount = 0;
     segments.forEach((
         segment,
@@ -716,8 +713,8 @@ ${NARRATIVE_AUTHORITY_PROMPT_CONTRACT}
 
 Authority and boundaries:
 - Archive only events that already occurred in the supplied messages. Do not rewrite the player action.
-- authorQuillEn is an out-of-character editorial postscript evaluating the player's performance in the chapter being closed. Write 180-280 English words packed with affectionate roasting, callbacks, mock awards, deadpan asides, and at least three distinct jokes grounded in specific observable player choices.
-- The Author's Quill is funny rather than lyrical or therapeutic. It may tease the player's tactics and running bits, but never insult the real player, speak as an NPC, reveal hidden truths, locked clues, private motives, future events, exact hidden rolls, or information absent from the observed transcript.
+- authorQuillEn is an optional out-of-character editorial postscript evaluating the player's performance in the chapter being closed. When supplied, write roughly 180-280 English words packed with affectionate roasting, callbacks, mock awards, deadpan asides, and at least three distinct jokes grounded in specific observable player choices.
+- The optional Author's Quill is funny rather than lyrical or therapeutic. It may tease the player's tactics and running bits, but never insult the real player, speak as an NPC, reveal hidden truths, locked clues, private motives, future events, exact hidden rolls, or information absent from the observed transcript.
 - Do not merely summarize the chapter. Treat it like a sharp British humour column written by an omniscient editor who has seen the player's chaos but is contractually forbidden to spoil the plot.
 - Realize committedNextSceneIntent by default. If userOverride.changed is true, honor the user's edited direction while preserving committed facts.
 - The next scene must use an existing mapId and roomId from locationDirectory. Never invent or rename a room.
@@ -753,7 +750,7 @@ Schema:
   "transitionMinutes": 0,
   "closureSummaryEn": "specific observable closure of the old scene",
   "globalChronicleSummaryEn": "40-80 word semantic chronicle of the closed scene",
-  "authorQuillEn": "180-280 word OOC comic review of the player's observed chapter performance",
+  "authorQuillEn": "optional 180-280 word OOC comic review of the player's observed chapter performance",
   "unresolvedThreadsEn": ["public unresolved thread"],
   "nextScene": {
     "id": "unique_snake_case_id",
