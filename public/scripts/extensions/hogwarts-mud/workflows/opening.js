@@ -289,14 +289,6 @@ Schema:
             )
                 ? payload.segments
                 : [];
-        if (
-            segments.length < 2 ||
-            segments.length > 6
-        ) {
-            errors.push(
-                'Bootstrap Scene Opening requires 2-6 segments.',
-            );
-        }
         const presentActorIds =
             new Set(
                 (state.actors || [])
@@ -307,7 +299,6 @@ Schema:
                         actor.id),
             );
         let narrationCount = 0;
-        let wordCount = 0;
         segments.forEach((
             segment,
             index,
@@ -369,15 +360,6 @@ Schema:
                     `Bootstrap segment ${index} rawText lacks language evidence metadata.`,
                 );
             }
-            wordCount +=
-                String(
-                    segment.textEn ||
-                    '',
-                )
-                    .trim()
-                    .split(/\s+/u)
-                    .filter(Boolean)
-                    .length;
             if (
                 segment.type ===
                 'narration'
@@ -404,17 +386,6 @@ Schema:
         if (!narrationCount) {
             errors.push(
                 'Bootstrap Scene Opening requires narration.',
-            );
-        }
-        if (
-            wordCount > 0 &&
-            (
-                wordCount < 180 ||
-                wordCount > 420
-            )
-        ) {
-            errors.push(
-                'Bootstrap Scene Opening must contain 180-420 English words.',
             );
         }
         return {

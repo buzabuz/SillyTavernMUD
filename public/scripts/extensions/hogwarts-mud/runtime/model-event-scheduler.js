@@ -9,9 +9,16 @@ import {
     recordModelTaskSuccess,
 } from '../domain/model-task-runtime.js';
 import {
+    createRoleTransportEnvelope,
     createTaskPromptBudget,
     measurePromptMessages,
 } from '../domain/prompt-budget-allocator.js';
+
+/**
+ * Model routes: role_capacity.input.slot,
+ * role_capacity.measurement.completeRequest.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
 
 function text(
     value,
@@ -176,7 +183,6 @@ export function createModelEventScheduler({
     async () => {},
     getRuntimeMaximumCharacters =
     () => Number.MAX_SAFE_INTEGER,
-    enforceProductBudget = false,
 } = {}) {
     if (
         typeof invokeRole !==
@@ -269,14 +275,28 @@ export function createModelEventScheduler({
                 tier,
                 event,
             );
+        const transportEnvelope =
+            createRoleTransportEnvelope({
+                maxResponseLength:
+                    roleSlot
+                        ?.maxResponseLength,
+                json:
+                    options.json ===
+                    true,
+                jsonSchema:
+                    options.jsonSchema ||
+                    null,
+            });
         const promptMeasurement =
             measurePromptMessages(
                 messages,
                 {
                     transportJsonSchema:
-                        options
-                            .jsonSchema ||
-                        null,
+                        transportEnvelope
+                            .transportJsonSchema,
+                    runtimeWrapper:
+                        transportEnvelope
+                            .runtimeWrapper,
                 },
             );
         const promptBudget =
@@ -298,16 +318,6 @@ export function createModelEventScheduler({
                 `Model task ${taskId} Prompt requires ${promptMeasurement.characters} characters, above runtime ceiling ${promptBudget.runtimeMaximumCharacters}.`,
             );
         }
-        if (
-            enforceProductBudget &&
-            promptMeasurement.characters >
-            promptBudget
-                .effectiveMaximumCharacters
-        ) {
-            throw new RangeError(
-                `Model task ${taskId} Prompt requires ${promptMeasurement.characters} characters, above product budget ${promptBudget.effectiveMaximumCharacters}.`,
-            );
-        }
         const envelope = {
             registryVersion:
                 MODEL_TASK_REGISTRY_VERSION,
@@ -322,6 +332,8 @@ export function createModelEventScheduler({
         };
         const requestOptions = {
             ...options,
+            preservePrompt:
+                true,
         };
         delete requestOptions.tier;
         delete requestOptions

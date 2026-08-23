@@ -155,7 +155,7 @@ import {
     normalizeSceneTransitionPackage,
     stripSyntheticSceneOpeningActorSegments,
     validateSceneTransitionPackage,
-} from './domain/scene-transition.js';
+} from './domain/scene-transition.js?v=0.1.2';
 import {
     migrateLoadedSocialGraph,
     normalizeSocialGraph,
@@ -238,17 +238,17 @@ import {
 import { createAutomaticWorkGate } from './runtime/automatic-work.js';
 import { createJobRegistry } from './runtime/job-registry.js';
 import { createActionPorts } from './runtime/action-ports.js';
-import { createGuardedSavePorts } from './runtime/guarded-save-ports.js?v=0.1.1';
+import { createGuardedSavePorts } from './runtime/guarded-save-ports.js?v=0.1.4';
 import {
     canOpenCurrentSocialSaveReadOnly,
     shouldTranslateRenderedMessage,
 } from './runtime/read-only-policy.js';
-import { createWorkflowApplication } from './workflows/application.js';
+import { createWorkflowApplication } from './workflows/application.js?v=0.1.4';
 import { createSocialMemoryWorkflow } from './workflows/social-memory.js';
 import {
     createUiApplication,
     UI_ACTION_NAMES,
-} from './ui/application.js';
+} from './ui/application.js?v=0.1.4';
 import { getUiDomRefs } from './ui/dom.js';
 import { createUiSessionState } from './ui/session-state.js';
 const MODULE_NAME = 'hogwarts-mud';

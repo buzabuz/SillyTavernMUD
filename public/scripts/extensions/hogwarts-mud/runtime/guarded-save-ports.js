@@ -1,6 +1,7 @@
 import {
     createNewSaveRevisionState,
     hasWorldStateChanges,
+    isStateRevisionCurrentOrModelTaskRuntimeOnly,
     migrateSaveRevisionState,
 } from '../domain/save-revision.js';
 import {
@@ -546,29 +547,70 @@ export function createGuardedSavePorts(
                 'Hogwarts context does not provide saveMetadata.',
             );
         }
-        if (
+        const runtimeOnlyAdvance =
             currentState
+                ?.timelineEpoch ===
+            observed.state
+                .timelineEpoch &&
+            isStateRevisionCurrentOrModelTaskRuntimeOnly(
+                observed.state,
+                currentState
+                    ?.stateRevision,
+            );
+        const transactionCurrentState =
+            runtimeOnlyAdvance
+                ? observed.state
+                : currentState;
+        const transactionNextState =
+            runtimeOnlyAdvance
+                ? {
+                    ...nextState,
+                    saveRevisionVersion:
+                        observed.state
+                            .saveRevisionVersion,
+                    timelineEpoch:
+                        observed.state
+                            .timelineEpoch,
+                    stateRevision:
+                        observed.state
+                            .stateRevision,
+                    revisionHistory:
+                        structuredClone(
+                            observed.state
+                                .revisionHistory ||
+                            [],
+                        ),
+                    modelTaskRuntime:
+                        structuredClone(
+                            observed.state
+                                .modelTaskRuntime ||
+                            {},
+                        ),
+                }
+                : nextState;
+        if (
+            transactionCurrentState
                 ?.timelineEpoch !==
                 observed.state
                     .timelineEpoch ||
-            currentState
+            transactionCurrentState
                 ?.stateRevision !==
                 observed.state
                     .stateRevision ||
             hasWorldStateChanges(
-                currentState,
+                transactionCurrentState,
                 observed.state,
             )
         ) {
             throw new SaveRevisionConflictError({
                 code: 'stale_save',
                 timelineEpoch:
-                    currentState
+                    transactionCurrentState
                         ?.timelineEpoch ||
                     observed.state
                         .timelineEpoch,
                 expectedRevision:
-                    currentState
+                    transactionCurrentState
                         ?.stateRevision,
                 actualRevision:
                     observed.state
@@ -597,8 +639,10 @@ export function createGuardedSavePorts(
         try {
             result =
                 await guard.guardedSave({
-                    currentState,
-                    nextState,
+                    currentState:
+                        transactionCurrentState,
+                    nextState:
+                        transactionNextState,
                     source,
                     timelineKey:
                     observed

@@ -42,7 +42,7 @@ import {
 
 import {
     validateSceneTransitionPackage,
-} from './scene-transition.js';
+} from './scene-transition.js?v=0.1.2';
 
 import {
     SPATIAL_STATE_VERSION,
@@ -57,7 +57,7 @@ import {
 } from './transition-presence.js';
 import {
     appendGlobalChronicleEntry,
-} from './timeline-chronicle.js';
+} from './timeline-chronicle.js?v=0.1.2';
 
 export function settleSceneCloseMemoryBoundary(
     memoryDirector = {},

@@ -29,19 +29,16 @@ function hasExactKeys(value, keys) {
             allowed.has(key));
 }
 
-function text(value, maximumLength) {
+function text(
+    value,
+    maximumLength =
+    Number.MAX_SAFE_INTEGER,
+) {
     return String(value ?? '')
         .normalize('NFKC')
         .replace(/\s+/gu, ' ')
         .trim()
         .slice(0, maximumLength);
-}
-
-function countWords(value) {
-    return text(value, 10_000)
-        .split(/\s+/u)
-        .filter(Boolean)
-        .length;
 }
 
 function compareClock(left, right) {
@@ -53,9 +50,7 @@ function compareClock(left, right) {
 
 export function normalizeChronicleEntry(
     value,
-    {
-        allowLegacySummaryLength = false,
-    } = {},
+    _options = {},
 ) {
     if (!isRecord(value)) {
         return null;
@@ -65,21 +60,12 @@ export function normalizeChronicleEntry(
         endedClock:
             text(value.endedClock, 120),
         summaryEn:
-            text(value.summaryEn, 640),
+            text(value.summaryEn),
     };
-    const words =
-        countWords(entry.summaryEn);
     if (
         !entry.sceneId ||
         !entry.endedClock ||
-        !entry.summaryEn ||
-        (
-            !allowLegacySummaryLength &&
-            (
-                words < 40 ||
-                words > 80
-            )
-        )
+        !entry.summaryEn
     ) {
         return null;
     }

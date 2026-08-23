@@ -1,4 +1,4 @@
-import { createStatePorts } from '../runtime/state-ports.js';
+import { createStatePorts } from '../runtime/state-ports.js?v=0.1.2';
 import { createLifecycleRuntime } from '../runtime/lifecycle.js';
 import {
     attachTurnDiagnostics,
@@ -32,11 +32,11 @@ import {
 import {
     createIdleLocalizationScheduler,
 } from '../runtime/idle-localization-scheduler.js';
-import { createOpeningWorkflow } from './opening.js';
+import { createOpeningWorkflow } from './opening.js?v=0.1.2';
 import { createInteriorMapWorkflow } from './interior-map.js';
 import { createDirectorWorkflows } from './directors.js';
 import { createSocialMemoryWorkflow } from './social-memory.js';
-import { createSceneTransitionWorkflow } from './scene-transition.js';
+import { createSceneTransitionWorkflow } from './scene-transition.js?v=0.1.2';
 import { createTurnPerformanceWorkflow } from './turn-performance.js';
 import { createTurnWorkflow } from './turn.js';
 import {
@@ -44,7 +44,7 @@ import {
 } from './background-event-boundary.js';
 import { createHighCalendarDirectorWorkflow } from './high-calendar-director.js';
 import { createMediumCalendarDirectorWorkflow } from './medium-calendar-director.js';
-import { createCalendarMomentWorkflow } from './calendar-moment.js';
+import { createCalendarMomentWorkflow } from './calendar-moment.js?v=0.1.3';
 import {
     restoreTurnRetryCheckpoint,
 } from '../domain/turn-rollback.js';
@@ -160,6 +160,11 @@ export async function finalizeCalendarMomentPostCommit({
         committedState;
 }
 
+/**
+ * Role capacity source for role_capacity.input.slot.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
+
 export function createWorkflowApplication(ports) {
     const {
         CANON_CAST_IDENTITY_CONTRACT,
@@ -236,7 +241,6 @@ export function createWorkflowApplication(ports) {
         getSceneDestinationAuthority,
         isMemoryBoundaryGuardCurrent,
         jobRegistry,
-        limitMessagesToContext,
         migrateActorContextState,
         migrateActorKnowledgeBoundaries,
         migrateActorMovementHistory,
@@ -371,8 +375,7 @@ export function createWorkflowApplication(ports) {
     });
 
     const {
-        sendRoleRequest:
-            invokeRoleRequest,
+        createScheduledRoleInvoker,
         extractRoleResponseText,
         parseJsonObject,
     } = createModelAdapter({
@@ -380,13 +383,13 @@ export function createWorkflowApplication(ports) {
         applyRegexPresetById,
         beforeRequest:
             assertSaveRevisionWritable,
-        createContextBudgetPlan,
         getConnectionProfiles,
-        limitMessagesToContext,
         parseCompleteJsonObject,
         recordTurnDiagnostic,
         uuidv4,
     });
+    const invokeRoleRequest =
+        createScheduledRoleInvoker();
     const modelEventScheduler =
         createModelEventScheduler({
             invokeRole:
@@ -415,8 +418,6 @@ export function createWorkflowApplication(ports) {
                             ?.maxResponseLength,
                     )
                         .maxPromptCharacters,
-            enforceProductBudget:
-                true,
             onAttempt:
                 envelope =>
                     recordTurnDiagnostic(
@@ -441,7 +442,12 @@ export function createWorkflowApplication(ports) {
                                     .promptMeasurement
                                     ?.characters ??
                                 null,
-                            productBudget:
+                            runtimePromptCapacity:
+                                envelope
+                                    .promptBudget
+                                    ?.runtimeMaximumCharacters ??
+                                null,
+                            staticPromptTarget:
                                 envelope
                                     .promptBudget
                                     ?.maximumCharacters ??

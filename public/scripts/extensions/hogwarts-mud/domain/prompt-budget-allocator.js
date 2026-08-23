@@ -2,7 +2,7 @@ import {
     getModelTaskDefinition,
 } from './model-task-registry.js';
 
-export const PROMPT_BUDGET_POLICY_VERSION = 1;
+export const PROMPT_BUDGET_POLICY_VERSION = 2;
 
 const policies = Object.freeze({
     medium_character_polish: {
@@ -344,6 +344,51 @@ export function measurePromptMessages(
         transportSchemaCharacters,
         runtimeWrapperCharacters,
         sections,
+    };
+}
+
+/**
+ * Builds the one transport envelope used both for Prompt measurement and the
+ * eventual role-model request. The schema is measured separately because it is
+ * already included in the prompt budget as a transport schema.
+ *
+ * @param {{ maxResponseLength?: number, json?: boolean, jsonSchema?: object | null }} options
+ */
+export function createRoleTransportEnvelope({
+    maxResponseLength = 0,
+    json = false,
+    jsonSchema = null,
+} = {}) {
+    const requestPayload = {
+        max_tokens:
+            Math.max(
+                0,
+                Number(maxResponseLength) ||
+                0,
+            ),
+    };
+    const transportJsonSchema =
+        json && jsonSchema
+            ? jsonSchema
+            : null;
+    if (transportJsonSchema) {
+        requestPayload.json_schema =
+            transportJsonSchema;
+    } else if (json) {
+        requestPayload.response_format = {
+            type:
+                'json_object',
+        };
+    }
+    const runtimeWrapper = {
+        ...requestPayload,
+    };
+    delete runtimeWrapper
+        .json_schema;
+    return {
+        requestPayload,
+        transportJsonSchema,
+        runtimeWrapper,
     };
 }
 

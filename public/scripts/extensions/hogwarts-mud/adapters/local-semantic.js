@@ -1377,7 +1377,10 @@ export function createLocalSemanticAdapter(ports) {
             });
         input =
             promptAssembly.input;
-        if (!promptAssembly.fit) {
+        if (
+            provider === 'local' &&
+            !promptAssembly.fit
+        ) {
             return {
                 observation: {
                     result: {
@@ -1488,7 +1491,6 @@ export function createLocalSemanticAdapter(ports) {
                                 LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
                             stream: false,
                             skipRegexPreset: true,
-                            preservePrompt: true,
                         },
                     );
                 const raw =

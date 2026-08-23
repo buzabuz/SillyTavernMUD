@@ -1,19 +1,25 @@
+import {
+    createRoleTransportEnvelope,
+} from '../domain/prompt-budget-allocator.js';
+
+/**
+ * Role capacity handoff for role_capacity.measurement.completeRequest.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
+
 export function createModelAdapter(ports) {
     const {
         ConnectionManagerRequestService,
         applyRegexPresetById,
         beforeRequest = () => {},
-        createContextBudgetPlan =
-        () => null,
         getConnectionProfiles,
-        limitMessagesToContext,
         parseCompleteJsonObject,
         recordTurnDiagnostic =
         () => {},
         uuidv4,
     } = ports;
 
-    async function sendRoleRequest(
+    async function sendScheduledRoleRequest(
         slot,
         prompt,
         {
@@ -22,7 +28,6 @@ export function createModelAdapter(ports) {
             stream = false,
             onProgress = null,
             skipRegexPreset = false,
-            preservePrompt = false,
         } = {},
     ) {
         const profiles = getConnectionProfiles();
@@ -44,13 +49,9 @@ export function createModelAdapter(ports) {
         };
         profiles.push(effectiveProfile);
         const requestPrompt =
-            preservePrompt
-                ? structuredClone(prompt)
-                : limitMessagesToContext(
-                    prompt,
-                    slot.contextSize,
-                    slot.maxResponseLength,
-                );
+            structuredClone(
+                prompt,
+            );
         const requestCharacters =
             Array.isArray(requestPrompt)
                 ? requestPrompt.reduce(
@@ -70,19 +71,6 @@ export function createModelAdapter(ports) {
                     requestPrompt ||
                     '',
                 ).length;
-        const requestContextPlan =
-            createContextBudgetPlan(
-                slot.contextSize,
-                slot.maxResponseLength,
-            );
-        const requestExceedsContext =
-            Number.isFinite(
-                requestContextPlan
-                    ?.maxPromptCharacters,
-            ) &&
-            requestCharacters >
-                requestContextPlan
-                    .maxPromptCharacters;
         const diagnosticSystem =
             Array.isArray(prompt)
                 ? String(
@@ -150,10 +138,6 @@ export function createModelAdapter(ports) {
                 originalJson
                     ?.originalSceneInput ||
                 originalJson;
-            const limitedInput =
-                limitedJson
-                    ?.originalSceneInput ||
-                limitedJson;
             recordTurnDiagnostic(
                 'model_request',
                 {
@@ -182,12 +166,6 @@ export function createModelAdapter(ports) {
                             ).length,
                     limitedCharacters:
                         requestCharacters,
-                    maxPromptCharacters:
-                        requestContextPlan
-                            ?.maxPromptCharacters ??
-                        null,
-                    exceedsContextBudget:
-                        requestExceedsContext,
                     originalMessageCharacters:
                         Array.isArray(prompt)
                             ? prompt.map(
@@ -226,30 +204,11 @@ export function createModelAdapter(ports) {
                                 )
                             : [],
                     contextTrimmed:
-                        originalUser !==
-                            limitedUser ||
-                        diagnosticSystem !==
-                            limitedSystem,
+                        false,
                     originalUserJsonValid:
                         Boolean(originalJson),
                     limitedUserJsonValid:
                         Boolean(limitedJson),
-                    originalPlayerAction:
-                        originalInput
-                            ?.playerAction ||
-                        '',
-                    limitedPlayerAction:
-                        limitedInput
-                            ?.playerAction ||
-                        '',
-                    originalPlayerTurnSequence:
-                        originalInput
-                            ?.playerTurnSequence ||
-                        [],
-                    limitedPlayerTurnSequence:
-                        limitedInput
-                            ?.playerTurnSequence ||
-                        [],
                     targetWordRange:
                         originalInput
                             ?.targetWordRange ||
@@ -283,47 +242,19 @@ export function createModelAdapter(ports) {
                                     'Every direct block',
                                 ),
                     },
-                    limitedUserPrefix:
-                        limitedUser.slice(
-                            0,
-                            500,
-                        ),
-                    limitedUserSuffix:
-                        limitedUser.slice(
-                            -500,
-                        ),
                 },
             );
         }
-        if (requestExceedsContext) {
-            const error =
-                new Error(
-                    `职责请求上下文仍超过预算：${requestCharacters}/${requestContextPlan.maxPromptCharacters} 字符。`,
-                );
-            error.name =
-                'ContextBudgetExceededError';
-            throw error;
-        }
-        const overridePayload = {
-            max_tokens: slot.maxResponseLength,
-            ...(json ? {
-                ...(
-                    jsonSchema
-                        ? {
-                            json_schema:
-                            jsonSchema,
-                        }
-                        : {
-                        // Keep raw fenced JSON for legacy
-                        // director responses.
-                            response_format: {
-                                type:
-                                'json_object',
-                            },
-                        }
-                ),
-            } : {}),
-        };
+        const {
+            requestPayload:
+                overridePayload,
+        } =
+            createRoleTransportEnvelope({
+                maxResponseLength:
+                    slot.maxResponseLength,
+                json,
+                jsonSchema,
+            });
         const execute = requestStream => {
             beforeRequest();
             recordTurnDiagnostic(
@@ -393,6 +324,24 @@ export function createModelAdapter(ports) {
                 profiles.splice(index, 1);
             }
         }
+    }
+
+    function createScheduledRoleInvoker() {
+        return (
+            slot,
+            prompt,
+            options = {},
+        ) =>
+            sendScheduledRoleRequest(
+                slot,
+                prompt,
+                {
+                    ...options,
+                    // The public scheduler owns complete Prompt eligibility.
+                    preservePrompt:
+                        true,
+                },
+            );
     }
 
     function extractRoleResponseText(response) {
@@ -477,7 +426,7 @@ export function createModelAdapter(ports) {
     }
 
     return {
-        sendRoleRequest,
+        createScheduledRoleInvoker,
         extractRoleResponseText,
         parseJsonObject,
     };
