@@ -211,6 +211,8 @@ export function createWorkflowApplication(ports) {
         buildSpatialContext,
         buildStructuredPlayerTurnSequence,
         buildTemporaryActorPromotionPolicy,
+        clearForegroundModelActivity =
+        () => {},
         clearLiveSceneStream,
         consumePacingBeat,
         createContextBudgetPlan,
@@ -278,7 +280,6 @@ export function createWorkflowApplication(ports) {
         reconcileTemporaryActorDisplayNames,
         reconcileTurnActorPresenceWithSpatialState,
         reconcileVisibleActorPresenceState,
-        recoverScenePerformancePayload,
         reduceLocalPresence,
         removeExplicitAddressDirective,
         removeSpellCastDirectives,
@@ -287,6 +288,8 @@ export function createWorkflowApplication(ports) {
         assertSaveRevisionWritable =
         () => {},
         guardedSaveTransaction,
+        guardedRewriteTimeline,
+        recoverFailedPostPreservation,
         resolveActionCheck,
         resolveEventWitnesses,
         resolveItemCandidate,
@@ -297,8 +300,9 @@ export function createWorkflowApplication(ports) {
         saveMetadataDebounced,
         scheduleRender,
         selectSharedMemoriesForContext,
+        setForegroundModelActivity =
+        () => {},
         setLiveSceneStreamPhase,
-        settleNarrativeTurnPerformance,
         shouldTranslateToChinese,
         splitTranslationChunks,
         stripSyntheticSceneOpeningActorSegments,
@@ -313,7 +317,6 @@ export function createWorkflowApplication(ports) {
         validateOpeningWorldPackage,
         validatePacingAssessment,
         validatePerceptionContract,
-        validateScenePerformance,
         validateSceneTransitionPackage,
         validateSocialDirectorResult,
         validateTurnTransaction,
@@ -419,7 +422,24 @@ export function createWorkflowApplication(ports) {
                     )
                         .maxPromptCharacters,
             onAttempt:
-                envelope =>
+                envelope => {
+                    if (
+                        envelope
+                            .definition
+                            .blocking &&
+                        envelope.tier !==
+                            'local'
+                    ) {
+                        setForegroundModelActivity({
+                            taskId:
+                                envelope.taskId,
+                            phase:
+                                envelope.event
+                                    .phase,
+                            startedAt:
+                                Date.now(),
+                        });
+                    }
                     recordTurnDiagnostic(
                         'model_task_attempt',
                         {
@@ -453,6 +473,17 @@ export function createWorkflowApplication(ports) {
                                     ?.maximumCharacters ??
                                 null,
                         },
+                    );
+                },
+            onSuccess:
+                envelope =>
+                    clearForegroundModelActivity(
+                        envelope.taskId,
+                    ),
+            onFailure:
+                envelope =>
+                    clearForegroundModelActivity(
+                        envelope.taskId,
                     ),
         });
     const roleRequests = {
@@ -1526,15 +1557,12 @@ export function createWorkflowApplication(ports) {
         parseJsonObject,
         projectNpcRuntimeActorsForPrompt,
         recordTurnDiagnostic,
-        recoverScenePerformancePayload,
         removeExplicitAddressDirective,
         resolvePlayerAddressing,
         sendModelTaskRequest:
             roleRequests.scenePerformance,
         setLiveSceneStreamPhase,
-        settleNarrativeTurnPerformance,
         updateLiveSceneStream,
-        validateScenePerformance,
     });
 
     const {
@@ -1617,6 +1645,8 @@ export function createWorkflowApplication(ports) {
         getMudState,
         getSettings,
         getInspectorMapScope,
+        guardedRewriteTimeline,
+        recoverFailedPostPreservation,
         jobRegistry,
         normalizeEventKnowledge,
         parseItemOperationDirectives,

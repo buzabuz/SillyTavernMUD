@@ -389,6 +389,7 @@ function createWorkflowHarness(
         guard,
         failModel = false,
         failSave = false,
+        languageSkipped = false,
     } = {},
 ) {
     const calls = {
@@ -540,6 +541,15 @@ function createWorkflowHarness(
                     throw new Error(
                         'model unavailable',
                     );
+                }
+                if (languageSkipped) {
+                    return {
+                        languageSkipped: true,
+                        diagnostics: [{
+                            code:
+                                'model_language_mismatch',
+                        }],
+                    };
                 }
                 const payload =
                     createPayload();
@@ -1497,6 +1507,80 @@ test('model and persistence failures leave Scene, clock, Calendar, archive and m
     }
 });
 
+test('language-skipped Calendar and Timeline Moments stop before opening or persistence', async () => {
+    for (const {
+        label,
+        run,
+    } of [{
+            label: 'Calendar',
+            run: workflow =>
+                workflow.runCalendarMoment(
+                    'charms_exam',
+                ),
+        }, {
+            label: 'Timeline',
+            run: workflow =>
+                workflow.runTimelineMoment({
+                    startClock:
+                        TARGET_CLOCK,
+                    mapId:
+                        'hogwarts_castle',
+                    roomId:
+                        'black_lake_shore',
+                }),
+        }]) {
+        const state =
+            createState();
+        const before =
+            JSON.stringify(state);
+        const harness =
+            createWorkflowHarness(
+                state,
+                {
+                    languageSkipped: true,
+                },
+            );
+        await assert.rejects(
+            run(
+                harness.workflow,
+            ),
+            error =>
+                error?.code ===
+                'language_skipped',
+            `${label} Moment preserves the language-skip result`,
+        );
+        assert.equal(
+            JSON.stringify(state),
+            before,
+            `${label} Moment leaves world State unchanged`,
+        );
+        assert.equal(
+            harness.calls.director.length,
+            1,
+            `${label} Moment makes one director call`,
+        );
+        assert.equal(
+            harness.calls.opening.length,
+            0,
+            `${label} Moment does not call Scene Opening`,
+        );
+        assert.equal(
+            harness.calls.commits,
+            0,
+            `${label} Moment does not save`,
+        );
+        assert.deepEqual(
+            harness.calls.phases,
+            [
+                'preparing',
+                'archiving',
+                'idle',
+            ],
+            `${label} Moment never advances to opening`,
+        );
+    }
+});
+
 test('Calendar and Timeline Moment pages sharing one revision allow only the first guarded commit', async () => {
     const storage =
         createStorage();
@@ -1925,6 +2009,97 @@ test('guarded state-and-chat transaction requires durable acknowledgement and ke
         successHost.context
             .chat
             .at(-1).mes,
+        'new scene',
+    );
+});
+
+test('Calendar Moment commits after only model-task runtime revisions advance during its model calls', async () => {
+    const baseline =
+        createState();
+    const runtimeAdvanced =
+        structuredClone(baseline);
+    runtimeAdvanced.modelTaskRuntime = {
+        byTaskId: {
+            scene_transition: {
+                attempted: 1,
+                succeeded: 1,
+            },
+        },
+    };
+    runtimeAdvanced.stateRevision = 7;
+    runtimeAdvanced.revisionHistory = [{
+        id: 'runtime_7',
+        baseRevision: 6,
+        revision: 7,
+        source: 'model_task_runtime',
+        committedAt:
+            '1991-09-03T10:30:00.000Z',
+        changedDomains: [
+            'model_task_runtime',
+        ],
+    }];
+    const context = {
+        chatId:
+            'calendar-runtime-rebase',
+        chatMetadata: {
+            hogwartsMud:
+                runtimeAdvanced,
+        },
+        chat: [],
+        async saveMetadata() {
+            return {
+                durable: true,
+            };
+        },
+    };
+    const ports =
+        createGuardedSavePorts({
+            getContext: () => context,
+            guard:
+                createGuard(
+                    createStorage(),
+                    'calendar_runtime_rebase',
+                ),
+        });
+    await ports
+        .registerSaveRevisionHead();
+    const next =
+        structuredClone(baseline);
+    next.clock =
+        TARGET_CLOCK;
+
+    const result =
+        await ports
+            .guardedSaveTransaction({
+                currentState: baseline,
+                nextState: next,
+                source:
+                    'calendar_moment',
+                changedDomains: [
+                    'calendar',
+                    'clock',
+                    'scene',
+                ],
+                chatMessages: [{
+                    mes: 'new scene',
+                }],
+            });
+
+    assert.equal(result.ok, true);
+    assert.equal(
+        result.state.stateRevision,
+        8,
+    );
+    assert.equal(
+        result.state.clock,
+        TARGET_CLOCK,
+    );
+    assert.deepEqual(
+        result.state.modelTaskRuntime,
+        runtimeAdvanced.modelTaskRuntime,
+    );
+    assert.equal(
+        context.chat.at(-1).mes,
         'new scene',
     );
 });

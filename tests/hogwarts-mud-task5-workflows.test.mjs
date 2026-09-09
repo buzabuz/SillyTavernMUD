@@ -6,6 +6,9 @@ import test from 'node:test';
 import {
     createLocalSemanticAdapter,
 } from '../public/scripts/extensions/hogwarts-mud/adapters/local-semantic.js';
+import {
+    settlePostTurnModelResult,
+} from '../src/hogwarts-mud/local-semantic-adjudicator.js';
 import { createModelAdapter } from '../public/scripts/extensions/hogwarts-mud/adapters/model.js';
 import { createAutomaticWorkGate } from '../public/scripts/extensions/hogwarts-mud/runtime/automatic-work.js';
 import { createJobRegistry } from '../public/scripts/extensions/hogwarts-mud/runtime/job-registry.js';
@@ -44,6 +47,9 @@ import {
 } from '../public/scripts/extensions/hogwarts-mud/workflows/scene-transition.js';
 import { createTurnPerformanceWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/turn-performance.js';
 import { createTurnWorkflow } from '../public/scripts/extensions/hogwarts-mud/workflows/turn.js';
+import { preserveSceneNarrative } from '../public/scripts/extensions/hogwarts-mud/domain/narrative-preservation.js';
+import { createGuardedSavePorts } from '../public/scripts/extensions/hogwarts-mud/runtime/guarded-save-ports.js';
+import { createSaveRevisionGuard } from '../public/scripts/extensions/hogwarts-mud/runtime/save-revision-guard.js';
 
 function createOpeningHarness(responses) {
     const calls = [];
@@ -321,7 +327,10 @@ function createTurnHarness({
     invalidAddressing = false,
     legacyDiagnostics = null,
     postGate = null,
+    postObservation = null,
+    postTemporalDiagnostics = null,
     translationGate = null,
+    failInitialPreservation = false,
 } = {}) {
     const playerAction = 'Wait by the door.';
     const playerMessage = {
@@ -329,6 +338,7 @@ function createTurnHarness({
         mes: playerAction,
         extra: {
             hogwartsMud: {
+                role: 'player_turn',
                 ...(legacyDiagnostics
                     ? {
                         turnDiagnostics:
@@ -388,6 +398,36 @@ function createTurnHarness({
         saveMetadata: async () => {},
     };
     const jobRegistry = createJobRegistry();
+    let failPreservation = failInitialPreservation;
+    let durable;
+    const saveValues = new Map();
+    const savePorts = failInitialPreservation ? createGuardedSavePorts({
+        getContext: () => context,
+        guard: createSaveRevisionGuard({
+            lockManager: null,
+            storage: {
+                get length() { return saveValues.size; },
+                key: index => [...saveValues.keys()][index] ?? null,
+                getItem: key => saveValues.get(key) ?? null,
+                setItem: (key, value) => saveValues.set(key, String(value)),
+                removeItem: key => saveValues.delete(key),
+            },
+        }),
+        readPersistedTimeline: async () => [
+            { chat_metadata: { hogwartsMud: durable.state } }, ...durable.chat,
+        ],
+    }) : null;
+    if (savePorts) {
+        const persist = async () => {
+            if (failPreservation && context.chat[1]?.extra?.hogwartsMud?.pendingPostSettlement) {
+                throw new Error('initial disk write failed');
+            }
+            durable = structuredClone({ state: context.chatMetadata.hogwartsMud, chat: context.chat });
+            return { durable: true };
+        };
+        context.saveChat = persist;
+        context.saveMetadata = persist;
+    }
     let diagnosticId = 0;
     let diagnosticNow =
         Date.parse(
@@ -409,6 +449,7 @@ function createTurnHarness({
     let translationCompletion =
         Promise.resolve(true);
     const workflowOrder = [];
+    const modelCalls = [];
     const workflow = createTurnWorkflow({
         TRANSLATION_FORMAT_VERSION: 12,
         admitMentionedKnownActors: current => ({
@@ -434,20 +475,7 @@ function createTurnHarness({
         buildLocalSemanticRoomContext: () => ({
             rooms: [],
         }),
-        buildSceneTransaction: () => ({
-            protocolVersion: 2,
-            publicEventEn: 'Tina waits by the door.',
-            segments: [{
-                type: 'narration',
-                textEn: 'Tina waits by the door.',
-            }],
-            actorPresence: {
-                presentActorIdsAfterTurn: [],
-            },
-            actorUpdates: [],
-            itemUpdates: [],
-            settlementWarnings: [],
-        }),
+        buildSceneTransaction: createTurnPerformanceWorkflow({}).buildSceneTransaction,
         clearLiveSceneStream: () => {
             streamClears++;
         },
@@ -520,14 +548,17 @@ function createTurnHarness({
             }
             : null,
         generateScenePerformance:
-            async () => ({
-                segments: [{
-                    type:
+            async () => {
+                modelCalls.push('scene');
+                return preserveSceneNarrative({
+                    segments: [{
+                        type:
                         'narration',
-                    textEn:
+                        textEn:
                         'Tina waits by the door.',
-                }],
-            }),
+                    }],
+                });
+            },
         getActiveAddressingState: () => ({}),
         getContext: () => context,
         getFailedPlayerTurn: () => ({
@@ -536,6 +567,36 @@ function createTurnHarness({
         }),
         getMudState: () =>
             context.chatMetadata.hogwartsMud,
+        guardedRewriteTimeline:
+            async ({
+                currentState,
+                nextState,
+                nextChat,
+                source,
+            }) => {
+                if (failInitialPreservation && source === 'turn_post_pending') throw new Error('initial disk write failed');
+                assert.equal(
+                    currentState
+                        .stateRevision,
+                    context.chatMetadata
+                        .hogwartsMud
+                        .stateRevision,
+                );
+                context.chatMetadata
+                    .hogwartsMud =
+                    nextState;
+                context.chat.splice(
+                    0,
+                    context.chat.length,
+                    ...structuredClone(
+                        nextChat,
+                    ),
+                );
+                return {
+                    ok: true,
+                    state: nextState,
+                };
+            },
         getSettings: () => ({
             translationEnabled: false,
         }),
@@ -563,19 +624,23 @@ function createTurnHarness({
         removeSpellCastDirectives: value =>
             value,
         renderAll: () => {},
-        requestLocalTurnAdjudication: async () => ({
-            result: {
-                temporal: {
-                    elapsedMinutes: 15,
+        requestLocalTurnAdjudication: async () => {
+            modelCalls.push('pre');
+            return {
+                result: {
+                    temporal: {
+                        elapsedMinutes: 15,
+                    },
+                    check: {
+                        required: false,
+                    },
                 },
-                check: {
-                    required: false,
-                },
-            },
-            diagnostics: {},
-        }),
+                diagnostics: {},
+            };
+        },
         requestPostTurnSemanticObservation:
             async () => {
+                modelCalls.push('post');
                 workflowOrder.push(
                     'post_start',
                 );
@@ -586,7 +651,7 @@ function createTurnHarness({
                         'post_end',
                     );
                 }
-                return {
+                return postObservation || {
                     observation: {
                         diagnostics: {},
                     },
@@ -598,6 +663,8 @@ function createTurnHarness({
                         source:
                             'deterministic_test',
                     },
+                    temporalDiagnostics:
+                        postTemporalDiagnostics,
                     targetActorIds:
                         [],
                 };
@@ -629,10 +696,17 @@ function createTurnHarness({
             valid: true,
             errors: [],
         }),
+        ...(savePorts || {}),
     });
     return {
         context,
         jobRegistry,
+        preparePersistence: async () => {
+            await savePorts.registerSaveRevisionHead(context, { persistMigration: false });
+            durable = structuredClone({ state: context.chatMetadata.hogwartsMud, chat: context.chat });
+        },
+        resumeWrites: () => { failPreservation = false; },
+        get durable() { return durable; },
         get streamClears() {
             return streamClears;
         },
@@ -649,6 +723,7 @@ function createTurnHarness({
             return translationCompletion;
         },
         workflowOrder,
+        modelCalls,
         workflow,
     };
 }
@@ -1956,6 +2031,21 @@ test('turn diagnostics stay local, bounded, and retain only recent traces', () =
                             TURN_DIAGNOSTIC_STRING_LIMIT +
                                 10,
                         ),
+                    requestedPlayerAction:
+                        'raw player action',
+                    playerMessage:
+                        'raw player message',
+                    addressing: {
+                        speechText:
+                            'nested player speech',
+                        targetLabels: [
+                            'nested player target',
+                        ],
+                    },
+                    momentum: {
+                        unresolvedPublicPressureEn:
+                            'nested model output',
+                    },
                 },
             );
         }
@@ -1983,13 +2073,24 @@ test('turn diagnostics stay local, bounded, and retain only recent traces', () =
                 .sequence,
             0,
         );
-        assert.ok(
+        assert.equal(
+            trace.playerAction,
+            undefined,
+        );
+        assert.equal(
+            trace.playerActionCharacters,
+            `turn ${turn}`.length,
+        );
+        assert.deepEqual(
             trace.events
                 .find(event =>
                     event.stage ===
                         'event')
-                .data.text.length <=
-                TURN_DIAGNOSTIC_STRING_LIMIT,
+                .data,
+            {
+                addressing: {},
+                momentum: {},
+            },
         );
     }
     assert.equal(
@@ -2053,7 +2154,7 @@ test('opening workflow surfaces the first invalid response without repair', asyn
     );
 });
 
-test('model adapter records context limiting and the resulting model call', async () => {
+test('model adapter records scheduler-owned request metrics without raw prompt data', async () => {
     const events = [];
     const prompt = [
         {
@@ -2099,17 +2200,6 @@ test('model adapter records context limiting and the resulting model call', asyn
                 () => [{
                     id: 'base',
                 }],
-            limitMessagesToContext:
-                value => [
-                    value[0],
-                    {
-                        ...value[1],
-                        content:
-                            value[1]
-                                .content
-                                .slice(40),
-                    },
-                ],
             parseCompleteJsonObject:
                 value => value,
             recordTurnDiagnostic:
@@ -2123,20 +2213,21 @@ test('model adapter records context limiting and the resulting model call', asyn
                 () => 'diagnostic-test',
         });
 
-    await adapter.sendRoleRequest(
-        {
-            profileId:
+    await adapter
+        .createScheduledRoleInvoker()(
+            {
+                profileId:
                 'base',
-            contextSize:
+                contextSize:
                 4096,
-            maxResponseLength:
+                maxResponseLength:
                 512,
-        },
-        prompt,
-        {
-            json: true,
-        },
-    );
+            },
+            prompt,
+            {
+                json: true,
+            },
+        );
 
     assert.deepEqual(
         events.map(event =>
@@ -2153,22 +2244,32 @@ test('model adapter records context limiting and the resulting model call', asyn
     assert.equal(
         events[0].data
             .contextTrimmed,
-        true,
-    );
-    assert.equal(
-        events[0].data
-            .originalPlayerAction,
-        'Whisper to Lavender.',
-    );
-    assert.equal(
-        events[0].data
-            .limitedUserJsonValid,
         false,
     );
     assert.equal(
         events[0].data
+            .originalPlayerAction,
+        undefined,
+    );
+    assert.equal(
+        events[0].data
+            .limitedUserJsonValid,
+        true,
+    );
+    assert.equal(
+        events[0].data
             .limitedPlayerAction,
-        '',
+        undefined,
+    );
+    assert.equal(
+        events[0].data
+            .originalPlayerTurnSequence,
+        undefined,
+    );
+    assert.equal(
+        events[0].data
+            .limitedUserPrefix,
+        undefined,
     );
     assert.equal(
         events[0].data
@@ -2246,6 +2347,340 @@ test('production turn workflow overlaps Low post with P0 translation before comm
     );
 });
 
+test('initial narrative persistence failure retains session prose without Post dispatch or a saved claim', async () => {
+    const harness = createTurnHarness({ failInitialPreservation: true });
+    await harness.preparePersistence();
+    await harness.workflow.runStructuredTurn(harness.context.chat[0].mes);
+    assert.equal(harness.context.chat.length, 1);
+    assert.equal(harness.workflowOrder.includes('post_start'), false);
+    assert.equal(harness.jobRegistry.unsavedPostNarrative.message.extra.hogwartsMud.segments[0].textEn,
+        'Tina waits by the door.');
+    assert.equal(harness.jobRegistry.unsavedPostNarrative.message.extra.hogwartsMud.turnTransaction, undefined);
+    assert.equal(harness.context.chatMetadata.hogwartsMud.turn.status, 'post_unsettled');
+    const callsBefore = [...harness.modelCalls];
+    const countBefore = harness.context.chatMetadata.hogwartsMud.turn.count;
+    await assert.rejects(() => harness.workflow.retryPendingPostSettlement({ saveOnly: true }), /initial disk write failed/);
+    assert.ok(harness.jobRegistry.unsavedPostNarrative);
+    assert.equal(harness.durable.chat.length, 1);
+    harness.resumeWrites();
+    const result = await harness.workflow.retryPendingPostSettlement({ saveOnly: true });
+    assert.deepEqual(result, { settled: false, narrativeSaved: true });
+    assert.equal(harness.jobRegistry.unsavedPostNarrative, undefined);
+    assert.deepEqual(harness.modelCalls, callsBefore);
+    assert.deepEqual(callsBefore, ['pre', 'scene']);
+    assert.equal(harness.durable.state.turn.count, countBefore);
+    assert.equal(harness.durable.state.turn.status, 'post_unsettled');
+    assert.equal(harness.durable.chat[1].extra.hogwartsMud.segments[0].textEn, 'Tina waits by the door.');
+    assert.equal(harness.durable.chat[1].extra.hogwartsMud.pendingPostSettlement.recovery.supplement.status, 'available');
+    assert.equal(harness.durable.chat[1].extra.hogwartsMud.turnTransaction, undefined);
+});
+
+test('malformed Post families preserve a valid Material sibling until explicit defaults commit', async () => {
+    const narrative =
+        'Tina placed the brass cup on the table.';
+    const validMaterial = {
+        type: 'object_placed',
+        actorId: 'player',
+        objectTextEn:
+            'the brass cup',
+        sourceTextEn: '',
+        targetTextEn:
+            'the table',
+        valueTextEn: '',
+        previousValueTextEn: '',
+        resultTextEn:
+            'the brass cup on the table',
+        quantity: 1,
+        operation: 'add',
+        slot: 'hands',
+        hand: 'right',
+        persistence:
+            'until_changed',
+        sourceKind: 'narrative',
+        evidenceText: narrative,
+        confidence: 0.95,
+    };
+    const baseResult = {
+        schemaVersion: 2,
+        temporaryActors: [],
+        firstImpressions: [],
+        sceneProgression: null,
+        pacingRealization: null,
+        historicalClaims: [],
+        materialEvents: [
+            validMaterial,
+        ],
+        actorUpdates: [],
+        inventoryObservationRequired:
+            false,
+        perception: {
+            version: 1,
+            visualScope: 'room',
+            audibleScope: 'none',
+            salience: 'normal',
+            attribution: 'clear',
+            concealment: 'none',
+            directParticipantActorIds:
+                [],
+            evidenceText: narrative,
+            confidence: 0.9,
+            source:
+                'post_turn_observer',
+        },
+        temporalClaims: [],
+        playerMovement: null,
+        inventoryUpdates: [],
+        identityObservations: [],
+    };
+    const malformedCases = [
+        [
+            'materialEvents',
+            {
+                materialEvents: [
+                    validMaterial,
+                    {
+                        invalid: true,
+                    },
+                ],
+            },
+        ],
+        [
+            'actorUpdates',
+            {
+                actorUpdates: [{
+                    invalid: true,
+                }],
+            },
+        ],
+        [
+            'inventoryObservationRequired',
+            {
+                inventoryObservationRequired:
+                    'yes',
+            },
+        ],
+        [
+            'perception',
+            {
+                perception: {
+                    invalid: true,
+                },
+            },
+        ],
+        [
+            'temporalClaims',
+            {
+                temporalClaims: [{
+                    invalid: true,
+                }],
+            },
+        ],
+        [
+            'inventoryUpdates',
+            {
+                inventoryUpdates: [{
+                    invalid: true,
+                }],
+            },
+        ],
+        [
+            'identityObservations',
+            {
+                identityObservations: [{
+                    invalid: true,
+                }],
+            },
+        ],
+    ];
+
+    for (
+        const [
+            family,
+            malformed,
+        ]
+        of malformedCases
+    ) {
+        const raw = {
+            ...structuredClone(
+                baseResult,
+            ),
+            ...malformed,
+        };
+        const adapter =
+            createLocalSemanticAdapter({
+                buildLocalMapModel:
+                    () => ({
+                        nodes: [{
+                            id: 'classroom',
+                            nameEn:
+                                'Classroom',
+                        }],
+                        exits: [],
+                    }),
+                buildStructuredPlayerTurnSequence:
+                    () => [],
+                getRequestHeaders:
+                    () => ({}),
+                projectObservedInventoryUpdates:
+                    () => [],
+                resolveRoleSlots:
+                    slots => slots,
+                sendPostTurnSemanticRequest:
+                    async () => ({
+                        content:
+                            JSON.stringify(
+                                raw,
+                            ),
+                    }),
+                fetchImpl:
+                    async (_url, options) => ({
+                        ok: true,
+                        json:
+                            async () => {
+                                const body =
+                                    JSON.parse(
+                                        options
+                                            .body,
+                                    );
+                                return settlePostTurnModelResult(
+                                    body.input,
+                                    body.raw,
+                                );
+                            },
+                    }),
+                validatePerceptionContract:
+                    perception => ({
+                        valid:
+                            Boolean(
+                                perception,
+                            ),
+                        value:
+                            perception,
+                    }),
+            });
+        const postObservation =
+            await adapter
+                .requestPostTurnSemanticObservation(
+                    {
+                        clock:
+                            '1991-09-01 · 08:00',
+                        postTurnSemanticProvider:
+                            'low',
+                        modelSlots: {
+                            low: {
+                                profileId:
+                                    'low-profile',
+                            },
+                        },
+                        character: {
+                            canonicalEn: {
+                                identity: {
+                                    nameEn:
+                                        'Tina',
+                                },
+                            },
+                        },
+                        map: {
+                            activeMapId:
+                                'castle',
+                            currentLocalNodeId:
+                                'classroom',
+                        },
+                        scene: {
+                            id: 'lesson',
+                            mapId: 'castle',
+                            roomId:
+                                'classroom',
+                        },
+                        actors: [],
+                        actorLibrary: [],
+                        localPresence: {
+                            occupantActorIds:
+                                [],
+                        },
+                        items: [],
+                    },
+                    'Wait by the door.',
+                    {
+                        elapsedMinutes: 15,
+                        segments: [{
+                            type:
+                                'narration',
+                            textEn:
+                                narrative,
+                        }],
+                        actorPresence: {
+                            presentActorIdsAfterTurn:
+                                [],
+                        },
+                        actorUpdates: [],
+                    },
+                );
+        assert.notEqual(
+            postObservation
+                .postSettlementFailure,
+            true,
+            family,
+        );
+        assert.equal(
+            postObservation
+                .materialEvents
+                .length,
+            1,
+            family,
+        );
+        const harness =
+            createTurnHarness({
+                postObservation,
+            });
+
+        await harness.workflow
+            .runStructuredTurn(
+                harness.context
+                    .chat[0].mes,
+            );
+
+        if (family !== 'inventoryObservationRequired') {
+            assert.equal(harness.context.chatMetadata.hogwartsMud.turn.status, 'post_unsettled', family);
+            assert.equal(harness.context.chat[1].extra.hogwartsMud.turnTransaction, undefined, family);
+            await harness.workflow.retryPendingPostSettlement({ defaults: true });
+        }
+        assert.equal(
+            harness.context
+                .chatMetadata
+                .hogwartsMud
+                .turn.status,
+            'idle',
+            family,
+        );
+        assert.equal(
+            harness.context
+                .chatMetadata
+                .hogwartsMud
+                .lastTransaction
+                .materialEvents
+                .length,
+            1,
+            family,
+        );
+        assert.ok(
+            harness.context
+                .chatMetadata
+                .hogwartsMud
+                .lastTransaction
+                .settlementWarnings
+                .some(warning =>
+                    warning.code ===
+                        'post_family_rejected' &&
+                    warning.detail
+                        .startsWith(
+                            `${family}:`,
+                        )),
+            family,
+        );
+    }
+});
+
 test('failed-turn retry appends one assistant response without duplicating player input', async () => {
     const legacyDiagnostics = {
         version: 1,
@@ -2278,7 +2713,7 @@ test('failed-turn retry appends one assistant response without duplicating playe
             .hogwartsMud
             .turnDiagnostics
             .version,
-        2,
+        3,
     );
     assert.deepEqual(
         harness.context.chat[0]
@@ -2397,7 +2832,7 @@ test('selected provider paths keep one early current-message owner without post-
     );
 });
 
-test('[defect-probing] production addressing failure persists bounded V2 diagnostics for the new turn', async () => {
+test('[defect-probing] production addressing failure persists bounded V3 diagnostics for the new turn', async () => {
     const legacyDiagnostics = {
         version: 1,
         traceId: 'legacy-v1',
@@ -2423,7 +2858,7 @@ test('[defect-probing] production addressing failure persists bounded V2 diagnos
             .turnDiagnostics;
     assert.equal(
         diagnostics.version,
-        2,
+        3,
     );
     assert.equal(
         diagnostics.status,
@@ -2441,6 +2876,69 @@ test('[defect-probing] production addressing failure persists bounded V2 diagnos
     assert.equal(
         harness.jobRegistry
             .turnActive,
+        false,
+    );
+});
+
+test('[defect-probing] temporal claim diagnostics retain rule metadata but never persist evidence prose', async () => {
+    const evidence =
+        'TEMPORAL_EVIDENCE_SENTINEL: the player and model prose must not persist';
+    const harness =
+        createTurnHarness({
+            postTemporalDiagnostics: {
+                valid: false,
+                accepted: 0,
+                rejected: 1,
+                errors: [
+                    `Rejected temporal claim: ${evidence}`,
+                ],
+                reasonCodes: [
+                    evidence,
+                ],
+                rejectedClaims: [{
+                    index: 3,
+                    evidenceText: evidence,
+                    kind: 'schedule',
+                    reason:
+                        'external_time_not_authorized',
+                }],
+            },
+        });
+
+    await harness.workflow
+        .retryFailedPlayerTurn();
+
+    const diagnostics =
+        harness.context.chat[1]
+            .extra
+            .hogwartsMud
+            .turnDiagnostics;
+    const validation =
+        diagnostics.events.find(event =>
+            event.stage ===
+                'temporal_claim_validation');
+    assert.deepEqual(
+        validation.data,
+        {
+            valid: false,
+            accepted: 0,
+            rejected: 1,
+            reasonCodes: [
+                'unknown_rejection_reason',
+                'external_time_not_authorized',
+            ],
+            rejectedClaims: [{
+                index: 3,
+                kind: 'schedule',
+                reason:
+                    'external_time_not_authorized',
+            }],
+            persisted: false,
+        },
+    );
+    assert.equal(
+        JSON.stringify(diagnostics)
+            .includes(evidence),
         false,
     );
 });

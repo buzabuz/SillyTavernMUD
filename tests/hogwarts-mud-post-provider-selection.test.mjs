@@ -30,12 +30,18 @@ import {
     parsePostTurnModelResult,
     settlePostTurnModelResult,
 } from '../src/hogwarts-mud/local-semantic-adjudicator.js';
+import { createPostRecovery } from '../public/scripts/extensions/hogwarts-mud/domain/post-recovery.js';
 
 const NARRATIVE =
     'Hermione nods from the front desk.';
 
 const VALID_RESULT = Object.freeze({
-    schemaVersion: 1,
+    schemaVersion: 2,
+    temporaryActors: [],
+    firstImpressions: [],
+    sceneProgression: null,
+    pacingRealization: null,
+    historicalClaims: [],
     materialEvents: [],
     actorUpdates: [],
     inventoryObservationRequired: false,
@@ -261,7 +267,36 @@ test('Low retry sends one complete-Post request, skips Regex, and settles its ra
                 return {
                     content:
                         JSON.stringify(
-                            LOW_VALID_RESULT,
+                            {
+                                ...LOW_VALID_RESULT,
+                                materialEvents: [{
+                                    type:
+                                        'scene_adjusted',
+                                    actorId: '',
+                                    objectTextEn:
+                                        'front desk',
+                                    sourceTextEn: '',
+                                    targetTextEn: '',
+                                    valueTextEn: '',
+                                    previousValueTextEn:
+                                        '',
+                                    resultTextEn:
+                                        'Hermione nods from the front desk.',
+                                    quantity: null,
+                                    operation: 'set',
+                                    slot:
+                                        'unspecified',
+                                    hand:
+                                        'unspecified',
+                                    persistence:
+                                        'transient',
+                                    sourceKind:
+                                        'narrative',
+                                    evidenceText:
+                                        NARRATIVE,
+                                    confidence: 0.9,
+                                }],
+                            },
                         ),
                 };
             },
@@ -344,6 +379,10 @@ test('Low retry sends one complete-Post request, skips Regex, and settles its ra
     assert.deepEqual(
         result.itemUpdates,
         [],
+    );
+    assert.equal(
+        result.materialEvents.length,
+        1,
     );
 });
 
@@ -895,6 +934,93 @@ test('Local no-fit does not invoke either selected Post transport', async () => 
     );
 });
 
+test('Local Dynamic failures stay recoverable without discarding valid core Post records', async t => {
+    for (const outcome of ['transport_failure', 'rejected_record', 'accepted_record']) {
+        await t.test(outcome, async () => {
+            const calls = [];
+            const tx = createTransaction();
+            const progression = {
+                type: 'social_shift', summaryEn: 'Hermione acknowledges the player.', evidenceText: NARRATIVE,
+            };
+            const acceptedIdentity = { actorId: 'hermione', kind: 'injury_assessment', status: 'visible_injury' };
+            const adapter = createAdapter({
+                runLocalModelTask: async (id, invoke) => { calls.push(id); return invoke(); },
+                fetchImpl: async (url, options) => {
+                    if (url === '/api/hogwarts-mud/local/observe') return {
+                        ok: true,
+                        json: async () => settlePostTurnModelResult(JSON.parse(options.body).input, {
+                            ...VALID_RESULT, sceneProgression: progression, inventoryObservationRequired: true,
+                        }),
+                    };
+                    if (outcome === 'transport_failure') throw new Error('Dynamic unavailable');
+                    return { ok: true, json: async () => ({
+                        result: { inventoryUpdates: [], identityObservations:
+                            outcome === 'accepted_record' ? [acceptedIdentity] : [] },
+                        diagnostics: {
+                            routed: true, requestedTasks: ['inventory', 'identity'], modelCalls: 1,
+                            inventory: { rejections: outcome === 'rejected_record'
+                                ? [{ index: 0, code: 'invalid_evidence' }] : [] },
+                            identity: {},
+                        },
+                    }) };
+                },
+            });
+            const result = await adapter.requestPostTurnSemanticObservation(createState('local'), 'I wait.', tx);
+            const recovery = createPostRecovery(result, tx);
+            assert.equal(result.postSettlementFailure, undefined);
+            assert.deepEqual(recovery.accepted.observation.result.sceneProgression, progression);
+            assert.deepEqual(calls, ['post_turn_semantic_proposal', 'local_dynamic_turn_observer']);
+            assert.deepEqual(recovery.groups.map(group => group.id),
+                outcome === 'accepted_record' ? [] : ['inventoryUpdates']);
+            if (outcome === 'accepted_record') {
+                assert.deepEqual(recovery.accepted.observation.result.identityObservations, [acceptedIdentity]);
+            }
+        });
+    }
+});
+
+test('Low Post delegates protected no-fit eligibility to the public role request', async () => {
+    let roleCalls = 0;
+    let localCalls = 0;
+    const adapter = createAdapter({
+        sendPostTurnSemanticRequest:
+            async () => {
+                roleCalls++;
+                throw new RangeError(
+                    'above runtime ceiling',
+                );
+            },
+        runLocalModelTask:
+            async () => {
+                localCalls++;
+            },
+    });
+
+    const result =
+        await adapter
+            .requestPostTurnSemanticObservation(
+                createState('low'),
+                'x'.repeat(
+                    100_000,
+                ),
+                createTransaction(),
+            );
+
+    assert.equal(
+        roleCalls,
+        1,
+        'Low must reach the scheduler even when protected input is too large',
+    );
+    assert.equal(
+        localCalls,
+        0,
+    );
+    assert.equal(
+        result.postSettlementFailure,
+        true,
+    );
+});
+
 test('Low JSON or settlement failure does not invoke Local, perception, or dynamic observation fallback', async () => {
     let roleCalls = 0;
     let localCalls = 0;
@@ -1038,23 +1164,24 @@ test('Low post request disables the profile Regex preset without changing its JS
             () => 'provider-selection',
     });
 
-    await adapter.sendRoleRequest(
-        {
-            profileId: 'low-profile',
-            contextSize: 4_096,
-            maxResponseLength: 512,
-        },
-        createPostTurnSemanticMessages({
-            playerAction: 'I wait.',
-        }),
-        {
-            json: true,
-            jsonSchema:
+    await adapter
+        .createScheduledRoleInvoker()(
+            {
+                profileId: 'low-profile',
+                contextSize: 4_096,
+                maxResponseLength: 512,
+            },
+            createPostTurnSemanticMessages({
+                playerAction: 'I wait.',
+            }),
+            {
+                json: true,
+                jsonSchema:
                 POST_TURN_TRANSPORT_JSON_SCHEMA,
-            skipRegexPreset: true,
-            preservePrompt: true,
-        },
-    );
+                skipRegexPreset: true,
+                preservePrompt: true,
+            },
+        );
 
     assert.deepEqual(
         appliedRegexIds,

@@ -82,6 +82,7 @@ export function createGuardedSavePorts(
         guard =
         createSaveRevisionGuard(),
         onConflict = () => {},
+        readPersistedTimeline = null,
     } = {},
 ) {
     if (
@@ -1255,6 +1256,35 @@ export function createGuardedSavePorts(
         );
     }
 
+    async function recoverFailedPostPreservation(expectedState, expectedChat) {
+        const context = unwrapContext(getHostContext());
+        if (context.chatMetadata.hogwartsMud.timelineEpoch !== expectedState.timelineEpoch
+            || context.chatMetadata.hogwartsMud.stateRevision !== expectedState.stateRevision
+            || JSON.stringify(context.chat) !== JSON.stringify(expectedChat)) return false;
+        const recovered = await guard.recoverUncertainWrite(expectedState, async () => {
+            let rows;
+            if (readPersistedTimeline) rows = await readPersistedTimeline(context);
+            else {
+                const character = context.characters?.[context.characterId];
+                if (!character || context.groupId || !context.getRequestHeaders) return false;
+                const response = await fetch('/api/chats/get', {
+                    method: 'POST', headers: context.getRequestHeaders(), cache: 'no-cache',
+                    body: JSON.stringify({
+                        ch_name: character.name, file_name: character.chat, avatar_url: character.avatar,
+                    }),
+                });
+                if (!response.ok) return false;
+                rows = await response.json();
+            }
+            const saved = rows?.[0]?.chat_metadata?.hogwartsMud;
+            return saved?.timelineEpoch === expectedState.timelineEpoch
+                && saved?.stateRevision === expectedState.stateRevision
+                && JSON.stringify(rows.slice(1)) === JSON.stringify(expectedChat);
+        });
+        if (recovered) observeContext(context, { force: true });
+        return recovered && !active.conflict;
+    }
+
     function initializeNewTimelineState(
         worldState,
         options = {},
@@ -1281,6 +1311,7 @@ export function createGuardedSavePorts(
         guardedSaveChat,
         guardedSaveMetadata,
         guardedSaveTransaction,
+        recoverFailedPostPreservation,
         initializeNewTimelineState,
         isSaveRevisionBlocked:
             () =>

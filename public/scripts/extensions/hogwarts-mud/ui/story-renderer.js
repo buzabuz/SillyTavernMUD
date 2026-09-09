@@ -21,6 +21,7 @@ import {
 import {
     getSceneTimelineDisplaySummary,
 } from '../domain/scene-timeline-display.js';
+import { upgradePendingPostSettlement } from '../domain/pending-post-settlement.js';
 
 export function createStoryRenderer(ports) {
     const {
@@ -1580,7 +1581,28 @@ export function createStoryRenderer(ports) {
                 storyElement.append(renderMessage(message, messageId)));
         }
 
-        if (saveRevisionBlocked) {
+        const unsaved = jobRegistry.unsavedPostNarrative?.chat === context.chat
+            ? jobRegistry.unsavedPostNarrative : null;
+        if (unsaved) {
+            storyElement.append(renderMessage(unsaved.message, unsaved.messageId));
+            const warning = document.createElement('div');
+            warning.className = 'hpmud-system-turn hpmud-post-recovery';
+            warning.textContent = staticText('ui.story.post_unsettled.unsaved', 'Reply not saved.');
+            const saveOnly = document.createElement('button');
+            saveOnly.type = 'button';
+            saveOnly.textContent = staticText('ui.story.post_unsettled.save_only', 'Retry saving reply');
+            saveOnly.disabled = jobRegistry.turnActive;
+            saveOnly.addEventListener('click', () => {
+                saveOnly.disabled = true;
+                void retryPendingPostSettlement({ saveOnly: true }).catch(error => {
+                    console.error('[Hogwarts MUD] Narrative save retry failed', error);
+                    toastr.error(staticText('ui.story.post_unsettled.action_failed', 'Settlement could not be saved.'));
+                }).finally(() => renderAll());
+            });
+            warning.append(saveOnly);
+            storyElement.append(warning);
+        }
+        if (saveRevisionBlocked && !unsaved) {
             const conflict =
                 document.createElement(
                     'div',
@@ -1617,6 +1639,7 @@ export function createStoryRenderer(ports) {
         if (
             state.turn?.status ===
             'post_unsettled' &&
+            !unsaved &&
             !jobRegistry.turnActive
         ) {
             const recovery =
@@ -1624,7 +1647,7 @@ export function createStoryRenderer(ports) {
                     'div',
                 );
             recovery.className =
-                'hpmud-system-turn hpmud-turn-failure';
+                'hpmud-system-turn hpmud-turn-failure hpmud-post-recovery';
             const title =
                 document.createElement(
                     'strong',
@@ -1645,11 +1668,48 @@ export function createStoryRenderer(ports) {
                 document.createElement(
                     'div',
                 );
-            const pending =
+            let pending =
                 context.chat.at(-1)?.extra
                     ?.hogwartsMud
                     ?.pendingPostSettlement ||
                 null;
+            let invalidLegacy = false;
+            if (pending?.version === 1) {
+                try {
+                    pending = upgradePendingPostSettlement(state, context.chat, pending);
+                } catch {
+                    invalidLegacy = true;
+                }
+            }
+            const selectionKey = JSON.stringify([
+                state.timelineEpoch, pending?.sceneMessageId, pending?.recovery?.sourceIdentity,
+                pending?.recovery?.groups?.map(group => group.id),
+            ]);
+            if (session.postRecoverySelection?.key !== selectionKey) {
+                session.postRecoverySelection = {
+                    key: selectionKey, groups: new Set(pending?.recovery?.groups?.map(group => group.id) || []),
+                };
+            }
+            const selectedGroups = session.postRecoverySelection.groups;
+            const fields = document.createElement('fieldset');
+            fields.className = 'hpmud-post-recovery-fields';
+            for (const group of pending?.recovery?.groups || []) {
+                const label = document.createElement('label');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = selectedGroups.has(group.id);
+                checkbox.disabled = saveRevisionBlocked || pending?.recovery?.supplement?.status !== 'available';
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) selectedGroups.add(group.id);
+                    else selectedGroups.delete(group.id);
+                    retry.disabled = saveRevisionBlocked || pending?.retryable !== true || !selectedGroups.size
+                        || pending?.recovery?.supplement?.status !== 'available';
+                });
+                label.append(checkbox, document.createTextNode(
+                    `${staticText(`ui.story.post_family.${group.id}`, 'Settlement')} (${group.count})`,
+                ));
+                fields.append(label);
+            }
             title.textContent =
                 staticText(
                     'ui.story.post_unsettled.title',
@@ -1657,7 +1717,10 @@ export function createStoryRenderer(ports) {
                 );
             detail.textContent =
                 staticText(
-                    'ui.story.post_unsettled.detail',
+                    pending?.recovery?.blockingMovement
+                        ? 'ui.story.post_unsettled.movement_blocked'
+                        : pending?.recovery?.supplement?.status !== 'available'
+                            ? 'ui.story.post_unsettled.spent' : 'ui.story.post_unsettled.detail',
                     'No world changes were committed. Retry Post or discard this turn.',
                 );
             retry.type = 'button';
@@ -1666,11 +1729,12 @@ export function createStoryRenderer(ports) {
             retry.disabled =
                 saveRevisionBlocked ||
                 pending?.retryable !==
-                    true;
+                    true || pending?.recovery?.supplement?.status !== 'available'
+                    || !selectedGroups.size;
             retry.textContent =
                 staticText(
-                    'ui.story.post_unsettled.retry',
-                    'Retry Post',
+                    'ui.story.post_unsettled.supplement',
+                    'Supplement selected once',
                 );
             retry.addEventListener(
                 'click',
@@ -1679,18 +1743,14 @@ export function createStoryRenderer(ports) {
                     retry.classList.add(
                         'is-loading',
                     );
-                    void retryPendingPostSettlement()
+                    void retryPendingPostSettlement({ selectedGroupIds: [...selectedGroups] })
                         .catch(error => {
                             console.error(
                                 '[Hogwarts MUD] Post settlement retry failed',
                                 error,
                             );
                             toastr.error(
-                                String(
-                                    error?.cause?.message ||
-                                    error?.message ||
-                                    error,
-                                ),
+                                staticText('ui.story.post_unsettled.action_failed', 'Settlement could not be saved.'),
                             );
                         })
                         .finally(() =>
@@ -1751,13 +1811,30 @@ export function createStoryRenderer(ports) {
             );
             actions.className =
                 'hpmud-post-settlement-actions';
+            const defaults = document.createElement('button');
+            defaults.type = 'button';
+            defaults.className = 'hpmud-retry-turn';
+            defaults.textContent = staticText('ui.story.post_unsettled.defaults', 'Continue with defaults');
+            defaults.disabled = saveRevisionBlocked || invalidLegacy || !pending
+                || pending?.recovery?.blockingMovement === true;
+            defaults.addEventListener('click', () => {
+                defaults.disabled = true;
+                retry.disabled = true;
+                void retryPendingPostSettlement({ defaults: true })
+                    .catch(() => toastr.error(staticText(
+                        'ui.story.post_unsettled.action_failed', 'Settlement could not be saved.',
+                    )))
+                    .finally(() => renderAll());
+            });
             actions.append(
                 retry,
+                defaults,
                 discard,
             );
             recovery.append(
                 title,
                 detail,
+                fields,
                 actions,
             );
             storyElement.append(recovery);

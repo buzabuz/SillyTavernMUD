@@ -11,6 +11,7 @@ import {
 } from '../public/scripts/extensions/hogwarts-mud/domain/movement-post-settlement.js';
 import {
     isPendingPostSettlementCurrent,
+    PENDING_POST_SETTLEMENT_VERSION,
 } from '../public/scripts/extensions/hogwarts-mud/domain/pending-post-settlement.js';
 import {
     reconcileSpatialState,
@@ -183,7 +184,7 @@ test('pending Post settlement rejects a changed State revision', () => {
             state,
             {
                 ...pending,
-                version: 1,
+                version: PENDING_POST_SETTLEMENT_VERSION,
             },
         ),
         false,
@@ -193,7 +194,7 @@ test('pending Post settlement rejects a changed State revision', () => {
             state,
             {
                 ...pending,
-                version: 1,
+                version: PENDING_POST_SETTLEMENT_VERSION,
                 stateRevision: 7,
             },
         ),

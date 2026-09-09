@@ -403,7 +403,8 @@ test('ordinary successful Performer keeps the paid budget at one low call', asyn
             resolveTemporaryActorRevealedName:
                 actor => actor,
             sendModelTaskRequest:
-                model.sendRoleRequest,
+                model
+                    .createScheduledRoleInvoker(),
             setLiveSceneStreamPhase:
                 () => {},
             settleNarrativeTurnPerformance:
@@ -538,7 +539,8 @@ test('event-boundary schema consolidation uses one existing medium call', async 
             selectSharedMemoriesForContext:
                 memories => memories,
             sendModelTaskRequest:
-                model.sendRoleRequest,
+                model
+                    .createScheduledRoleInvoker(),
             validateMemoryConsolidation:
                 () => ({
                     valid: true,
@@ -866,6 +868,34 @@ function createBoundaryTurnHarness({
                     context
                         .chatMetadata
                         .hogwartsMud,
+            guardedRewriteTimeline:
+                async ({
+                    currentState,
+                    nextState,
+                    nextChat,
+                }) => {
+                    assert.equal(
+                        currentState
+                            .stateRevision,
+                        context.chatMetadata
+                            .hogwartsMud
+                            .stateRevision,
+                    );
+                    context.chatMetadata
+                        .hogwartsMud =
+                        nextState;
+                    context.chat.splice(
+                        0,
+                        context.chat.length,
+                        ...structuredClone(
+                            nextChat,
+                        ),
+                    );
+                    return {
+                        ok: true,
+                        state: nextState,
+                    };
+                },
             getSettings:
                 () => ({
                     translationEnabled:
@@ -1516,7 +1546,7 @@ test('[defect-probing] stale post-turn Appraisal work cannot overwrite a newer r
         harness.context.chatMetadata
             .hogwartsMud
             .stateRevision,
-        7,
+        8,
     );
     assert.deepEqual(
         harness.context.chatMetadata

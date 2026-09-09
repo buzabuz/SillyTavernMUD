@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'node:path';
+import { ZodError } from 'zod';
 
 import {
     TRANSLATION_API_CONTRACT_VERSION,
@@ -47,6 +48,9 @@ import {
     settlePostTurnModelResult,
     translateText,
 } from '../hogwarts-mud/local-semantic-adjudicator.js';
+import {
+    PostTurnResultEnvelopeError,
+} from '../hogwarts-mud/post-turn-result-settlement.js';
 import {
     proposeTurnAppraisals,
 } from '../hogwarts-mud/local-appraisal-proposer.js';
@@ -1690,6 +1694,21 @@ router.post('/local/observe', async (request, response) => {
             ),
         );
     } catch (error) {
+        if (
+            error instanceof
+                PostTurnResultEnvelopeError ||
+            error instanceof
+                SyntaxError ||
+            error instanceof
+                ZodError
+        ) {
+            return response.status(422).json({
+                error:
+                    'Post-turn semantic result rejected.',
+                failureCode:
+                    'post_schema_failed',
+            });
+        }
         console.warn(
             '[Hogwarts MUD] Local post-turn observation unavailable',
             error,

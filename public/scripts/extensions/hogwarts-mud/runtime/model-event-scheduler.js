@@ -374,40 +374,55 @@ export function createModelEventScheduler({
                     requestOptions,
                 );
             if (usesWorldLedger) {
-                const outcomeState =
-                    currentTaskState(
-                        prepared,
+                try {
+                    const outcomeState =
+                        currentTaskState(
+                            prepared,
+                        );
+                    recordModelTaskSuccess(
+                        outcomeState,
+                        prepared.definition,
+                        prepared.event,
                     );
-                recordModelTaskSuccess(
-                    outcomeState,
-                    prepared.definition,
-                    prepared.event,
-                );
-                await persistRuntime(
-                    outcomeState,
-                );
+                    await persistRuntime(
+                        outcomeState,
+                    );
+                } finally {
+                    onSuccess(
+                        envelope,
+                    );
+                }
+            } else {
+                onSuccess(envelope);
             }
-            onSuccess(envelope);
             return result;
         } catch (error) {
             if (usesWorldLedger) {
-                const outcomeState =
-                    currentTaskState(
-                        prepared,
+                try {
+                    const outcomeState =
+                        currentTaskState(
+                            prepared,
+                        );
+                    recordModelTaskFailure(
+                        outcomeState,
+                        prepared.definition,
+                        prepared.event,
                     );
-                recordModelTaskFailure(
-                    outcomeState,
-                    prepared.definition,
-                    prepared.event,
-                );
-                await persistRuntime(
-                    outcomeState,
-                );
+                    await persistRuntime(
+                        outcomeState,
+                    );
+                } finally {
+                    onFailure({
+                        ...envelope,
+                        error,
+                    });
+                }
+            } else {
+                onFailure({
+                    ...envelope,
+                    error,
+                });
             }
-            onFailure({
-                ...envelope,
-                error,
-            });
             throw error;
         }
     }

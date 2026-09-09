@@ -471,7 +471,7 @@ async function withSettlementFetch(
     }
 }
 
-test('[defect-probing] ordinary Performer reports the first validation error without a repair call', async () => {
+test('ordinary Performer preserves prose before Item authority validation without a repair call', async () => {
     const prompts = [];
     const diagnostics = [];
     const responses = [
@@ -527,7 +527,7 @@ test('[defect-probing] ordinary Performer reports the first validation error wit
             ),
         );
 
-    await assert.rejects(
+    await assert.doesNotReject(
         () => withSettlementFetch(
             () =>
                 workflow.generateScenePerformance(
@@ -558,8 +558,8 @@ test('[defect-probing] ordinary Performer reports the first validation error wit
                     createContextPlan(),
                 ),
         ),
-        /Item vanished_quill is physically absent/u,
     );
+    assert.equal(validations, 0, 'Scene no longer performs Post authority validation.');
 
     assert.equal(
         prompts.length,
@@ -592,7 +592,7 @@ test('[defect-probing] ordinary Performer reports the first validation error wit
     );
 });
 
-test('[defect-probing] production Performer reports an extreme invalid output after one bounded request', async () => {
+test('production Performer preserves prose with invalid auxiliary output after one bounded request', async () => {
     const prompts = [];
     const claimTextEn =
         'Yesterday in the rain corridor, you hid my umbrella.';
@@ -655,7 +655,7 @@ test('[defect-probing] production Performer reports an extreme invalid output af
             ),
         );
 
-    await assert.rejects(
+    await assert.doesNotReject(
         () => withSettlementFetch(
             () =>
                 workflow.generateScenePerformance(
@@ -686,8 +686,8 @@ test('[defect-probing] production Performer reports an extreme invalid output af
                     createContextPlan(),
                 ),
         ),
-        /不得写入字段：disposable/u,
     );
+    assert.equal(validations, 0);
 
     assert.equal(
         prompts.length,
@@ -948,6 +948,110 @@ test('[defect-probing] low Opening reports the first validation error without a 
     );
 });
 
+test('low Opening preserves a valid seven-segment response without a retry', async () => {
+    const response =
+        JSON.stringify({
+            segments: [{
+                type: 'narration',
+                textEn:
+                    'The Library windows blur with afternoon rain.',
+            }, {
+                type: 'narration',
+                textEn:
+                    'A brass lamp makes the nearest table usable.',
+            }, {
+                type: 'dialogue',
+                actorId: 'hermione',
+                textEn:
+                    'Keep your voice down.',
+            }, {
+                type: 'narration',
+                textEn:
+                    'Hermione turns another page.',
+            }, {
+                type: 'dialogue',
+                actorId: 'hermione',
+                textEn:
+                    'The index is nearly finished.',
+            }, {
+                type: 'narration',
+                textEn:
+                    'The librarian watches from the desk.',
+            }, {
+                type: 'dialogue',
+                actorId: 'hermione',
+                textEn:
+                    'What are you looking for?',
+            }],
+        });
+    const workflow =
+        createSceneTransitionWorkflow(
+            createTransitionPorts(
+                async () => ({
+                    content: response,
+                }),
+                () => ({
+                    valid: true,
+                    errors: [],
+                }),
+            ),
+        );
+
+    const result =
+        await workflow
+            .generateSceneTransitionOpening(
+                {
+                    profileId: 'low',
+                    tier: 'low',
+                },
+                createState(),
+                {
+                    nextClock:
+                        '1991-09-04 · 09:45',
+                    nextScene: {
+                        id: 'scene_library',
+                        nameEn: 'Library',
+                        summaryEn:
+                            'The Library waits.',
+                        mapId:
+                            'hogwarts_castle',
+                        roomId: 'library',
+                        actorStates: [{
+                            id: 'hermione',
+                            present: true,
+                            mapId:
+                                'hogwarts_castle',
+                            roomId: 'library',
+                            lifeStatus: 'alive',
+                            currentActivityEn:
+                                'Sorting notes.',
+                            currentIntentEn:
+                                'Finish the index.',
+                        }],
+                    },
+                },
+                {
+                    mapId:
+                        'hogwarts_castle',
+                    roomId: 'library',
+                },
+                createContextPlan(),
+                {},
+                createRetrievalResult(),
+            );
+
+    assert.equal(
+        result.nextScene.openingSegments.length,
+        7,
+    );
+    assert.equal(
+        result.nextScene
+            .openingSegments[0]
+            .textEn,
+        'The Library windows blur with afternoon rain.',
+    );
+});
+
 test('[defect-probing] production Opening reports an invalid extreme output after one bounded request', async () => {
     const prompts = [];
     const claimTextEn =
@@ -1166,12 +1270,9 @@ test('[Task 12] production Performer accepts supported actor recall and expectat
         supportedPrompts.length,
         1,
     );
-    assert.deepEqual(
-        supported.segments[0]
-            .historicalClaims[0]
-            .sourceEventIds,
-        ['event_umbrella'],
-    );
+    assert.equal(supported.segments[0].historicalClaims, undefined);
+    assert.equal(supported.segments[0].textEn, supportedUmbrellaSegment().textEn);
+    assert.ok(supported.postContext.historicalSupport.hermione.includes('event_umbrella'));
 
     const gistPrompts = [];
     await runTask12Performance(

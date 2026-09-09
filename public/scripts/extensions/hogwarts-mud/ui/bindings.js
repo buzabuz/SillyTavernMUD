@@ -72,6 +72,7 @@ export function createUiBindings(ports) {
         submitTurn,
         syncContextPolicyUi,
         syncManualModelVisibility,
+        syncProfileEndpointWarning,
         syncModelSlotControls,
         syncProfileEndpointVisibility,
         syncSettingsUi,
@@ -391,6 +392,7 @@ export function createUiBindings(ports) {
             }
         });
         listen(root.querySelector('#hpmud_profile_source'), 'change', syncProfileEndpointVisibility);
+        listen(root.querySelector('#hpmud_profile_endpoint'), 'input', syncProfileEndpointWarning);
         listen(root.querySelector('#hpmud_profile_model'), 'change', () => {
             syncManualModelVisibility();
             if (root.querySelector('#hpmud_profile_model').value === MANUAL_MODEL_VALUE) {

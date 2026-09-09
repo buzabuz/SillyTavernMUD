@@ -61,11 +61,12 @@ ID、ACL、authority、provenance 等非语言错误仍按原合同直接失败�
 | 字段路径 | 真实语义 | 唯一写入者 | 主要读取者 | 兼容/诊断 |
 | --- | --- | --- | --- | --- |
 | `session.liveSceneStream` | 当前生成阶段、内部 raw 长度、恢复 segments 与判定预览 | app controller、turn workflow | loading card renderer | segments 仅供内部诊断；提交前不得渲染为正文 |
+| `session.foregroundModelActivity` | 当前 `blocking=true` Hogwarts role task 的有限 `taskId/phase/startedAt` 活动状态 | model-event scheduler lifecycle 经 UI application port | 各 foreground workflow 的既有 loading surface | 纯 UI session；不含 Prompt、content、reasoning、error 或 proposal；success/failure/cancel/navigation 时清空，不写 JSONL/localStorage/TranslationTable |
 | `session.latestStoryMessageId` | 当前 scene 最近一次已渲染的消息 ID | story renderer | story scroll resolver | 新 assistant ID 只触发一次顶部定位；scene 切换时清空；首次 scene load 固定 retain；generation/candidate 不覆盖阅读位置 |
 | `session.calendarTimelineEpoch` | 当前 Calendar 页面选择所绑定的时间线 epoch | Calendar controller | Calendar selection reset、view model | 只存在于页面实例；与世界 `timelineEpoch` 不一致时先清空旧日期、schedule、Scene 与 storyline 选择；不写 JSONL 或 localStorage |
 | `session.calendarSelectedDate/calendarDisplayMonth/calendarSelectedEntryId/calendarSelectedSceneId/calendarSelectedStorylineId` | 当前页面 Calendar 日期、schedule/Scene/storyline 预览焦点 | Calendar controller | Calendar view model、renderer、bindings | 只存在于页面实例；跨 timelineEpoch 时清空；不写 JSONL 或 localStorage |
 | `session.calendarExpandedSceneIds/calendarFreePanelOpen` | 当前日期场景卡展开集合与【场景】区自由开场面板开关 | Calendar controller | 场景折叠 renderer、自由开场 panel | 纯 UI session；切换日期/时间线时清空；展开和开关不写世界状态、不调用模型 |
-| `session.calendarViewMode/calendarFreeStartTime/calendarFreeMapId/calendarFreeRoomId/calendarMomentBusy/calendarMomentError` | 今日日程/剧情线视图、自由开场草稿及瞬时提交状态 | Calendar controller | Calendar renderer、Moment action ports | 纯 UI session；选择、预览和校验不写世界权威、不调用模型 |
+| `session.calendarViewMode/calendarFreeStartTime/calendarFreeMapId/calendarFreeRoomId/calendarMomentBusy/calendarMomentError` | 今日日程/剧情线视图、自由开场草稿及瞬时提交状态 | Calendar controller | Calendar renderer、Moment action ports | 纯 UI session；选择、预览和校验不写世界权威、不调用模型；已知语言跳过和普通运行失败均映射为静态 locale 文案，原始模型错误只写 console |
 
 ## UI projection 字段
 
@@ -87,7 +88,7 @@ ID、ACL、authority、provenance 等非语言错误仍按原合同直接失败�
 | `LowTierContextV1.memoryActivations.common/byActorId` | 公开事实及按 observer 密封的 Schema expectation 与按需 hydrated Event | Backend candidate ID 经当前 State/chat canonical hydration、Relational Synapse 与 `projectLowTierContextV1()` | matching actor 的低档表演 | 每 actor 最多 3 个 active Schema、3 个 Event，全局最多 8 个 Event；retained Event 必须命中当前玩家动作 anchor；具体旧事必须有同 actor Event/sourceRefs |
 | `LowTierContextV1.playerTurn.movementPreflight` | 当前显式移动标记的有界确定性 eligibility：候选路线、访问结果、当前/候选房间与可同行 Actor；不是 arrival 或 outcome | movement preflight projector | Low Performer | protected；只限制可演出的路线，不写位置、时间或 `lastMovement`；模型不能把 ineligible 目标演成可提交移动 |
 | Low Scene Performance `stateProposals[]` | Low 对已表演正文提出的稀疏可执行状态提示；仅 activity/move/enter/exit、首次印象、Item operation、temporary Actor | Low Scene Performance model，经 turn settlement fold 接受 | turn validator、turn reducer | 不得写 current impression、`memoryUpdate`、Appraisal、relationship、clue 或 hidden fact；Schema/fold/validator 字段必须完全一致 |
-| Low Scene Opening `{segments}` | bootstrap 或 Scene Transition 已提交 State 的纯正文渲染；不拥有任何 State/Social writer | Low Scene Opening model | opening validator、message writer | root/segment 字段严格按各模式 Schema；每次只调用一次，非法输出直接失败，不发送 repair，也不生成 fallback prose |
+| Low Scene Opening `{segments}` | bootstrap 或 Scene Transition 已提交 State 的纯正文渲染；不拥有任何 State/Social writer | Low Scene Opening model | opening validator、message writer | root/segment 字段严格按各模式 Schema；段数和总词数仅作 Prompt/diagnostic 质量目标，不是失败条件；每次只调用一次，非法结构/语言/人物输出直接失败，不发送 repair，也不生成 fallback prose |
 | `extra.hogwartsMud.mentionedKnownActors[]` | 玩家动作中明确提及、需确定性入场并响应的既有人物描述 | `admitMentionedKnownActors()` | turn workflow、Low actor whitelist | 只拥有 presence/reaction 语义；`requireEverydayMemory` reader/writer 已删除，历史消息残留字段不参与 settlement |
 | `NarrativeAuthoritySnapshotV1` | 从当前 Actor Runtime、Item、Material、Room 与 open fact 构造的非持久化当前态权威 | `buildNarrativeAuthoritySnapshot()` | Low Performer、Scene Transition/Opening、Social Prompt | low/medium 按 audience access 排除 hidden Item；Item/Material/Room 在同一请求中不再发送 sibling 副本 |
 | `projectActorLibraryForContext()` | 当前 medium/high 角色模型 Actor 投影，拼接 Core、Runtime、Identity 和可选 private facts | `directors.js` Prompt projector | Scene Transition/Opening | Daily 已退役，Pacing 已改用 causal slot 的 compact actor directory；Scene Transition 的全 Actor 投影仍待 HPC-16 收敛 |
@@ -99,7 +100,7 @@ ID、ACL、authority、provenance 等非语言错误仍按原合同直接失败�
 | `ActorCreationProposalV1` | Opening 与 Low temporary Actor 的瞬时嵌套创建提案，不是 State | Opening/Performer Prompt Schema | initial-world、turn reducers | Schema/validator/Core/Runtime projector 已统一；Pacing 不再创建、引入或合并人物 |
 | `MODEL_TASK_REGISTRY` / model event definitions | 全部活跃生成任务的静态职责、档位、触发事件、阶段、预算、Schema、validator、reducer、重试与失败策略 | `domain/model-task-registry.js` | scheduler、build-only inventory、diagnostics | 非 State；登记 21 个任务，17 active（其中 Dynamic Identity 为 `server_ephemeral`），save runtime 仍仅 16 rows；Foundation/Opening Plan/Opening Dialogue/Daily 为 retired 且无 caller |
 | Knowledge V2 `records[]` | Actor Core、observed/reported Event、Appraisal、Person Schema、Scene、Item/Clue 的可重建检索投影；Relationship Evidence V3 只建引用边 | Knowledge Projector V2 | JSON exact、Vectra/Qdrant candidate index、Planner/Synapse | API contract=3、index/projector=2；candidate revision 允许 `<= current`，最终 canonical hydration 必须 exact current；backend text/ACL/capsule 不进入 Prompt |
-| Scene Transition proposal `globalChronicleSummaryEn` | 对已关闭 Scene timeline 的 40–80 词英文语义压缩；不是 closure、Event 或关系记忆 | medium/high Scene Transition 模型 proposal，经 validator 接受 | Scene Transition reducer | revision 4 已实现；不新增模型调用；非法值直接失败且不自动 retry；stray `relationshipUpdates/worldChanges` 在 normalizer 丢弃 |
+| Scene Transition proposal `globalChronicleSummaryEn` | 对已关闭 Scene timeline 的非空英文语义压缩；不是 closure、Event 或关系记忆 | medium/high Scene Transition 模型 proposal，经 validator 接受 | Scene Transition reducer | 40–80 词和 640 字符只作 Prompt/diagnostic 质量目标；非空英语权威、结构和 transition guards 仍硬拒绝；不新增模型调用或 retry；stray `relationshipUpdates/worldChanges` 在 normalizer 丢弃 |
 | Social Director `socialAuthorityStamp/reviewableActors/existingSocialGraph` | 当前 review cycle 的 revision/Scene/Actor whitelist、Appraisal/MemoryRef 与 batch-relevant relation/Event 校准 | Social Prompt projector | medium Social Director | Tina 18-message build-only 含 transport Schema 为 76,624 chars；无 Narrative Authority Snapshot、完整 Social Graph 或 prose Schema 副本 |
 | `ActorEventKnowledgeV2.direct/witnessed/reported` | 按 actor 即时投影 observed participant、observed witness、reported recipient Event | Actor Event Knowledge projector | diagnostics/authorized lookup；Prompt 只走 bounded Event activation | 非 State；禁止整表直投 Prompt；reported 不展开 source transcript/authority-only `aboutEventId` |
 
@@ -110,7 +111,7 @@ ID、ACL、authority、provenance 等非语言错误仍按原合同直接失败�
 | `phase` | 世界初始化/游玩状态 | opening reducers、lifecycle | UI、workflow gates | 无 |
 | `campaign` | 时间线与剧本硬约束 | setup、initial world | prompts、directors | 不由模型覆盖 |
 | `character` | 玩家身份与属性 | setup、character reducer | prompts、checks、UI | 玩家事实权威 |
-| `modelSlots` | role 到 Connection Profile/预算映射 | settings controller、slot migration | model adapter、workflows | `responseHeadroomVersion` 管迁移 |
+| `modelSlots` | role 到 Connection Profile/预算映射 | settings controller、slot migration | model adapter、public model-event scheduler、role workflows | 对 `low/medium/high` 角色请求，`contextSize/maxResponseLength` 经 `createContextBudgetPlan(...).maxPromptCharacters` 是唯一总 Prompt 硬资格；静态 task 字符值只能作非阻断 metadata；`responseHeadroomVersion` 管迁移 |
 | `postTurnSemanticProvider` | VCON-013 的执行源配置，只允许 `low` 或 `local`；`low` 复用 `modelSlots.low` 完整 Connection Profile，并独占完整 Post Item/Identity 语义链；`local` 使用现有 Ollama core Post，按既有路由可再调用一次共享 4B | settings profile controller、initial world、lifecycle normalization | post semantic adapter、models settings UI | 缺失/非法旧档原子归一为 `low`；同时写 extension setting 与 active timeline；不是 gameplay semantic State、modelTaskRuntime 或模型 proposal writer；Low 失败只保留正文进入 `post_unsettled`，不切换 Local 或 4B；字段路线见 `model-field-routes.md` |
 | `saveRevisionVersion` | 保存门禁 Schema 版本 | save revision migration | guarded save ports、diagnostics | 当前值 `1` |
 | `timelineEpoch` | 单条时间线稳定且不可复用的保存域 | new timeline initializer、legacy revision migration | save guard、storage head | 新时间线安全随机；旧档按 timeline key + 状态确定性生成 |
@@ -143,7 +144,7 @@ ID、ACL、authority、provenance 等非语言错误仍按原合同直接失败�
 
 | 字段路径 | 真实语义 | 唯一写入者 | 主要读取者 | 兼容/诊断 |
 | --- | --- | --- | --- | --- |
-| `scene` | 当前场景 ID、开场摘要、起点、room、timeline、next intent | opening/transition/scene reducers | turn、UI、archive | `summary/summaryEn` 是开场快照；timeline 推进后不再作为 Performer 当前态；`startedMessageId` 绑定聊天范围 |
+| `scene` | 当前场景 ID、开场摘要、起点、room、timeline、next intent | opening/transition/scene reducers | turn、UI、archive | `summary/summaryEn` 是开场快照；`explorationHookEn` 是可选英语互动线索，缺失不阻断或写入空字符串，存在时才走英语采纳，其词数只作 Prompt/diagnostic 质量目标；timeline 推进后不再作为 Performer 当前态；`startedMessageId` 绑定聊天范围 |
 | `scene.calendarEntryIds[]` | 当前 Scene 明确认领的 schedule ID | Calendar/Timeline Moment、Scene Transition reducer、lifecycle normalization | Performer、Scene Transition、archive linker、Calendar UI | Calendar Moment 新 Scene 只含所选 schedule；自由/普通 Scene 可为空；不得按时间重叠自动扩张 |
 | `scene.timelineEntries[]` | 场景内按时钟排序的已提交详细历史 | turn/transition reducers | performer、UI、archive、Scene Transition chronicle proposal | 不是同时态；后续当前状态覆盖早期条目的事实效力；revision 4 已批准提交后只追加不编辑/删除 |
 | `sceneArchive[]` | 已封存场景的稳定元数据、append-only timeline 与原消息 ID 索引 | archive projector | archive UI、Calendar 历史、knowledge | 历史只读；record 是元数据/索引权威，正文按 `messageIds` 从原 chat 消息行读取，不复制或重新生成 |
@@ -258,17 +259,25 @@ actorLibrary membership != physical presence
 | `extra.hogwartsMud.localAdjudication.result` | 一次 pre-turn `1.7B` 的瞬态 `temporal/check/calendarCommitment` 结构化提案快照 | local semantic adapter + turn workflow | 当前回合预算、Check、Calendar route、retry | 不拥有 movement intent、outcome、时间或位置；已知中文日期前置 Calendar 漏判登记为 TODO，失败时 Calendar 不写；不 retry、不用 Regex 补猜 |
 | `extra.hogwartsMud.movementPreflight` | `MovementPreflightV2`：当前显式 marker 的有界路线/access eligibility、候选目标、同行候选与 marker evidence | deterministic movement preflight | 当前 paid Prompt、Post candidate guard、同一 pending settlement | 临时字段；不是 outcome、arrival、时间或 State authority；成功 commit 或显式 rollback 后删除；不进入 Knowledge/archive |
 | `extra.hogwartsMud.segments[]` | 已保存并展示的英文 narration/dialogue | scene performer/transition opening | render、localization；仅当 scene turn 同时有 `turnTransaction` 时供 observe/archive/Knowledge 使用 | 付费正文先于 proposal settlement 保存；下游失败只留下无 transaction 的正文，不得覆盖更高优先级当前 State |
-| `extra.hogwartsMud.pendingPostSettlement` | `PendingPostSettlementV1`：已保存 Scene 的有界 transaction draft、可选 movement preflight、回合前 checkpoint、消息/时间线/Scene guard、provider fit/compaction diagnostics 与 Post-only retry 状态 | turn recovery workflow | recovery UI、Post-only retry、explicit discard | 仅 `post_unsettled` 使用；不是 committed transaction、Prompt/Knowledge/archive authority；成功 commit 或 discard 原子删除；Retry 可穿透连续 runtime/lifecycle 和无 changedDomains 的 metadata revision，任何实质 world/Item revision 仍拒绝；任何 selected Post no-fit/provider/schema/guard failure 都写入它，缺完整 envelope 的旧未结算 Scene 只允许 discard，绝不自动重放 |
+| `extra.hogwartsMud.pendingPostSettlement` | `PendingPostSettlementV2`：正文源身份、transaction draft、movement preflight、checkpoint、revision guard、accepted bundle、失败类别与一次补充额度 | turn recovery workflow | recovery UI、selected Post supplement、defaults、explicit discard | 正文与初始 receipt 同次 guarded 保存；附表失败保留正文并等待选择；一次手动补充在 dispatch 前持久预约，reserved/spent 刷新后不得重置；defaults 只合并合法结果，不猜移动；成功 commit 或 discard 原子删除；旧 V1 在显式恢复时逐条重验候选并升级，不改已提交历史；runtime/lifecycle/无 changedDomains metadata revision 的既有规则保留 |
+| `extra.hogwartsMud.speakers[]` | Scene 的消息内公开显示身份 `{id,displayNameEn}`，不等于正式 Actor | Scene narrative message writer | message renderer、Post promotion guard | `message_speaker/message:<messageId>:speaker:<id>/displayNameEn` 翻译；无正式 Actor/ACL/presence/Item 权限，错误声明显示静态未知人物 |
+| `pendingPostSettlement.recovery.sourceIdentity/accepted/groups/supplement` | 正文指纹、合法草稿、待处理依赖组、available/reserved/spent 额度 | turn recovery workflow | dispatch guard、merge、Story selection | 请求前与提交前核对当前已保存 segments；补充不能覆盖 accepted sibling；拒绝越界类别，依赖 Actor 未登记时相关记录一起隔离；receipt 修改先 clone，再原子保存 |
+| `session.postRecoverySelection` | `{key,groups:Set}`，当前 timeline/message/source/failed-group 的勾选状态 | Story renderer | failed-family checkboxes、supplement command | 仅内存，不写世界；同源普通重绘保留勾选，换源重置 |
+| `jobRegistry.unsavedPostNarrative` | 首次正文落盘失败时的本页正文、事务草稿、原 State/chat 基线和 checkpoint；不是已保存消息 | turn workflow 首次保存异常分支 | Story renderer、`retryPendingPostSettlement({saveOnly:true})`、新行动锁 | 绑定当前 chat 对象，刷新可能丢失；明确显示未保存；保存重试不调模型，在保存锁内核对磁盘基线并 CAS 释放本次不确定 claim，成功后正文和 pending 同次 guarded 保存并删除本页 receipt；磁盘更高版本拒绝，不猜测采纳丢失回执的写入 |
 | `extra.hogwartsMud.turnTransaction` | 已提交回合事务快照，记录 proposal、结算和来源证据 | turn workflow | retry、migration、debug、Knowledge Projector、后台 Event 10-turn window | 与新 State 共同构成权威提交边界；Revision 16 不再新增 `eventEnded`；Revision 17 新增唯一 committed `movementOutcome` |
 | `extra.hogwartsMud.turnTransaction.movementOutcome` | 当前标签移动的唯一 committed `MovementOutcomeV1`：moved/already_there/failed、稳定原因、from/to/remaining、guide/evidence、分钟 | Movement Reducer + turn transaction writer | retry、spatial history、debug | 只在 Post evidence candidate 经 guard 后产生；只有 moved 可更新位置/`spatial.lastMovement`；failed/already 保留位置；历史 user-message `movement` 只读、不再新增 |
 | `extra.hogwartsMud.turnTransaction.checkResolution.spellObservation` | 主动观测的内部 spell 目标与 D20 结果 | check resolver / turn workflow | performer、spell reducer、check card | failure 时公开 UI/正文不得泄露 spell identity |
 | `extra.hogwartsMud.turnTransaction.spellCandidates[]` | 本回合明确教学或玩家自由标记产生的自定义咒语候选 | turn workflow deterministic extractor | turn reducer、message renderer、debug | 不是已学习；必须由玩家收录；未知效果只保存 observed evidence |
 | `extra.hogwartsMud.turnTransaction.itemOperations[]` | 对已有正式 Item 的证据化操作 | turn workflow | turn validator/reducer、debug | 只允许稳定已有 ID |
 | `extra.hogwartsMud.turnTransaction.itemCandidates[]` | 本回合发现的新 Item 候选快照 | turn workflow | message renderer、retry | 只允许 `acquire`，不等于正式入库 |
-| `extra.hogwartsMud.turnDiagnostics` | bounded 回合诊断，含 request、response、validation 与 commit/error 边界；`narrative_visible` 和 `state_settled` 是即时回合只读延迟观测点 | turn diagnostics recorder | G3 读取正文消息保存并渲染的时间，以及 Turn、Calendar 和既有即时 follow-up 持久化后的时间；Low validation failure 记录 `willRetry=false`，不保存第二次请求；观测点不改变 State、模型次数或既有 Appraisal/Social 调用 |
+| `extra.hogwartsMud.turnDiagnostics` | bounded 回合诊断，含 request、response、validation 与 commit/error 边界；role request 记录完整请求字符数、runtimePromptCapacity 与 staticPromptTarget，但不记录 Prompt/response 正文；`narrative_visible` 和 `state_settled` 是即时回合只读延迟观测点 | turn diagnostics recorder | G3 读取正文消息保存并渲染的时间，以及 Turn、Calendar 和既有即时 follow-up 持久化后的时间；Low validation failure 记录 `willRetry=false`，不保存第二次请求；观测点不改变 State、模型次数或既有 Appraisal/Social 调用 |
 | `extra.hogwartsMud.sceneTransition.diagnostics` | actor states、active/local 提交对比及精简 `authoritativeItems` | transition message builder | 后续转场 debug；Item 按已提交 holder/目的地投影 |
 
 ## 排障入口
+
+已批准实施中：[正文优先与统一 Post 结算 Revision 1](../hogwarts-narrative-first-post-settlement/prd.md)。
+消息展示身份、未提交 proposal 与已提交 State 已分离接线，pending V2 实施中；
+最终完整流程、真实 provider 与独立验收仍未完成，详见该变更 progress。
 
 1. 先定位最新相关消息的 `extra.hogwartsMud.turnDiagnostics` 或 transition diagnostics。
 2. 再读 JSONL 首行对应字段，确认是 proposal、Reducer、persistence 还是 projection 问题。

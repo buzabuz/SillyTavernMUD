@@ -2085,15 +2085,16 @@ test('a failed stream is surfaced after one save guard and one model request', a
         });
 
     await assert.rejects(
-        adapter.sendRoleRequest(
-            {
-                profileId: 'low',
-            },
-            [],
-            {
-                stream: true,
-            },
-        ),
+        adapter
+            .createScheduledRoleInvoker()(
+                {
+                    profileId: 'low',
+                },
+                [],
+                {
+                    stream: true,
+                },
+            ),
         /stream disconnected/u,
     );
 

@@ -3,7 +3,9 @@ import {
 } from '../domain/prompt-budget-allocator.js';
 
 /**
- * Role capacity handoff for role_capacity.measurement.completeRequest.
+ * Role capacity and response channels:
+ * role_capacity.measurement.completeRequest,
+ * role_response.finalContent, role_response.reasoning.
  * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
  */
 
@@ -18,6 +20,51 @@ export function createModelAdapter(ports) {
         () => {},
         uuidv4,
     } = ports;
+
+    function discardReasoning(
+        response,
+    ) {
+        if (
+            !response ||
+            typeof response !==
+                'object' ||
+            Array.isArray(response)
+        ) {
+            return response;
+        }
+        const contentResponse = {
+            ...response,
+        };
+        delete contentResponse
+            .reasoning;
+        delete contentResponse
+            .reasoning_content;
+        delete contentResponse
+            .responseContent;
+        if (
+            Array.isArray(
+                contentResponse.content,
+            )
+        ) {
+            contentResponse.content =
+                contentResponse
+                    .content
+                    .filter(
+                        part =>
+                            part?.type ===
+                                'text' &&
+                            typeof part
+                                .text ===
+                                'string',
+                    )
+                    .map(
+                        part =>
+                            part.text,
+                    )
+                    .join('');
+        }
+        return contentResponse;
+    }
 
     async function sendScheduledRoleRequest(
         slot,
@@ -290,7 +337,6 @@ export function createModelAdapter(ports) {
                     'function'
                 ) {
                     let content = '';
-                    let reasoning = '';
                     for await (
                         const chunk
                         of response()
@@ -298,16 +344,13 @@ export function createModelAdapter(ports) {
                         content =
                             chunk.text ||
                             content;
-                        reasoning =
-                            chunk.state?.reasoning || reasoning;
                         onProgress?.(
                             content,
-                            chunk.state || {},
+                            {},
                         );
                     }
                     return {
                         content,
-                        reasoning,
                     };
                 }
                 onProgress?.(
@@ -315,9 +358,13 @@ export function createModelAdapter(ports) {
                     '',
                     {},
                 );
-                return response;
+                return discardReasoning(
+                    response,
+                );
             }
-            return await execute(false);
+            return discardReasoning(
+                await execute(false),
+            );
         } finally {
             const index = profiles.findIndex(item => item.id === effectiveProfile.id);
             if (index >= 0) {
@@ -345,17 +392,26 @@ export function createModelAdapter(ports) {
     }
 
     function extractRoleResponseText(response) {
-        if (response?.content && typeof response.content === 'object') {
+        if (
+            response?.content &&
+            typeof response.content ===
+                'object' &&
+            !Array.isArray(
+                response.content,
+            )
+        ) {
             return response.content;
         }
         const candidates = [
             String(response?.content || '').trim(),
-            String(response?.reasoning || '').trim(),
+            String(
+                response?.choices?.[0]
+                    ?.message
+                    ?.content ||
+                '',
+            ).trim(),
         ].filter(Boolean);
-        for (const candidate of [
-            ...candidates,
-            candidates.join('\n'),
-        ]) {
+        for (const candidate of candidates) {
             try {
                 return parseCompleteJsonObject(
                     candidate,

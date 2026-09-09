@@ -4,6 +4,7 @@
             <button id="hpmud_scene_restore" class="hpmud-icon-button" type="button" aria-label="显示场景栏">◫</button>
             <strong id="hpmud_location">建档大厅</strong>
             <span id="hpmud_save_state" class="hpmud-save-state"><i></i>已保存</span>
+            <span id="hpmud_model_activity" class="hpmud-model-activity" role="status" hidden></span>
         </div>
         <div class="hpmud-chapter">
             <strong id="hpmud_chapter">1991 年时间线</strong>
@@ -832,7 +833,7 @@
                         <option value="siliconflow">SiliconFlow</option>
                         <option value="zai">Z.AI</option>
                     </select></label>
-                    <label id="hpmud_profile_endpoint_row" class="wide"><span>Custom Endpoint (Base URL) *</span><input id="hpmud_profile_endpoint" type="url" placeholder="https://example.com/v1"><small>自动调用兼容的 Chat Completions 接口。</small></label>
+                    <label id="hpmud_profile_endpoint_row" class="wide"><span>Custom Endpoint (Base URL) *</span><input id="hpmud_profile_endpoint" type="url" placeholder="https://example.com/v1"><small>自动调用兼容的 Chat Completions 接口。</small><small id="hpmud_profile_endpoint_warning" class="hpmud-field-warning" role="status" aria-live="polite" hidden>该地址可能不是 API 基址；通常应以 /v1 结尾，例如 https://api.example.com/v1。</small></label>
                     <label class="wide"><span>API Key</span><input id="hpmud_profile_api_key" type="password" autocomplete="new-password" placeholder="新建时输入；编辑时留空表示保留现有密钥"><small>密钥保存在 SillyTavern Secret Storage，不进入存档。</small></label>
                     <label><span>Available Models *</span><select id="hpmud_profile_model" required>
                         <option value="__manual__">手动输入 Model ID…</option>

@@ -142,6 +142,10 @@ Context Size 是输入窗口，输出安全余量是 API 防截断上限，两�
 
 普通低档 Performer 的结构化 User Payload 固定为 `LowTierContextV1` 六个顶层字段：`playerTurn`、`sceneFacts`、`actorCards`、`actionOpportunities`、`memoryActivations`、`prohibitions`。总量不超过 50 KiB，单 actor card 不超过 4 KiB；每 actor 最多 3 个 active Schema 和 3 个 hydrated Event，全局最多 8 个 Event。超限时先删除 hydrated Event，再删除可重建 opportunity，不会注入 raw Actor Library、完整 Social Graph、完整 Identity、人物记忆正文账本或全量历史补位。Low 每个任务只有一次模型请求；非法输出直接失败，不发送 repair/retry，也不生成模型 fallback。
 
+Hogwarts 不再对 OpenAI/Custom 的 GLM-5 命名结构请求额外强制关闭 thinking；其他 Connection Profile 和 provider 参数保持原行为。只有最终 `content` 可进入 JSON/Schema/guard/Reducer；reasoning/thinking 文本会在 Hogwarts adapter 边界丢弃，不显示、不保存，也不能在最终正文为空时作为 fallback。所有前台阻塞模型任务只显示有限任务阶段与已等待时间；后台 Calendar、Social 和 Event 任务保持静默。该进度不增加模型调用、不写存档，任务结束、失败、取消或切页时清空。
+
+Post 返回会按 Material、Actor、Item、Identity、perception、temporal 和 movement 分族结算。独立提案中的坏记录只会被丢弃或保守规范化，不再让整次 Post 失败；`player`、重复项和未知 ID 不会进入 NPC witness/Event 状态。只有无法取得可用根响应、明确且可行的移动仍无法确定结果、权威版本冲突或事务/持久化无法原子提交时，才保留 Scene 并进入 `post_unsettled`。该策略不增加自动重试、repair 或 provider fallback。
+
 每个职责槽位实时显示输入预算、系统预留、RAG 条数和三层记忆配额。手工 Context 会自动归入精简、标准或丰裕策略，但不会被快捷档位强制覆盖。
 
 ### Narrative Authority 与关系突触
@@ -624,7 +628,7 @@ node scripts/repair-hogwarts-relational-memory-task7.mjs \
 - 中档内部图只能补齐缺失的局部拓扑，不能创建人物、物品、线索、秘密、事件或改写父地图。制图是成功转场后的非阻塞空间补全：失败时保留已提交场景并记录 `interiorMapGeneration.status = failed`，同一失败 binding 不会在刷新时无限重试；生成成功后再次进入直接复用本地绑定，不再调用模型。
 - 低档的对白与人物更新白名单仍然保持严格。地点固有角色必须先由规则层准入，低档不能因为来到一家商店就自行发明店主。
 - 没有情感或戏剧价值的普通赶路最多保留一两个简短节拍；恋爱、关系冲突、信息推进或即时障碍可以展开途中镜头，但本回合必须抵达目标并继续，不能停在“快到了”。
-- 正式新场景必须保存一个 6–60 词的 `explorationHookEn`，并在开场前两段建立为可观察、可忽略、不会剧透的环境邀请。同场景进入新房间时，规则层要求低档补一个低风险环境细节；玩家可以检查、跟随、询问、触碰或完全忽略，系统不会把它变成强制任务。
+- 正式新场景可以保存一个 `explorationHookEn`，作为可观察、可忽略、不会剧透的环境邀请。它缺失不阻断场景；存在时推荐在开场前两段自然建立为低风险环境细节。玩家可以检查、跟随、询问、触碰或完全忽略，系统不会把它变成强制任务。
 - 本地节奏探针根据场景回合数、核心人物重合和冷却状态决定是否调用中档 `Pacing Director`；普通自动复查至少间隔 6 回合，且当前已有 3 名近龄人物时不再因全局人物预算缺口调用。未命中时不增加模型调用。
 - 中档节奏介入保存为 `pacingDirector.pendingBeat`。规则层先提交获准入场的人物，低档在下一次现场表演中执行公开转机，成功后标记为已消费。
 - `map.currentLocalNodeId` 保存玩家房间；每名在场 NPC 独立保存 `mapId + roomId`。低档只能沿同一张现有地图的可通行出口更新 NPC 房间。
@@ -632,9 +636,9 @@ node scripts/repair-hogwarts-relational-memory-task7.mjs \
 - 导演生成当前场景时同时预写默认下一场景意图、目标房间和模型档位；生成下一场景时再预写后续意图，形成连续场景链。
 - 用户点击“封存场景”后会看到已填好的默认意图与档位，可以直接确认，也可以编辑文字、目标地点或切换中档/高档。
 - 规则层把明确提到的现有地点解析为固定 `mapId + roomId`，模型不得改写该目标。
-- 中档封存核心同时生成 `authorQuillEn`：一篇 180–280 词的 OOC 搞笑章节评价，使用具体回收梗、善意吐槽、冷面旁白和虚构奖项评价玩家表现。它只能引用玩家已经做过的事，不得泄露隐藏真相、锁定线索、NPC 私密动机、未来事件或暗骰。
+- 中档封存核心可选生成 `authorQuillEn`：一篇建议 180–280 词的 OOC 搞笑章节评价，使用具体回收梗、善意吐槽、冷面旁白和虚构奖项评价玩家表现。存在时它只能引用玩家已经做过的事，不得泄露隐藏真相、锁定线索、NPC 私密动机、未来事件或暗骰。
 - “作者的羽毛笔”随英文结算走现有翻译链，在下一场景开头显示为独立羊皮纸批注卡，并永久保存在旧场景只读档案底部。它不属于任何角色认知，也不进入世界内事件事实。
-- 中档核心只提交时间、地图房间、人物状态、关系结算、旧场景摘要、下一幕结构与作者羽毛笔，不包含新场景正文、社交图或世界变化。核心输出目标保持在 1200–1800 token。
+- 中档核心提交时间、地图房间、人物状态、关系结算、旧场景摘要和下一幕结构；可选附带作者羽毛笔，不包含新场景正文、社交图或世界变化。核心输出目标保持在 1200–1800 token。
 - 核心通过后，低档根据已锁定的时间、房间、人物活动、环境钩子及按 holder 同步到新房间的 `authoritativeItems` 生成 2–6 个开场分段。中档同样收到转场前正式 Item 快照；`ownerId` 不授予物理持有，`destroyed` 不能在开场中变成 damaged、可用或转交给其他人物。低档开场无效时使用规则层短开场，不回滚已经合法的封存核心。
 - 旧场景尚未整理的社交证据在提交后交给现有单模型 LangGraph 异步回填。失败只保留 pending 与错误信息，不影响当前场景。
 - 当 `nextClock` 至少跨越 7 个完整日时，提交后才按需生成 `worldChanges`；长转场生成 1–4 条《预言家日报》边角新闻，并从旧场景同房间见证者的公开事件创建至少一个流言包。失败保留 pending，可在重新载入时间线时重试。

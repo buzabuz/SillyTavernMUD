@@ -36,8 +36,11 @@ export function createUiSessionState({
         roleRegexImportTarget: '',
         selectedActorId: '',
         liveSceneStream: null,
+        foregroundModelActivity:
+            null,
         renderedSceneId: '',
         latestStoryMessageId: null,
+        postRecoverySelection: null,
         currentSceneMessageLimit:
             currentScenePageSize,
         archiveListLimit:

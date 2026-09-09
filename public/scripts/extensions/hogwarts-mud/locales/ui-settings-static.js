@@ -95,6 +95,10 @@ const SETTINGS_TEXT = Object.freeze({
         en: 'Automatically calls a compatible Chat Completions endpoint.',
         zh: '自动调用兼容的 Chat Completions 接口。',
     },
+    'ui.profile.endpoint_warning': {
+        en: 'This may not be an API base URL. It usually ends in /v1, for example https://api.example.com/v1.',
+        zh: '该地址可能不是 API 基址；通常应以 /v1 结尾，例如 https://api.example.com/v1。',
+    },
     'ui.profile.api_key_help': {
         en: 'The key stays in SillyTavern Secret Storage and never enters a save.',
         zh: '密钥保存在 SillyTavern Secret Storage，不进入存档。',

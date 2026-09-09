@@ -2214,12 +2214,6 @@ router.post('/generate', async function (request, response) {
             if (['enabled', 'disabled'].includes(request.body.thinking?.type)) {
                 bodyParams.thinking = { type: request.body.thinking.type };
             }
-            if (isHogwartsMudJsonSchema &&
-                /^glm-5(?:\.|$)/i.test(String(request.body.model || ''))) {
-                bodyParams.thinking = { type: 'disabled' };
-                bodyParams.enable_thinking = false;
-                bodyParams.reasoning_effort = 'none';
-            }
             // Adjust logprobs params for Chat Completions API, which expects { top_logprobs: number; logprobs: boolean; }
             if (!isTextCompletion && bodyParams.logprobs > 0) {
                 bodyParams.top_logprobs = bodyParams.logprobs;
@@ -2329,12 +2323,6 @@ router.post('/generate', async function (request, response) {
             };
             if (['enabled', 'disabled'].includes(request.body.thinking?.type)) {
                 bodyParams.thinking = { type: request.body.thinking.type };
-            }
-            if (isHogwartsMudJsonSchema &&
-                /^glm-5(?:\.|$)/i.test(String(request.body.model || ''))) {
-                bodyParams.thinking = { type: 'disabled' };
-                bodyParams.enable_thinking = false;
-                bodyParams.reasoning_effort = 'none';
             }
             // Adjust logprobs params for Chat Completions API, which expects { top_logprobs: number; logprobs: boolean; }
             if (!isTextCompletion && bodyParams.logprobs > 0) {

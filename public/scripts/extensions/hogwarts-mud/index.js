@@ -45,7 +45,6 @@ import {
 import {
     extractStreamingSceneSegments,
     parseCompleteJsonObject,
-    recoverScenePerformancePayload,
 } from './core/json-recovery.js';
 import { admitCurrentLocationResidents, admitMentionedKnownActors } from './domain/actor-admission.js';
 import { migrateActorContextV1 } from './domain/actor-context-cutover.js';
@@ -189,7 +188,6 @@ import {
     shouldTranslateToChinese,
     splitTranslationChunks,
 } from './domain/translation.js';
-import { settleNarrativeTurnPerformance } from './domain/turn-protocol.js';
 import { applyTurnTransaction } from './domain/turn-reducer.js';
 import {
     createLegacyTurnRollbackCheckpoint,
@@ -200,7 +198,7 @@ import {
     restoreTurnRetryCheckpoint,
 } from './domain/turn-rollback.js';
 import { createTurnPerformanceBudget } from './domain/turn-time.js';
-import { validateScenePerformance, validateTurnTransaction } from './domain/turn-validation.js';
+import { validateTurnTransaction } from './domain/turn-validation.js';
 import {
     applyPresenceWitnessTransaction,
     createDeterministicPerceptionFallback,
@@ -468,7 +466,6 @@ const platform = {
     reconcileTemporaryActorDisplayNames,
     reconcileTurnActorPresenceWithSpatialState,
     reconcileVisibleActorPresenceState,
-    recoverScenePerformancePayload,
     reduceLocalPresence,
     removeExplicitAddressDirective,
     removeSpellCastDirectives,
@@ -489,7 +486,6 @@ const platform = {
     selectCharacterById,
     selectSharedMemoriesForContext,
     setExtensionPrompt,
-    settleNarrativeTurnPerformance,
     shouldTranslateRenderedMessage,
     shouldTranslateToChinese,
     splitTranslationChunks,
@@ -506,7 +502,6 @@ const platform = {
     validateOpeningWorldPackage,
     validatePacingAssessment,
     validatePerceptionContract,
-    validateScenePerformance,
     validateSceneTransitionPackage,
     validateSocialDirectorResult,
     validateTurnTransaction,

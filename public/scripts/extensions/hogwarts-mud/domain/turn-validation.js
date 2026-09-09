@@ -404,7 +404,7 @@ export function validateTurnTransaction(
     if (!Number.isInteger(elapsedMinutes) || elapsedMinutes < 0 || elapsedMinutes > 10080) {
         errors.push('elapsedMinutes 必须是 0–10080 的整数。');
     }
-    if (!String(transaction.publicEventEn || '').trim()) {
+    if (!transaction.narrativeFirst && !String(transaction.publicEventEn || '').trim()) {
         errors.push('回合结算必须包含玩家可知的事件摘要。');
     }
     if (
@@ -571,7 +571,7 @@ export function validateTurnTransaction(
                 'rawText 分段缺少语言证据标记。',
             );
         }
-        if (segment.type === 'dialogue' && !actorIds.has(segment.actorId)) {
+        if (!transaction.narrativeFirst && segment.type === 'dialogue' && !actorIds.has(segment.actorId)) {
             errors.push(`对白引用了不存在的角色 ${segment.actorId || '?'}。`);
         }
     });

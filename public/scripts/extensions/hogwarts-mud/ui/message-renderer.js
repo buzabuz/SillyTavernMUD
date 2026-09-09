@@ -677,6 +677,9 @@ export function createMessageRenderer(ports) {
             );
         }
         const article = document.createElement('article');
+        const admitted = new Set((message.extra?.hogwartsMud?.turnTransaction?.temporaryActorEntrances || []).map(actor => actor.id));
+        const collisions = new Set((message.extra?.hogwartsMud?.speakers || [])
+            .filter(speaker => actorLibrary.has(speaker.id) && !admitted.has(speaker.id)).map(speaker => speaker.id));
         article.className = 'hpmud-scene-turn';
         article.dataset.messageId = String(messageId);
         const authorQuillEn =
@@ -728,7 +731,7 @@ export function createMessageRenderer(ports) {
             ),
         ]
             .filter(actorId =>
-                !getCanonLocalizationZhCn(
+                actorLibrary.has(actorId) && !collisions.has(actorId) && !getCanonLocalizationZhCn(
                     actorId,
                 ))
             .map(actorId => {
@@ -752,7 +755,7 @@ export function createMessageRenderer(ports) {
                     .map(segment =>
                         segment.actorId),
             ),
-        ].map(actorId => {
+        ].filter(actorId => actorLibrary.has(actorId) && !collisions.has(actorId)).map(actorId => {
             const actor =
                 actorLibrary.get(
                     actorId,
@@ -793,6 +796,12 @@ export function createMessageRenderer(ports) {
                     ...localizationFields,
                     ...actorNameFields,
                     ...actorRoleFields,
+                    ...(message.extra?.hogwartsMud?.speakers || []).map(speaker => ({
+                        recordKind: 'message_speaker',
+                        recordId: `message:${messageId}:speaker:${speaker.id}`,
+                        fieldPath: 'displayNameEn',
+                        sourceTextEn: speaker.displayNameEn,
+                    })),
                     authorQuillField,
                     ...itemCandidates
                         .flatMap(candidate =>
@@ -847,20 +856,23 @@ export function createMessageRenderer(ports) {
             const block = document.createElement(segment.type === 'dialogue' ? 'section' : 'div');
             block.className = `hpmud-scene-segment ${segment.type}`;
             if (segment.type === 'dialogue') {
-                const actor = actorLibrary.get(segment.actorId);
-                const displayName =
-                    getActorDisplayName({
-                        actorId:
-                            segment
-                                .actorId,
-                        nameEn:
-                            actor
-                                ?.nameEn,
-                        displayLocale:
-                            session
-                                .displayLocale,
-                        getLocalizedField,
-                    });
+                const actor = collisions.has(segment.actorId) ? null : actorLibrary.get(segment.actorId);
+                const declaration = collisions.has(segment.actorId) ? null : (message.extra?.hogwartsMud?.speakers || [])
+                    .find(speaker => speaker.id === segment.actorId);
+                const localName = declaration ? getLocalizedField({
+                    recordKind: 'message_speaker',
+                    recordId: `message:${messageId}:speaker:${declaration.id}`,
+                    fieldPath: 'displayNameEn',
+                    sourceTextEn: declaration.displayNameEn,
+                }) : null;
+                const displayName = actor ? getActorDisplayName({
+                    actorId: segment.actorId,
+                    nameEn: actor.nameEn,
+                    displayLocale: session.displayLocale,
+                    getLocalizedField,
+                }) : localName && (session.displayLocale === 'en' || localName.status === 'translated')
+                    ? localName.text || staticText('ui.message.unresolved_speaker', 'Unidentified speaker')
+                    : staticText('ui.message.unresolved_speaker', 'Unidentified speaker');
                 const header = document.createElement('header');
                 header.innerHTML = `
                 <span class="hpmud-turn-avatar">${initials(displayName)}</span>
@@ -868,13 +880,13 @@ export function createMessageRenderer(ports) {
             `;
                 header.querySelector('strong').textContent = displayName;
                 header.querySelector('small').textContent =
-                    getLocalizedField(
+                    (actor ? getLocalizedField(
                         createActorRoleField(
                             segment.actorId,
                             actor?.roleEn ||
                                 '',
                         ),
-                    ).text ||
+                    ).text : '') ||
                     staticText(
                         'ui.message.present_actor',
                         'Present actor',

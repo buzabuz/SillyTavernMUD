@@ -4,6 +4,10 @@ import {
     MATERIAL_EVENT_TYPES,
     MATERIAL_OPERATIONS,
 } from '../material-schema.js';
+import {
+    POST_BOOKKEEPING_PROPERTIES,
+    POST_BOOKKEEPING_SYSTEM,
+} from './post-bookkeeping-contract.js';
 
 /**
  * Field routes: vcon013.input.itemCandidates,
@@ -78,7 +82,8 @@ Calibration examples:
 3. Pure dialogue with no physical or presence change => empty materialEvents and actorUpdates; perception still describes that primary exchange.
 4. A failed secret spell sends Ron into the rafters in front of class => visualScope room, audibleScope room, concealment attempted, Ron as a direct participant.
 5. A note quietly passed to Harry without discovery => visualScope target, audibleScope none, concealment successful, Harry as a direct participant.
-6. Narrative "At 14:50 the shop door opened, five minutes later." => two temporalClaims: absolute_clock clock 14:50, and relative_duration durationMinutes 5 relation later.`;
+6. Narrative "At 14:50 the shop door opened, five minutes later." => two temporalClaims: absolute_clock clock 14:50, and relative_duration durationMinutes 5 relation later.
+${POST_BOOKKEEPING_SYSTEM}`;
 
 export const LOW_POST_TURN_SEMANTIC_SYSTEM = `${POST_TURN_SEMANTIC_SYSTEM}
 
@@ -551,11 +556,12 @@ export const POST_TURN_JSON_SCHEMA = {
         'perception',
         'temporalClaims',
         'playerMovement',
+        ...Object.keys(POST_BOOKKEEPING_PROPERTIES),
     ],
     properties: {
         schemaVersion: {
             type: 'integer',
-            const: 1,
+            const: 2,
         },
         materialEvents: {
             type: 'array',
@@ -578,6 +584,7 @@ export const POST_TURN_JSON_SCHEMA = {
         },
         playerMovement:
             playerMovementJsonSchema,
+        ...POST_BOOKKEEPING_PROPERTIES,
     },
 };
 

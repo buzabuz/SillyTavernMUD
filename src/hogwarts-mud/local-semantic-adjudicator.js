@@ -31,13 +31,25 @@ import {
     POST_TURN_SYSTEM,
 } from './post-turn-system-prompt.js';
 import {
-    createLowPostTurnResultSchema,
     postTurnJsonSchema,
     postTurnResultSchema,
+    lowPostTurnJsonSchema,
 } from './post-turn-transport-contract.js';
+import { selectLocalPostOutputSchema } from '../../public/scripts/extensions/hogwarts-mud/domain/post-bookkeeping-contract.js';
+import { POST_TURN_LOCAL_RESPONSE_RESERVE_TOKENS } from '../../public/scripts/extensions/hogwarts-mud/domain/post-turn-prompt-assembly.js';
+import {
+    PostTurnResultEnvelopeError,
+    postTurnRootEnvelopeSchema,
+    recordPostFamilyRejection,
+    settlePostTurnResultFamilies,
+} from './post-turn-result-settlement.js';
 
 /**
- * Field routes: vcon013.result.inventoryUpdates,
+ * Field routes: vcon013.result.materialEvents,
+ * vcon013.result.actorUpdates,
+ * vcon013.result.inventoryObservationRequired,
+ * vcon013.result.perception, vcon013.result.temporalClaims,
+ * vcon013.result.playerMovement, vcon013.result.inventoryUpdates,
  * vcon013.result.identityObservations.
  * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
  */
@@ -57,7 +69,7 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 export const POST_TURN_CONTEXT_SIZE =
     8_192;
 export const POST_TURN_RESPONSE_RESERVE_TOKENS =
-    1_024;
+    POST_TURN_LOCAL_RESPONSE_RESERVE_TOKENS;
 const MODULE_ROOT =
     path.dirname(
         fileURLToPath(
@@ -229,7 +241,6 @@ const settledTemporalClaimSchema =
                 TEMPORAL_CLAIM_RELATIONS,
             ),
     }).strict();
-
 export const translationResultSchema =
     z.object({
         translation:
@@ -1026,10 +1037,26 @@ export async function callStructuredModel({
                 'Ollama returned no structured content.',
             );
         }
-        const parsed =
-            resultSchema.parse(
-                JSON.parse(content),
-            );
+        let parsed;
+        try {
+            parsed =
+                resultSchema.parse(
+                    JSON.parse(content),
+                );
+        } catch (error) {
+            if (
+                taskId ===
+                'post_turn_semantic_proposal'
+            ) {
+                throw new PostTurnResultEnvelopeError(
+                    'Post-turn model result has an unusable root envelope.',
+                    {
+                        cause: error,
+                    },
+                );
+            }
+            throw error;
+        }
         return {
             result: parsed,
             diagnostics: {
@@ -1700,19 +1727,21 @@ export function validateObservedPerception(
                     ))
                 .filter(Boolean),
         );
-    if (
+    const participantActorIds = [
+        ...new Set(
+            parsed.data
+                .directParticipantActorIds
+                .filter(actorId =>
+                    actorId !== 'player' &&
+                    allowedActorIds
+                        .has(actorId)),
+        ),
+    ].sort();
+    const removedParticipantCount =
         parsed.data
             .directParticipantActorIds
-            .some(actorId =>
-                !allowedActorIds
-                    .has(actorId))
-    ) {
-        return {
-            valid: false,
-            error:
-                'Perception references an actor ID outside the supplied observer context.',
-        };
-    }
+            .length -
+        participantActorIds.length;
     const sourceTexts = [
         String(
             input.playerAction ||
@@ -1746,8 +1775,13 @@ export function validateObservedPerception(
     }
     return {
         valid: true,
-        value: parsed.data,
+        value: {
+            ...parsed.data,
+            directParticipantActorIds:
+                participantActorIds,
+        },
         error: '',
+        removedParticipantCount,
     };
 }
 
@@ -1901,9 +1935,9 @@ export function createPostTurnModelRequest(
             POST_TURN_SYSTEM,
         input,
         jsonSchema:
-            postTurnJsonSchema,
+            selectLocalPostOutputSchema(input.recoveryTargets ? lowPostTurnJsonSchema : postTurnJsonSchema, input),
         resultSchema:
-            postTurnResultSchema,
+            postTurnRootEnvelopeSchema,
         unload: true,
         contextSizeOverride:
             contextSize,
@@ -2024,31 +2058,36 @@ async function settleLowPostAuxiliaryProposals(
                             .inspectionTargetActorIds
                         : [],
             });
-    const lowResultSchema =
-        createLowPostTurnResultSchema({
-            inventoryUpdates:
-                inventoryContract
-                    .createDynamicInventoryResultSchema()
-                    .shape
-                    .inventoryUpdates,
-            identityObservations:
-                identityContract
-                    .createDynamicIdentityResultSchema(
-                        identityInput
-                            .identityTargetActorIds,
-                        identityInput
-                            .narrativeSegments
-                            .length,
-                    )
-                    .shape
-                    .identityObservations,
-        });
-    const parsed =
-        lowResultSchema.parse(
-            parsePostTurnRawObject(
-                rawResult,
-            ),
+    const inventoryUpdatesSchema =
+        inventoryContract
+            .createDynamicInventoryResultSchema()
+            .shape
+            .inventoryUpdates;
+    const identityObservationsSchema =
+        identityContract
+            .createDynamicIdentityResultSchema(
+                identityInput
+                    .identityTargetActorIds,
+                identityInput
+                    .narrativeSegments
+                    .length,
+            )
+            .shape
+            .identityObservations;
+    const settled =
+        settlePostTurnResultFamilies(
+            rawResult,
+            {
+                inventoryUpdateSchema:
+                    inventoryUpdatesSchema
+                        .element,
+                identityObservationSchema:
+                    identityObservationsSchema
+                        .element,
+            },
         );
+    const parsed =
+        settled.result;
     const inventory =
         inventoryContract
             .guardDynamicInventoryResult(
@@ -2071,6 +2110,8 @@ async function settleLowPostAuxiliaryProposals(
         parsed,
         inventory,
         identity,
+        familyRejections:
+            settled.rejections,
     };
 }
 
@@ -2085,18 +2126,29 @@ export async function settlePostTurnModelResult(
         Array.isArray(
             coreInput.itemCandidates,
         );
-    const lowAuxiliary =
-        lowMode
-            ? await settleLowPostAuxiliaryProposals(
+    let lowAuxiliary = null;
+    let parsed;
+    let familyRejections;
+    if (lowMode) {
+        lowAuxiliary =
+            await settleLowPostAuxiliaryProposals(
                 coreInput,
                 rawResult,
-            )
-            : null;
-    const parsed =
-        lowAuxiliary?.parsed ||
-        parsePostTurnModelResult(
-            rawResult,
-        );
+            );
+        parsed =
+            lowAuxiliary.parsed;
+        familyRejections =
+            lowAuxiliary.familyRejections;
+    } else {
+        const settledCore =
+            settlePostTurnResultFamilies(
+                rawResult,
+            );
+        parsed =
+            settledCore.result;
+        familyRejections =
+            settledCore.rejections;
+    }
     const coreAdoption =
         adoptLocalPostTurnLanguage(
             parsed,
@@ -2113,6 +2165,71 @@ export async function settlePostTurnModelResult(
                 .temporalClaims,
             coreInput,
         );
+    const settledRejections = [
+        ...familyRejections.filter(entry => !coreInput.recoveryTargets
+            || coreInput.recoveryTargets.families.includes(entry.family)),
+    ];
+    for (const family of ['actorUpdates', 'materialEvents']) {
+        parsed[family].forEach((record, index) => {
+            if (!coreAdoption.result[family].includes(record)) {
+                recordPostFamilyRejection(settledRejections, family, 'discard_record',
+                    'language_mismatch', 1, index, record);
+            }
+        });
+    }
+    for (const [family, rejected] of [
+        ['inventoryUpdates', lowAuxiliary?.inventory.rejections],
+        ['identityObservations', lowAuxiliary?.identity.rejections],
+    ]) {
+        for (const rejection of rejected || []) {
+            recordPostFamilyRejection(settledRejections, family, 'discard_record',
+                'domain_guard_rejected', 1, rejection.index, parsed[family][rejection.index]);
+        }
+    }
+    if (!lowMode && !coreInput.recoveryTargets
+        && familyRejections.some(entry => entry.family === 'inventoryObservationRequired')) {
+        recordPostFamilyRejection(settledRejections, 'inventoryUpdates', 'discard_family',
+            'inventory_assessment_incomplete');
+    }
+    if (
+        !perceptionValidation.valid &&
+        !settledRejections.some(entry =>
+            entry.family ===
+            'perception')
+    ) {
+        recordPostFamilyRejection(
+            settledRejections,
+            'perception',
+            'discard_family',
+            'invalid_perception',
+        );
+    }
+    if (
+        perceptionValidation
+            .removedParticipantCount
+    ) {
+        recordPostFamilyRejection(
+            settledRejections,
+            'perception',
+            'normalize',
+            'participant_ids_removed',
+            perceptionValidation
+                .removedParticipantCount,
+        );
+    }
+    if (
+        temporalClaimsValidation
+            .errors.length
+    ) {
+        recordPostFamilyRejection(
+            settledRejections,
+            'temporalClaims',
+            'discard_record',
+            'invalid_temporal_claim',
+            temporalClaimsValidation
+                .errors.length,
+        );
+    }
     return {
         result: {
             ...coreAdoption.result,
@@ -2150,6 +2267,10 @@ export async function settlePostTurnModelResult(
             perceptionError:
                 perceptionValidation
                     .error,
+            perceptionParticipantIdsRemoved:
+                perceptionValidation
+                    .removedParticipantCount ||
+                0,
             temporalClaimsRejected:
                 temporalClaimsValidation
                     .errors.length,
@@ -2169,6 +2290,8 @@ export async function settlePostTurnModelResult(
                                 .rejections,
                     }
                     : null,
+            familyRejections:
+                settledRejections,
         },
     };
 }

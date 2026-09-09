@@ -11,6 +11,50 @@ const GAME_TEXT = Object.freeze({
         en: 'Saved',
         zh: '已保存',
     },
+    'ui.model_activity.elapsed': {
+        en: '{task} · {seconds}s',
+        zh: '{task} · {seconds} 秒',
+    },
+    'ui.model_activity.task.generic': {
+        en: 'Model task',
+        zh: '模型任务',
+    },
+    'ui.model_activity.task.character_polish': {
+        en: 'Character',
+        zh: '人物',
+    },
+    'ui.model_activity.task.opening_world': {
+        en: 'World',
+        zh: '世界',
+    },
+    'ui.model_activity.task.interior_cartographer': {
+        en: 'Interior',
+        zh: '室内地图',
+    },
+    'ui.model_activity.task.pacing_director': {
+        en: 'Pacing',
+        zh: '节奏',
+    },
+    'ui.model_activity.task.scene_performance': {
+        en: 'Scene',
+        zh: '正文',
+    },
+    'ui.model_activity.task.scene_transition': {
+        en: 'Transition',
+        zh: '转场',
+    },
+    'ui.model_activity.task.scene_opening': {
+        en: 'Opening',
+        zh: '开场',
+    },
+    'ui.model_activity.task.map_expansion': {
+        en: 'Map',
+        zh: '地图',
+    },
+    'ui.model_activity.task.post_turn_semantic_proposal': {
+        en: 'Post',
+        zh: 'Post',
+    },
     'ui.game.scene.collapse_aria': {
         en: 'Collapse Scene panel',
         zh: '收起场景栏',
@@ -832,9 +876,29 @@ const GAME_TEXT = Object.freeze({
         zh: '场景已保留，Post 正在等待结算。',
     },
     'ui.story.post_unsettled.detail': {
-        en: 'No world changes were committed. Retry Post or discard this turn.',
-        zh: '尚未提交世界状态；可重试 Post 或丢弃本回合。',
+        en: 'Narrative preserved. Some settlement fields need a decision.',
+        zh: '正文已保留，部分结算数据尚未完成。',
     },
+    'ui.message.unresolved_speaker': { en: 'Unidentified speaker', zh: '身份待确认' },
+    'ui.story.post_unsettled.supplement': { en: 'Supplement selected once', zh: '补生成所选项（一次）' },
+    'ui.story.post_unsettled.defaults': { en: 'Continue with defaults', zh: '使用保守结果继续' },
+    'ui.story.post_unsettled.spent': { en: 'Supplement used', zh: '补生成机会已用完' },
+    'ui.story.post_unsettled.movement_blocked': { en: 'Movement remains uncertain. World state has not advanced.', zh: '移动结果仍不确定，世界状态尚未推进。' },
+    'ui.story.post_unsettled.action_failed': { en: 'Settlement could not be saved.', zh: '结算未能保存，正文仍保留。' },
+    'ui.story.post_unsettled.unsaved': { en: 'The reply remains in this page only. It was not saved; refreshing may lose it. World state has not advanced.', zh: '正文仅保留在当前页面，尚未写入存档；刷新可能丢失。世界状态未推进。' },
+    'ui.story.post_unsettled.save_only': { en: 'Retry saving reply', zh: '重试保存正文' },
+    'ui.story.post_family.materialEvents': { en: 'Physical changes', zh: '物理变化' },
+    'ui.story.post_family.actorUpdates': { en: 'Character activity', zh: '人物活动' },
+    'ui.story.post_family.perception': { en: 'Perception and witnesses', zh: '感知与目击' },
+    'ui.story.post_family.temporalClaims': { en: 'Time claims', zh: '时间描述' },
+    'ui.story.post_family.playerMovement': { en: 'Player movement', zh: '玩家移动' },
+    'ui.story.post_family.inventoryUpdates': { en: 'Items', zh: '物品变化' },
+    'ui.story.post_family.identityObservations': { en: 'Injury observations', zh: '伤势观察' },
+    'ui.story.post_family.temporaryActors': { en: 'New characters', zh: '新登场人物' },
+    'ui.story.post_family.firstImpressions': { en: 'First impressions', zh: '初见印象' },
+    'ui.story.post_family.sceneProgression': { en: 'Scene progression', zh: '场景推进' },
+    'ui.story.post_family.pacingRealization': { en: 'Pacing realization', zh: '节奏落实' },
+    'ui.story.post_family.historicalClaims': { en: 'Recalled events', zh: '历史陈述' },
     'ui.story.post_unsettled.retry': {
         en: 'Retry Post',
         zh: '重试 Post',

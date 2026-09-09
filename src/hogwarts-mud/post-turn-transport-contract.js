@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { postBookkeepingSchemas } from './post-bookkeeping-schema.js';
 
 import {
     APPEARANCE_SLOT_VALUES,
@@ -12,7 +13,11 @@ import {
 } from '../../public/scripts/extensions/hogwarts-mud/domain/post-turn-semantic-contract.js';
 
 /**
- * Field routes: vcon013.result.inventoryUpdates,
+ * Field routes: vcon013.result.materialEvents,
+ * vcon013.result.actorUpdates,
+ * vcon013.result.inventoryObservationRequired,
+ * vcon013.result.perception, vcon013.result.temporalClaims,
+ * vcon013.result.playerMovement, vcon013.result.inventoryUpdates,
  * vcon013.result.identityObservations.
  * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
  */
@@ -91,7 +96,7 @@ const perceptionShape = {
             'post_turn_observer',
         ),
 };
-const materialEventSchema =
+export const materialEventSchema =
     z.object({
         type:
             z.enum(
@@ -146,7 +151,7 @@ const materialEventSchema =
         confidence:
             confidenceSchema,
     }).strict();
-const actorUpdateSchema =
+export const actorUpdateSchema =
     z.object({
         actorId:
             z.string().max(96),
@@ -165,7 +170,7 @@ const actorUpdateSchema =
         confidence:
             confidenceSchema,
     }).strict();
-const temporalClaimSchema =
+export const temporalClaimSchema =
     z.object({
         kind:
             z.enum(
@@ -190,7 +195,7 @@ const temporalClaimSchema =
         confidence:
             confidenceSchema,
     }).strict();
-const playerMovementSchema =
+export const playerMovementSchema =
     z.object({
         outcome:
             z.enum([
@@ -216,7 +221,7 @@ const playerMovementSchema =
 export const postTurnResultSchema =
     z.object({
         schemaVersion:
-            z.literal(1),
+            z.literal(2),
         materialEvents:
             z.array(
                 materialEventSchema,
@@ -237,6 +242,7 @@ export const postTurnResultSchema =
             ).max(16),
         playerMovement:
             playerMovementSchema,
+        ...postBookkeepingSchemas,
     }).strict();
 
 export const postTurnJsonSchema =
