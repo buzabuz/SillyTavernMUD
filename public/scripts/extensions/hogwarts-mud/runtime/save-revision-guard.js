@@ -1481,6 +1481,21 @@ export function createSaveRevisionGuard(
         );
     }
 
+    async function recoverUncertainWrite(worldState, verifyPersistedBase) {
+        const base = getSaveRevisionHead(worldState);
+        if (!base || typeof verifyPersistedBase !== 'function') throw new TypeError('Verified base required.');
+        return runExclusive(base.timelineEpoch, createClaimId(), async mutex => {
+            mutex.assertOwned();
+            const current = heads.readHead(base.timelineEpoch);
+            if (current?.stateRevision === base.stateRevision && !current.claimId) return true;
+            if (current?.stateRevision !== base.stateRevision + 1
+                || current.claimPhase !== CLAIM_PHASE_HOST_SAVE_STARTED || !current.claimId) return false;
+            if (!await verifyPersistedBase()) return false;
+            mutex.assertOwned();
+            return heads.rejectHostSave(base, current.stateRevision, current.claimId, current.claimFence);
+        });
+    }
+
     async function runExclusive(
         timelineEpoch,
         claimId,
@@ -1934,6 +1949,7 @@ export function createSaveRevisionGuard(
         registerHead,
         recoverHead,
         replaceHead,
+        recoverUncertainWrite,
         guardedSave,
     };
 }

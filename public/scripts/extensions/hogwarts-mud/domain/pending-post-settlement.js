@@ -1,8 +1,10 @@
 import {
     isStateRevisionCurrentOrModelTaskRuntimeOnly,
 } from './save-revision.js';
+import { createPostRecovery, emptyPostObservation, narrativeSourceIdentity } from './post-recovery.js';
+import { validateTurnTransaction } from './turn-validation.js';
 
-export const PENDING_POST_SETTLEMENT_VERSION = 1;
+export const PENDING_POST_SETTLEMENT_VERSION = 2;
 
 function isPostPendingRevisionCurrent(
     state,
@@ -129,6 +131,7 @@ export function createPendingPostSettlement({
     discardable = Boolean(
         preTurnCheckpoint,
     ),
+    recovery = null,
 }) {
     return {
         version: PENDING_POST_SETTLEMENT_VERSION,
@@ -186,6 +189,11 @@ export function createPendingPostSettlement({
                 failureCode ||
                 'post_provider_failed',
             ),
+        recovery: recovery || createPostRecovery({
+            ...emptyPostObservation(transactionDraft),
+            postSettlementFailure: true,
+            failureCode,
+        }, transactionDraft),
     };
 }
 
@@ -215,6 +223,70 @@ export function isPendingPostSettlementCurrent(
             ),
         ),
     );
+}
+
+export function upgradePendingPostSettlement(state, chat, pending) {
+    if (pending?.version !== 1) return pending;
+    if (!isPendingPostSettlementTail(chat, pending)
+        || !isPendingPostSettlementCurrent(state, { ...pending, version: PENDING_POST_SETTLEMENT_VERSION })
+        || !pending.preTurnCheckpoint
+        || !Array.isArray(pending.transactionDraft?.segments)
+        || !pending.transactionDraft.segments.length) {
+        throw new Error('Legacy Post recovery lacks an authoritative source or checkpoint.');
+    }
+    const draft = structuredClone(pending.transactionDraft);
+    const source = chat[pending.sceneMessageId]?.extra?.hogwartsMud?.segments;
+    if (!Array.isArray(source) || narrativeSourceIdentity(source) !== narrativeSourceIdentity(draft.segments)) {
+        throw new Error('Legacy Post recovery narrative changed.');
+    }
+    draft.narrativeFirst = true;
+    draft.protocolVersion = 3;
+    const fields = ['temporaryActorEntrances', 'actorUpdates', 'itemUpdates',
+        'itemOperations', 'itemCandidates', 'materialEvents', 'identityObservations'];
+    const candidates = Object.fromEntries(fields.map(field => [field, draft[field]]));
+    for (const field of fields) draft[field] = [];
+    // Legacy summaries may be synthesized excerpts, not evidence-bound Post proposals.
+    draft.publicEventEn = '';
+    draft.sceneProgression = null;
+    draft.pacingBeatRealized = false;
+    delete draft.eventKnowledge;
+    delete draft.actorPresence;
+    delete draft.perception;
+    delete draft.participantActorIds;
+    delete draft.witnessActorIds;
+    for (const segment of draft.segments) delete segment.historicalClaims;
+    const playerAction = String(chat[pending.playerMessageId]?.mes || '');
+    for (const field of fields) {
+        const limit = field === 'temporaryActorEntrances' ? 2 : 16;
+        for (const candidate of (Array.isArray(candidates[field]) ? candidates[field] : []).slice(0, limit)) {
+            const trial = { ...draft, [field]: [...draft[field], candidate] };
+            if (validateTurnTransaction(trial, state, playerAction).valid) draft[field].push(candidate);
+        }
+    }
+    const accepted = emptyPostObservation(draft);
+    accepted.materialEvents = structuredClone(draft.materialEvents);
+    accepted.identityObservations = structuredClone(draft.identityObservations);
+    accepted.observation.result.temporaryActors = structuredClone(draft.temporaryActorEntrances);
+    accepted.observation.result.actorUpdates = draft.actorUpdates.map(update => ({
+        actorId: update.id, currentActivityEn: update.currentActivityEn,
+    }));
+    accepted.observation.result.inventoryUpdates = structuredClone([
+        ...draft.itemUpdates, ...draft.itemOperations, ...draft.itemCandidates,
+    ]);
+    accepted.observation.result.materialEvents = structuredClone(draft.materialEvents);
+    accepted.observation.result.identityObservations = structuredClone(draft.identityObservations);
+    const recovery = createPostRecovery({
+        ...accepted,
+        postSettlementFailure: true,
+        failureCode: 'legacy_candidates_unverified',
+    }, draft);
+    if (pending.retryCount > 0) recovery.supplement.status = 'spent';
+    return {
+        ...structuredClone(pending),
+        version: PENDING_POST_SETTLEMENT_VERSION,
+        transactionDraft: draft,
+        recovery,
+    };
 }
 
 export function isPendingPostSettlementTail(
@@ -265,8 +337,8 @@ export function findPendingPostSettlement(
             message?.extra
                 ?.hogwartsMud
                 ?.pendingPostSettlement
-                ?.version ===
-                PENDING_POST_SETTLEMENT_VERSION,
+                && [1, PENDING_POST_SETTLEMENT_VERSION].includes(
+                    message.extra.hogwartsMud.pendingPostSettlement.version),
         );
     if (sceneMessageId < 0) {
         return null;
@@ -433,41 +505,7 @@ export function migrateLegacyPendingMovementSettlement(
         sceneMessage.extra
             ?.hogwartsMud?.role ===
             'scene_turn';
-    const baseState =
-        structuredClone(state);
-    delete baseState.turnRetry;
-    baseState.turn = {
-        ...(baseState.turn || {}),
-        status: 'idle',
-        error: '',
-    };
-    const preTurnCheckpoint =
-        legacy.preTurnCheckpoint ||
-        (
-            isTailPair
-                ? {
-                    version: 1,
-                    playerMessageId,
-                    assistantMessageId:
-                        sceneMessageId,
-                    playerAction:
-                        String(
-                            playerMessage.mes ||
-                            '',
-                        ),
-                    forceCheck:
-                        Boolean(
-                            playerMessage.extra
-                                ?.hogwartsMud
-                                ?.requiresCheck,
-                        ),
-                    baseClock: baseState.clock,
-                    createdAt:
-                        new Date().toISOString(),
-                    baseState,
-                }
-                : null
-        );
+    const preTurnCheckpoint = legacy.preTurnCheckpoint || null;
     sceneMessage.extra.hogwartsMud
         .pendingPostSettlement =
         createPendingPostSettlement({
@@ -491,7 +529,7 @@ export function migrateLegacyPendingMovementSettlement(
                 legacy.retryCount ||
                 0,
             retryable:
-                isTailPair &&
+                isTailPair && Boolean(preTurnCheckpoint) &&
                 Boolean(
                     legacy.transactionDraft &&
                     typeof legacy
@@ -504,6 +542,9 @@ export function migrateLegacyPendingMovementSettlement(
                     preTurnCheckpoint,
                 ),
         });
+    // Keep legacy candidates behind the same explicit V1 revalidation gate.
+    sceneMessage.extra.hogwartsMud.pendingPostSettlement.version = 1;
+    delete sceneMessage.extra.hogwartsMud.pendingPostSettlement.recovery;
     delete sceneMessage.extra
         .hogwartsMud
         .pendingTurnSettlement;

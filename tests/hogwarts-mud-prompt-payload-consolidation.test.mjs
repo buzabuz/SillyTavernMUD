@@ -49,6 +49,7 @@ import {
 } from '../public/scripts/extensions/hogwarts-mud/domain/save-revision.js';
 import {
     allocatePromptSections,
+    createTaskPromptBudget,
     getTaskPromptBudgetPolicy,
 } from '../public/scripts/extensions/hogwarts-mud/domain/prompt-budget-allocator.js';
 import {
@@ -83,9 +84,9 @@ import {
     createSocialMemoryWorkflow,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/social-memory.js';
 import {
-    sanitizeLowScenePerformancePayload,
     validateLowScenePerformanceOutputContract,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/turn-performance.js';
+import { preserveSceneNarrative } from '../public/scripts/extensions/hogwarts-mud/domain/narrative-preservation.js';
 import {
     createInteriorMapWorkflow,
 } from '../public/scripts/extensions/hogwarts-mud/workflows/interior-map.js';
@@ -470,7 +471,7 @@ test(
 );
 
 test(
-    'bootstrap Scene Opening validator enforces the Prompt 180-420 word contract',
+    'bootstrap Scene Opening keeps segment and word targets nonblocking',
     () => {
         const {
             validateBootstrapSceneOpening,
@@ -488,39 +489,41 @@ test(
                     Array.from(
                         {
                             length:
-                                wordCount - 1,
+                                Math.max(
+                                    1,
+                                    wordCount - 1,
+                                ),
                         },
                         () => 'word',
                     ).join(' '),
             }],
         });
+        for (const wordCount of [
+            1,
+            179,
+            180,
+            420,
+            421,
+        ]) {
+            assert.equal(
+                validateBootstrapSceneOpening(
+                    payload(wordCount),
+                    state,
+                ).valid,
+                true,
+            );
+        }
         assert.equal(
             validateBootstrapSceneOpening(
-                payload(179),
-                state,
-            ).valid,
-            false,
-        );
-        assert.equal(
-            validateBootstrapSceneOpening(
-                payload(180),
+                {
+                    segments: [{
+                        type: 'narration',
+                        textEn: 'Opening.',
+                    }],
+                },
                 state,
             ).valid,
             true,
-        );
-        assert.equal(
-            validateBootstrapSceneOpening(
-                payload(420),
-                state,
-            ).valid,
-            true,
-        );
-        assert.equal(
-            validateBootstrapSceneOpening(
-                payload(421),
-                state,
-            ).valid,
-            false,
         );
     },
 );
@@ -1421,6 +1424,8 @@ test(
             calls[0].options,
             {
                 json: true,
+                preservePrompt:
+                    true,
             },
         );
         assert.equal(
@@ -1470,7 +1475,7 @@ test(
 );
 
 test(
-    'Low proposal Schema, fold and validator expose one exact first-impression contract',
+    'Scene preservation ignores attached first-impression and signal proposals',
     () => {
         const valid = {
             segments: [{
@@ -1496,20 +1501,7 @@ test(
                 errors: [],
             },
         );
-        const folded =
-            foldNarrativeTurnProposals(
-                valid,
-            );
-        assert.deepEqual(
-            folded.actorUpdates,
-            [{
-                id: 'hermione',
-                currentActivityEn:
-                    'Watching the player from across the desk.',
-                firstImpressionOfPlayerEn:
-                    'A conspicuously eager classmate.',
-            }],
-        );
+        assert.deepEqual(preserveSceneNarrative(valid).actorUpdates, []);
         assert.equal(
             validateLowScenePerformanceOutputContract(
                 valid,
@@ -1520,7 +1512,7 @@ test(
                         true,
                 },
             ).valid,
-            false,
+            true,
         );
         const requiredSignals = {
             ...valid,
@@ -1574,7 +1566,7 @@ test(
                 });
             assert.equal(
                 result.valid,
-                false,
+                true,
             );
         }
         const legacyFold =
@@ -1630,7 +1622,7 @@ test(
 );
 
 test(
-    'Low activity hints discard unsupported location fields without rejecting valid paid segments',
+    'Scene attached activity hints never write authority or reject valid paid segments',
     () => {
         const payload = {
             segments: [{
@@ -1653,33 +1645,19 @@ test(
         };
 
         const sanitized =
-            sanitizeLowScenePerformancePayload(
+            preserveSceneNarrative(
                 structuredClone(
                     payload,
                 ),
             );
 
         assert.deepEqual(
-            sanitized.stateProposals,
-            [{
-                type:
-                    'actor_activity',
-                actorId:
-                    'hermione',
-                currentActivityEn:
-                    'Inspecting the quill across the table.',
-            }],
+            sanitized.actorUpdates,
+            [],
         );
         assert.deepEqual(
-            sanitized
-                .modelShapeDiagnostics,
-            [{
-                proposalIndex: 0,
-                fields: [
-                    'mapId',
-                    'roomId',
-                ],
-            }],
+            sanitized.segments,
+            payload.segments,
         );
         assert.deepEqual(
             validateLowScenePerformanceOutputContract(
@@ -1740,7 +1718,7 @@ test(
 );
 
 test(
-    'scheduler enforces product budget including transport JSON Schema before model invocation',
+    'scheduler uses selected role capacity instead of static task budget',
     async () => {
         const state = {
             timelineEpoch:
@@ -1756,20 +1734,92 @@ test(
                 createDefaultModelTaskRuntime(),
         };
         let calls = 0;
+        let attempt = null;
+        let requestOptions = null;
         const scheduler =
             createModelEventScheduler({
                 getState:
                     () => state,
                 invokeRole:
-                    async () => {
+                    async (
+                        _slot,
+                        _messages,
+                        options,
+                    ) => {
                         calls += 1;
+                        requestOptions =
+                            options;
                         return {
                             content: '{}',
                         };
                     },
-                enforceProductBudget:
-                    true,
+                getRuntimeMaximumCharacters:
+                    () => 90_000,
+                onAttempt:
+                    envelope => {
+                        attempt = envelope;
+                    },
             });
+        await scheduler.runRoleTask(
+            'social_director',
+            {
+                tier: 'medium',
+            },
+            [{
+                role: 'user',
+                content:
+                    'x'.repeat(
+                        75_000,
+                    ),
+            }],
+            {
+                tier: 'medium',
+                jsonSchema: {
+                    type: 'object',
+                    description:
+                        'y'.repeat(
+                            6_000,
+                        ),
+                },
+            },
+            {
+                eventType:
+                    'turn.post_commit',
+                emittedBy:
+                    'budget.test',
+            },
+        );
+        assert.equal(
+            calls,
+            1,
+            'a request above the former 80k static target dispatches',
+        );
+        assert.equal(
+            requestOptions
+                ?.preservePrompt,
+            true,
+            'the public scheduler forwards its measured request unchanged',
+        );
+        assert.equal(
+            attempt
+                ?.promptBudget
+                .runtimeMaximumCharacters,
+            90_000,
+        );
+        assert.equal(
+            attempt
+                ?.promptBudget
+                .maximumCharacters,
+            80_000,
+            'the old static value remains metadata only',
+        );
+        assert.equal(
+            state.modelTaskRuntime
+                .byTaskId
+                .social_director
+                .attempted,
+            1,
+        );
         await assert.rejects(
             () =>
                 scheduler.runRoleTask(
@@ -1781,18 +1831,11 @@ test(
                         role: 'user',
                         content:
                             'x'.repeat(
-                                75_000,
+                                90_001,
                             ),
                     }],
                     {
                         tier: 'medium',
-                        jsonSchema: {
-                            type: 'object',
-                            description:
-                                'y'.repeat(
-                                    6_000,
-                                ),
-                        },
                     },
                     {
                         eventType:
@@ -1801,18 +1844,197 @@ test(
                             'budget.test',
                     },
                 ),
-            /above product budget/u,
+            /above runtime ceiling/u,
         );
         assert.equal(
             calls,
-            0,
+            1,
         );
         assert.equal(
             state.modelTaskRuntime
                 .byTaskId
                 .social_director
                 .attempted,
+            1,
+        );
+    },
+);
+
+test(
+    'every active role task dispatches above its static target when selected capacity fits',
+    async () => {
+        const roleTasks =
+            MODEL_TASK_CATALOG.filter(definition =>
+                definition.status === 'active' &&
+                definition.allowedTiers.some(tier =>
+                    [
+                        'low',
+                        'medium',
+                        'high',
+                    ].includes(tier)),
+            );
+        for (const definition of roleTasks) {
+            const policy =
+                getTaskPromptBudgetPolicy(
+                    definition.taskId,
+                );
+            const tier =
+                definition.allowedTiers.find(candidate =>
+                    [
+                        'low',
+                        'medium',
+                        'high',
+                    ].includes(candidate));
+            const state = {
+                timelineEpoch:
+                    `capacity_${definition.taskId}`,
+                stateRevision: 1,
+                turn: {
+                    count: 1,
+                },
+                scene: {
+                    id: 'capacity_scene',
+                },
+                modelTaskRuntime:
+                    createDefaultModelTaskRuntime(),
+            };
+            let calls = 0;
+            const scheduler =
+                createModelEventScheduler({
+                    getState:
+                        () => state,
+                    getRuntimeMaximumCharacters:
+                        () =>
+                            policy
+                                .maximumCharacters +
+                            2_048,
+                    invokeRole:
+                        async () => {
+                            calls += 1;
+                            return {
+                                content: '{}',
+                            };
+                        },
+                });
+            await scheduler.runRoleTask(
+                definition.taskId,
+                {
+                    tier,
+                },
+                [{
+                    role: 'user',
+                    content:
+                        'x'.repeat(
+                            policy
+                                .maximumCharacters +
+                            1,
+                        ),
+                }],
+                {
+                    tier,
+                },
+                {
+                    eventType:
+                        definition
+                            .triggerEvents[0],
+                    emittedBy:
+                        'role_capacity.test',
+                },
+            );
+            assert.equal(
+                calls,
+                1,
+                `${definition.taskId} dispatches above its static target`,
+            );
+        }
+        const localBudget =
+            createTaskPromptBudget(
+                'local_pre_turn_adjudicator',
+                {
+                    runtimeMaximumCharacters:
+                        90_000,
+                },
+            );
+        assert.equal(
+            localBudget
+                .effectiveMaximumCharacters,
+            localBudget
+                .maximumCharacters,
+            'Local-only policy remains independent of role capacity',
+        );
+    },
+);
+
+test(
+    'scheduler rejects a role request when its shared transport wrapper exceeds capacity',
+    async () => {
+        const state = {
+            timelineEpoch:
+                'wrapper_budget_epoch',
+            stateRevision: 1,
+            turn: {
+                count: 1,
+            },
+            scene: {
+                id:
+                    'wrapper_budget_scene',
+            },
+            modelTaskRuntime:
+                createDefaultModelTaskRuntime(),
+        };
+        let calls = 0;
+        const scheduler =
+            createModelEventScheduler({
+                getState:
+                    () => state,
+                invokeRole:
+                    async () => {
+                        calls += 1;
+                        return {
+                            content:
+                                '{}',
+                        };
+                    },
+                getRuntimeMaximumCharacters:
+                    () => 100,
+            });
+        await assert.rejects(
+            () =>
+                scheduler.runRoleTask(
+                    'social_director',
+                    {
+                        tier:
+                            'medium',
+                        maxResponseLength:
+                            512,
+                    },
+                    [{
+                        role:
+                            'user',
+                        content:
+                            'x'.repeat(
+                                60,
+                            ),
+                    }],
+                    {
+                        tier:
+                            'medium',
+                        json:
+                            true,
+                    },
+                    {
+                        eventType:
+                            'turn.post_commit',
+                        emittedBy:
+                            'budget.test',
+                    },
+                ),
+            /above runtime ceiling/u,
+        );
+        assert.equal(
+            calls,
             0,
+            'a wrapper-induced overflow must not reach the adapter',
         );
     },
 );

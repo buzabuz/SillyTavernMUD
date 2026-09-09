@@ -1,4 +1,4 @@
-export const TURN_DIAGNOSTICS_VERSION = 2;
+export const TURN_DIAGNOSTICS_VERSION = 3;
 export const TURN_DIAGNOSTIC_HISTORY_LIMIT = 8;
 export const TURN_DIAGNOSTIC_EVENT_LIMIT = 32;
 export const TURN_DIAGNOSTIC_STRING_LIMIT = 2_000;
@@ -8,24 +8,56 @@ const SENSITIVE_DIAGNOSTIC_KEYS =
     new Set([
         'authorization',
         'content',
+        'error',
+        'errors',
+        'evidenceText',
         'fullPrompt',
         'invalidOutput',
         'limitedUserPrefix',
         'limitedUserSuffix',
+        'limitedPlayerAction',
+        'limitedPlayerTurnSequence',
+        'originalPlayerAction',
         'originalPlayerTurnSequence',
         'originalRequest',
         'originalSceneInput',
         'password',
+        'playerAction',
+        'playerMessage',
         'playerTurnSequence',
         'prompt',
         'raw',
+        'requestedPlayerAction',
         'reasoning',
         'requiredSchema',
         'segments',
+        'speechText',
+        'storedPlayerMessage',
         'systemPrompt',
+        'text',
+        'targetLabels',
+        'unresolvedLabels',
+        'unresolvedPublicPressureEn',
     ]);
 const SENSITIVE_DIAGNOSTIC_KEY_PATTERN =
     /(?:api.?key|private.?goal|secret|token)/iu;
+const TEMPORAL_CLAIM_KINDS =
+    new Set([
+        'absolute_clock',
+        'relative_duration',
+        'named_time',
+        'schedule',
+        'calendar_date',
+    ]);
+const TEMPORAL_REJECTION_REASON_CODES =
+    new Set([
+        'evidence_not_in_narrative',
+        'invalid_clock_shape',
+        'clock_outside_turn',
+        'relative_duration_outside_turn',
+        'unknown_claim_kind',
+        'external_time_not_authorized',
+    ]);
 
 let fallbackTraceSequence = 0;
 
@@ -111,6 +143,109 @@ function sanitizeDiagnosticValue(
     );
 }
 
+function projectDiagnosticCount(value) {
+    const numeric =
+        Number(value);
+    return Math.max(
+        0,
+        Math.min(
+            1_000_000,
+            Number.isFinite(numeric)
+                ? Math.floor(numeric)
+                : 0,
+        ),
+    );
+}
+
+function projectTemporalClaimKind(value) {
+    const kind =
+        String(value || '');
+    return TEMPORAL_CLAIM_KINDS.has(kind)
+        ? kind
+        : 'unknown';
+}
+
+function projectTemporalReasonCode(value) {
+    const reason =
+        String(value || '');
+    return TEMPORAL_REJECTION_REASON_CODES
+        .has(reason)
+        ? reason
+        : 'unknown_rejection_reason';
+}
+
+export function projectTemporalDiagnostics(
+    diagnostics,
+) {
+    const rejectedClaims =
+        Array.isArray(
+            diagnostics?.rejectedClaims,
+        )
+            ? diagnostics.rejectedClaims
+                .slice(0, 16)
+                .map((claim, fallbackIndex) => ({
+                    index:
+                        projectDiagnosticCount(
+                            claim?.index ??
+                            fallbackIndex,
+                        ),
+                    kind:
+                        projectTemporalClaimKind(
+                            claim?.kind,
+                        ),
+                    reason:
+                        projectTemporalReasonCode(
+                            claim?.reason,
+                        ),
+                }))
+            : [];
+    const reasonCodes = [
+        ...new Set(
+            [
+                ...(
+                    Array.isArray(
+                        diagnostics?.reasonCodes,
+                    )
+                        ? diagnostics.reasonCodes
+                        : []
+                ),
+                ...rejectedClaims.map(claim =>
+                    claim.reason),
+            ]
+                .map(projectTemporalReasonCode)
+                .filter(Boolean),
+        ),
+    ].slice(0, 16);
+    const rejected =
+        Math.max(
+            projectDiagnosticCount(
+                diagnostics?.rejected,
+            ),
+            rejectedClaims.length,
+        );
+    if (
+        rejected > 0 &&
+        !reasonCodes.length
+    ) {
+        reasonCodes.push(
+            'unknown_rejection_reason',
+        );
+    }
+
+    return {
+        valid:
+            diagnostics?.valid === true,
+        accepted:
+            projectDiagnosticCount(
+                diagnostics?.accepted,
+            ),
+        rejected:
+            rejected,
+        reasonCodes,
+        rejectedClaims,
+    };
+}
+
 export function createTurnDiagnosticsRecorder({
     createId = () =>
         `local-${Date.now()}-${++fallbackTraceSequence}`,
@@ -145,12 +280,9 @@ export function createTurnDiagnosticsRecorder({
                 )
                     ? assistantMessageId
                     : null,
-            playerAction:
+            playerActionCharacters:
                 String(playerAction || '')
-                    .slice(
-                        0,
-                        TURN_DIAGNOSTIC_STRING_LIMIT,
-                    ),
+                    .length,
             callCounts: {
                 high: 0,
                 medium: 0,

@@ -10,6 +10,9 @@ import {
     validateSceneDestinationGrounding,
 } from '../public/scripts/extensions/hogwarts-mud/domain/scene-destination.js';
 import {
+    collectNonEnglishAuthorityFields,
+} from '../public/scripts/extensions/hogwarts-mud/domain/model-language-adoption.js';
+import {
     normalizeSceneTransitionPackage,
     stripSyntheticSceneOpeningActorSegments,
     validateSceneTransitionPackage,
@@ -167,6 +170,89 @@ function createEntranceHallTransitionCase() {
     };
 }
 
+test('optional scene prose is language-checked only when supplied', () => {
+    assert.deepEqual(
+        collectNonEnglishAuthorityFields({
+            authorQuillEn:
+                '中文作者点评',
+            nextScene: {
+                explorationHookEn:
+                    '中文探索钩子',
+            },
+        }),
+        [
+            'authorQuillEn',
+            'nextScene.explorationHookEn',
+        ],
+    );
+    assert.deepEqual(
+        collectNonEnglishAuthorityFields({
+            nextScene: {},
+        }),
+        [],
+    );
+});
+
+test('scene transition prompt treats Author Quill as optional', () => {
+    const workflow =
+        createSceneTransitionWorkflow({
+            CANON_CAST_IDENTITY_CONTRACT:
+                '',
+            CANON_WIT_TONE_CONTRACT: '',
+            buildActorContinuityCapsules:
+                () => [],
+            buildBehavioralEnvironment:
+                () => ({}),
+            buildMapAuthorityContext:
+                () => ({}),
+            buildSceneCastRotationPolicy:
+                () => ({}),
+            formatRetrievedKnowledge:
+                () => '',
+            getContext:
+                () => ({
+                    chat: [],
+                }),
+            projectActorLibraryForContext:
+                () => [],
+        });
+    const prompt =
+        workflow.createSceneTransitionPrompt(
+            {
+                clock:
+                    '1991-09-03 · 17:00',
+                scene: {
+                    id: 'scene_old',
+                },
+                map: {},
+                actors: [],
+                actorLibrary: [],
+                items: [],
+                clues: [],
+                storyArcs: [],
+            },
+            'medium',
+            '',
+            null,
+            {
+                changed: false,
+            },
+            [],
+            {
+                chapterMessageLimit:
+                    20,
+            },
+        );
+    assert.match(
+        prompt[0].content,
+        /authorQuillEn is an optional/u,
+    );
+    assert.match(
+        prompt[0].content,
+        /"authorQuillEn": "optional/u,
+    );
+});
+
 test('scene transition duration is not locally capped', () => {
     const state =
         createCurrentPlayingState();
@@ -242,7 +328,7 @@ test('scene transition duration is not locally capped', () => {
     );
 });
 
-test('scene transition validation locks an explicit player destination', () => {
+test('scene transition validation keeps prose targets nonblocking while locking destinations', () => {
     const state = createCurrentPlayingState();
     const valid = validateSceneTransitionPackage(
         createCurrentTransitionPackage(),
@@ -269,30 +355,133 @@ test('scene transition validation locks an explicit player destination', () => {
         createCurrentTransitionPackage();
     shortQuill.authorQuillEn =
         'Tina did very well and everyone laughed.';
-    const invalidQuill =
+    const shortQuillValidation =
         validateSceneTransitionPackage(
             shortQuill,
             state,
         );
-    assert.equal(invalidQuill.valid, false);
-    assert.match(
-        invalidQuill.errors.join('；'),
-        /作者的羽毛笔/,
+    assert.equal(
+        shortQuillValidation.valid,
+        true,
+    );
+
+    const manySegments =
+        createCurrentTransitionPackage();
+    manySegments.nextScene.openingSegments =
+        Array.from(
+            { length: 9 },
+            (_, index) => ({
+                type: 'narration',
+                textEn:
+                    `The garden path holds a distinct marker ${index}.`,
+            }),
+        );
+    const normalizedManySegments =
+        normalizeSceneTransitionPackage(
+            manySegments,
+            state,
+        );
+    assert.equal(
+        normalizedManySegments.nextScene
+            .openingSegments.length,
+        9,
+    );
+    assert.equal(
+        validateSceneTransitionPackage(
+            normalizedManySegments,
+            state,
+        ).valid,
+        true,
+    );
+
+    const longQuill =
+        createCurrentTransitionPackage();
+    longQuill.authorQuillEn =
+        Array.from(
+            { length: 501 },
+            () => 'commentary',
+        ).join(' ');
+    assert.equal(
+        validateSceneTransitionPackage(
+            longQuill,
+            state,
+        ).valid,
+        true,
+    );
+
+    const missingQuill =
+        createCurrentTransitionPackage();
+    delete missingQuill.authorQuillEn;
+    assert.equal(
+        validateSceneTransitionPackage(
+            missingQuill,
+            state,
+        ).valid,
+        true,
+    );
+
+    const shortHook =
+        createCurrentTransitionPackage();
+    shortHook.nextScene.explorationHookEn =
+        'Look.';
+    assert.equal(
+        validateSceneTransitionPackage(
+            shortHook,
+            state,
+        ).valid,
+        true,
+    );
+
+    const longHook =
+        createCurrentTransitionPackage();
+    longHook.nextScene.explorationHookEn =
+        Array.from(
+            { length: 61 },
+            () => 'detail',
+        ).join(' ');
+    const normalizedLongHook =
+        normalizeSceneTransitionPackage(
+            longHook,
+            state,
+        );
+    assert.equal(
+        normalizedLongHook.nextScene
+            .explorationHookEn,
+        longHook.nextScene
+            .explorationHookEn,
+    );
+    assert.equal(
+        validateSceneTransitionPackage(
+            normalizedLongHook,
+            state,
+        ).valid,
+        true,
     );
 
     const missingHook =
         createCurrentTransitionPackage();
     delete missingHook.nextScene
         .explorationHookEn;
-    const invalidHook =
-        validateSceneTransitionPackage(
+    const normalizedMissingHook =
+        normalizeSceneTransitionPackage(
             missingHook,
             state,
         );
-    assert.equal(invalidHook.valid, false);
-    assert.match(
-        invalidHook.errors.join('；'),
-        /explorationHookEn/,
+    assert.equal(
+        Object.hasOwn(
+            normalizedMissingHook.nextScene,
+            'explorationHookEn',
+        ),
+        false,
+    );
+    const missingHookValidation =
+        validateSceneTransitionPackage(
+            normalizedMissingHook,
+            state,
+        );
+    assert.equal(
+        missingHookValidation.valid,
+        true,
     );
 
     const unrepresentedActor =
@@ -419,7 +608,7 @@ test('compact scene-seal core defers opening only for the staged low performer',
                     true,
             },
         ).errors.join('；'),
-        /开场必须包含 2–8 个分段/,
+        /开场至少需要一个环境或动作描写分段/,
     );
     const deferredState =
         structuredClone(

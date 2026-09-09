@@ -257,7 +257,7 @@ test('local pre and post build-only requests expose the exact production contrac
     );
     assert.equal(
         POST_TURN_RESPONSE_RESERVE_TOKENS,
-        1_024,
+        2_048,
     );
 });
 

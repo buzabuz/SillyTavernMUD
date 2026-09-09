@@ -1406,6 +1406,27 @@ test('controller DOM flow previews each item, moves list focus, reads archives, 
         nodes.hpmud_calendar_status.getAttribute('role'),
         'alert',
     );
+    momentFailure = Object.assign(
+        new Error(
+            'Scene director returned non-English structured content.',
+        ),
+        {
+            code:
+                'language_skipped',
+        },
+    );
+    nodes.hpmud_calendar_preview
+        .querySelector('.hpmud-calendar-enter')
+        .click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.match(
+        nodes.hpmud_calendar_preview
+            .querySelector(
+                '.hpmud-calendar-action-feedback',
+            )
+            .textContent,
+        /场景导演返回了非英语结构内容/u,
+    );
     momentFailure = null;
 
     controller.openCalendar();
@@ -1732,6 +1753,10 @@ test('controller uses action and archive ports without writing authority or scro
     assert.doesNotMatch(
         controllerSource,
         /chatMetadata|saveMetadata|sendRoleRequest|scrollIntoView/u,
+    );
+    assert.doesNotMatch(
+        controllerSource,
+        /127\.0\.0\.1:7777|CALENDAR_DEBUG|reportCalendarUiDebug|debug-point/u,
     );
     assert.match(
         controllerSource,

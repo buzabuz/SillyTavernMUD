@@ -10,7 +10,9 @@ import {
     createPostTurnSemanticMessages,
     LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
     POST_TURN_JSON_SCHEMA,
+    LOW_POST_TURN_JSON_SCHEMA,
 } from './post-turn-semantic-contract.js';
+import { selectPostOutputSchema, selectLocalPostOutputSchema } from './post-bookkeeping-contract.js';
 
 /**
  * Field routes: vcon013.input.itemCandidates,
@@ -20,7 +22,7 @@ import {
  */
 
 export const POST_TURN_LOCAL_CONTEXT_TOKENS = 8_192;
-export const POST_TURN_LOCAL_RESPONSE_RESERVE_TOKENS = 1_024;
+export const POST_TURN_LOCAL_RESPONSE_RESERVE_TOKENS = 2_048;
 export const POST_TURN_LOCAL_ESTIMATED_CHARACTERS_PER_TOKEN = 4;
 
 function clone(value) {
@@ -134,7 +136,10 @@ function measureInput(
                         .responseReserve,
                 json: true,
                 jsonSchema:
-                    LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
+                    {
+                        ...LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
+                        value: selectPostOutputSchema(LOW_POST_TURN_JSON_SCHEMA, input),
+                    },
             })
             : null;
     return measurePromptMessages(
@@ -149,7 +154,7 @@ function measureInput(
             transportJsonSchema:
                 roleTransportEnvelope
                     ?.transportJsonSchema ||
-                POST_TURN_JSON_SCHEMA,
+                selectLocalPostOutputSchema(input.recoveryTargets ? LOW_POST_TURN_JSON_SCHEMA : POST_TURN_JSON_SCHEMA, input),
             runtimeWrapper:
                 roleTransportEnvelope
                     ?.runtimeWrapper ||

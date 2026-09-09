@@ -116,6 +116,8 @@ function createPayload() {
             chapterEn: 'Test',
             mapId: 'test_map',
             roomId: 'garden',
+            explorationHookEn:
+                'A blue bottle waits beside the garden gate.',
             actorStates: [],
             openingSegments: [
                 {
@@ -315,7 +317,7 @@ test('successful Scene Transition atomically appends one chronicle entry without
     );
 });
 
-test('invalid chronicle output fails before source mutation', () => {
+test('short chronicle output remains admissible before source mutation', () => {
     const state = createState();
     const payload =
         createPayload();
@@ -327,31 +329,53 @@ test('invalid chronicle output fails before source mutation', () => {
             payload,
             state,
         );
-    const before =
-        structuredClone(state);
-
-    assert.throws(
-        () =>
-            applySceneTransition(
+    const next =
+        applySceneTransition(
+            state,
+            normalized,
+            createArchiveEntry(
                 state,
                 normalized,
-                createArchiveEntry(
-                    state,
-                    normalized,
-                ),
             ),
-        /globalChronicleSummaryEn/u,
+        );
+    assert.equal(
+        next.globalChronicle.entries[0]
+            .summaryEn,
+        'Too short.',
     );
-    assert.deepEqual(state, before);
+
+    const longPayload =
+        createPayload();
+    longPayload.globalChronicleSummaryEn =
+        Array.from(
+            { length: 641 },
+            () => 'chronicle',
+        ).join(' ');
+    const normalizedLongPayload =
+        normalizeSceneTransitionPackage(
+            longPayload,
+            state,
+        );
+    assert.equal(
+        normalizedLongPayload
+            .globalChronicleSummaryEn,
+        longPayload
+            .globalChronicleSummaryEn,
+    );
+    assert.equal(
+        validateSceneTransitionPackage(
+            normalizedLongPayload,
+            state,
+        ).valid,
+        true,
+    );
 });
 
-test('invalid Chronicle model output reports immediately without automatic retry', async () => {
+test('missing Chronicle model output reports immediately without automatic retry', async () => {
     const state = createState();
     const invalid =
         createPayload();
-    invalid
-        .globalChronicleSummaryEn =
-        'Too short.';
+    delete invalid.globalChronicleSummaryEn;
     let modelCalls = 0;
     const workflow =
         createSceneTransitionWorkflow({

@@ -41,8 +41,6 @@ function createHarness(
                 async () => {},
             getConnectionProfiles:
                 () => profiles,
-            limitMessagesToContext:
-                prompt => prompt,
             parseCompleteJsonObject:
                 value => value,
             uuidv4:
@@ -50,6 +48,9 @@ function createHarness(
         });
     return {
         adapter,
+        invokeRole:
+            adapter
+                .createScheduledRoleInvoker(),
         profiles,
         requestModes,
     };
@@ -78,14 +79,13 @@ test('stream failure is surfaced after one request and the temporary profile is 
         );
 
     await assert.rejects(
-        harness.adapter
-            .sendRoleRequest(
-                SLOT,
-                PROMPT,
-                {
-                    stream: true,
-                },
-            ),
+        harness.invokeRole(
+            SLOT,
+            PROMPT,
+            {
+                stream: true,
+            },
+        ),
         error => {
             assert.strictEqual(
                 error,
@@ -111,6 +111,7 @@ test('stream failure is surfaced after one request and the temporary profile is 
 
 test('stream success consumes one response iterator without a second request', async () => {
     const progress = [];
+    const progressStates = [];
     const harness =
         createHarness(
             async () =>
@@ -130,24 +131,37 @@ test('stream success consumes one response iterator without a second request', a
         );
 
     const result =
-        await harness.adapter
-            .sendRoleRequest(
-                SLOT,
-                PROMPT,
-                {
-                    stream: true,
-                    onProgress:
-                        content =>
+        await harness.invokeRole(
+            SLOT,
+            PROMPT,
+            {
+                stream: true,
+                onProgress:
+                        (
+                            content,
+                            state,
+                        ) => {
                             progress.push(
                                 content,
-                            ),
-                },
-            );
+                            );
+                            progressStates.push(
+                                state,
+                            );
+                        },
+            },
+        );
 
     assert.deepEqual(
         harness.requestModes,
         [
             true,
+        ],
+    );
+    assert.deepEqual(
+        progressStates,
+        [
+            {},
+            {},
         ],
     );
     assert.deepEqual(
@@ -161,8 +175,28 @@ test('stream success consumes one response iterator without a second request', a
         result,
         {
             content: 'one two',
-            reasoning: 'done',
         },
+    );
+});
+
+test('reasoning-only responses cannot become Hogwarts structured content', () => {
+    const harness =
+        createHarness(
+            async () => ({
+                content: '',
+                reasoning:
+                    '{"schemaVersion":1}',
+            }),
+        );
+
+    assert.equal(
+        harness.adapter
+            .extractRoleResponseText({
+                content: '',
+                reasoning:
+                    '{"schemaVersion":1}',
+            }),
+        '',
     );
 });
 
@@ -172,20 +206,116 @@ test('one-shot mode sends exactly one non-streaming request', async () => {
             async () => ({
                 content:
                     'one response',
+                reasoning:
+                    'hidden reasoning',
+                reasoning_content:
+                    'hidden reasoning',
+                responseContent: {
+                    parts: [{
+                        thought: true,
+                        text:
+                            'hidden reasoning',
+                    }],
+                },
             }),
         );
 
     const result =
-        await harness.adapter
-            .sendRoleRequest(
-                SLOT,
-                PROMPT,
-            );
+        await harness.invokeRole(
+            SLOT,
+            PROMPT,
+        );
 
     assert.equal(
         result.content,
         'one response',
     );
+    assert.equal(
+        'reasoning' in result,
+        false,
+    );
+    assert.equal(
+        'reasoning_content' in
+            result,
+        false,
+    );
+    assert.equal(
+        'responseContent' in
+            result,
+        false,
+    );
+    assert.deepEqual(
+        harness.requestModes,
+        [
+            false,
+        ],
+    );
+});
+
+test('provider-native content arrays retain final text and discard thinking blocks', async () => {
+    const harness =
+        createHarness(
+            async () => ({
+                content: [{
+                    type: 'thinking',
+                    thinking:
+                        'hidden',
+                }, {
+                    type: 'text',
+                    text:
+                        '{"schemaVersion":1}',
+                }],
+            }),
+        );
+
+    const result =
+        await harness.invokeRole(
+            SLOT,
+            PROMPT,
+        );
+
+    assert.deepEqual(
+        result,
+        {
+            content:
+                '{"schemaVersion":1}',
+        },
+    );
+    assert.equal(
+        harness.adapter
+            .extractRoleResponseText(
+                result,
+            ),
+        '{"schemaVersion":1}',
+    );
+});
+
+test('adapter exposes only a scheduler-bound role invoker', async () => {
+    const harness =
+        createHarness(
+            async () => ({
+                content:
+                    'one response',
+            }),
+        );
+
+    assert.equal(
+        harness.adapter
+            .sendRoleRequest,
+        undefined,
+    );
+    await harness.invokeRole(
+        SLOT,
+        [{
+            role:
+                'user',
+            content:
+                'x'.repeat(
+                    11,
+                ),
+        }],
+    );
+
     assert.deepEqual(
         harness.requestModes,
         [

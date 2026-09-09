@@ -15,8 +15,13 @@ import {
     synchronizePendingPostSettlementRevision,
 } from '../public/scripts/extensions/hogwarts-mud/domain/pending-post-settlement.js';
 import {
+    createRoleTransportEnvelope,
     createTaskPromptBudget,
+    measurePromptMessages,
 } from '../public/scripts/extensions/hogwarts-mud/domain/prompt-budget-allocator.js';
+import {
+    LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
+} from '../public/scripts/extensions/hogwarts-mud/domain/post-turn-semantic-contract.js';
 import {
     createTurnRetryCheckpoint,
     restoreTurnRetryCheckpoint,
@@ -81,7 +86,7 @@ function createPostInput() {
     };
 }
 
-test('a 16,803-character Low Post request is dispatched by selected Low capacity', () => {
+test('a complete Post request above the old local target uses selected Low capacity', () => {
     const input = createPostInput();
     input.playerTurnSequence = [];
     input.existingActorPresence = null;
@@ -100,10 +105,11 @@ test('a 16,803-character Low Post request is dispatched by selected Low capacity
             input,
             lowSlot,
         }).diagnostics.fullMeasurement;
+    const requestCharacters = baseline.characters + 1_000;
     input.narrativeSegments[0].textEn =
         'n'.repeat(
             input.narrativeSegments[0].textEn.length +
-            16_803 -
+            requestCharacters -
             baseline.characters,
         );
     const result =
@@ -117,7 +123,7 @@ test('a 16,803-character Low Post request is dispatched by selected Low capacity
         result.diagnostics
             .fullMeasurement
             .characters,
-        16_803,
+        requestCharacters,
     );
     assert.ok(
         result.diagnostics
@@ -132,6 +138,48 @@ test('a 16,803-character Low Post request is dispatched by selected Low capacity
         0,
     );
     assert.equal(result.fit, true);
+    const transportEnvelope =
+        createRoleTransportEnvelope({
+            maxResponseLength:
+                lowSlot.maxResponseLength,
+            json: true,
+            jsonSchema:
+                LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
+        });
+    assert.deepEqual(
+        result.diagnostics
+            .fullMeasurement,
+        {
+            ...measurePromptMessages(
+                result.messages,
+                {
+                    transportJsonSchema:
+                        transportEnvelope
+                            .transportJsonSchema,
+                    runtimeWrapper:
+                        transportEnvelope
+                            .runtimeWrapper,
+                },
+            ),
+            estimatedTokens:
+                result.diagnostics
+                    .fullMeasurement
+                    .estimatedTokens,
+            estimatedMessageTokens:
+                result.diagnostics
+                    .fullMeasurement
+                    .estimatedMessageTokens,
+            estimatedSchemaTokens:
+                result.diagnostics
+                    .fullMeasurement
+                    .estimatedSchemaTokens,
+            estimatedWrapperTokens:
+                result.diagnostics
+                    .fullMeasurement
+                    .estimatedWrapperTokens,
+        },
+        'Low Post assembly must use the scheduler transport envelope',
+    );
     assert.deepEqual(
         result.diagnostics
             .compactedSections,
@@ -145,7 +193,7 @@ test('a 16,803-character Low Post request is dispatched by selected Low capacity
         result.diagnostics
             .capacity
             .maximumCharacters >=
-        16_803,
+        requestCharacters,
     );
     assert.equal(
         createTaskPromptBudget(
@@ -169,12 +217,21 @@ test('Post assembly compacts only approved sections in deterministic order', () 
     input.playerTurnSequence = [{
         note: 's'.repeat(1_400),
     }];
+    const compacted = structuredClone(input);
+    delete compacted.existingActorPresence;
+    delete compacted.playerTurnSequence;
+    delete compacted.localPresence;
+    compacted.actors = compacted.actors.filter(actor => actor.id === 'hermione');
+    delete compacted.room.exits;
+    const protectedSize = assemblePostTurnSemanticPrompt({
+        provider: 'local', input: compacted,
+    }).diagnostics.fullMeasurement.characters;
     const result =
         assemblePostTurnSemanticPrompt({
             provider: 'local',
             input,
             localCapacity: {
-                contextTokens: 15_000,
+                contextTokens: protectedSize + 1_024,
                 responseReserveTokens: 1_000,
                 estimatedCharactersPerToken: 1,
             },
@@ -371,22 +428,23 @@ test('pending Post settlement requires a current tail pair and migrates legacy m
             .pendingTurnSettlement,
         undefined,
     );
-    assert.ok(
+    assert.equal(
         findPendingPostSettlement(
             chat,
         )?.pending.preTurnCheckpoint,
+        null,
     );
     assert.equal(
         findPendingPostSettlement(
             chat,
         )?.pending.retryable,
-        true,
+        false,
     );
     assert.equal(
         findPendingPostSettlement(
             chat,
         )?.pending.discardable,
-        true,
+        false,
     );
 });
 
@@ -610,6 +668,9 @@ test('empty metadata cannot bypass pending revision continuity', () => {
 function createPendingWorkflowHarness({
     postResult = null,
     advanceRevisionOnMetadataSave = false,
+    failAtomicCommit = false,
+    advanceRevisionDuringPost = false,
+    movementPreflight = null,
 } = {}) {
     const state =
         createCurrentPlayingState();
@@ -659,6 +720,7 @@ function createPendingWorkflowHarness({
         },
         saveChat: async () => {},
     };
+    let atomicCommitCalls = 0;
     const pending =
         createPendingPostSettlement({
             state,
@@ -675,6 +737,7 @@ function createPendingWorkflowHarness({
                 },
             },
             preTurnCheckpoint: checkpoint,
+            movementPreflight,
             failureCode: 'post_provider_failed',
         });
     context.chat[1].extra.hogwartsMud
@@ -692,6 +755,71 @@ function createPendingWorkflowHarness({
             getMudState: () =>
                 context.chatMetadata
                     .hogwartsMud,
+            guardedRewriteTimeline:
+                async ({
+                    currentState,
+                    nextState,
+                    nextChat,
+                    source,
+                }) => {
+                    if (source === 'turn_post_commit') atomicCommitCalls++;
+                    if (failAtomicCommit && source === 'turn_post_commit') {
+                        const previousState =
+                            structuredClone(
+                                context
+                                    .chatMetadata
+                                    .hogwartsMud,
+                            );
+                        const previousChat =
+                            structuredClone(
+                                context.chat,
+                            );
+                        context.chatMetadata
+                            .hogwartsMud =
+                            structuredClone(
+                                nextState,
+                            );
+                        context.chat.splice(
+                            0,
+                            context.chat.length,
+                            ...structuredClone(
+                                nextChat,
+                            ),
+                        );
+                        context.chatMetadata
+                            .hogwartsMud =
+                            previousState;
+                        context.chat.splice(
+                            0,
+                            context.chat.length,
+                            ...previousChat,
+                        );
+                        throw new Error(
+                            'Atomic commit failed.',
+                        );
+                    }
+                    assert.equal(
+                        currentState
+                            .stateRevision,
+                        context.chatMetadata
+                            .hogwartsMud
+                            .stateRevision,
+                    );
+                    context.chatMetadata
+                        .hogwartsMud =
+                        nextState;
+                    context.chat.splice(
+                        0,
+                        context.chat.length,
+                        ...structuredClone(
+                            nextChat,
+                        ),
+                    );
+                    return {
+                        ok: true,
+                        state: nextState,
+                    };
+                },
             jobRegistry: {
                 turnActive: false,
                 sceneTransitionActive: false,
@@ -739,9 +867,18 @@ function createPendingWorkflowHarness({
             }),
             resolveEventWitnesses: () => null,
             updateNativeMessageBlock: () => {},
+            validateTurnTransaction: () => ({ valid: true, errors: [] }),
             requestPostTurnSemanticObservation:
-                async () => {
+                async (_state, _action, _transaction, options) => {
+                    await options.beforeDispatch?.();
                     postCalls++;
+                    if (
+                        advanceRevisionDuringPost
+                    ) {
+                        context.chatMetadata
+                            .hogwartsMud
+                            .stateRevision += 1;
+                    }
                     return postResult || {
                         postSettlementFailure: true,
                         failureCode:
@@ -755,11 +892,14 @@ function createPendingWorkflowHarness({
         get postCalls() {
             return postCalls;
         },
+        get atomicCommitCalls() {
+            return atomicCommitCalls;
+        },
         workflow,
     };
 }
 
-test('Retry Post makes one selected Post call and leaves failure pending', async () => {
+test('one failed supplement settles optional fields with defaults and retains prose', async () => {
     const harness =
         createPendingWorkflowHarness();
 
@@ -769,20 +909,19 @@ test('Retry Post makes one selected Post call and leaves failure pending', async
 
     assert.equal(harness.postCalls, 1);
     assert.deepEqual(result, {
-        settled: false,
+        settled: true,
     });
     assert.equal(
         harness.context.chatMetadata
             .hogwartsMud
             .turn.status,
-        'post_unsettled',
+        'idle',
     );
     assert.equal(
         harness.context.chat[1].extra
             .hogwartsMud
-            .pendingPostSettlement
-            .retryCount,
-        1,
+            .pendingPostSettlement,
+        undefined,
     );
 });
 
@@ -790,6 +929,10 @@ test('pending guard advances with the save revision that persisted it', async ()
     const harness =
         createPendingWorkflowHarness({
             advanceRevisionOnMetadataSave: true,
+            movementPreflight: {
+                triggered: true, eligibility: 'eligible',
+                candidateMapId: 'hogwarts_castle', candidateRoomId: 'classroom',
+            },
         });
 
     await harness.workflow
@@ -825,7 +968,7 @@ test('pending guard advances with the save revision that persisted it', async ()
             state,
             {
                 ...pending,
-                version: 1,
+                version: 2,
                 stateRevision: 7,
             },
         ),
@@ -847,7 +990,7 @@ test('pending guard advances with the save revision that persisted it', async ()
     );
 });
 
-test('incomplete legacy pending is marked discard-only', () => {
+test('incomplete legacy pending without a checkpoint cannot fabricate discard authority', () => {
     const state =
         createCurrentPlayingState();
     state.timelineEpoch = 'timeline-a';
@@ -897,7 +1040,7 @@ test('incomplete legacy pending is marked discard-only', () => {
         chat[1].extra.hogwartsMud
             .pendingPostSettlement
             .discardable,
-        true,
+        false,
     );
 });
 
@@ -937,6 +1080,10 @@ test('successful Retry Post commits the saved turn once without follow-up model 
     });
     assert.equal(harness.postCalls, 1);
     assert.equal(
+        harness.atomicCommitCalls,
+        1,
+    );
+    assert.equal(
         harness.context.chatMetadata
             .hogwartsMud
             .turn.status,
@@ -952,6 +1099,185 @@ test('successful Retry Post commits the saved turn once without follow-up model 
         harness.context.chat[1].extra
             .hogwartsMud
             .turnTransaction,
+    );
+});
+
+test('Retry Post persistence failure leaves the saved Scene pending without a partial commit', async () => {
+    const harness =
+        createPendingWorkflowHarness({
+            failAtomicCommit: true,
+            postResult: {
+                observation: {
+                    result: {
+                        playerMovement: null,
+                        actorUpdates: [],
+                    },
+                    diagnostics: {
+                        provider: 'low',
+                    },
+                },
+                narrativeText:
+                    'Hermione nods.',
+                materialEvents: [],
+                itemUpdates: [],
+                identityObservations: [],
+                temporalDiagnostics: {
+                    valid: true,
+                    accepted: 0,
+                    rejected: 0,
+                },
+                perception: null,
+                targetActorIds: [],
+            },
+        });
+
+    await assert.rejects(
+        () =>
+            harness.workflow
+                .retryPendingPostSettlement(),
+        /Atomic commit failed/u,
+    );
+    assert.equal(harness.postCalls, 1);
+    assert.equal(
+        harness.atomicCommitCalls,
+        1,
+    );
+    assert.equal(
+        harness.context.chatMetadata
+            .hogwartsMud
+            .turn.status,
+        'post_unsettled',
+    );
+    assert.equal(
+        harness.context.chat[1].extra
+            .hogwartsMud
+            .pendingPostSettlement
+            .failureCode,
+        'post_guard_failed',
+    );
+});
+
+test('Retry Post rejects a substantive revision change that occurs while the model is running', async () => {
+    const harness =
+        createPendingWorkflowHarness({
+            advanceRevisionDuringPost:
+                true,
+            postResult: {
+                observation: {
+                    result: {
+                        playerMovement: null,
+                        actorUpdates: [],
+                    },
+                    diagnostics: {
+                        provider: 'low',
+                    },
+                },
+                narrativeText:
+                    'Hermione nods.',
+                materialEvents: [],
+                itemUpdates: [],
+                identityObservations: [],
+                temporalDiagnostics: {
+                    valid: true,
+                    accepted: 0,
+                    rejected: 0,
+                },
+                perception: null,
+                targetActorIds: [],
+            },
+        });
+
+    await assert.rejects(
+        () =>
+            harness.workflow
+                .retryPendingPostSettlement(),
+        /State changed before retry commit/u,
+    );
+    assert.equal(
+        harness.atomicCommitCalls,
+        0,
+    );
+    assert.equal(
+        harness.context.chatMetadata
+            .hogwartsMud
+            .turn.status,
+        'post_unsettled',
+    );
+});
+
+test('blocking Retry movement preserves its bounded reason in the pending draft', async () => {
+    const movementPreflight = {
+        triggered: true,
+        eligibility: 'eligible',
+        mode: 'direct_room',
+        candidateMapId:
+            'hogwarts_castle',
+        candidateRoomId:
+            'back_garden',
+        eligibleCompanionActorIds: [],
+    };
+    const harness =
+        createPendingWorkflowHarness({
+            movementPreflight,
+            postResult: {
+                observation: {
+                    result: {
+                        playerMovement: {
+                            outcome: 'moved',
+                            destinationMapId:
+                                'hogwarts_castle',
+                            destinationRoomId:
+                                'wrong_room',
+                            accompanyingActorIds:
+                                [],
+                            evidenceText:
+                                'Hermione nods.',
+                        },
+                        actorUpdates: [],
+                    },
+                    diagnostics: {
+                        provider: 'low',
+                    },
+                },
+                narrativeText:
+                    'Hermione nods.',
+                materialEvents: [],
+                itemUpdates: [],
+                identityObservations: [],
+                temporalDiagnostics: {
+                    valid: true,
+                    accepted: 0,
+                    rejected: 0,
+                },
+                perception: null,
+                targetActorIds: [],
+            },
+        });
+
+    const result =
+        await harness.workflow
+            .retryPendingPostSettlement();
+
+    assert.deepEqual(result, {
+        settled: false,
+    });
+    const pending =
+        harness.context.chat[1]
+            .extra.hogwartsMud
+            .pendingPostSettlement;
+    assert.equal(
+        pending.failureCode,
+        'post_candidate_rejected',
+    );
+    assert.deepEqual(
+        pending.transactionDraft
+            .settlementWarnings,
+        [{
+            code:
+                'post_movement_blocked',
+            detail:
+                'movement_destination_mismatch',
+        }],
     );
 });
 

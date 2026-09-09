@@ -2,6 +2,29 @@ import {
     applyStaticUiLocale,
 } from '../locales/ui-static.js';
 
+export function shouldWarnCustomEndpoint(
+    source,
+    endpoint,
+) {
+    if (source !== 'custom') {
+        return false;
+    }
+    const value =
+        String(endpoint || '')
+            .trim();
+    if (!value) {
+        return false;
+    }
+    try {
+        const url = new URL(value);
+        return !/\/v1\/?$/iu.test(
+            url.pathname,
+        );
+    } catch {
+        return true;
+    }
+}
+
 export function createSettingsProfileController(ports) {
     const {
         refs,
@@ -192,6 +215,32 @@ export function createSettingsProfileController(ports) {
         const requiresEndpoint = source === 'custom';
         row.hidden = !requiresEndpoint;
         endpoint.required = requiresEndpoint;
+        syncProfileEndpointWarning();
+    }
+
+    function syncProfileEndpointWarning() {
+        const source =
+            root.querySelector(
+                '#hpmud_profile_source',
+            ).value;
+        const endpoint =
+            root.querySelector(
+                '#hpmud_profile_endpoint',
+            );
+        const warning =
+            root.querySelector(
+                '#hpmud_profile_endpoint_warning',
+            );
+        const visible =
+            shouldWarnCustomEndpoint(
+                source,
+                endpoint.value,
+            );
+        warning.hidden = !visible;
+        endpoint.classList.toggle(
+            'hpmud-input-warning',
+            visible,
+        );
     }
 
     async function clearTemporaryProfileSecret() {
@@ -1224,6 +1273,7 @@ export function createSettingsProfileController(ports) {
         populateProfileModels,
         populateProfilePresetOptions,
         syncProfileEndpointVisibility,
+        syncProfileEndpointWarning,
         clearTemporaryProfileSecret,
         getSelectedProfileForEditing,
         openProfileEditor,

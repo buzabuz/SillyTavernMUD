@@ -10,6 +10,12 @@ import {
     validateSceneTemporalConsistency,
 } from '../domain/turn-time.js';
 import {
+    projectTemporalDiagnostics,
+} from '../runtime/turn-diagnostics.js';
+import { settlePostBookkeeping, projectPostActorState } from '../domain/post-bookkeeping-settlement.js';
+import { selectPostOutputSchema } from '../domain/post-bookkeeping-contract.js';
+import { postRecordTarget } from '../domain/post-record-target.js';
+import {
     guardPreTurnEvidenceRoutes,
 } from '../domain/pre-turn-route-guards.js';
 import {
@@ -28,8 +34,12 @@ import {
 
 /**
  * Field routes: vcon013.input.itemCandidates,
- * vcon013.result.inventoryObservationRequired, dynamic.inventory.items,
- * dynamic.result.inventoryUpdates, dynamic.result.identityObservations.
+ * vcon013.result.materialEvents, vcon013.result.actorUpdates,
+ * vcon013.result.inventoryObservationRequired, vcon013.result.perception,
+ * vcon013.result.temporalClaims, vcon013.result.playerMovement,
+ * vcon013.result.inventoryUpdates, vcon013.result.identityObservations,
+ * dynamic.inventory.items, dynamic.result.inventoryUpdates,
+ * dynamic.result.identityObservations.
  * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
  */
 
@@ -142,6 +152,14 @@ export function createLocalSemanticAdapter(ports) {
             observation.diagnostics
                 .languageMismatches
                 .length;
+        const family = fieldPrefix.split('[')[0];
+        if (['actorUpdates', 'materialEvents', 'inventoryUpdates'].includes(family)) {
+            observation.diagnostics.familyRejections ??= [];
+            observation.diagnostics.familyRejections.push({
+                family, disposition: 'discard_record', reasonCode: 'language_mismatch',
+                rejectedCount: 1, target: postRecordTarget(family, source),
+            });
+        }
         return true;
     }
 
@@ -1225,6 +1243,9 @@ export function createLocalSemanticAdapter(ports) {
         {
             addressing = {},
             settlementOnly = false,
+            recoveryTargets = null,
+            acceptedConstraints = null,
+            beforeDispatch = null,
         } = {},
     ) {
         const narrativeText = (
@@ -1264,6 +1285,13 @@ export function createLocalSemanticAdapter(ports) {
             roomId:
                 actor.roomId,
         }));
+        for (const speaker of transaction.speakers || []) {
+            if (!actors.some(actor => actor.id === speaker.id)) actors.push({
+                id: speaker.id, nameEn: speaker.displayNameEn,
+                roleEn: 'Message-local speaker awaiting admission',
+                mapId: state.map?.activeMapId || '', roomId: state.map?.currentLocalNodeId || '',
+            });
+        }
         const itemContext =
             selectPostItemContext({
                 state,
@@ -1351,8 +1379,15 @@ export function createLocalSemanticAdapter(ports) {
                 transaction
                     .movementPreflight ||
                 null,
+            sceneAuthority: {
+                pendingBeat: transaction.pacingBeat || null,
+                check: transaction.checkResolution || null,
+            },
+            ...(transaction.postContext || {}),
+            speakerDeclarations: transaction.speakers || [],
+            ...(recoveryTargets ? { recoveryTargets, acceptedConstraints } : {}),
         };
-        if (provider === 'low') {
+        if (provider === 'low' || recoveryTargets) {
             input = {
                 ...input,
                 itemCandidates:
@@ -1377,8 +1412,11 @@ export function createLocalSemanticAdapter(ports) {
             });
         input =
             promptAssembly.input;
+        if (promptAssembly.fit && beforeDispatch) {
+            await beforeDispatch(promptAssembly);
+        }
         if (
-            provider === 'local' &&
+            (provider === 'local' || recoveryTargets) &&
             !promptAssembly.fit
         ) {
             return {
@@ -1460,11 +1498,22 @@ export function createLocalSemanticAdapter(ports) {
                         },
                     );
                 if (!response.ok) {
-                    throw new Error(
+                    const message =
                         (
                             await response.text()
                         ).slice(0, 1_000) ||
-                        `HTTP ${response.status}`,
+                        `HTTP ${response.status}`;
+                    if (
+                        response.status ===
+                        422
+                    ) {
+                        throw new PostSettlementError(
+                            'post_schema_failed',
+                            message,
+                        );
+                    }
+                    throw new Error(
+                        message,
                     );
                 }
                 observation =
@@ -1488,7 +1537,10 @@ export function createLocalSemanticAdapter(ports) {
                         {
                             json: true,
                             jsonSchema:
-                                LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
+                            recoveryTargets ? {
+                                ...LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
+                                value: selectPostOutputSchema(LOW_POST_TURN_TRANSPORT_JSON_SCHEMA.value, input),
+                            } : LOW_POST_TURN_TRANSPORT_JSON_SCHEMA,
                             stream: false,
                             skipRegexPreset: true,
                         },
@@ -1530,6 +1582,19 @@ export function createLocalSemanticAdapter(ports) {
                     await settled.json();
             }
             observation.result ??= {};
+            state = projectPostActorState(state, acceptedConstraints?.temporaryActors || []);
+            const bookkeeping = settlePostBookkeeping(observation.result, state, transaction, {
+                acceptedActorIds: (acceptedConstraints?.temporaryActors || []).map(actor => actor.id),
+            });
+            observation.result = bookkeeping.result;
+            state = projectPostActorState(state, [
+                ...(bookkeeping.result.temporaryActors || []),
+            ]);
+            observation.diagnostics ??= {};
+            observation.diagnostics.familyRejections = [
+                ...(observation.diagnostics.familyRejections || []),
+                ...bookkeeping.rejections,
+            ];
             observation.result.playerMovement ??=
                 null;
             const temporalValidation =
@@ -1554,6 +1619,13 @@ export function createLocalSemanticAdapter(ports) {
                 temporalValidation
                     .rejectedClaims ||
                 [];
+            const serverRejectedTemporalClaims =
+                Number(
+                    observation
+                        ?.diagnostics
+                        ?.temporalClaimsRejected ||
+                    0,
+                );
             const perceptionValidation =
             validatePerceptionContract(
                 observation
@@ -1592,29 +1664,19 @@ export function createLocalSemanticAdapter(ports) {
                 ?.perception
                 ?.concealment ===
                     'successful';
-            const sourceRejected =
+            const perceptionRejected =
                 Boolean(
                     observation
                         ?.diagnostics
                         ?.perceptionRejected,
                 ) ||
-                Number(
-                    observation
-                        ?.diagnostics
-                        ?.temporalClaimsRejected ||
-                    0,
-                ) > 0 ||
                 !perceptionValidation.valid ||
-                rejectedFailedConcealment ||
-                !temporalValidation.valid;
-            if (sourceRejected) {
-                throw new PostSettlementError(
-                    'post_guard_failed',
-                    'Post-turn semantic proposal was rejected by a deterministic guard.',
-                );
-            }
+                rejectedFailedConcealment;
             const perception =
-                perceptionValidation.value;
+                perceptionRejected
+                    ? null
+                    : perceptionValidation
+                        .value;
             observation.result
                 .perception =
             perception;
@@ -1623,21 +1685,35 @@ export function createLocalSemanticAdapter(ports) {
             acceptedTemporalClaims;
             observation.diagnostics ??= {};
             observation.diagnostics
-                .temporalClaims = {
+                .perception = {
                     valid:
-                    temporalValidation
-                        .valid,
-                    accepted:
-                    acceptedTemporalClaims
-                        .length,
-                    rejected:
-                    rejectedTemporalClaims
-                        .length,
-                    errors:
-                    temporalValidation
-                        .errors,
-                    rejectedClaims:
-                    rejectedTemporalClaims,
+                        !perceptionRejected,
+                    discarded:
+                        perceptionRejected,
+                    reasonCode:
+                        rejectedFailedConcealment
+                            ? 'failed_check_concealment_conflict'
+                            : !perceptionValidation
+                                .valid
+                                ? 'invalid_perception'
+                                : observation
+                                    .diagnostics
+                                    .perceptionRejected
+                                    ? 'server_perception_rejected'
+                                    : '',
+                };
+            observation.diagnostics
+                .temporalClaims = {
+                    ...projectTemporalDiagnostics({
+                        ...temporalValidation,
+                        accepted:
+                            acceptedTemporalClaims
+                                .length,
+                        rejected:
+                            rejectedTemporalClaims
+                                .length +
+                            serverRejectedTemporalClaims,
+                    }),
                 };
             observation.diagnostics.provider =
                 provider;
@@ -1648,9 +1724,55 @@ export function createLocalSemanticAdapter(ports) {
                 state,
                 narrativeText,
             );
-            if (settlementOnly) {
+            const trial = { segments: transaction.segments, actorUpdates: [] };
+            applyObservedActorUpdates(trial, observation, state, narrativeText);
+            const acceptedActorIds = new Set(trial.actorUpdates.map(actor => actor.id));
+            const removedActors = observation.result.actorUpdates.filter(actor => !acceptedActorIds.has(actor.actorId));
+            if (removedActors.length) {
+                observation.diagnostics.familyRejections.push(...removedActors.map(actor => ({
+                    family: 'actorUpdates', disposition: 'discard_record',
+                    reasonCode: 'actor_evidence_invalid', rejectedCount: 1,
+                    target: postRecordTarget('actorUpdates', actor),
+                    ...(transaction.speakers?.some(s => s.id === actor.actorId)
+                        ? { dependsOn: 'temporaryActors' } : {}),
+                })));
+                observation.result.actorUpdates = observation.result.actorUpdates.filter(actor =>
+                    acceptedActorIds.has(actor.actorId));
+            }
+            for (const [family, rejected] of [
+                ['inventoryUpdates', observation.diagnostics.lowAuxiliary?.inventoryRejected],
+                ['identityObservations', observation.diagnostics.lowAuxiliary?.identityRejected],
+            ]) {
+                if (rejected?.length && !observation.diagnostics.familyRejections.some(entry =>
+                    entry.family === family && entry.reasonCode === 'domain_guard_rejected')) observation.diagnostics.familyRejections.push({
+                    family, disposition: 'discard_record', reasonCode: 'domain_guard_rejected',
+                    rejectedCount: rejected.length,
+                });
+            }
+            const acceptedMaterial = observation.result.materialEvents.filter(event =>
+                projectObservedMaterialEvents({
+                    ...observation, result: { ...observation.result, materialEvents: [event] },
+                }, state, playerAction, narrativeText).length > 0);
+            const materialCount = acceptedMaterial.length;
+            if (materialCount < observation.result.materialEvents.length) {
+                observation.diagnostics.familyRejections.push(...observation.result.materialEvents
+                    .filter(event => !acceptedMaterial.includes(event)).map(event => ({
+                        family: 'materialEvents', disposition: 'discard_record',
+                        reasonCode: 'material_evidence_invalid', rejectedCount: 1,
+                        target: postRecordTarget('materialEvents', event),
+                    })));
+            }
+            observation.result.materialEvents = acceptedMaterial;
+            if (perceptionRejected && !observation.diagnostics.familyRejections.some(r => r.family === 'perception')) {
+                observation.diagnostics.familyRejections.push({
+                    family: 'perception', disposition: 'discard_family',
+                    reasonCode: 'perception_guard_rejected', rejectedCount: 1,
+                });
+            }
+            if (settlementOnly || recoveryTargets) {
+                const completePost = provider === 'low' || Boolean(recoveryTargets);
                 const lowInventoryUpdates =
-                    provider === 'low' &&
+                    completePost &&
                     Array.isArray(
                         observation
                             ?.result
@@ -1705,9 +1827,15 @@ export function createLocalSemanticAdapter(ports) {
                 return {
                     observation,
                     narrativeText,
-                    materialEvents: [],
+                    materialEvents:
+                        projectObservedMaterialEvents(
+                            observation,
+                            state,
+                            playerAction,
+                            narrativeText,
+                        ),
                     itemUpdates:
-                        provider === 'low'
+                        completePost
                             ? projectObservedInventoryUpdates(
                                 lowInventoryUpdates,
                                 state,
@@ -1716,7 +1844,7 @@ export function createLocalSemanticAdapter(ports) {
                             )
                             : [],
                     identityObservations:
-                        provider === 'low' &&
+                        completePost &&
                         Array.isArray(
                             observation
                                 ?.result
@@ -1727,14 +1855,14 @@ export function createLocalSemanticAdapter(ports) {
                                 .identityObservations
                             : [],
                     identityDiagnostics:
-                        provider === 'low'
+                        completePost
                             ? lowDiagnostics
                             : {
                                 routed: false,
                                 modelCalls: 0,
                             },
                     inventoryDiagnostics:
-                        provider === 'low'
+                        completePost
                             ? lowDiagnostics
                             : {
                                 routed: false,
@@ -1808,11 +1936,39 @@ export function createLocalSemanticAdapter(ports) {
                         },
                     };
             observation.diagnostics ??= {};
+            const dynamicBookkeeping = settlePostBookkeeping({
+                inventoryUpdates: dynamicObservation.inventoryUpdates,
+                identityObservations: dynamicObservation.identityObservations,
+            }, state, transaction, {
+                acceptedActorIds: [...(acceptedConstraints?.temporaryActors || []),
+                    ...(bookkeeping.result.temporaryActors || [])].map(actor => actor.id),
+            });
+            dynamicObservation.inventoryUpdates = dynamicBookkeeping.result.inventoryUpdates;
+            dynamicObservation.identityObservations = dynamicBookkeeping.result.identityObservations;
+            observation.diagnostics.familyRejections.push(
+                ...dynamicBookkeeping.rejections.filter(rejection => rejection.dependsOn === 'temporaryActors'),
+            );
             observation.diagnostics
                 .inventory =
                 dynamicObservation
                     .diagnostics
                     .inventory;
+            if (provider === 'local') {
+                for (const [task, family] of [
+                    ['inventory', 'inventoryUpdates'], ['identity', 'identityObservations'],
+                ]) {
+                    const diagnostics = dynamicObservation.diagnostics;
+                    const failedRequest = diagnostics.error && diagnostics.requestedTasks?.includes(task);
+                    const rejected = diagnostics[task]?.rejections || [];
+                    if (failedRequest || rejected.length) {
+                        observation.diagnostics.familyRejections.push({
+                            family, disposition: failedRequest ? 'discard_family' : 'discard_record',
+                            reasonCode: failedRequest ? 'dynamic_request_failed' : 'dynamic_domain_guard_rejected',
+                            rejectedCount: rejected.length || 1,
+                        });
+                    }
+                }
+            }
             const observedInventoryUpdates =
                 dynamicObservation
                     .inventoryUpdates
@@ -1838,6 +1994,8 @@ export function createLocalSemanticAdapter(ports) {
                                 ),
                             },
                         ));
+            observation.result.inventoryUpdates = observedInventoryUpdates;
+            observation.result.identityObservations = dynamicObservation.identityObservations;
             return {
                 observation,
                 narrativeText,

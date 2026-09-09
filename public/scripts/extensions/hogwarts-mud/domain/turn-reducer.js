@@ -439,7 +439,7 @@ export function applyTurnTransaction(
                 ? `message:${sourceMessageId}:public_event`
                 : `turn:${committedTurn}:public_event`,
     };
-    if (next.scene) {
+    if (next.scene && String(transaction.publicEventEn || '').trim()) {
         next.scene.timelineEntries = [
             ...(next.scene.timelineEntries || []),
             timelineEntry,

@@ -1,6 +1,6 @@
 # Hogwarts MUD Product PRD Registry
 
-Last updated: 2026-08-22
+Last updated: 2026-09-09
 
 ## Purpose
 
@@ -35,6 +35,15 @@ linked authority wins and this registry must be corrected in the same change.
 | `hogwarts-selected-post-capacity-settlement-safety` | L2 approved; implementation in progress | [PRD](.trae/specs/hogwarts-selected-post-capacity-settlement-safety/prd.md) |
 | `hogwarts-auxiliary-observation-normalization` | L1 implemented and verified | [PRD](.trae/specs/hogwarts-auxiliary-observation-normalization/prd.md) |
 | `hogwarts-low-post-chain-replacement` | L2 implementation in progress: Low complete Post chain and provider-neutral Item context | [PRD](.trae/specs/hogwarts-low-post-chain-replacement/prd.md) |
+| `hogwarts-calendar-language-skip-guard` | L1 implemented and verified: Calendar/Timeline Moment language-skip guard | [PRD](.trae/specs/hogwarts-calendar-language-skip-guard/prd.md) |
+| `hogwarts-role-slot-capacity-eligibility` | L2 approved; implementation in progress | [PRD](.trae/specs/hogwarts-role-slot-capacity-eligibility/prd.md) |
+| `hogwarts-scene-narrative-admission` | L3 implemented and independently accepted: Scene prose quality-target rejection gates removed | [PRD](.trae/specs/hogwarts-scene-narrative-admission/prd.md) |
+| `hogwarts-calendar-runtime-ledger-self-conflict` | L2 implementation and acceptance complete; technical-debt reinventory decision pending | [PRD](.trae/specs/hogwarts-calendar-runtime-ledger-self-conflict/prd.md) |
+| `hogwarts-calendar-debug-telemetry-removal` | L1 implemented: temporary localhost telemetry removed | [PRD](.trae/specs/hogwarts-calendar-debug-telemetry-removal/prd.md) |
+| `hogwarts-custom-endpoint-warning` | L1 implemented and verified | [PRD](.trae/specs/hogwarts-custom-endpoint-warning/prd.md) |
+| `hogwarts-thinking-neutral-progress` | L2 completed | [PRD](.trae/specs/hogwarts-thinking-neutral-progress/prd.md) |
+| `hogwarts-post-failure-isolation` | L3 implementation and independent acceptance passed; real-provider browser success externally blocked by Cloudflare 524 | [PRD](.trae/specs/hogwarts-post-failure-isolation/prd.md) |
+| `hogwarts-narrative-first-post-settlement` | L3 Revision 1 approved; implementation in progress: Scene prose preservation, unified Post and one manual supplement | [PRD](.trae/specs/hogwarts-narrative-first-post-settlement/prd.md) |
 
 ## Implemented And Accepted PRDs
 

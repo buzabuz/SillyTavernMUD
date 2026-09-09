@@ -5,6 +5,11 @@ import {
     createMovementOutcome,
 } from './movement-outcome.js';
 
+/**
+ * Field route: vcon013.result.playerMovement.
+ * See .trae/specs/hogwarts-runtime-contracts/model-field-routes.md.
+ */
+
 function hasExactNarrativeEvidence(
     evidenceText,
     narrativeSegments,
@@ -29,10 +34,15 @@ function hasExactNarrativeEvidence(
 
 function candidateFailure(
     error,
+    reasonCode =
+    'movement_candidate_invalid',
 ) {
     return {
         valid: false,
         error,
+        disposition:
+            'blocking_uncertain',
+        reasonCode,
     };
 }
 
@@ -42,15 +52,47 @@ export function validatePostPlayerMovement(
     narrativeSegments = [],
 ) {
     if (!preflight?.triggered) {
-        return candidate === null ||
-            candidate === undefined
-            ? {
-                valid: true,
-                value: null,
-            }
-            : candidateFailure(
-                'Ordinary prose cannot create a player movement candidate.',
-            );
+        return {
+            valid: true,
+            value: null,
+            disposition:
+                candidate === null ||
+                candidate === undefined
+                    ? 'accepted'
+                    : 'discarded_unsolicited',
+            reasonCode:
+                candidate === null ||
+                candidate === undefined
+                    ? ''
+                    : 'movement_without_preflight',
+        };
+    }
+    if (
+        preflight.eligibility ===
+            'ineligible' ||
+        preflight.eligibility ===
+            'already_there'
+    ) {
+        return {
+            valid: true,
+            value: {
+                outcome:
+                    preflight
+                        .eligibility ===
+                    'already_there'
+                        ? 'already_there'
+                        : 'not_moved',
+                destinationMapId: '',
+                destinationRoomId: '',
+                accompanyingActorIds: [],
+                evidenceText: '',
+            },
+            disposition:
+                'normalized_no_movement',
+            reasonCode:
+                preflight.reasonCode ||
+                preflight.eligibility,
+        };
     }
     if (
         !candidate ||
@@ -60,6 +102,7 @@ export function validatePostPlayerMovement(
     ) {
         return candidateFailure(
             'Triggered movement requires one Post movement candidate.',
+            'movement_candidate_missing',
         );
     }
     const outcome =
@@ -76,6 +119,7 @@ export function validatePostPlayerMovement(
     ) {
         return candidateFailure(
             'Post movement outcome is invalid.',
+            'movement_outcome_invalid',
         );
     }
     if (
@@ -86,29 +130,7 @@ export function validatePostPlayerMovement(
     ) {
         return candidateFailure(
             'Post movement evidence must be an exact saved narration substring.',
-        );
-    }
-    const companions =
-        Array.isArray(
-            candidate.accompanyingActorIds,
-        )
-            ? [
-                ...new Set(
-                    candidate
-                        .accompanyingActorIds,
-                ),
-            ]
-            : [];
-    if (
-        companions.length !==
-        (
-            candidate
-                .accompanyingActorIds ||
-            []
-        ).length
-    ) {
-        return candidateFailure(
-            'Post movement companions must not contain duplicates.',
+            'movement_evidence_ungrounded',
         );
     }
     const allowedCompanions =
@@ -117,30 +139,37 @@ export function validatePostPlayerMovement(
                 .eligibleCompanionActorIds ||
             [],
         );
-    if (
-        companions.some(actorId =>
-            !allowedCompanions.has(actorId))
-    ) {
-        return candidateFailure(
-            'Post movement companion is outside the deterministic preflight.',
-        );
-    }
+    const suppliedCompanions =
+        Array.isArray(
+            candidate.accompanyingActorIds,
+        )
+            ? candidate
+                .accompanyingActorIds
+            : [];
+    const companions = [
+        ...new Set(
+            suppliedCompanions
+                .filter(actorId =>
+                    allowedCompanions
+                        .has(actorId)),
+        ),
+    ];
     if (outcome !== 'moved') {
-        if (
-            String(
-                candidate.destinationMapId ||
-                '',
-            ) ||
-            String(
-                candidate.destinationRoomId ||
-                '',
-            ) ||
-            companions.length
-        ) {
-            return candidateFailure(
-                'A no-move candidate cannot carry a destination or companions.',
+        const normalized =
+            Boolean(
+                String(
+                    candidate
+                        .destinationMapId ||
+                    '',
+                ) ||
+                String(
+                    candidate
+                        .destinationRoomId ||
+                    '',
+                ) ||
+                suppliedCompanions
+                    .length,
             );
-        }
         return {
             valid: true,
             value: {
@@ -155,6 +184,14 @@ export function validatePostPlayerMovement(
                         '',
                     ),
             },
+            disposition:
+                normalized
+                    ? 'normalized_no_movement'
+                    : 'accepted',
+            reasonCode:
+                normalized
+                    ? 'no_movement_extras_removed'
+                    : '',
         };
     }
     if (
@@ -163,6 +200,7 @@ export function validatePostPlayerMovement(
     ) {
         return candidateFailure(
             'An ineligible preflight cannot settle as moved.',
+            'movement_preflight_ineligible',
         );
     }
     if (
@@ -185,6 +223,7 @@ export function validatePostPlayerMovement(
     ) {
         return candidateFailure(
             'Post movement destination differs from the deterministic preflight.',
+            'movement_destination_mismatch',
         );
     }
     if (
@@ -197,6 +236,7 @@ export function validatePostPlayerMovement(
     ) {
         return candidateFailure(
             'A completed follow movement must evidence the selected guide accompanying the player.',
+            'movement_required_guide_missing',
         );
     }
     return {
@@ -216,6 +256,16 @@ export function validatePostPlayerMovement(
                     '',
                 ),
         },
+        disposition:
+            companions.length !==
+                suppliedCompanions.length
+                ? 'normalized'
+                : 'accepted',
+        reasonCode:
+            companions.length !==
+                suppliedCompanions.length
+                ? 'movement_companions_removed'
+                : '',
     };
 }
 

@@ -1787,6 +1787,40 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
     box-shadow: 0 0 8px rgb(127 179 147 / 60%);
 }
 
+.hpmud-model-activity {
+    min-width: 0;
+    max-width: 180px;
+    overflow: hidden;
+    border-radius: 4px;
+    padding: 5px 7px;
+    color: var(--hp-gold);
+    background: rgb(225 196 119 / 8%);
+    box-shadow: inset 0 0 0 1px rgb(225 196 119 / 20%);
+    font-size: 9px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hpmud-model-activity::before {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: var(--hp-gold);
+    box-shadow: 0 0 8px rgb(225 196 119 / 55%);
+    content: "";
+}
+
+.hpmud-model-activity[hidden] {
+    display: none;
+}
+
+.hpmud-dialog-frame > header > .hpmud-model-activity {
+    margin-left: auto;
+}
+
 .hpmud-chapter {
     justify-content: center;
     gap: 12px;
@@ -4356,6 +4390,52 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
     white-space: nowrap;
 }
 
+.hpmud-post-recovery {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 12px;
+}
+
+.hpmud-post-recovery > strong {
+    font-size: 12px;
+}
+
+.hpmud-post-recovery > span {
+    white-space: normal;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.hpmud-post-recovery-fields {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+}
+
+.hpmud-post-recovery-fields label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    font-size: 11px;
+}
+
+.hpmud-post-recovery .hpmud-post-settlement-actions {
+    grid-row: auto;
+    grid-column: 1;
+    flex-wrap: wrap;
+}
+
+.hpmud-post-recovery .hpmud-post-settlement-actions > button {
+    min-height: 36px;
+    white-space: normal;
+    font-size: 11px;
+}
+
 .hpmud-discard-turn {
     border-color: rgb(201 121 121 / 48%);
     color: #efcfca;
@@ -5442,6 +5522,17 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
     color: var(--hp-text-3);
     font-size: 8px;
     line-height: 1.4;
+}
+
+.hpmud-profile-form-grid label > .hpmud-field-warning {
+    color: var(--hp-danger);
+    font-weight: 700;
+}
+
+.hpmud-profile-form-grid input.hpmud-input-warning {
+    box-shadow:
+        inset 0 0 0 1px rgb(201 121 121 / 72%),
+        0 0 16px rgb(201 121 121 / 8%);
 }
 
 .hpmud-profile-model-loader {
@@ -9276,6 +9367,11 @@ body.hpmud-mode > :not(#hpmud_app):not(.popup):not(dialog):not(#toast-container)
 
     .hpmud-save-state {
         display: none;
+    }
+
+    .hpmud-model-activity {
+        max-width: 128px;
+        font-size: 8px;
     }
 
     .hpmud-top-actions {

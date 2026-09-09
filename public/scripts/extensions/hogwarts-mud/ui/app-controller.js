@@ -50,6 +50,210 @@ export function createAppController(ports) {
         setupElement,
         workspaceElement,
     } = refs;
+    let foregroundActivityTimer =
+        null;
+
+    const foregroundTaskLabels =
+        Object.freeze({
+            character_polish: [
+                'ui.model_activity.task.character_polish',
+                'Character',
+            ],
+            opening_world: [
+                'ui.model_activity.task.opening_world',
+                'World',
+            ],
+            interior_cartographer: [
+                'ui.model_activity.task.interior_cartographer',
+                'Interior',
+            ],
+            pacing_director: [
+                'ui.model_activity.task.pacing_director',
+                'Pacing',
+            ],
+            scene_performance: [
+                'ui.model_activity.task.scene_performance',
+                'Scene',
+            ],
+            scene_transition: [
+                'ui.model_activity.task.scene_transition',
+                'Transition',
+            ],
+            scene_opening: [
+                'ui.model_activity.task.scene_opening',
+                'Opening',
+            ],
+            map_expansion: [
+                'ui.model_activity.task.map_expansion',
+                'Map',
+            ],
+            post_turn_semantic_proposal: [
+                'ui.model_activity.task.post_turn_semantic_proposal',
+                'Post',
+            ],
+        });
+
+    function activityText(
+        staticKey,
+        sourceTextEn,
+    ) {
+        return getLocalizedField({
+            staticKey,
+            sourceTextEn,
+        }).text ||
+            sourceTextEn;
+    }
+
+    function renderForegroundModelActivity() {
+        const element =
+            root.querySelector(
+                '#hpmud_model_activity',
+            );
+        if (!element) return;
+        const activity =
+            session
+                .foregroundModelActivity;
+        element.hidden =
+            !activity;
+        if (!activity) {
+            element.textContent = '';
+            root.querySelector(
+                '.hpmud-place',
+            )?.append(element);
+            return;
+        }
+        const activeDialog =
+            Array.from(
+                root.querySelectorAll(
+                    'dialog[open]',
+                ),
+            ).at(-1);
+        const host =
+            activeDialog
+                ?.querySelector(
+                    '.hpmud-dialog-frame > header',
+                ) ||
+            root.querySelector(
+                '.hpmud-place',
+            );
+        if (
+            host &&
+            element.parentElement !==
+                host
+        ) {
+            const closeButton =
+                activeDialog
+                    ? host.querySelector(
+                        ':scope > button',
+                    )
+                    : null;
+            host.insertBefore(
+                element,
+                closeButton,
+            );
+        }
+        const [
+            taskKey,
+            taskFallback,
+        ] =
+            foregroundTaskLabels[
+                activity.taskId
+            ] || [
+                'ui.model_activity.task.generic',
+                'Model task',
+            ];
+        const seconds =
+            Math.max(
+                0,
+                Math.floor(
+                    (
+                        Date.now() -
+                        Number(
+                            activity
+                                .startedAt ||
+                            Date.now(),
+                        )
+                    ) /
+                    1_000,
+                ),
+            );
+        element.textContent =
+            activityText(
+                'ui.model_activity.elapsed',
+                '{task} · {seconds}s',
+            )
+                .replace(
+                    '{task}',
+                    activityText(
+                        taskKey,
+                        taskFallback,
+                    ),
+                )
+                .replace(
+                    '{seconds}',
+                    String(seconds),
+                );
+    }
+
+    function clearForegroundActivityTimer() {
+        if (
+            foregroundActivityTimer !==
+            null
+        ) {
+            clearInterval(
+                foregroundActivityTimer,
+            );
+            foregroundActivityTimer =
+                null;
+        }
+    }
+
+    function setForegroundModelActivity(
+        activity,
+    ) {
+        clearForegroundActivityTimer();
+        session.foregroundModelActivity = {
+            taskId:
+                String(
+                    activity?.taskId ||
+                    '',
+                ),
+            phase:
+                String(
+                    activity?.phase ||
+                    'requesting',
+                ),
+            startedAt:
+                Number(
+                    activity?.startedAt,
+                ) ||
+                Date.now(),
+        };
+        renderForegroundModelActivity();
+        foregroundActivityTimer =
+            setInterval(
+                renderForegroundModelActivity,
+                1_000,
+            );
+    }
+
+    function clearForegroundModelActivity(
+        taskId = '',
+    ) {
+        if (
+            taskId &&
+            session
+                .foregroundModelActivity
+                ?.taskId !==
+                taskId
+        ) {
+            return;
+        }
+        clearForegroundActivityTimer();
+        session.foregroundModelActivity =
+            null;
+        renderForegroundModelActivity();
+    }
 
     function isGameStarted() {
         const state = getMudState();
@@ -68,6 +272,13 @@ export function createAppController(ports) {
             true,
         } = {},
     ) {
+        if (
+            session.activeScreen &&
+            session.activeScreen !==
+                screen
+        ) {
+            clearForegroundModelActivity();
+        }
         session.activeScreen = screen;
         const showHome = screen === 'home';
         const showSetup = screen === 'setup';
@@ -542,5 +753,8 @@ Continue from this exact state. actorCards contain the only shared NPC performan
         getInspectorMapScope,
         resetInspectorMapScope,
         clearLiveSceneStream,
+        setForegroundModelActivity,
+        clearForegroundModelActivity,
+        renderForegroundModelActivity,
     };
 }

@@ -192,6 +192,18 @@ export function createTurnController(ports) {
             return;
         }
         if (
+            getMudState()?.turn?.status ===
+            'post_unsettled'
+        ) {
+            toastr.warning(
+                staticText(
+                    'ui.story.post_unsettled.blocked',
+                    'Settle or discard the saved Scene before submitting another action.',
+                ),
+            );
+            return;
+        }
+        if (
             getFailedPlayerTurn(
                 getContext().chat,
                 getMudState()?.turn,

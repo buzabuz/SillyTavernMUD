@@ -235,6 +235,36 @@ technical assumptions. Implementation constraints such as FIFO, model
 residency, queueing or provider capability must not be promoted into product
 eligibility rules unless the user explicitly approves that business rule.
 
+### Permanent Sub-Agent Scope Authority Gate
+
+Sub-agents provide evidence and recommendations. They do not own product scope,
+PRD content, acceptance criteria or implementation authority.
+
+1. A PM, explorer, reviewer, test Agent or acceptance Agent finding may block
+   current work only when it maps directly to:
+   - the user's latest explicitly confirmed goal;
+   - one criterion in the currently approved PRD; or
+   - a living-contract invariant necessarily crossed by that approved scope.
+2. Before acting on any sub-agent proposal, the main Agent must state the exact
+   approved goal or PRD criterion it satisfies. If no exact mapping exists,
+   classify it as an out-of-scope observation and do not edit production code,
+   tests, PRD, Spec, checklist, registry or acceptance criteria for it.
+3. Never revise the PRD after approval merely to make a sub-agent's new
+   concern, preferred design, security hardening, cleanup, compatibility work
+   or broader test matrix appear in scope. Only a new explicit user decision
+   can authorize that scope change.
+4. An independent acceptance Agent must judge the approved user outcome. It
+   cannot invent a stricter product goal and then fail the change against that
+   invention. Record such suggestions separately without changing the current
+   verdict.
+5. The main Agent owns the final scope decision and must challenge a
+   sub-agent conclusion that exceeds user authority. Repeated Agent agreement
+   does not replace user approval.
+6. When the user rejects Agent-created scope, immediately stop that work,
+   rollback only the unapproved edits, restore the approved artifacts, and
+   verify the remaining approved change. Do not launch another Agent to
+   relitigate the rejected proposal.
+
 #### Grade Definitions
 
 | Grade | Scope | Required process | Target elapsed time |
@@ -372,6 +402,31 @@ Detailed artifacts cannot substitute for a direct user-facing explanation.
    evidence after the user outcome, not before it.
 8. This report does not replace the governed PRD. If the plain-language report
    and PRD differ, approval is blocked until both are reconciled.
+
+### Permanent Paid-Model Diagnosis Instrumentation Gate
+
+Before asking a user to spend a diagnostic model invocation for any Hogwarts
+workflow, instrument the complete relevant execution path first. A request to
+"try again for logs" is forbidden until this gate is satisfied.
+
+1. Use one trace ID across the relevant user entry, deterministic preflight,
+   request eligibility/dispatch, response parse and validation, State
+   transformation, persistence result, UI error mapping, and thrown exception
+   boundaries. Instrument every stage the workflow can actually reach; do not
+   stop at the first suspected component.
+2. Record only bounded diagnostic metadata needed to distinguish stages, such
+   as IDs, revision values, counts, booleans, error names/codes, and short
+   normalized messages. Do not persist Prompt text, model output text, player
+   prose, secrets, or raw save snapshots.
+3. Verify the diagnostic collector locally without a paid model request before
+   asking the user to run the workflow. The instrumentation must show whether
+   each trace reached or skipped every expected stage.
+4. Only after the path is observable may the user be asked for one diagnostic
+   invocation. Capture its trace and identify the exact failing boundary before
+   requesting any further model call.
+5. Temporary workflow instrumentation must have an explicit lifecycle. Remove
+   it after the diagnosis or retain it only when the user explicitly requests
+   a maintained diagnostic feature with its own approved contract.
 
 ### Registered Module: Immediate Turn Module
 

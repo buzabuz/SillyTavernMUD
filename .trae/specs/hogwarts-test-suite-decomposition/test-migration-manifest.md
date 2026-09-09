@@ -391,6 +391,16 @@ Final destination evidence:
 
 ## Completion Rules
 
+### Narrative-First Post Settlement (Revision 1)
+
+| Retired assertion or caller | Replacement owner | Retirement authority | No-caller / replacement evidence | Verification |
+| --- | --- | --- | --- | --- |
+| `workflows/turn-performance.js::sanitizeLowScenePerformancePayload` and `Low activity hints discard unsupported location fields without rejecting valid paid segments` | `preserveSceneNarrative`; `Scene attached activity hints never write authority or reject valid paid segments` | `hogwarts-narrative-first-post-settlement` A01/A03 | No production caller remained; removed export and sole test import; complete Scene attached proposals are display-irrelevant rather than cleaned State proposals | focused 150-entry batch exit 0 |
+| `workflows/turn-performance.js::settleScenePerformance` plus its server/local fallback ports | Scene preservation; unified Post adapter and guarded turn workflow | same PRD A01/A03/A04 | No call sites remained; removed returned method and application/index injection of retired Scene recovery/validator/fold ports | task5/task6 repair/task8 and prompt consolidation pass |
+| `Low proposal Schema, fold and validator expose one exact first-impression contract` | `Scene preservation ignores attached first-impression and signal proposals`; `hogwarts-mud-post-bookkeeping.test.mjs` positive first-impression reducer test | same PRD A03/A04 | Scene no longer invokes aggregate authority validation; Post owns first-impression admission | focused batch exit 0 |
+| task6 Performer assertions rejecting valid prose for Item authority or auxiliary output; Scene-owned historical annotations | `ordinary Performer preserves prose before Item authority validation without a repair call`; `production Performer preserves prose with invalid auxiliary output after one bounded request`; same-speaker Post historical support tests | same PRD A01/A03/A04 | generateScenePerformance calls preservation only; tests assert old aggregate validator receives zero calls and support context remains bounded | task6 repair suite passes |
+| task5 V2 Scene transaction stub and `every malformed Post family still commits a valid Material sibling and the base turn` | real `buildSceneTransaction`, preserved V3 fixture and `malformed Post families preserve a valid Material sibling until explicit defaults commit` | same PRD A05/A07 | harness now reaches pending choice, then explicit defaults; harmless route normalization still commits directly | task5 suite 19 entries, exit 0 |
+
 - no source test may be absent or appear twice;
 - no `delete` row may lack retirement and no-caller evidence;
 - no `move` or `mixed` row may lack an existing destination;
